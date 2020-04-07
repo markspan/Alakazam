@@ -123,5 +123,4 @@ function createTransformation(tab, app)
         gallery = Gallery(popup, 'MinColumnCount',2, 'MaxColumnCount',2);
         column.add(gallery);
     end
-    app.SplashScreen.AddText("");
 end

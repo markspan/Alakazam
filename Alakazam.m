@@ -15,27 +15,12 @@ classdef Alakazam < handle
         FDropHandler
         Workspace
         originalLnF
-        asmInfo
-        SplashScreen
     end
     
     methods
         
         function this = Alakazam(varargin)
             %[flist,plist] = matlab.codetools.requiredFilesAndProducts('Alakazam.m'); [flist'; {plist.Name}']
-            try
-                this.asmInfo = NET.addAssembly('.\AlakazamGui.dll');
-            catch e
-                e.message;
-            end
-            
-            this.SplashScreen = AlakazamGui.SplashForm;
-            Show(this.SplashScreen)
-           
-            
-            this.SplashScreen.AddTitle('Alakazam', 32, 250,1)
-            this.SplashScreen.AddText('Initializing All Transformations')
-            Activate(this.SplashScreen)
             
             % Al
             addpath(genpath('Transformations'), 'mlapptools', genpath('../Alakazam/functions'));
@@ -77,10 +62,6 @@ classdef Alakazam < handle
             % addlistener(this.FDropHandler, 'VariablesBeingDropped', @(x,y) disp(y.Variables));
             % store java toolgroup so that app will stay in memory
             internal.setJavaCustomData(this.ToolGroup.Peer,this);
-            this.SplashScreen.AddText('Ready.')
-            pause(1);
-            this.SplashScreen.Close();
-            
         end
         
         function delete(this)
