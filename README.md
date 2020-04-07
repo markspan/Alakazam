@@ -1,6 +1,7 @@
 # Alakazam
 Modular EEG analysis software package in MATLAB
 
+![Screenshot](/ScreenShot.jpg)
 
 The general idea is to create a user interface to do EEG analysis. This is work in progress!
 
