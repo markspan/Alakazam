@@ -1,5 +1,4 @@
 function open(this,~,~)
-    %this.RootNode.removeAllChildren();
     allChildren = this.Tree.Root.Children;
     allChildren.delete;
     fileList = dir (strcat(this.RawDirectory, '*.vhdr'));
@@ -14,6 +13,4 @@ function open(this,~,~)
     for file = 1:length(fileList)
         %this.loadCortriumFile(this, fileList(file).name)
     end
-
-    %this.TreeModel.reload()
 end
