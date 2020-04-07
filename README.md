@@ -6,7 +6,7 @@ Modular EEG analysis software package in MATLAB
 The general idea is to create a user interface to do EEG analysis. This is work in progress!
 
 The interface is based on the [Toolgroup](http://undocumentedmatlab.com/articles/matlab-toolstrip-part-2-toolgroup-app) demo, and is vey much influenced by the "[Brainvision Analyser](https://www.brainproducts.com/promo_analyzer2.php)" interface.
-Timeseries plotting based on [plotECG](https://nl.mathworks.com/matlabcentral/fileexchange/59296-daniel-frisch-kit-plot-ecg)  by daniel frisch. 
+Timeseries plotting based on [plotECG](https://nl.mathworks.com/matlabcentral/fileexchange/59296-daniel-frisch-kit-plot-ecg)  by Daniel Frisch. 
 The generic data object used for a study is the [EEGLAB](https://sccn.ucsd.edu/eeglab/index.php) "EEG" structure. Alakazam does put some extra info in this structure when it writes its own .mat files.
 Take a look at the "Transformations" directory to get the idea of how to add computations to the package.
 
