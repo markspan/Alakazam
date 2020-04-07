@@ -24,7 +24,7 @@ classdef Alakazam < handle
         function this = Alakazam(varargin)
             %[flist,plist] = matlab.codetools.requiredFilesAndProducts('Alakazam.m'); [flist'; {plist.Name}']
             try
-                this.asmInfo = NET.addAssembly('C:\Users\Mark Span\Documents\MATLAB\ToolGroup\AlakazamGui.dll');
+                this.asmInfo = NET.addAssembly('.\AlakazamGui.dll');
             catch e
                 e.message;
             end
