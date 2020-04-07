@@ -1,0 +1,41 @@
+Brain Vision Data Exchange Marker File, Version 2.0
+; Data created from history path: record-[2014.06.23-11.34.27]/Raw Data/Filters
+; The channel numbers are related to the channels in the exported file.
+
+[Common Infos]
+Codepage=UTF-8
+DataFile=OpenVibe.dat
+
+[Marker Infos]
+; Each entry: Mk<Marker number>=<Type>,<Description>,<Position in data points>,
+; <Size in data points>, <Channel number (0 = marker is related to all channels)>,
+; <Date (YYYYMMDDhhmmssuuuuuu)>, Visible
+; Fields are delimited by commas, some fields may be omitted (empty).
+; Commas in type or description text are coded as "\1".
+Mk1=Stimulus,S897,1,1,0
+Mk2=Stimulus,S898,1,1,0
+Mk3=New Segment,,1,1,0,20140623113427000000
+Mk4=Stimulus,S898,440,1,0
+Mk5=Stimulus,S897,441,1,0
+Mk6=Stimulus,S898,785,1,0
+Mk7=Stimulus,S897,786,1,0
+Mk8=Stimulus,S898,962,1,0
+Mk9=Stimulus,S897,963,1,0
+Mk10=Stimulus,S898,2363,1,0
+Mk11=Stimulus,S897,2364,1,0
+Mk12=Stimulus,S898,3624,1,0
+Mk13=Stimulus,S897,3625,1,0
+Mk14=Stimulus,S898,4857,1,0
+Mk15=Stimulus,S897,4858,1,0
+Mk16=Stimulus,S898,6030,1,0
+Mk17=Stimulus,S897,6031,1,0
+Mk18=Stimulus,S898,7175,1,0
+Mk19=Stimulus,S897,7176,1,0
+
+[Marker User Infos]
+; Each entry: Prop<Number>=Mk<Marker number>,<Type>,<Name>,<Value>,<Value2>,...,<ValueN>
+; Property number must be unique. Types can be int, single, string, bool, byte, double, uint
+; or arrays of those, indicated int-array etc
+; Array types have more than one value, number of values determines size of array.
+; Fields are delimited by commas, commas in strings are written \1
+; Properties are assigned to markers using their marker number.
