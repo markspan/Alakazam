@@ -1,0 +1,1 @@
+{"Name":"FlipECG","Description":"Flips the values for the ECG trace. Do this when your trace is upside down","Entry":"FlipECG.m","Icon":"Flip.png","Section":"Preprocessing","Category":"Data"}

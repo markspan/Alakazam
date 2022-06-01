@@ -1,0 +1,1 @@
+{"Name":"getIBI","Description":"detects IBI values from ECG","Entry":"getIBI.m","Icon":"getIBI.png","Section":"Preprocessing","Category":"ECG"}
