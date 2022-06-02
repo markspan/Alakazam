@@ -24,10 +24,6 @@ rawfilename = strcat(WS.RawDirectory, name);
         EEG.DataType = 'TIMEDOMAIN';
     end
 
-    save(matfilename, 'EEG');
-  
-    % else read the rawfile
-    %a=load(strcat(WS.CacheDirectory, id, '.mat'), 'EEG');
 
     this.EEG = EEG;
     this.EEG.id = id;
