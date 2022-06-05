@@ -16,6 +16,9 @@ matfilename = strcat(WS.CacheDirectory, id, '.mat');
 rawfilename = strcat(WS.RawDirectory, name);
 
     load(rawfilename, 'EEG');
+    if ~exist(matfilename, 'file')
+        save(matfilename, 'EEG');
+    end
     EEG.File = matfilename;
     if (~isfield(EEG, 'DataFormat'))
         EEG.DataFormat = 'CONTINUOUS';

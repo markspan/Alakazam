@@ -23,10 +23,15 @@ end
 
 later = sign(IBIS{2}.RTopTime(1) - IBIS{1}.RTopTime(1)); % if -1, first IBI is later, if 1, last IBI is later
 if later == -1 
-    later = 1;
+    %% HACK
+    later = 2;
+    IBIS{2}.RTopTime = IBIS{2}.RTopTime(2:end);
+    IBIS{2}.RTopVal = IBIS{2}.RTopVal(2:end);
+    IBIS{2}.ibis = IBIS{2}.ibis(2:end);
 else
     later = 2;
 end
+
 %% The later trace has to be shifted
 if (abs(IBIS{1}.ibis(1) - IBIS{2}.ibis(1)) < .05)
     shift = IBIS{1}.RTopTime(1) - IBIS{2}.RTopTime(1);
@@ -37,6 +42,7 @@ end
 
 EEG = input;
 shiftinsamples = int32(EEG.srate*abs(shift));
+EEG.IBIevent{later} = IBIS{later};
 EEG.IBIevent{later}.RTopTime = IBIS{later}.RTopTime + shift;
 ch = find(strcmp({input.chanlocs.labels},  IBIS{later}.channelname));
 EEG.data(ch,1:end-(shiftinsamples-1)) = EEG.data(ch,shiftinsamples:end);

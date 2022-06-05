@@ -43,7 +43,7 @@ end
 
 ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
 ecgData = ecgData(ecgid,:);
-par.MinPeakHeight = median(ecgData)+(2*std(ecgData));
+par.MinPeakHeight = median(ecgData)+(1.5*std(ecgData));
 fSample = EEGstruct.srate;
 
 %% if the data originate from a polarband: we have the original sampled 

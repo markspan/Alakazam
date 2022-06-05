@@ -34,7 +34,7 @@ RTop = [];  IBI = [];
 Device = [];
 
 for dev = 1:NDevices
-    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime(1:end-1))'];
+    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime)'];
     IBI  = [IBI;  squeeze(input.IBIevent{dev}.ibis)'];
     Device(end+1:length(RTop)) = dev;
 end
@@ -62,6 +62,7 @@ out.DeviceName(out.Device == 0) = "Empatica";
 % TODO exclude zero-duration blocks.
 
 validevents = input.event([input.event.duration]>1);
+if length(validevents)
 for type = unique({validevents.type})
     %% do this for all possible types:
     % create a new column in the output: named as the type
@@ -76,7 +77,7 @@ for type = unique({validevents.type})
     out.(strrep(strrep(string(matlab.lang.makeValidName(type)), 'Start', ...
         ''),'_', ''))  = vals;
 end
-
+end
 
 out = sortrows(out,{'RTop','Device'});
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
