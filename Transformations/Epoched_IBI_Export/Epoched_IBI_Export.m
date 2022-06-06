@@ -31,11 +31,11 @@ end
 srate = input.srate;
 
 RTop = [];  IBI = [];
-Device = [];
+Device = []; 
 
 for dev = 1:NDevices
-    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime)'];
-    IBI  = [IBI;  squeeze(input.IBIevent{dev}.ibis)'];
+    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime)']; %#ok<AGROW> 
+    IBI  = [IBI;  squeeze(input.IBIevent{dev}.ibis)']; %#ok<AGROW> 
     Device(end+1:length(RTop)) = dev;
 end
 Device = Device';
@@ -51,8 +51,11 @@ if strcmp(options.ed, 'yes') %% add the empatica data?
     Device(end+1:length(RTop)) = 0;
 end
 
-out = table(RTop,IBI,Device);
+SubjectID(Device > -1) = string(input.filename);
+SubjectID = SubjectID';
+out = table(SubjectID, RTop, IBI, Device);
 out.DeviceName = string(out.Device);
+
 for dev = 1:NDevices
     out.DeviceName(out.Device == dev) = input.IBIevent{dev}.channelname;
 end
@@ -62,21 +65,21 @@ out.DeviceName(out.Device == 0) = "Empatica";
 % TODO exclude zero-duration blocks.
 
 validevents = input.event([input.event.duration]>1);
-if length(validevents)
-for type = unique({validevents.type})
-    %% do this for all possible types:
-    % create a new column in the output: named as the type
-    vals = out.IBI.*0;
-    eventsofthistype = validevents(string({validevents.type}) == type);
+if ~isempty(validevents)
+    for type = unique({validevents.type})
+        %% do this for all possible types:
+        % create a new column in the output: named as the type
+        vals = out.IBI.*0;
+        eventsofthistype = validevents(string({validevents.type}) == type);
 
-    for i = 1: length(eventsofthistype)
-        tstart = eventsofthistype(i).latency/srate;
-        tend   = tstart + (eventsofthistype(i).duration/srate);
-        vals((out.RTop > tstart) & (out.RTop < tend)) = true;
+        for i = 1: length(eventsofthistype)
+            tstart = eventsofthistype(i).latency/srate;
+            tend   = tstart + (eventsofthistype(i).duration/srate);
+            vals((out.RTop > tstart) & (out.RTop < tend)) = true;
+        end
+        out.(strrep(strrep(string(matlab.lang.makeValidName(type)), 'Start', ...
+            ''),'_', ''))  = vals;
     end
-    out.(strrep(strrep(string(matlab.lang.makeValidName(type)), 'Start', ...
-        ''),'_', ''))  = vals;
-end
 end
 
 out = sortrows(out,{'RTop','Device'});
