@@ -51,27 +51,24 @@ while length(IBI(1).ibis) ~= length(IBI(2).ibis) || first
     disp(['Weirdness: ' num2str(z)]);
 
     % 2) additional of missing??
-    if (z(wc) < 0 ) %% additional
-    %if  IBI(wc).ibis(idx) < .38
+    if (z(wc) < 0 ) %% additional: z-value of the weird channel is negative: value too small
         % 3) if additional: delete from weird channel 
         disp(['Removing IBI at timepoint:' num2str(IBI(wc).RTopTime(idx)) ' from channel: ' IBI(wc).channelname]);
+        IBI(wc).ibis(idx-1) = IBI(wc).ibis(idx-1) + IBI(wc).ibis(idx);
         IBI(wc).ibis(idx) = [];        
         IBI(wc).RTopTime(idx) = [];
         IBI(wc).RTopVal(idx)  = [];
     else %% missing
-        nwc = 3-wc;
-        % 4) if missing: take the value from the correct channel
-        disp(['Adding IBI at timepoint: ' num2str(IBI(nwc).RTopTime(idx)) ' to channel: ' IBI(wc).channelname]);
-        IBI(wc).RTopTime = [IBI(wc).RTopTime(1:idx-1) IBI(nwc).RTopTime(idx) IBI(wc).RTopTime(idx-1:end)];
-        IBI(wc).RTopVal  = [IBI(wc).RTopVal(1:idx-1) IBI(nwc).RTopVal(idx) IBI(wc).RTopVal(idx-1:end)];
-        IBI(wc).ibis  = [IBI(wc).ibis(1:idx-1) IBI(nwc).ibis(idx) IBI(wc).ibis(idx-1:end)];
+        % 3) if missing: delete from unweird channel 
+                % and fix the weird ibi value of weird
+                % channel
+                
+        disp(['Removing IBI at timepoint:' num2str(IBI(3-wc).RTopTime(idx)) ' from channel: ' IBI(3-wc).channelname]);
+        IBI(3-wc).ibis(idx-1)= IBI(wc).ibis(idx-1);
+        IBI(wc).ibis(idx) = [];        
+        IBI(wc).RTopTime(idx) = [];
+        IBI(wc).RTopVal(idx)  = [];
     end
-    IBI(wc).ibis = round([diff(IBI(wc).RTopTime) IBI(3-wc).ibis(end)],3);
-    tooshort = IBI(wc).ibis < .35;
-    IBI(wc).ibis(tooshort) = [];
-    IBI(wc).RTopTime(tooshort) = [];
-    IBI(wc).RTopVal(tooshort) = [];
-    IBI(wc).ibis = round([diff(IBI(wc).RTopTime) IBI(3-wc).ibis(end)],3);
     disp([int2str(length(IBI(1).ibis)) ' - ' int2str(length(IBI(2).ibis)) ]);
 end
 
