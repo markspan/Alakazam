@@ -51,7 +51,8 @@ if strcmp(options.ed, 'yes') %% add the empatica data?
     Device(end+1:length(RTop)) = 0;
 end
 
-SubjectID(Device > -1) = string(input.filename);
+[~,subid,~] = fileparts(input.filename); 
+SubjectID(Device > -1) = string(subid);
 SubjectID = SubjectID';
 out = table(SubjectID, RTop, IBI, Device);
 out.DeviceName = string(out.Device);

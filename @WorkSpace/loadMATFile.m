@@ -16,10 +16,13 @@ matfilename = strcat(WS.CacheDirectory, id, '.mat');
 rawfilename = strcat(WS.RawDirectory, name);
 
     load(rawfilename, 'EEG');
+    EEG.File = matfilename;
+    EEG.FileName = rawfilename;
+    EEG.id = id;
+
     if ~exist(matfilename, 'file')
         save(matfilename, 'EEG');
     end
-    EEG.File = matfilename;
     if (~isfield(EEG, 'DataFormat'))
         EEG.DataFormat = 'CONTINUOUS';
     end
@@ -30,7 +33,6 @@ rawfilename = strcat(WS.RawDirectory, name);
 
     this.EEG = EEG;
     this.EEG.id = id;
-    this.EEG.File = matfilename;
 
 
 %% Adds the loaded 'EEG' to the tree.
