@@ -467,6 +467,7 @@ hs.panel.Visible = 'on';
                 SIG.RTop = SIG.IBIEVENTS{i}.RTopTime;
                 SIG.ibi = SIG.IBIEVENTS{i}.ibis;
                 showRTi = (SIG.RTop>startTime) & (SIG.RTop < endTime);
+                showRTi = showRTi(1:length(SIG.ibi));
                 plottedIBIS = SIG.RTop(showRTi);
                 Labels = SIG.ibi(showRTi);
                 cols = lines(length(SIG.IBIEVENTS));

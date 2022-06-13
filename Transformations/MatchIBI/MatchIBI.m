@@ -35,21 +35,21 @@ end
 
 first = true;
 while length(IBI(1).ibis) ~= length(IBI(2).ibis) || first 
-    %first = false;
+    first = false;
     sl = min(length(IBI(1).ibis), length(IBI(2).ibis));
     dif = IBI(1).RTopTime(1:sl)-IBI(2).RTopTime(1:sl);
 
     % 1) find out which channel is weird: 1 or two:
-    idx = find(abs(dif)>.2, 1 ); %%idx is the index of the first inequality
+    idx = find(abs(dif)>.1, 1 ); %%idx is the index of the first inequality
     if isempty(idx)
         break
     end
     for c = 1:2
-        z(c) = (IBI(c).ibis(idx)-mean(IBI(c).ibis)) / std(IBI(c).ibis) %#ok<AGROW> 
+        z(c) = (IBI(c).ibis(idx)-mean(IBI(c).ibis)) / std(IBI(c).ibis); %#ok<AGROW> 
     end
     [~,wc] = max(abs(z)); %% wc = weird
     if abs(z(wc)) < 1.4
-        break;
+        %break;
     end
     disp(['Weirdness: ' num2str(z)]);
 
@@ -57,7 +57,9 @@ while length(IBI(1).ibis) ~= length(IBI(2).ibis) || first
     if (z(wc) < 0 ) %% additional: z-value of the weird channel is negative: value too small
         % 3) if additional: delete from weird channel 
         disp(['Removing IBI at timepoint:' num2str(IBI(wc).RTopTime(idx)) ' from channel: ' IBI(wc).channelname]);
-        IBI(wc).ibis(idx-1) = IBI(wc).ibis(idx-1) + IBI(wc).ibis(idx);
+        if idx>1
+            IBI(wc).ibis(idx-1) = IBI(wc).ibis(idx-1) + IBI(wc).ibis(idx);
+        end
         IBI(wc).ibis(idx) = [];        
         IBI(wc).RTopTime(idx) = [];
         IBI(wc).RTopVal(idx)  = [];
@@ -75,6 +77,7 @@ while length(IBI(1).ibis) ~= length(IBI(2).ibis) || first
     disp([int2str(length(IBI(1).ibis)) ' - ' int2str(length(IBI(2).ibis)) ]);
 end
 
+disp([int2str(length(IBI(1).ibis)) ' - ' int2str(length(IBI(2).ibis)) ]);
 EEG=input;
 EEG.IBIevent{1} = IBI(1);
 EEG.IBIevent{2} = IBI(2);

@@ -30,6 +30,9 @@ if later == -1
     IBIS{2}.ibis = IBIS{2}.ibis(2:end);
 else
     later = 2;
+    %IBIS{2}.RTopTime = IBIS{2}.RTopTime(2:end);
+    %IBIS{2}.RTopVal = IBIS{2}.RTopVal(2:end);
+    %IBIS{2}.ibis = IBIS{2}.ibis(2:end);
 end
 
 %% The later trace has to be shifted
@@ -37,7 +40,7 @@ if (abs(IBIS{1}.ibis(1) - IBIS{2}.ibis(1)) < .05)
     shift = IBIS{1}.RTopTime(1) - IBIS{2}.RTopTime(1);
 else
     % Yes, what do we do now?
-    disp('hellup! call mark!')
+    shift = IBIS{1}.RTopTime(1) - IBIS{2}.RTopTime(1);
 end
 
 EEG = input;

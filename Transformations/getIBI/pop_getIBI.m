@@ -43,7 +43,7 @@ end
 
 ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
 ecgData = ecgData(ecgid,:);
-par.MinPeakHeight = median(ecgData)+(1.5*std(ecgData));
+par.MinPeakHeight = nanmedian(ecgData)+(1.5*nanstd(ecgData));
 fSample = EEGstruct.srate;
 
 %% if the data originate from a polarband: we have the original sampled 
@@ -54,6 +54,7 @@ if isfield(EEGstruct, 'Polarchannels')
         ecgData = EEGstruct.Polarchannels.data;
         fSample = EEGstruct.Polarchannels.srate;
         ecgTimestamps = EEGstruct.Polarchannels.times/1000;
+        par.MinPeakHeight = nanmedian(ecgData)+(1.5*nanstd(ecgData));
     end
 end
 
@@ -86,7 +87,7 @@ if size(ecgTimestamps(locs),1) == size(correction,2)
 end
 
 if isfield(EEGstruct, 'IBIevent') 
-    i = length(EEGstruct.IBIevent)+1;
+    i = min(length(EEGstruct.IBIevent)+1,2);
     for ie = 1:length(EEGstruct.IBIevent)
         if strcmpi(EEGstruct.IBIevent{ie}.channelname , par.channame)
             i = ie;
