@@ -246,7 +246,6 @@ classdef Alakazam < handle
         end
 
         function Evaluate(this, NewData, OldData, NewParentNode)
-            % this should be done recursively......
             endnode = false;
 
             while endnode == false
@@ -258,8 +257,8 @@ classdef Alakazam < handle
                 id = Old.EEG.Call(idx1+1:idx2-1);
     
                 [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
-                disp(["I called: " id])
-                Old.EEG.params
+%                 disp(["I called: " id])
+%                 Old.EEG.params
                 CurrentNode = x.EEG.id;
                 Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
                 [parent.dir, parent.name] = fileparts(x.EEG.File);

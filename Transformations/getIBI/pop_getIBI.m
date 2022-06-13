@@ -7,22 +7,8 @@ function [EEGstruct, par] = pop_getIBI(EEGstruct,varargin)
 % Matlab version M.M.Span (2021)
 par = [];
 ecgData = EEGstruct.data;
-% 
-% if (size(EEGstruct.data,1) >1 )
-%     try
-%         %ecgid = strcmpi({EEGstruct.chanlocs.labels},'ECG');
-%         ecgid = contains(upper({EEGstruct.chanlocs.labels}),{'POLAR', 'ECG'});
-%     catch ME %#ok<NASGU>
-%         return
-%     end
-%     if sum(ecgid)>0
-%         ecgData = ecgData(ecgid(1),:);
-%     else
-%         return
-%     end
-%     %EEGstruct.times = EEGstruct.times / 1000;
-% end
 ecgTimestamps = EEGstruct.times;
+
 %% Parse the name - value pairs found in varargin
 %------------------------------------------------------------------------------------------
 if (~isempty(varargin))
@@ -43,7 +29,7 @@ end
 
 ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
 ecgData = ecgData(ecgid,:);
-par.MinPeakHeight = nanmedian(ecgData)+(1.5*nanstd(ecgData));
+par.MinPeakHeight = median(ecgData,'omitnan')+(1.5*std(ecgData, 'omitnan'));
 fSample = EEGstruct.srate;
 
 %% if the data originate from a polarband: we have the original sampled 
@@ -54,7 +40,7 @@ if isfield(EEGstruct, 'Polarchannels')
         ecgData = EEGstruct.Polarchannels.data;
         fSample = EEGstruct.Polarchannels.srate;
         ecgTimestamps = EEGstruct.Polarchannels.times/1000;
-        par.MinPeakHeight = nanmedian(ecgData)+(1.5*nanstd(ecgData));
+        par.MinPeakHeight = median(ecgData,'omitnan')+(1.5*std(ecgData,'omitnan'));
     end
 end
 
