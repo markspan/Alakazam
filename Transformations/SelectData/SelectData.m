@@ -29,11 +29,22 @@ EEG = input;
 if (ischar(options))
     if (strcmpi(options, 'Init'))
         [EEG, options] = pop_select(input);
+        if isfield(EEG, 'Polarchannels')
+            ix1 = strfind(options, '[');
+            ix2 = strfind(options, ']');
+            EEG.Polarchannels = pop_select(EEG.Polarchannels, 'time', eval(options(ix1:ix2)));
+        end
         % in EEGLAB, the second return value is the function call to recreate the
         % transformation.
     end
 else
     eval(options.Param)
+    if isfield(EEG, 'Polarchannels')
+        ix1 = strfind(options, '[');
+        ix2 = strfind(options, ']');
+        EEG.Polarchannels = pop_select(EEG.Polarchannels, 'time', eval(options(ix1:ix2)));
+    end
+
     % so, when we evaluate this return value, it will recreate the
     % transformation on the "EEG" structure.
 end
