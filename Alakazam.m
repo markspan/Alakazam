@@ -257,13 +257,8 @@ classdef Alakazam < handle
                 id = Old.EEG.Call(idx1+1:idx2-1);
     
                 [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
-<<<<<<< Updated upstream
-%                 disp(["I called: " id])
-%                 Old.EEG.params
-=======
                 %disp(["I called: " id])
                 %Old.EEG.params
->>>>>>> Stashed changes
                 CurrentNode = x.EEG.id;
                 Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
                 [parent.dir, parent.name] = fileparts(x.EEG.File);

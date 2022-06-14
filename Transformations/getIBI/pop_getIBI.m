@@ -39,17 +39,13 @@ if isfield(EEGstruct, 'Polarchannels')
     if strcmp(EEGstruct.Polarchannels.chanlocs.labels, par.channame)
         ecgData = double(EEGstruct.Polarchannels.data);
         fSample = EEGstruct.Polarchannels.srate;
-<<<<<<< Updated upstream
-        ecgTimestamps = EEGstruct.Polarchannels.times/1000;
-        par.MinPeakHeight = median(ecgData,'omitnan')+(1.5*std(ecgData,'omitnan'));
-=======
+
         if EEGstruct.Polarchannels.times(2)-EEGstruct.Polarchannels.times(1) > 999
             ecgTimestamps = EEGstruct.Polarchannels.times/1000;
         else
-            ecgTimestamps = EEGstruct.Polarchannels.times
+            ecgTimestamps = EEGstruct.Polarchannels.times;
         end
-        par.MinPeakHeight = nanmedian(ecgData)+(1.5*nanstd(ecgData));
->>>>>>> Stashed changes
+        par.MinPeakHeight = median(ecgData, 'omitnan')+(1.5*std(ecgData, 'omitnan'));
     end
 end
 
