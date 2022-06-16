@@ -85,10 +85,15 @@ function EEG = loadXDF(filename)
     EEG = data.export2eeglab(datachannels, find(ismarker), [],false);
 
     if polar
-        polarchannels = data.export2eeglab(polar, find(ismarker), [],false);
-        for c = 1:size(polarchannels.data,1)
-            polarchannels.data(c,isnan(polarchannels.data(c,:))) = mean(polarchannels.data(c,:), 'omitnan');
-        end
+        datachannels = datachannels(datachannels ~= polar);
+        datachannels = [datachannels polar];
+        polarchannels = data.export2eeglab(datachannels, find(ismarker), [],false);
+        polarchannels.data = polarchannels.data(1,:);
+        polarchannels.nbchan = 1;
+        polarchannels.chanlocs = polarchannels.chanlocs(1);
+        %for c = 1:size(polarchannels.data,1)
+        %    polarchannels.data(c,isnan(polarchannels.data(c,:))) = mean(polarchannels.data(c,:), 'omitnan');
+        %end
         
     end
 

@@ -2,3 +2,5 @@
 *.csv
 *.asv
 *.Rhistory
+Data\*
+*.xdf

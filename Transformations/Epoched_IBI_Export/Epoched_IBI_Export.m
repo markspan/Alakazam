@@ -23,11 +23,12 @@ else
         'Description', 'Set the parameters for ''export'' ibi',...
         'title' , 'IBIExport options',...
         'separator' , 'File Parameters:',...
-        {'Filename' ;'fname' }, [n '.csv'],...
         {'Open in Notepad?'; 'np'}, {'no', 'yes'}, ...
         {'Export eventdata', 'ed'}, {'yes', 'no'});
 end
 
+[~,fname,~] = fileparts(input.filename);
+fname = [fname '.csv'];
 srate = input.srate;
 
 RTop = [];  IBI = [];
@@ -85,8 +86,8 @@ end
 
 out = sortrows(out,{'RTop','Device'});
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
-writetable(out, fullfile(ExportsDir,options.fname))
+writetable(out, fullfile(ExportsDir,fname))
 if strcmp(options.np , 'yes')
-    system(['notepad ' fullfile(ExportsDir,options.fname)]);
+    system(['notepad ' fullfile(ExportsDir,fname)]);
 end
 EEG=input;

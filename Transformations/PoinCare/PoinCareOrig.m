@@ -41,7 +41,6 @@ ev = [];
 
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
     ev = unique({input.event.type});
-    evc = ev(contains(ev, "Start"));
 end
 
 %% simplest option....
@@ -57,13 +56,10 @@ if strcmp(options, 'Init')
         {'Plot Ellipses' ;'ell' }, [true, false], ...
         'separator' , 'Use Labels:',...
         {'By Label' ;'bylabel' }, {'on', 'off'}, ...
-        {'Label Contains:'; 'label'}, "Emotional" , ...
-        {'Use Unlabeled' ;'unlabeled' }, {'off', 'on'});
+        {'Use Unlabeled' ;'unlabeled' }, {'on', 'off'}, ...
+        {'Use:'; 'label'}, ev);
 end
 
-if length(options.label)
-    evc = evc(contains(evc, options.label));
-end
 if strcmp(options.type, 'lines')
     type = '-';
 elseif strcmp(options.type, 'both')
@@ -124,38 +120,62 @@ else
     %% Same plot, but now for each of the levels of the selected label.
     ibix = input.IBIevent{1}.ibis(1:end-options.delta)';
     ibiy = input.IBIevent{1}.ibis(1+options.delta:end)';
-    ibit = input.IBIevent{1}.RTopTime(1:end-1-options.delta)' * input.srate;
+    ibit = input.IBIevent{1}.RTopTime(1:end-1-options.delta)';
 
-    for i = 1:length(evc)
-        lab = evc(i);
-        event = strcmp({input.event.type}, lab);
+    events = input.event;
+    idx = strcmp({events(:).type}, options.label);
+    events = events(idx);
+    %% Create a table with values for each of the the levels.
+    out = table(ibit,ibix, ibiy);
+    for ev = events
+        if ~ismember(matlab.lang.makeValidName(ev.type), out.Properties.VariableNames)
+            out = [out table(cell(length(ibix),1))];
+            for i = 1:length(ibix)
+                out(i,end) = {'No label'};
+            end
+            out.Properties.VariableNames(end) = {matlab.lang.makeValidName(ev.type)};
+        end
+        d = out.(matlab.lang.makeValidName(ev.type));
+        tstart = ev.latency / input.srate;
+        tend   = (ev.latency + ev.duration) / input.srate;
+        d((ibit>tstart) & (ibit<tend)) = {ev.type};
+        out.(matlab.lang.makeValidName(ev.type)) = d;
+    end
 
-        idx = ibit > input.event(event).latency & ibit < (input.event(event).latency+input.event(event).duration);
-        ix = ibix(idx);
-        iy = ibiy(idx);
+    labels = table2cell(unique(out(:,end)));
+    if ~strcmp(options.unlabeled, 'on')
+        labels = labels(~strcmp(labels,'No label'));
+    end
+    
+    for i = 1:length(labels)
+        ix = out.ibix(strcmpi(table2cell(out(:,end)), labels(i)));
+        iy = out.ibiy(strcmpi(table2cell(out(:,end)), labels(i)));
         %% this is the 'subplot' per label:
         h(i) = plot(pax, ix, iy, type, 'MarkerSize', 8);
         hold on
         %calculate the parameters for the infopanes...
         sd1(i) = round( (sqrt(2)/2.0) * std(ix-iy), 3);
         sd2(i) = round( sqrt(2*std(ix)^2 ) - (.5*std(ix-iy)^2),3);
-        if options.ell
-            plot_ellipse(2*sd1(i),2*sd2(i),mean(ix), mean(iy), 45, get(h(i),'Color'));
-        end
+        
     end
    
+    if options.ell
+        for i = 1:length(labels)
+            plot_ellipse(2*sd1(i),2*sd2(i),mean(ibix), mean(ibiy), 45, get(h(i),'Color'));
+        end
+    end
     %% draw zoomed in to the dots, of from the origin?
     if options.origin
         a=xlim;
-        xlim([0 1])
-        ylim([0 1])
+        xlim([0 a(2)])
+        ylim([0 a(2)])
     end
 
     xlabel("IBI_(_t_)");
     ylabel("IBI_(_t_+_1_)");
 
     axis square;
-    %title(pax, input.id);
+    title(pax, input.id);
     plot (pax, xlim, ylim, ':r', 'LineWidth', 1);
     grid minor;
     % make it into a subplot:
@@ -173,15 +193,15 @@ else
     title('Parameters:', 'Poincare')
 
     pars = {};
-    for i = 1:length(evc)
+    for i = 1:length(labels)
         %labels(i) = {[char(labels(i)) ' (sd1= '  num2str(sd1(i)) ' sd2= '  num2str(sd2(i)) ')']};
-        pars{end+1} = char(evc(i));
+        pars{end+1} = char(labels(i));
         pars{end+1} = "     SD1 = " + num2str(sd1(i)) + " s";
         pars{end+1} = "     SD2 = " + num2str(sd2(i)) + " s";
         pars{end+1} = "     SD2/SD1 = " + num2str(round(sd2(i)/sd1(i),2));
     end
     text(0,1,pars, 'VerticalAlignment', 'top');
-    legend(pax, evc, 'Location', 'southeast');
+    legend(pax, labels, 'Location', 'southeast');
 
 end
 end

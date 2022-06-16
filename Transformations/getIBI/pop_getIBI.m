@@ -40,7 +40,7 @@ if isfield(EEGstruct, 'Polarchannels')
         ecgData = double(EEGstruct.Polarchannels.data);
         fSample = EEGstruct.Polarchannels.srate;
 
-        if EEGstruct.Polarchannels.times(2)-EEGstruct.Polarchannels.times(1) > 999
+        if EEGstruct.Polarchannels.times(2)-EEGstruct.Polarchannels.times(1) >5
             ecgTimestamps = EEGstruct.Polarchannels.times/1000;
         else
             ecgTimestamps = EEGstruct.Polarchannels.times;
