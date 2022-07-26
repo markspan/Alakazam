@@ -35,9 +35,9 @@ RTop = [];  IBI = [];
 Device = []; 
 
 for dev = 1:NDevices
-    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime)']; %#ok<AGROW> 
     IBI  = [IBI;  squeeze(input.IBIevent{dev}.ibis)']; %#ok<AGROW> 
-    Device(end+1:length(RTop)) = dev;
+    RTop = [RTop; squeeze(input.IBIevent{dev}.RTopTime(1:length(squeeze(input.IBIevent{dev}.ibis))))']; %#ok<AGROW> 
+    Device(end+1:length(IBI)) = dev;
 end
 Device = Device';
 
@@ -49,7 +49,7 @@ if strcmp(options.ed, 'yes') %% add the empatica data?
     % create a new column in the output: named as the type
     IBI = [IBI; str2double(strrep(string({validevents.type}), ',', '.')')];
     RTop  = [RTop; [validevents.latency]'/srate];
-    Device(end+1:length(RTop)) = 0;
+    Device(end+1:length(IBI)) = 0;
 end
 
 [~,subid,~] = fileparts(input.filename); 
@@ -84,7 +84,7 @@ if ~isempty(validevents)
     end
 end
 
-out = sortrows(out,{'RTop','Device'});
+out = sortrows(out,{'IBI','Device'});
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 writetable(out, fullfile(ExportsDir,fname))
 if strcmp(options.np , 'yes')

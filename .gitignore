@@ -4,3 +4,4 @@
 *.Rhistory
 Data\*
 *.xdf
+*.BLE

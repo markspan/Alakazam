@@ -51,6 +51,23 @@ setIcon(tn,this.RawFileIcon);
 %% Now recursively check for children of this file, and read them if they are there there.
 this.treeTraverse(id, WS.CacheDirectory, tn);
 end
+function EEG = loadXDF2(filename)
+    EEG = Tools.eeg_emptyset;
+    tt = load_xdf(filename);
+    EEG.data = tt{1}.time_series;
+    [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
+    EEG.srate = str2double(tt{1}.info.nominal_srate); 
+    EEG.xmin = 0;
+    EEG.xmax = (EEG.pnts-1)/EEG.srate;
+    EEG.etc.desc = '';
+    EEG.etc.info = 'desc';
+
+    for c =1:EEG.nbchan
+        EEG.chanlocs(c).labels = tt{1}.info.desc.channels.channel{c}.label;
+    end
+    EEG=Tools.eeg_checkset(EEG);
+    EEG.times = 1000*tt{1}.time_stamps;
+end
 
 function EEG = loadXDF(filename)
     td = tempdir;

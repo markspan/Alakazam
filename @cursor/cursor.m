@@ -6,6 +6,7 @@ classdef cursor
         upCallback
         pAxes
         pFigure
+        ID
     end
     
     methods
@@ -15,6 +16,15 @@ classdef cursor
             obj.upCallback      = ucallback;
             obj.pAxes = hAxes;
             obj.pFigure = get(get(hAxes, 'Parent'), 'Parent');
+            for v = 1:length(varargin)
+                if strcmp(varargin{v}, "ID")
+                    obj.ID = varargin{v+1};            
+                    varargin(v) = [];
+                    varargin(v) = [];
+                    break;
+                end
+            end
+
             if isempty(mcallback) && isempty(ucallback)
                 obj.vline = xline(pos,  ...
                     'Parent', hAxes, ...
@@ -28,12 +38,7 @@ classdef cursor
         end
         
         function buttondn(obj, h, events)
-            ud = get(obj.pFigure,'UserData');            
-            
-            ud.vline = h;
-            ud.downEvents = events;
-            
-            set(obj.pFigure,'UserData', ud, ...
+            set(obj.pFigure,...
                 'WindowButtonMotionFcn',@obj.buttonmotion,...
                 'WindowButtonUpFcn',@obj.buttonup);         
         end
@@ -41,21 +46,17 @@ classdef cursor
         
         function buttonup(obj, h, events)             
             set(h,'WindowButtonMotionFcn','','WindowButtonUpFcn','')
-            ud = get(h,'UserData');
-            
             if ~isempty(obj.upCallback)
-                feval(obj.upCallback, ud.vline, events)
+                feval(obj.upCallback, obj.vline, events)
             end
         end
         
         function buttonmotion(obj, h, events)
-            ud = get(h,'UserData');
             np = get (gca, 'CurrentPoint');
-            
-            set(ud.vline,'Value',np(1));
-            
+            set(obj.vline,'Value',np(1));
+            drawnow;
             if ~isempty(obj.motionCallback)
-                feval(obj.motionCallback, ud.vline, events)
+                feval(obj.motionCallback,obj.vline, events)
             end
         end
     end

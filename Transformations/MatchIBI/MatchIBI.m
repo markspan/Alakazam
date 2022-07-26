@@ -40,7 +40,7 @@ while length(IBI(1).ibis) ~= length(IBI(2).ibis) || first
     dif = IBI(1).RTopTime(1:sl)-IBI(2).RTopTime(1:sl);
 
     % 1) find out which channel is weird: 1 or two:
-    idx = find(abs(dif)>.1, 1 ); %%idx is the index of the first inequality
+    idx = find(abs(dif)>.2, 1 ); %%idx is the index of the first inequality
     if isempty(idx)
         break
     end
