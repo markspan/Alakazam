@@ -60,7 +60,13 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
         EEG.srate  = C3.ecg.fs;
         EEG.pnts   = size(data,1);
         EEG.times = (((1:EEG.pnts)-1)/EEG.srate);
-        
+
+        for ii = 1:length(eventMarkers)
+            EEG.event(end+1).type = strrep(eventMarkers(ii).description, '_', ' ');
+            EEG.event(end).latency = eventMarkers(ii).serial;
+            EEG.event(end).duration = 0;
+            EEG.event(end).urevent = ii;
+        end
 %         RTopIndices = detectIbi(data(:,2), EEG.srate);
 %         
 %         global Events
@@ -106,6 +112,17 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
             eventMarkers(ii+idxOffset).description = ['C3 button press #' num2str(ii)];
             eventMarkers(ii+idxOffset).eventid = 'BLE'; %char(java.util.UUID.randomUUID);
         end
+        %% Add the Json events if there
+         if isfield(jsondata,'events') && ~isempty(jsondata.events)
+            idxOffset = length(eventMarkers);
+            for ii=1:size(jsondata.events,2)
+                eventMarkers(ii+idxOffset).index = ii+idxOffset;
+                eventMarkers(ii+idxOffset).serial = jsondata.events{1,ii}.serial;
+                eventMarkers(ii+idxOffset).description = jsondata.events{1,ii}.eventname;
+                eventMarkers(ii+idxOffset).eventid = jsondata.events{1,ii}.eventid;
+            end
+         end
+        %%
     end
     
 %function called when loading new sensor data. Fills jsondata.events into eventMarkers.
@@ -151,9 +168,10 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
                     warndlg(sprintf('More than one JSON file present in folder!\nAuto-loading of JSON was skipped.'));
                 end
             otherwise
-                [~,filename_wo_extension,~] = fileparts(name);
-                if exist([pathName filename_wo_extension '.JSON'], 'file') == 2
-                    json_fullpath = [pathName filename_wo_extension '.JSON'];
+                [rdd,filename_wo_extension,~] = fileparts(cortriumfilename);
+                rdd = [rdd '\'];
+                if exist([rdd filename_wo_extension '.json'], 'file') == 2
+                    json_fullpath = [rdd filename_wo_extension '.json'];
                     jsondata = loadjson(json_fullpath);
                 end
         end
@@ -197,6 +215,7 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
                 else
                     C3.date_start = datenum(datetime('0001-01-01T00:00:00.000+0000','InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSXXX','TimeZone','local'));
                 end
+
                 %                 if isempty(jsondata)
                 %                     [jsondata, Cancelled] = createNewJSON(C3,full_path,fileFormat);
                 %                     if ~Cancelled
