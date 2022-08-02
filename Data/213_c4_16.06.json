@@ -1,0 +1,196 @@
+{
+  "hardwareversion" : "B8",
+  "softwareversion" : "0.5.8.1",
+  "patientage" : "Not specified",
+  "emailsubject" : "Default subject",
+  "events" : [
+    {
+      "serial" : 10513,
+      "eventid" : "B87D0FEC-7A79-49DC-947F-63CA195BFDBC",
+      "logged" : "2022-06-16T11:20:54.306+02:00",
+      "ambienttemp" : 34.810000000000002,
+      "respiratoryrate" : 19,
+      "deviceorientation" : 6,
+      "heartrate" : 84,
+      "eventname" : "Start questionnaire s2.1",
+      "devicetemp" : 31.390000000000043
+    },
+    {
+      "serial" : 19610,
+      "eventid" : "8CC3717C-BBD7-4CDB-A5A5-01F00DD61D10",
+      "logged" : "2022-06-16T11:24:36.951+02:00",
+      "ambienttemp" : 35.03000000000003,
+      "respiratoryrate" : 17,
+      "deviceorientation" : 6,
+      "heartrate" : 81,
+      "eventname" : "End questionnaire s2.1",
+      "devicetemp" : 32.53000000000003
+    },
+    {
+      "serial" : 24156,
+      "eventid" : "95CF4F2C-A1F4-463D-B2EA-72619DB869ED",
+      "logged" : "2022-06-16T11:26:26.260+02:00",
+      "ambienttemp" : 35.210000000000036,
+      "respiratoryrate" : 22,
+      "deviceorientation" : 6,
+      "heartrate" : 89,
+      "eventname" : "Start memory reactivation task s2.1",
+      "devicetemp" : 32.910000000000025
+    },
+    {
+      "serial" : 27766,
+      "eventid" : "84CD243D-336B-4D8C-98E6-1CDDC14EA610",
+      "logged" : "2022-06-16T11:27:55.599+02:00",
+      "ambienttemp" : 35.29000000000002,
+      "respiratoryrate" : 16,
+      "deviceorientation" : 6,
+      "heartrate" : 102,
+      "eventname" : "End memory activation task S2.1",
+      "devicetemp" : 33.170000000000016
+    },
+    {
+      "serial" : 37464,
+      "eventid" : "AD9ED32C-907E-4920-A61F-7E9552BDF60A",
+      "logged" : "2022-06-16T11:31:51.520+02:00",
+      "ambienttemp" : 35.390000000000043,
+      "respiratoryrate" : 19,
+      "deviceorientation" : 0,
+      "heartrate" : 105,
+      "eventname" : "VR tunnel 1_eo",
+      "devicetemp" : 33.57000000000005
+    },
+    {
+      "serial" : 50516,
+      "eventid" : "B225F800-AF43-484B-B796-A6FBEB190990",
+      "logged" : "2022-06-16T11:37:08.083+02:00",
+      "ambienttemp" : 35.470000000000027,
+      "respiratoryrate" : 18,
+      "deviceorientation" : 0,
+      "heartrate" : 105,
+      "eventname" : "VR tunnel 2_eo",
+      "devicetemp" : 34.090000000000032
+    },
+    {
+      "serial" : 64498,
+      "eventid" : "0905F58F-D913-46EC-A574-2A80E15DFCE3",
+      "logged" : "2022-06-16T11:42:47.859+02:00",
+      "ambienttemp" : 35.810000000000002,
+      "respiratoryrate" : 22,
+      "deviceorientation" : 0,
+      "heartrate" : 88,
+      "eventname" : "End VR exposure_eo",
+      "devicetemp" : 34.53000000000003
+    },
+    {
+      "serial" : 68543,
+      "eventid" : "0ACEE70C-E675-4444-AC6D-676CC1E71172",
+      "logged" : "2022-06-16T11:44:26.226+02:00",
+      "ambienttemp" : 35.990000000000009,
+      "respiratoryrate" : 30,
+      "deviceorientation" : 6,
+      "heartrate" : 90,
+      "eventname" : "Start filler task",
+      "devicetemp" : 34.670000000000016
+    },
+    {
+      "serial" : 146898,
+      "eventid" : "9C16ED37-5318-4739-B7F3-E25CDF6C52BE",
+      "logged" : "2022-06-16T12:16:00.422+02:00",
+      "ambienttemp" : 36.470000000000027,
+      "respiratoryrate" : 26,
+      "deviceorientation" : 6,
+      "heartrate" : 0,
+      "eventname" : "End filler task",
+      "devicetemp" : 35.110000000000014
+    },
+    {
+      "serial" : 150032,
+      "eventid" : "52F0E5FB-0DB5-417D-98DE-1594BDBFB006",
+      "logged" : "2022-06-16T12:17:17.843+02:00",
+      "ambienttemp" : 36.470000000000027,
+      "respiratoryrate" : 21,
+      "deviceorientation" : 6,
+      "heartrate" : 94,
+      "eventname" : "Start memory activation task s2.2",
+      "devicetemp" : 35.230000000000018
+    },
+    {
+      "serial" : 153094,
+      "eventid" : "0E6458D4-4C9F-4BDE-A341-CFE916F480A3",
+      "logged" : "2022-06-16T12:18:31.799+02:00",
+      "ambienttemp" : 36.510000000000048,
+      "respiratoryrate" : 24,
+      "deviceorientation" : 6,
+      "heartrate" : 93,
+      "eventname" : "End memory activation task s2.2",
+      "devicetemp" : 35.330000000000041
+    },
+    {
+      "serial" : 155112,
+      "eventid" : "69F48E96-CC02-4BB8-A270-E80F2606AE13",
+      "logged" : "2022-06-16T12:19:21.214+02:00",
+      "ambienttemp" : 36.470000000000027,
+      "respiratoryrate" : 24,
+      "deviceorientation" : 6,
+      "heartrate" : 94,
+      "eventname" : "Start questionnaire s2.2",
+      "devicetemp" : 35.370000000000005
+    },
+    {
+      "serial" : 157015,
+      "eventid" : "6ADBB813-13D8-41A2-B2B3-AA33396F5922",
+      "logged" : "2022-06-16T12:20:08.037+02:00",
+      "ambienttemp" : 36.470000000000027,
+      "respiratoryrate" : 18,
+      "deviceorientation" : 6,
+      "heartrate" : 89,
+      "eventname" : "End questionnaire s2.2",
+      "devicetemp" : 35.370000000000005
+    }
+  ],
+  "appversion" : "1.59",
+  "latitude" : "Not specified",
+  "patientname" : "Not specified",
+  "reportmode" : 2,
+  "outputformats" : [
+    {
+      "binaryfiles" : true
+    },
+    {
+      "csv" : false
+    },
+    {
+      "physiobank" : false
+    },
+    {
+      "miscpacketsonly" : false
+    },
+    {
+      "mitformat" : false
+    }
+  ],
+  "pdfpassword" : "Not specified",
+  "patient" : {
+    "gender" : "Unknown",
+    "weight" : 0,
+    "height" : 0,
+    "lastname" : "",
+    "anonymous" : true,
+    "firstname" : "",
+    "identifier" : ""
+  },
+  "filename" : "62AAF4F6.BLE",
+  "reportdetail" : 0,
+  "deviceid" : "C3-8A9A7913F5D4",
+  "email" : "Not specified",
+  "longitude" : "Not specified",
+  "gender" : "Not specified",
+  "temperaturescale" : "f",
+  "firmwareversion" : "Mar 26 2018",
+  "appbuild" : "1",
+  "gain" : 1,
+  "patientid" : "Not specified",
+  "start" : "2022-06-16T11:16:38.000+02:00",
+  "outlier_limit" : 30000,
+  "samplingrate" : 250
+}
