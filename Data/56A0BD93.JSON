@@ -1,0 +1,47 @@
+{
+  "reportdetail" : 0,
+  "deviceid" : "C3-A8B7E48FC320",
+  "reportmode" : 2,
+  "filename" : "56A0BD93.BLE",
+  "email" : "Not specified",
+  "outputformats" : [
+    {
+      "binaryfiles" : true
+    },
+    {
+      "csv" : false
+    },
+    {
+      "physiobank" : false
+    },
+    {
+      "miscpacketsonly" : false
+    },
+    {
+      "mitformat" : false
+    }
+  ],
+  "firmwareversion" : "Jan  5 2016",
+  "latitude" : "Not specified",
+  "start" : "2016-01-25T21:34:16.385+0000",
+  "softwareversion" : "0.3.9.2",
+  "longitude" : "Not specified",
+  "appversion" : "1.2",
+  "gender" : "Not specified",
+  "patientid" : "Not specified",
+  "patientname" : "Not specified",
+  "samplingrate" : 250,
+  "emailsubject" : "Not specified",
+  "temperaturescale" : "f",
+  "appbuild" : "12",
+  "events" : [
+    {
+      "eventid" : "0856FDB9-B86E-4FB4-931F-F585E89ECF2F",
+      "eventname" : "Some event i noted in the app",
+      "serial" : 1316
+    }
+  ],
+  "patientage" : "Not specified",
+  "pdfpassword" : "1234",
+  "hardwareversion" : "B6"
+}

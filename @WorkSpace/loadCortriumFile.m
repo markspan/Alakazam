@@ -1,10 +1,6 @@
 function loadCortriumFile(this, WS, name)
 %%
 %
-% http://www.mathworks.com/matlabcentral/fileexchange/45840-complete-pan-tompkins-implementation-ecg-qrs-detector
-% https://nl.mathworks.com/help/wavelet/ug/r-wave-detection-in-the-ecg.html
-% https://nl.mathworks.com/matlabcentral/fileexchange/67805-biosigkit-a-toolkit-for-bio-signal-analysis?s_tid=prof_contriblnk
-% https://nl.mathworks.com/matlabcentral/fileexchange/45404-an-online-algorithm-for-r-s-and-t-wave-detection
 %%
 
 import matlab.ui.internal.toolstrip.*
@@ -60,10 +56,9 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
         EEG.srate  = C3.ecg.fs;
         EEG.pnts   = size(data,1);
         EEG.times = (((1:EEG.pnts)-1)/EEG.srate);
-
         for ii = 1:length(eventMarkers)
             EEG.event(end+1).type = strrep(eventMarkers(ii).description, '_', ' ');
-            EEG.event(end).latency = eventMarkers(ii).serial;
+            EEG.event(end).latency = round(eventMarkers(ii).serial * EEG.srate);%% TODO is this correct? Seems so.
             EEG.event(end).duration = 0;
             EEG.event(end).urevent = ii;
         end
@@ -115,11 +110,31 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
         %% Add the Json events if there
          if isfield(jsondata,'events') && ~isempty(jsondata.events)
             idxOffset = length(eventMarkers);
-            for ii=1:size(jsondata.events,2)
-                eventMarkers(ii+idxOffset).index = ii+idxOffset;
-                eventMarkers(ii+idxOffset).serial = jsondata.events{1,ii}.serial;
-                eventMarkers(ii+idxOffset).description = jsondata.events{1,ii}.eventname;
-                eventMarkers(ii+idxOffset).eventid = jsondata.events{1,ii}.eventid;
+            logstart = datetime(jsondata.start,'InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSXXX','TimeZone','local');
+            if size(jsondata.events,2) > 1
+                for ii=1:size(jsondata.events,2)
+                    try
+                        logged = datetime(jsondata.events(ii).logged,'InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSXXX','TimeZone','local');
+                        eventMarkers(ii+idxOffset).index = ii+idxOffset;
+                        eventMarkers(ii+idxOffset).serial = seconds(logged-logstart); % jsondata.events(ii).serial;
+                        eventMarkers(ii+idxOffset).description = jsondata.events(ii).eventname;
+                        eventMarkers(ii+idxOffset).eventid = jsondata.events(ii).eventid;
+                    catch e
+                        logged = datetime(jsondata.events{ii}.logged,'InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSXXX','TimeZone','local');
+                        eventMarkers(ii+idxOffset).index = ii+idxOffset;
+                        eventMarkers(ii+idxOffset).serial = seconds(logged-logstart); % jsondata.events(ii).serial;
+                        eventMarkers(ii+idxOffset).description = jsondata.events{ii}.eventname;
+                        eventMarkers(ii+idxOffset).eventid = jsondata.events{ii}.eventid;
+                    end                        
+                end
+            else
+                if (isfield(jsondata.events, 'logged'))
+                    logged = datetime(jsondata.events.logged,'InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSXXX','TimeZone','local');
+                    eventMarkers(end+1).index = ii+idxOffset;
+                    eventMarkers(end).serial =  seconds(logged-logstart);% jsondata.events.serial;
+                    eventMarkers(end).description = jsondata.events.eventname;
+                    eventMarkers(end).eventid = jsondata.events.eventid;
+                end
             end
          end
         %%
