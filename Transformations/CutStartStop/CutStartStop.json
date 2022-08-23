@@ -1,0 +1,1 @@
+{"Name":"CutStartStop","Description":"cuts data from the pulse in the start channel upto the pulse in the stop channel","Entry":"CutStartStop.m","Icon":"CutStartStop.png","Section":"Preprocessing","Category":"Cold Pressor"}
