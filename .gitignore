@@ -4,6 +4,5 @@
 *.Rhistory
 *.xdf
 *.BLE
-*.Poly5
 Temperatuur files Lara.zip
-Data/*.*
+Data
