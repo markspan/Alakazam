@@ -34,8 +34,15 @@ f = fopen([ExportsDir '/stats.csv'], "a");
 EEG=input;
 if ~isempty(STARTCHANNEL) && ~isempty(STOPCHANNEL)
     start = find(input.data(STARTCHANNEL,:) > 0);
+    if isempty(start)
+         throw(MException('Alakazam:CutStartStop','Problem in CutStartStop: No Start code'));
+    end
     start = start(end);
     stop = find(input.data(STOPCHANNEL,:) > 0);
+    if isempty(stop)
+         stop = EEG.pnts;
+         disp("No endpoint. Using the last sample as end.")
+    end
     stop = stop(1);
     EEG.pnts = stop - start;
     EEG.data = EEG.data(:,start:stop);
@@ -43,6 +50,8 @@ if ~isempty(STARTCHANNEL) && ~isempty(STOPCHANNEL)
     disp(['Temp 1: Mean(sd) = ' num2str(mean(EEG.data(T1,:))) '(' num2str(std(EEG.data(T1,:))) ') (n=' num2str(EEG.pnts) ') (' num2str(EEG.pnts/EEG.srate) 'sec)']);
     disp(['Temp 2: Mean(sd) = ' num2str(mean(EEG.data(T2,:))) '(' num2str(std(EEG.data(T2,:))) ')' ]);
     fprintf(f, '%s\t%3.3f\t%i\t%8.4f\t%8.4f\t%8.4f\t%8.4f\n',  EEG.id, EEG.pnts/EEG.srate, EEG.pnts, mean(EEG.data(T1,:)), std(EEG.data(T2,:)), mean(EEG.data(T2,:)), std(EEG.data(T1,:)));
+else
+        throw(MException('Alakazam:CutStartStop','Problem in CutStartStop: No Start and/or Stop channel defined'));
 end
  fclose(f) ; 
 
