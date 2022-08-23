@@ -2,7 +2,6 @@
 *.csv
 *.asv
 *.Rhistory
-Data\*
 *.xdf
 *.BLE
 *.Poly5
