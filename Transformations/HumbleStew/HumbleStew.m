@@ -1,6 +1,6 @@
-function [EEG, options] = CutStartStop(input,opts)
+function [EEG, options] = HumbleStew(input,opts)
 %%
-% CutstartStop: specific plugin for the temperature data from the
+% HumbleStew: specific plugin for the temperature data from the
 % cold-pressor test 
 % 
 % made for L.Lakhsassi
@@ -10,7 +10,7 @@ function [EEG, options] = CutStartStop(input,opts)
 
 %% Check for the EEG dataset input:
 if (nargin < 1)
-    throw(MException('Alakazam:CutStartStop','Problem in CutStartStop: No Data Supplied'));
+    throw(MException('Alakazam:HumbleStew','Problem in HumbleStew: No Data Supplied'));
 end
 
 if (nargin == 1)
@@ -25,17 +25,17 @@ T1 = find(strcmpi('Temp 1', {input.chanlocs.labels}), 1);
 T2 = find(strcmpi('Temp 2', {input.chanlocs.labels}), 1);
 
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
-if ~isfile([ExportsDir 'stats.csv'])
-    f = fopen([ExportsDir 'stats.csv'], 'a');
-    fprintf(f,'id\tdur\tpts\tT1Mean\tT1std\ttT2Mean\tT2std\n')
+if ~isfile([ExportsDir 'Stew.csv'])
+    f = fopen([ExportsDir 'Stew.csv'], 'a');
+    fprintf(f,'id;dur;pts;T1Mean;T1std;tT2Mean;T2std\n');
     fclose(f);
 end
-f = fopen([ExportsDir '/stats.csv'], "a");
+f = fopen([ExportsDir '/Stew.csv'], "a");
 EEG=input;
 if ~isempty(STARTCHANNEL) && ~isempty(STOPCHANNEL)
     start = find(input.data(STARTCHANNEL,:) > 0);
     if isempty(start)
-         throw(MException('Alakazam:CutStartStop','Problem in CutStartStop: No Start code'));
+         throw(MException('Alakazam:HumbleStew','Problem in HumbleStew: No Start code'));
     end
     start = start(end);
     stop = find(input.data(STOPCHANNEL,:) > 0);
@@ -49,9 +49,9 @@ if ~isempty(STARTCHANNEL) && ~isempty(STOPCHANNEL)
     EEG.times = EEG.times(start:stop);
     disp(['Temp 1: Mean(sd) = ' num2str(mean(EEG.data(T1,:))) '(' num2str(std(EEG.data(T1,:))) ') (n=' num2str(EEG.pnts) ') (' num2str(EEG.pnts/EEG.srate) 'sec)']);
     disp(['Temp 2: Mean(sd) = ' num2str(mean(EEG.data(T2,:))) '(' num2str(std(EEG.data(T2,:))) ')' ]);
-    fprintf(f, '%s\t%3.3f\t%i\t%8.4f\t%8.4f\t%8.4f\t%8.4f\n',  EEG.id, EEG.pnts/EEG.srate, EEG.pnts, mean(EEG.data(T1,:)), std(EEG.data(T2,:)), mean(EEG.data(T2,:)), std(EEG.data(T1,:)));
+    fprintf(f, '%s;%3.3f;%i;%8.4f;%8.4f;%8.4f;%8.4f\n',  EEG.id, EEG.pnts/EEG.srate, EEG.pnts, mean(EEG.data(T1,:)), std(EEG.data(T2,:)), mean(EEG.data(T2,:)), std(EEG.data(T1,:)));
 else
-        throw(MException('Alakazam:CutStartStop','Problem in CutStartStop: No Start and/or Stop channel defined'));
+        throw(MException('Alakazam:HumbleStew','Problem in HumbleStew: No Start and/or Stop channel defined'));
 end
  fclose(f) ; 
 
