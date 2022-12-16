@@ -84,7 +84,7 @@ if ~isempty(validevents)
     end
 end
 
-out = sortrows(out,{'IBI','Device'});
+out = sortrows(out,{'RTop','Device'});
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 writetable(out, fullfile(ExportsDir,fname))
 if strcmp(options.np , 'yes')

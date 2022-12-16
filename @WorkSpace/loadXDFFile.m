@@ -73,7 +73,7 @@ function EEG = loadXDF(filename)
     td = tempdir;
     tnf = tempname(td);
     mkdir (tnf)
-    data = dataSourceXDF( filename , tnf );
+    data = Tools.dataSourceXDF( filename , tnf );
     sr=[]; ns=[]; 
     maxsr=-1;
     polar = [];

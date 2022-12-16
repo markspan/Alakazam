@@ -27,7 +27,7 @@ T2 = find(strcmpi('Temp 2', {input.chanlocs.labels}), 1);
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 if ~isfile([ExportsDir 'Stew.csv'])
     f = fopen([ExportsDir 'Stew.csv'], 'a');
-    fprintf(f,'id;dur;pts;T1Mean;T1std;tT2Mean;T2std\n');
+    fprintf(f,'id,dur,pts,T1Mean,T1std,tT2Mean,T2std\n');
     fclose(f);
 end
 f = fopen([ExportsDir '/Stew.csv'], "a");
@@ -49,7 +49,7 @@ if ~isempty(STARTCHANNEL) && ~isempty(STOPCHANNEL)
     EEG.times = EEG.times(start:stop);
     disp(['Temp 1: Mean(sd) = ' num2str(mean(EEG.data(T1,:))) '(' num2str(std(EEG.data(T1,:))) ') (n=' num2str(EEG.pnts) ') (' num2str(EEG.pnts/EEG.srate) 'sec)']);
     disp(['Temp 2: Mean(sd) = ' num2str(mean(EEG.data(T2,:))) '(' num2str(std(EEG.data(T2,:))) ')' ]);
-    fprintf(f, '%s;%3.3f;%i;%8.4f;%8.4f;%8.4f;%8.4f\n',  EEG.id, EEG.pnts/EEG.srate, EEG.pnts, mean(EEG.data(T1,:)), std(EEG.data(T2,:)), mean(EEG.data(T2,:)), std(EEG.data(T1,:)));
+    fprintf(f, '%s,%f,%i,%f,%f,%f,%f\n',  EEG.id, EEG.pnts/EEG.srate, EEG.pnts, mean(EEG.data(T1,:)), std(EEG.data(T2,:)), mean(EEG.data(T2,:)), std(EEG.data(T1,:)));
 else
         throw(MException('Alakazam:HumbleStew','Problem in HumbleStew: No Start and/or Stop channel defined'));
 end

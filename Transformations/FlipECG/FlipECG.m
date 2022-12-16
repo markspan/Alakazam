@@ -31,6 +31,8 @@ if (size(ecgData,1) > 1 )
     ecgid = strcmpi(options.channelname, {input.chanlocs.labels});
 else
     ecgid=1;
+    options = struct();
+    options.channelname = 'Unknown1';
 end
 
 if sum(ecgid) > 0

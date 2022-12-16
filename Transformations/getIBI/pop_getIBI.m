@@ -23,13 +23,16 @@ if strcmp(par, 'Init')
         'Description', 'Set the parameters for getIBI',...
         'title' , 'IBI options',...
         'separator' , 'Parameters:',...
-        {'Minimal Peak Distance' ;'MinPeakDistance' }, .33, ...
+        {'Minimal Peak Distance' ;'MinPeakDistance' }, .3, ...
+        {'WinLength' ;'Tw' }, 50, ...
+        {'limit in sd' ;'Nsd' }, 4, ...
+        {'Max interpolation duration' ;'Tmax' }, 5, ...
         {'Use:'; 'channame'}, cn);
 end
 
 ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
 ecgData = ecgData(ecgid,:);
-par.MinPeakHeight = median(ecgData,'omitnan')+(1.5*std(ecgData, 'omitnan'));
+par.MinPeakHeight = median(ecgData,'omitnan')+(2*std(ecgData, 'omitnan'));
 fSample = EEGstruct.srate;
 
 %% if the data originate from a polarband: we have the original sampled 
@@ -45,7 +48,8 @@ if isfield(EEGstruct, 'Polarchannels')
         else
             ecgTimestamps = EEGstruct.Polarchannels.times;
         end
-        par.MinPeakHeight = median(ecgData, 'omitnan')+(1.5*std(ecgData, 'omitnan'));
+        %ecgData(ecgData < prctile(ecgData,.01) | ecgData > prctile(ecgData, 99.99)) = nan;
+        par.MinPeakHeight = median(ecgData, 'omitnan')+(.8*std(ecgData, 'omitnan'));
     end
 end
 
@@ -55,9 +59,9 @@ MinPeakDistance = par.MinPeakDistance*fSample;
 
 
 %% Then, first find the (approximate) peaks
-[~,locs] = findpeaks(ecgData,'MinPeakHeight',par.MinPeakHeight,...
+[vals,locs] = findpeaks(ecgData, 'MinPeakHeight', par.MinPeakHeight,...
     'MinPeakDistance',MinPeakDistance);
-vals = ecgData(locs);
+locs = locs - 1;
 disp(['*found '  int2str(length(vals))  ' r-tops'])
 %% Now the algorithm can start.
 %------------------------------------------------------------------------------------------
@@ -69,6 +73,7 @@ catch ME
     ME = addCause(ME,causeException);
     rethrow(ME);
 end
+%correction = correction * 0;
 
 %% Because the eventtimes for the r-top are interpolated they do not fit 
 %% the event structure. We keep them separated
@@ -76,6 +81,13 @@ end
 if size(ecgTimestamps(locs),1) == size(correction,2)
     ecgTimestamps = ecgTimestamps';
 end
+
+classID = IBIClassification(ecgTimestamps(locs) + correction, par.Tw, par.Nsd, par.Tmax); %% (p45 of CARSPAN MANUAL 2.0)
+[cRTopTimes,ecgData] = RTCorrection(ecgTimestamps(locs) + correction, ecgData(locs), classID);
+
+%cRTopTimes = ecgTimestamps(locs) + correction;
+%ecgData =  ecgData(locs);
+%EEGstruct.data(ecgid,:) =  ecgData; 
 
 if isfield(EEGstruct, 'IBIevent') 
     i = min(length(EEGstruct.IBIevent)+1,2);
@@ -85,13 +97,115 @@ if isfield(EEGstruct, 'IBIevent')
         end
     end
     EEGstruct.IBIevent{i}.channelname = par.channame;
-    EEGstruct.IBIevent{i}.RTopTime = ecgTimestamps(locs) + correction;
-    EEGstruct.IBIevent{i}.RTopVal = ecgData(locs);
+    EEGstruct.IBIevent{i}.RTopTime = cRTopTimes;
+    EEGstruct.IBIevent{i}.RTopVal = ecgData;
     EEGstruct.IBIevent{i}.ibis = round(diff(EEGstruct.IBIevent{i}.RTopTime),3);
+    EEGstruct.IBIevent{i}.classID = classID;
 else    
     EEGstruct.IBIevent{1}.channelname = par.channame;
-    EEGstruct.IBIevent{1}.RTopTime = ecgTimestamps(locs) + correction;
-    EEGstruct.IBIevent{1}.RTopVal = ecgData(locs);
+    EEGstruct.IBIevent{1}.RTopTime = cRTopTimes;
+    EEGstruct.IBIevent{1}.RTopVal = ecgData;
     EEGstruct.IBIevent{1}.ibis = round(diff(EEGstruct.IBIevent{1}.RTopTime),3);
+    EEGstruct.IBIevent{1}.classID = classID;
 end
 end
+
+function [RTout,ecgData, classID] = RTCorrection(RTin, ecgData, classID)
+    RTout = RTin;
+    return
+    for i = 1:length(classID)-1
+        disp(int2str(i))
+        if classID(i) == "S"
+            RTout(i) = 0;
+            ecgData(i) = nan;
+            classID(i) = "";
+        end
+    end
+    classID(classID=="") = [];
+    RTout(RTout==0) = [];
+    ecgData(isnan(ecgData)) = [];
+end
+
+function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
+    %%Classification:
+    %
+    %   default params:
+    %       Tw = 50 (sec!) (###Implemented as 50 IBIs!###)
+    %       Nsd = 4 (sd)
+    %       T refractory = .3
+    %       Tmax = 5 (sec)
+    %
+    %%
+    %%
+    % Normal beat: Calculate mean IBI around current over time Tw -> avIBIr
+    %               Calculate the SD of this vaiable              -> SD(avIBIr)
+    %               if the value is within the Running average and Nsd times
+    %               the SD: This is a normal Beat
+    % else:
+    %       short beat: below this min value
+    %       long beat : above this max value
+    %
+
+    %% Additional Classifications: 
+    % vagal Inhibition (WARNING, no correction)
+    % vagal activation (WARNING, no correction)
+    
+    %% Short followed by long:
+    % remove R-peak, interpolate (WARNING)
+    
+    %% Short - Normal - Short
+    % Interpolate (WARNING)
+    
+    %% Short Beat:
+    % if IBI < Trefractory: 
+    %   Remove R-peak
+    % else:
+    %   if nFit = 1: remove R-Peak
+    %   if nFit = 2: remove R-Peak, interpolate
+    %   if else: No correction, unknown artefact
+    
+    %% Long Beat:
+    % if IBI > Tmax: Split Block (WARNING)
+    % interpolate
+
+    %% Output Labels:
+    % N = Normal
+    % L = Long
+    % S = Short
+    % T = Too long to interpolate
+
+    % I = inhibition (NOT YET IMPLEMENTED)
+    % A =  Activation (NOT YET IMPLEMENTED)
+
+    % 1 = short-long 
+    % 2 = short-normal-short
+
+    IBI = diff(RTT);
+
+    classID(1:length(IBI)) = "N"; %% The default
+
+    avIBIr = movmean(IBI, Tw);
+    SDavIBIr = movstd(IBI, Tw);
+    lower = avIBIr - (Nsd .* SDavIBIr);
+    higher = avIBIr + (Nsd .* SDavIBIr);
+
+    classID(IBI > higher) = "L"; %% Long IBI
+    classID(IBI < lower) = "S";  %% Short IBI
+    
+    classID(IBI > Tmax) = "T"; %% Too Long
+
+    for i = 1:length(classID)-1
+        if classID(i) == "S" && classID(i+1) == "L"
+            classID(i) = "1"; %% Short - long
+        end
+        if i ~= length(classID)-2
+            if classID(i) == "S" && classID(i+1) == "N" && classID(i+1) == "S" 
+                classID(i) = "2"; %% short - normal - short
+            end
+        end
+    end
+    for id = unique(classID)
+        d = "Found " + length(classID(classID==id)) + " " + id + " rtops";
+        disp(d)
+    end
+ end
