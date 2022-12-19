@@ -473,7 +473,7 @@ hs.panel.Visible = 'on';
                 Labels = SIG.ibi(showRTi);
                 prelab = SIG.IBICLASS(showRTi);
                 %cols = lines(length(SIG.IBIEVENTS));
-                cols = dictionary(["N" "L" "S" "T" "1" "2"], ["blue" "red" "red" "yellow" "green" "green"]);
+                cols = dictionary(["N" "L" "S" "T" "1" "2" "i"], ["blue" "red" "red" "yellow" "green" "green" "magenta"]);
                 if (length(plottedIBIS) < parser.Results.MaxIBIS)
                     if i == 1
                         for rt = 1:length(plottedIBIS)

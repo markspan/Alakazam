@@ -49,7 +49,7 @@ if isfield(EEGstruct, 'Polarchannels')
             ecgTimestamps = EEGstruct.Polarchannels.times;
         end
         %ecgData(ecgData < prctile(ecgData,.01) | ecgData > prctile(ecgData, 99.99)) = nan;
-        par.MinPeakHeight = median(ecgData, 'omitnan')+(.8*std(ecgData, 'omitnan'));
+        par.MinPeakHeight = median(ecgData, 'omitnan')+(1.5*std(ecgData, 'omitnan'));
     end
 end
 
@@ -61,7 +61,6 @@ MinPeakDistance = par.MinPeakDistance*fSample;
 %% Then, first find the (approximate) peaks
 [vals,locs] = findpeaks(ecgData, 'MinPeakHeight', par.MinPeakHeight,...
     'MinPeakDistance',MinPeakDistance);
-locs = locs - 1;
 disp(['*found '  int2str(length(vals))  ' r-tops'])
 %% Now the algorithm can start.
 %------------------------------------------------------------------------------------------
@@ -73,7 +72,6 @@ catch ME
     ME = addCause(ME,causeException);
     rethrow(ME);
 end
-%correction = correction * 0;
 
 %% Because the eventtimes for the r-top are interpolated they do not fit 
 %% the event structure. We keep them separated
@@ -83,7 +81,7 @@ if size(ecgTimestamps(locs),1) == size(correction,2)
 end
 
 classID = IBIClassification(ecgTimestamps(locs) + correction, par.Tw, par.Nsd, par.Tmax); %% (p45 of CARSPAN MANUAL 2.0)
-[cRTopTimes,ecgData] = RTCorrection(ecgTimestamps(locs) + correction, ecgData(locs), classID);
+[cRTopTimes,ecgData, classID] = RTCorrection(ecgTimestamps(locs) + correction, ecgData(locs), classID);
 
 %cRTopTimes = ecgTimestamps(locs) + correction;
 %ecgData =  ecgData(locs);
@@ -110,20 +108,33 @@ else
 end
 end
 
-function [RTout,ecgData, classID] = RTCorrection(RTin, ecgData, classID)
+function [RTout, ecgData, classID] = RTCorrection(RTin, ecgData, classID)
     RTout = RTin;
-    return
     for i = 1:length(classID)-1
-        disp(int2str(i))
         if classID(i) == "S"
-            RTout(i) = 0;
+            RTout(i) = 0; % mark for removal
             ecgData(i) = nan;
             classID(i) = "";
         end
+        if classID(i) == "L"
+            if i>1
+                delta = ecgData(i) / abs(mean([ecgData(i-1), ecgData(i+1)])); 
+                if (delta > 1.5)
+                    %% interpolate a beat after this one,
+                    % and recalculate *this* ibi
+                    nRt     = mean([RTin(i), RTin(i+1)]);
+                    nIBI    = ecgData(i)/2;
+                    RTout   = [RTout(1:i) nRt RTout((i+1):end)];
+                    ecgData = [ecgData(1:i) nIBI ecgData((i+1):end)];
+                    classID(i) = 'i';
+                    classID = [classID(1:i) 'i' classID((i+1):end)];
+                end
+            end
+        end
     end
-    classID(classID=="") = [];
-    RTout(RTout==0) = [];
-    ecgData(isnan(ecgData)) = [];
+    classID(classID=="") = [];% remove 
+    RTout(RTout==0) = []; % remove 
+    ecgData(isnan(ecgData)) = []; % remove 
 end
 
 function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
@@ -154,13 +165,13 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
     % remove R-peak, interpolate (WARNING)
     
     %% Short - Normal - Short
-    % Interpolate (WARNING)
+    % Interpolate (WARNING) @AvR What??
     
     %% Short Beat:
     % if IBI < Trefractory: 
     %   Remove R-peak
     % else:
-    %   if nFit = 1: remove R-Peak
+    %   if nFit = 1: remove R-Peak %% @AvR: Q1: what is nFit?
     %   if nFit = 2: remove R-Peak, interpolate
     %   if else: No correction, unknown artefact
     
@@ -172,7 +183,7 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
     % N = Normal
     % L = Long
     % S = Short
-    % T = Too long to interpolate
+    % T = Too long (@AvR: to interpolate?)
 
     % I = inhibition (NOT YET IMPLEMENTED)
     % A =  Activation (NOT YET IMPLEMENTED)
@@ -182,7 +193,7 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
 
     IBI = diff(RTT);
 
-    classID(1:length(IBI)) = "N"; %% The default
+    classID(1:length(IBI)+1) = "N"; %% The default
 
     avIBIr = movmean(IBI, Tw);
     SDavIBIr = movstd(IBI, Tw);
