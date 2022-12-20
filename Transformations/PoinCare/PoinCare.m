@@ -83,7 +83,7 @@ if (~strcmp(options.bylabel, 'on'))
     label = "Full Epoch";
     [h, sd1,sd2] = PCPlot(pax,ibix,ibiy, ibit, type, input, options.ell,1, label);
     subplot(1,2,1,pax);
-    PCInfo(label, sd1, sd2)
+    PCInfo(strrep(label, options.label, ""), sd1, sd2)
 else
     h=[];
     sd1=[];
@@ -97,11 +97,11 @@ else
             ev = elist(e);
             idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
         end
-        [h(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), type, input, options.ell,i, label);
+        [h(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), type, input, options.ell,i, strrep(evc{i}, options.label, ""));
         hold on
     end
     subplot(1,2,1,pax);
-    PCInfo(evc, sd1, sd2)
+    PCInfo(strrep(evc, options.label, ""), sd1, sd2)
 end
 
 if options.origin
@@ -110,7 +110,7 @@ if options.origin
     xlim([0 a(2)])
     ylim([0 a(2)])
 end
-
+sgtitle(input.id);
 xlabel("IBI_(_t_)");
 ylabel("IBI_(_t_+_1_)");
 legend(h);
@@ -137,8 +137,9 @@ title('Parameters:', 'Poincare')
 pars = {};
 for i = 1:length(sd1)
     %labels(i) = {[char(labels(i)) ' (sd1= '  num2str(sd1(i)) ' sd2= '  num2str(sd2(i)) ')']};
-    pars{end+1} = name{i};
-    pars{end+1} = "     SD1 = " + num2str(sd1(i)) + " s -" + "     SD2 = " + num2str(sd2(i)) + " s -" + "     SD2/SD1 = " + num2str(round(sd2(i)/sd1(i),2));
+    pars{end+1} = name{i} + ": " + char(9) + "SD1 = " + num2str(sd1(i),'%05.3f') + ...
+        "s - " + char(9) + "SD2 = "     + num2str(sd2(i),'%05.2f') + ...
+        "s - "+ char(9) + "SD2/SD1 = "  + num2str(sd2(i)/sd1(i),'%05.2f');
 end
 fs = 12;
 if length(pars) > 45
@@ -158,7 +159,6 @@ col = pax.ColorOrder(mod(i-1,7)+1,:);
 hold on
 h=scatter(pax,ibix, ibiy, type, 'MarkerEdgeColor',col, 'DisplayName', char(label) );
 axis square;
-title(pax, input.id);
 grid minor;
 
 if ell
