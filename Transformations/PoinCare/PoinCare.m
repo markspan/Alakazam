@@ -90,9 +90,14 @@ else
     sd2=[];
     for i = 1:length(evc)
         label = evc(i);
-        event = strcmp({input.event.type}, label);
-        idx = (ibit > input.event(event).latency/input.srate) & (ibit < (((input.event(event).latency)/input.srate)+(input.event(event).duration/input.srate)));
-        [h(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), type, input, options.ell,i, label);   
+        event = [strcmp({input.event.type}, label)];
+        idx = ibit<0;
+        for e = 1:length(input.event(event)) %% when there are more events
+            elist = [input.event(event)];
+            ev = elist(e);
+            idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
+        end
+        [h(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), type, input, options.ell,i, label);
         hold on
     end
     subplot(1,2,1,pax);
@@ -100,7 +105,7 @@ else
 end
 
 if options.origin
-    axes(pax) 
+    axes(pax)
     a=xlim;
     xlim([0 a(2)])
     ylim([0 a(2)])
@@ -108,67 +113,16 @@ end
 
 xlabel("IBI_(_t_)");
 ylabel("IBI_(_t_+_1_)");
-
+legend(h);
+legend('boxoff')
 end
-%
-% else
-%     %% Same plot, but now for each of the levels of the selected label.
-%     sd1=[];sd2=[];name={};h=[];
-%     h=scatter(pax, xlim, ylim, ':b', 'LineWidth', 1);
-%     hold on
-%     for i = 1:length(evc)
-%         lab = evc(i);
-%         event = strcmp({input.event.type}, lab);
-%         try
-%             idx = (ibit > input.event(event).latency) & (ibit < (input.event(event).latency+input.event(event).duration));
-%             disp (sum(idx))
-%         catch e
-%         end
-%         if exist("idx", "var")  && ~isempty(idx)
-%             if sum(idx) > 0
-%                 ix = ibix(idx);
-%                 iy = ibiy(idx);
-%                 %% this is the 'subplot' per label:
-%                 h(end+1) = plot(ix, iy, type, 'MarkerSize', 8);
-%                 col = get(h(i),'Color');
-%                 hold on
-%                 %calculate the parameters for the infopanes...
-%                 sd1(end+1) = round( (sqrt(2)/2.0) * std(ix-iy), 3);
-%                 sd2(end+1) = round( sqrt(2*std(ix)^2 ) - (.5*std(ix-iy)^2),3);
-%                 name{end+1} = char(lab);
-%                 if options.ell
-%                     plot_ellipse(2*sd1(end),2*sd2(end),mean(ix), mean(iy), 45, col);
-%                 end
-%             end
-%         end
-%     end
-% end
-% %% draw zoomed in to the dots, of from the origin?
-%
-% %% create the info plot with the parameters
-% anax = subplot(1,2,2);
-% plot(anax, 0);
-% set(anax, 'XTick', [], 'YTick', [], 'Box', 'off',...
-%     'Color', [.98 .98 .98], ...
-%     'XColor', 'none', 'YColor', 'none');
-%
-% anax.Toolbar.Visible = 'off';
-% axis square;
-% set(anax,'TitleHorizontalAlignment', 'left');
-% title('Parameters:', 'Poincare')
-%
-% pars = {};
-% for i = 1:length(sd1)
-%     %labels(i) = {[char(labels(i)) ' (sd1= '  num2str(sd1(i)) ' sd2= '  num2str(sd2(i)) ')']};
-%     pars{end+1} = name{i};
-%     pars{end+1} = "     SD1 = " + num2str(sd1(i)) + " s";
-%     pars{end+1} = "     SD2 = " + num2str(sd2(i)) + " s";
-%     pars{end+1} = "     SD2/SD1 = " + num2str(round(sd2(i)/sd1(i),2));
-% end
-% text(0,1,pars, 'VerticalAlignment', 'top');
-% legend(pax, evc, 'Location', 'southeast');
-% end
+
 function PCInfo(name, sd1, sd2)
+%% 
+%   PCInfo plots the test statistics next to the plot
+%
+%
+%%
 anax = subplot(1,2,2);
 plot(anax, 0);
 set(anax, 'XTick', [], 'YTick', [], 'Box', 'off',...
@@ -184,35 +138,44 @@ pars = {};
 for i = 1:length(sd1)
     %labels(i) = {[char(labels(i)) ' (sd1= '  num2str(sd1(i)) ' sd2= '  num2str(sd2(i)) ')']};
     pars{end+1} = name{i};
-    pars{end+1} = "     SD1 = " + num2str(sd1(i)) + " s";
-    pars{end+1} = "     SD2 = " + num2str(sd2(i)) + " s";
-    pars{end+1} = "     SD2/SD1 = " + num2str(round(sd2(i)/sd1(i),2));
+    pars{end+1} = "     SD1 = " + num2str(sd1(i)) + " s -" + "     SD2 = " + num2str(sd2(i)) + " s -" + "     SD2/SD1 = " + num2str(round(sd2(i)/sd1(i),2));
 end
-text(0,1,pars, 'VerticalAlignment', 'top');
+fs = 12;
+if length(pars) > 45
+    fs = fs / 2;
+end
+text(0,1,pars, 'VerticalAlignment', 'top', 'FontSize', fs);
 end
 
-function [h, sd1, sd2]=PCPlot(pax,ibix,ibiy, ibit, type, input, ell, i, label)    
-    col = pax.ColorOrder(mod(i-1,7)+1,:);
-    hold on
-    h=scatter(pax,ibix, ibiy, type, 'MarkerEdgeColor',col );
-    axis square;
-    title(pax, input.id);
-    grid minor;
+function [h, sd1, sd2]=PCPlot(pax,ibix,ibiy,ibit, type, input, ell, i, label)
+%% 
+%   PCPlot plots the poincare map
+%
+%
+%%
 
-    if ell
-        sd1 = round((sqrt(2)/2.0) * std(ibix-ibiy),3);
-        sd2 = round( sqrt(2*std(ibix)^2) - (.5*std(ibix-ibiy)^2),3);
-        plot_ellipse(4*sd1,4*sd2,mean(ibix), mean(ibiy), 45, col);
-    end
+col = pax.ColorOrder(mod(i-1,7)+1,:);
+hold on
+h=scatter(pax,ibix, ibiy, type, 'MarkerEdgeColor',col, 'DisplayName', char(label) );
+axis square;
+title(pax, input.id);
+grid minor;
 
-    % make it into a subplot:
-
-    h.DataTipTemplate.DataTipRows(1).Label = "ibi_(_t_)";
-    h.DataTipTemplate.DataTipRows(2).Label = "ibi_(_t_+_1_)";
-    h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
-    [k{1:length(ibit)}] = deal(label);
-    h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
+if ell
+    sd1 = round((sqrt(2)/2.0) * std(ibix-ibiy),3);
+    sd2 = round( sqrt(2*std(ibix)^2) - (.5*std(ibix-ibiy)^2),3);
+    plot_ellipse(4*sd1,4*sd2,mean(ibix), mean(ibiy), 45, col);
 end
+
+% make it into a subplot:
+
+h.DataTipTemplate.DataTipRows(1).Label = "ibi_(_t_)";
+h.DataTipTemplate.DataTipRows(2).Label = "ibi_(_t_+_1_)";
+h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
+[k{1:length(ibit)}] = deal(label);
+h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
+end
+
 function h=plot_ellipse(a,b,cx,cy,angle,color)
 %a: width in pixels
 %b: height in pixels
@@ -235,20 +198,3 @@ h = patch(cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
 h.FaceAlpha = .05;
 
 end
-%
-%     %% create the info plot with the parameters
-%     anax = subplot(1,2,2);
-%     pars = {"     SD1 = " + num2str(sd1) + " s"};
-%     pars{end+1} = "     SD2 = " + num2str(sd2) + " s";
-%     pars{end+1} = "     SD2/SD1 = " + num2str(round(sd2/sd1,2));
-%
-%     plot(anax, 0);
-%     set(anax, 'XTick', [], 'YTick', [], 'Box', 'off',...
-%         'Color', [.98 .98 .98], ...
-%         'XColor', 'none', 'YColor', 'none');
-%     anax.Toolbar.Visible = 'off';
-%     axis square;
-%     title('Parameters:', 'Poincare')
-%     set(anax,'TitleHorizontalAlignment', 'left');
-%     text(0,1,pars, 'VerticalAlignment', 'top');
-%

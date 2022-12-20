@@ -119,14 +119,14 @@ function [RTout, ecgData, classID] = RTCorrection(RTin, ecgData, classID)
         if classID(i) == "L"
             if i>1
                 delta = ecgData(i) / abs(mean([ecgData(i-1), ecgData(i+1)])); 
-                if (delta > 1.5)
+                if (delta > 2.0)
                     %% interpolate a beat after this one,
                     % and recalculate *this* ibi
-                    nRt     = mean([RTin(i), RTin(i+1)]);
-                    nIBI    = ecgData(i)/2;
+                    nRt     = mean([RTin(i), RTin(i+1)])
+                    nIBI    = ecgData(i)/2
                     RTout   = [RTout(1:i) nRt RTout((i+1):end)];
                     ecgData = [ecgData(1:i) nIBI ecgData((i+1):end)];
-                    classID(i) = 'i';
+                    classID(i) = 'T';
                     classID = [classID(1:i) 'i' classID((i+1):end)];
                 end
             end
