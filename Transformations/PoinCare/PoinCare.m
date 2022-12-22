@@ -24,7 +24,6 @@ else
 end
 
 pfigure = figure('NumberTitle', 'off', 'Name', 'PoinCare','Tag', input.File, ...
-    'Renderer', 'painters' , ...
     'Color' ,[.98 .98 .98], ...
     'PaperOrientation','landscape', ...
     'PaperPosition',[.05 .05 .9 .9], ...
@@ -52,7 +51,6 @@ if strcmp(options, 'Init')
         'separator' , 'Plot Parameters:',...
         {'Delta' ;'delta' }, 1,...
         {'Origin included'; 'origin'}, [true, false],...
-        {'Dots or Lines?'; 'type'}, {'dots','lines', 'both'},...
         'separator' , 'Ellipses:',...
         {'Plot Ellipses' ;'ell' }, [true, false], ...
         'separator' , 'Use Labels:',...
@@ -64,13 +62,6 @@ end
 if length(options.label) ~=7 && ~strcmpi(options.label, "pressed")
     evc = ev(contains(ev, options.label));
 end
-if strcmp(options.type, 'lines')
-    type = '-';
-elseif strcmp(options.type, 'both')
-    type = '-o';
-else
-    type = 'o';
-end
 
 pax = axes(pfigure);
 
@@ -81,13 +72,14 @@ ibit = input.IBIevent{1}.RTopTime(1:end-1-options.delta);
 if (~strcmp(options.bylabel, 'on'))
     %% This is the plot when no labels are used.
     label = "Full Epoch";
-    [h, sd1,sd2] = PCPlot(pax,ibix,ibiy, ibit, type, input, options.ell,1, label);
+    [h, e, sd1,sd2] = PCPlot(pax,ibix,ibiy, ibit, options.ell,1, label);
     subplot(1,2,1,pax);
     PCInfo(strrep(label, options.label, ""), sd1, sd2)
 else
     h=[];
     sd1=[];
     sd2=[];
+    e=[];
     for i = 1:length(evc)
         label = evc(i);
         event = [strcmp({input.event.type}, label)];
@@ -97,7 +89,7 @@ else
             ev = elist(e);
             idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
         end
-        [h(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), type, input, options.ell,i, strrep(evc{i}, options.label, ""));
+        [h(end+1), e(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), options.ell,i, strrep(evc{i}, options.label, ""));
         hold on
     end
     subplot(1,2,1,pax);
@@ -148,7 +140,7 @@ end
 text(0,1,pars, 'VerticalAlignment', 'top', 'FontSize', fs);
 end
 
-function [h, sd1, sd2]=PCPlot(pax,ibix,ibiy,ibit, type, input, ell, i, label)
+function [h, e, sd1, sd2]=PCPlot(pax,ibix,ibiy,ibit, ell, i, label)
 %% 
 %   PCPlot plots the poincare map
 %
@@ -157,14 +149,14 @@ function [h, sd1, sd2]=PCPlot(pax,ibix,ibiy,ibit, type, input, ell, i, label)
 
 col = pax.ColorOrder(mod(i-1,7)+1,:);
 hold on
-h=scatter(pax,ibix, ibiy, type, 'MarkerEdgeColor',col, 'DisplayName', char(label) );
+h=scatter(pax,ibix, ibiy, 'MarkerEdgeColor',col, 'DisplayName', char(label) );
 axis square;
 grid minor;
 
 if ell
     sd1 = round((sqrt(2)/2.0) * std(ibix-ibiy),3);
     sd2 = round( sqrt(2*std(ibix)^2) - (.5*std(ibix-ibiy)^2),3);
-    plot_ellipse(4*sd1,4*sd2,mean(ibix), mean(ibiy), 45, col);
+    e = plot_ellipse(4*sd1,4*sd2,mean(ibix), mean(ibiy), 45, col, char(label));
 end
 
 % make it into a subplot:
@@ -176,7 +168,7 @@ h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
 h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
 end
 
-function h=plot_ellipse(a,b,cx,cy,angle,color)
+function h=plot_ellipse(a,b,cx,cy,angle,color, lab)
 %a: width in pixels
 %b: height in pixels
 %cx: horizontal center
@@ -197,4 +189,13 @@ p1=p*alpha;
 h = patch(cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
 h.FaceAlpha = .05;
 
+set(h,'ButtonDownFcn',@(~,~) ann(lab),...
+   'PickableParts','all')
+
+end
+
+function ann(lab)
+    global UniqueAnnotation; %#ok<GVMIS> 
+    delete(UniqueAnnotation);
+    UniqueAnnotation = annotation('textbox',[.15 .23 0 0],'String',lab,'FitBoxToText','on', 'Tag', 'UniqueAnnotation');
 end
