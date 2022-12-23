@@ -16,15 +16,28 @@ function [EEG, options] = PublicSpeaking(input,opts)
     else
         options = opts;
     end
+    
+    keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "A", "B", "C", "D", "E", "F"];
+    names = ["SAM1", "Instructions","Baseline Standing","Baseline Sitting","Instructions2","Preparation",...
+             "SAM2", "Wait for audience", "Presentation", ...
+             "SAM3","Rest", ...
+             "SAM4","Post Standing", "Post Sitting","DeBrief","End"];
+    d = dictionary(keys, names);
+
+
     %% copy input to output.
     EEG = input;
     id = contains({input.event.type}, "pressed");
     events = {input.event};
     events = events{1};
     starts = events(id);
+    %ids = {starts.type};
+    ids = strrep({starts.type}, " pressed", "");
     for i = 1:length(starts)-1
+        starts(i).type = d(ids(i));
         starts(i).duration = starts(i+1).latency-starts(i).latency; %% in samples!
         starts(i).unit = 'samples';
     end
+    starts(end) =[];
     EEG.event = starts;
 end

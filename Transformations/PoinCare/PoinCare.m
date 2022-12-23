@@ -23,24 +23,12 @@ else
     options = opts;
 end
 
-pfigure = figure('NumberTitle', 'off', 'Name', 'PoinCare','Tag', input.File, ...
-    'Color' ,[.98 .98 .98], ...
-    'PaperOrientation','landscape', ...
-    'PaperPosition',[.05 .05 .9 .9], ...
-    'PaperPositionMode', 'auto',...
-    'PaperType', 'A0', ...
-    'Units', 'normalized', ...
-    'MenuBar', 'none', ...
-    'Toolbar', 'none',...
-    'DockControls','on', ...
-    'Visible','off' ...
-    );
+pfigure = uifigure('Visible', false, 'Units', 'normalized');
 
 ev = [];
-
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
-    ev = unique({input.event.type});
-    evc = ev(contains(ev, "pressed"));
+    ev = unique([input.event.type], 'stable');
+    evc = ev;
 end
 
 %% simplest option....
@@ -54,121 +42,96 @@ if strcmp(options, 'Init')
         'separator' , 'Ellipses:',...
         {'Plot Ellipses' ;'ell' }, [true, false], ...
         'separator' , 'Use Labels:',...
-        {'By Label' ;'bylabel' }, {'off', 'on'}, ...
-        {'Label Contains:'; 'label'}, "pressed" , ...
+        {'By Label' ;'bylabel' }, {'on', 'off'}, ...
         {'Use Unlabeled' ;'unlabeled' }, {'off', 'on'});
 end
 
-if length(options.label) ~=7 && ~strcmpi(options.label, "pressed")
-    evc = ev(contains(ev, options.label));
-end
-
-pax = axes(pfigure);
 
 ibix = input.IBIevent{1}.ibis(1:end-options.delta);
 ibiy = input.IBIevent{1}.ibis(1+options.delta:end);
 ibit = input.IBIevent{1}.RTopTime(1:end-1-options.delta);
 
-if (~strcmp(options.bylabel, 'on'))
-    %% This is the plot when no labels are used.
-    label = "Full Epoch";
-    [h, e, sd1,sd2] = PCPlot(pax,ibix,ibiy, ibit, options.ell,1, label);
-    subplot(1,2,1,pax);
-    PCInfo(strrep(label, options.label, ""), sd1, sd2)
-else
-    h=[];
-    sd1=[];
-    sd2=[];
-    e=[];
+    function t = PoinCarePlot(fig,ibix, ibiy, ibit, options, evc, input)
+    % Create table array
+    RMSSD =[];
+    mIBI = [];
+    SD1=[];
+    SD2=[];
+    x={};
+    y={};
     for i = 1:length(evc)
         label = evc(i);
-        event = [strcmp({input.event.type}, label)];
+        event = [strcmp([input.event.type], label)];
         idx = ibit<0;
         for e = 1:length(input.event(event)) %% when there are more events
             elist = [input.event(event)];
             ev = elist(e);
             idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
         end
-        [h(end+1), e(end+1), sd1(end+1),sd2(end+1)] = PCPlot(pax,ibix(idx),ibiy(idx), ibit(idx), options.ell,i, strrep(evc{i}, options.label, ""));
-        hold on
+        x{end+1} = ibix(idx);
+        y{end+1} = ibiy(idx);
+        SD1(end+1) = round((sqrt(2)/2.0) * std(ibix(idx)-ibiy(idx)),3);
+        SD2(end+1) = round( sqrt(2*std(ibix(idx))^2) - (.5*std(ibix(idx)-ibiy(idx))^2),3);
+        RMSSD(end+1) = Tools.HRV.RMSSD(ibix(idx));
+        mIBI(end+1) = mean(ibix(idx));
     end
-    subplot(1,2,1,pax);
-    PCInfo(strrep(evc, options.label, ""), sd1, sd2)
+    pSD1SD2 = SD1./SD2;
+    cRMSSD = RMSSD./mIBI;
+    Plotted = mIBI > 0;
+
+    t = table(Plotted', SD1', SD2', pSD1SD2', RMSSD', mIBI', cRMSSD', ...
+        'VariableNames',["Plot","SD1","SD2","SD1/SD2","RMSSD","mean(IBI)","cRMSSD"], ... 
+        'RowNames',evc);
+
+    gl = uigridlayout(fig, [1 2]);
+
+    % Create UI figure
+    % Create table UI component
+    uit = uitable(gl);
+    uit.Layout.Row = 1;
+    uit.Layout.Column = 2;
+    uit.Data = t;
+    uit.ColumnSortable = false;
+    uit.ColumnEditable = [true false false false false false false ];
+    uit.DisplayDataChangedFcn = @updatePlot;
+
+    % Create PoinCare chart
+    ax = uiaxes(gl);
+    ax.Layout.Row = 1;
+    ax.Layout.Column = 1;
+    
+    lPoincarePlot(t, x, y)
+
+        % Update the bubble chart when table data changes
+        function updatePlot(~,~)
+            t = uit.DisplayData;
+            lPoincarePlot(t,x,y)
+        end
+        function lPoincarePlot(t,xibis,yibis)
+            cla(ax);
+            
+            xlabel(ax, "IBI_(_t_)");
+            ylabel(ax, "IBI_(_t_+_1_)");
+
+            xlim(ax, [0 1])
+            ylim(ax, [0 1])
+
+            for i = 1:length(t.Plot)
+                if (t.Plot(i))
+                  col = ax.ColorOrder(mod(i-1,7)+1,:);
+                  hold(ax, 'on')
+                  scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
+                  plot_ellipse(ax, 4*t.SD1(i),4*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
+                end
+            end
+        end
+    end
+
+    PoinCarePlot(pfigure, ibix, ibiy, ibit, options, evc, input);
+    pfigure.Visible = true;
 end
 
-if options.origin
-    axes(pax)
-    a=xlim;
-    xlim([0 a(2)])
-    ylim([0 a(2)])
-end
-sgtitle(input.id);
-xlabel("IBI_(_t_)");
-ylabel("IBI_(_t_+_1_)");
-legend(h);
-legend('boxoff')
-end
-
-function PCInfo(name, sd1, sd2)
-%% 
-%   PCInfo plots the test statistics next to the plot
-%
-%
-%%
-anax = subplot(1,2,2);
-plot(anax, 0);
-set(anax, 'XTick', [], 'YTick', [], 'Box', 'off',...
-    'Color', [.98 .98 .98], ...
-    'XColor', 'none', 'YColor', 'none');
-
-anax.Toolbar.Visible = 'off';
-axis square;
-set(anax,'TitleHorizontalAlignment', 'left');
-title('Parameters:', 'Poincare')
-
-pars = {};
-for i = 1:length(sd1)
-    %labels(i) = {[char(labels(i)) ' (sd1= '  num2str(sd1(i)) ' sd2= '  num2str(sd2(i)) ')']};
-    pars{end+1} = name{i} + ": " + char(9) + "SD1 = " + num2str(sd1(i),'%05.3f') + ...
-        "s - " + char(9) + "SD2 = "     + num2str(sd2(i),'%05.2f') + ...
-        "s - "+ char(9) + "SD2/SD1 = "  + num2str(sd2(i)/sd1(i),'%05.2f');
-end
-fs = 12;
-if length(pars) > 45
-    fs = fs / 2;
-end
-text(0,1,pars, 'VerticalAlignment', 'top', 'FontSize', fs);
-end
-
-function [h, e, sd1, sd2]=PCPlot(pax,ibix,ibiy,ibit, ell, i, label)
-%% 
-%   PCPlot plots the poincare map
-%
-%
-%%
-
-col = pax.ColorOrder(mod(i-1,7)+1,:);
-hold on
-h=scatter(pax,ibix, ibiy, 'MarkerEdgeColor',col, 'DisplayName', char(label) );
-axis square;
-grid minor;
-
-if ell
-    sd1 = round((sqrt(2)/2.0) * std(ibix-ibiy),3);
-    sd2 = round( sqrt(2*std(ibix)^2) - (.5*std(ibix-ibiy)^2),3);
-    e = plot_ellipse(4*sd1,4*sd2,mean(ibix), mean(ibiy), 45, col, char(label));
-end
-
-% make it into a subplot:
-
-h.DataTipTemplate.DataTipRows(1).Label = "ibi_(_t_)";
-h.DataTipTemplate.DataTipRows(2).Label = "ibi_(_t_+_1_)";
-h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
-[k{1:length(ibit)}] = deal(label);
-h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
-end
-
-function h=plot_ellipse(a,b,cx,cy,angle,color, lab)
+function h=plot_ellipse(ax,a,b,cx,cy,angle,color)
 %a: width in pixels
 %b: height in pixels
 %cx: horizontal center
@@ -185,17 +148,12 @@ alpha=[cos(angle) -sin(angle)
     sin(angle) cos(angle)];
 
 p1=p*alpha;
-
-h = patch(cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
+h = patch(ax, cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
 h.FaceAlpha = .05;
-
-set(h,'ButtonDownFcn',@(~,~) ann(lab),...
-   'PickableParts','all')
-
 end
+%     h.DataTipTemplate.DataTipRows(1).Label = "ibi_(_t_)";
+%     h.DataTipTemplate.DataTipRows(2).Label = "ibi_(_t_+_1_)";
+%     h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
+%     [k{1:length(ibit)}] = deal(label);
+%     h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
 
-function ann(lab)
-    global UniqueAnnotation; %#ok<GVMIS> 
-    delete(UniqueAnnotation);
-    UniqueAnnotation = annotation('textbox',[.15 .23 0 0],'String',lab,'FitBoxToText','on', 'Tag', 'UniqueAnnotation');
-end
