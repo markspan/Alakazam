@@ -1,0 +1,1 @@
+{"Name":"HumbleStew","Description":"prunes data from the pulse in the start channel upto the pulse in the stop channel and writes the descriptives to an export file","Entry":"HumbleStew.m","Icon":"HumbleStew.png","Section":"Specifics","Category":"Cold Pressor"}

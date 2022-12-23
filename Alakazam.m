@@ -78,7 +78,8 @@ classdef Alakazam < handle
                 if ishandle(a.EEG)
                     %% the function returned a handle: this means there is
                     % no real transformation: the function returned a plot.
-                    plotFigure(this, a.EEG);
+                    % plotFigure(this, a.EEG);
+                    set(f,'Pointer','arrow');
                     return
                 end
 
@@ -129,13 +130,6 @@ classdef Alakazam < handle
             end
         end
 
-        function plotFigure(this, figureHandle)
-            % add plot as a new document
-            this.Figures(end+1) = figureHandle;
-            this.ToolGroup.addFigure(this.Figures(end));
-            this.Figures(end).Visible = 'on';
-            set(this.Figures(end), 'Toolbar', 'figure');
-        end
 
         function plotCurrent(this)
 
@@ -162,8 +156,10 @@ classdef Alakazam < handle
                 );
 
             %% EPOCHED DATA PLOT
+            hEEG = Tools.hEEG;
+            hEEG.toHandle(this.Workspace.EEG);
+            set(this.Figures(end), 'UserData', hEEG);
             if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED')
-                this.Workspace.EEG;
                 if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
                     if (this.Workspace.EEG.nbchan > 1)
                         if (isfield(this.Workspace.EEG, 'trials'))
@@ -246,46 +242,58 @@ classdef Alakazam < handle
         end
 
         function Evaluate(this, NewData, OldData, NewParentNode)
-            % this should be done recursively......
+            endnode = false;
 
-            x = load(NewData, 'EEG');
-            Old = load(OldData, 'EEG');
+            while endnode == false
 
-            idx1 = strfind(Old.EEG.Call, '=');
-            idx2 = strfind(Old.EEG.Call, '(');
-            id = Old.EEG.Call(idx1+1:idx2-1);
-
-            [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
-
-            CurrentNode = x.EEG.id;
-            Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
-            [parent.dir, parent.name] = fileparts(x.EEG.File);
-
-            cDir = fullfile(parent.dir,parent.name);
-            if ~exist(cDir, 'dir')
+                x = load(NewData, 'EEG');
+                Old = load(OldData, 'EEG');
+                idx1 = strfind(Old.EEG.Call, '=');
+                idx2 = strfind(Old.EEG.Call, '(');
+                id = Old.EEG.Call(idx1+1:idx2-1);
+    
+                [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
+                %disp(["I called: " id])
+                %Old.EEG.params
+                CurrentNode = x.EEG.id;
+                Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
+                [parent.dir, parent.name] = fileparts(x.EEG.File);
                 cDir = fullfile(parent.dir,parent.name);
-                mkdir(cDir);
+                if ~exist(cDir, 'dir')
+                    cDir = fullfile(parent.dir,parent.name);
+                    mkdir(cDir);
+                end
+       
+                a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+    
+                %a.EEG.File = strcat(this.Workspace.CacheDirectory, char(CurrentNode),'\', Key, '.mat');
+                a.EEG.id =  [char(CurrentNode) ' - ' id];
+                a.EEG.Call = Old.EEG.Call;
+                a.EEG.params = Old.EEG.params;
+                % newNode = javaObjectEDT('AlakazamHelpers.EEGLABTreeNode', a.EEG.id, a.EEG.File);
+                NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
+                if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
+                    setIcon(NewNode,this.Workspace.TimeSeriesIcon);
+                elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
+                    setIcon(NewNode,this.Workspace.FrequenciesIcon);
+                end
+                NewNode.Parent.expand();
+                this.Workspace.Tree.SelectedNodes = NewNode;
+    
+                EEG=a.EEG;
+                save(a.EEG.File, 'EEG');
+                this.Workspace.EEG=EEG;
+                
+                [p,n,~] = fileparts(OldData);
+                if exist([p '\' n], 'dir')
+                    NewParentNode = NewNode;
+                    NewData = a.EEG.File;
+                    name = dir([p '\' n '\' '*.mat' ]);
+                    OldData = [p '\' n '\' name.name];
+                else
+                    endnode = true;
+                end
             end
-   
-            a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
-
-            %a.EEG.File = strcat(this.Workspace.CacheDirectory, char(CurrentNode),'\', Key, '.mat');
-            a.EEG.id =  [char(CurrentNode) ' - ' id];
-            a.EEG.Call = Old.EEG.Call;
-            a.EEG.params = Old.EEG.params;
-            % newNode = javaObjectEDT('AlakazamHelpers.EEGLABTreeNode', a.EEG.id, a.EEG.File);
-            NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
-            if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
-                setIcon(NewNode,this.Workspace.TimeSeriesIcon);
-            elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
-                setIcon(NewNode,this.Workspace.FrequenciesIcon);
-            end
-            NewNode.Parent.expand();
-            this.Workspace.Tree.SelectedNodes = NewNode;
-
-            EEG=a.EEG;
-            save(a.EEG.File, 'EEG');
-            this.Workspace.EEG=EEG;
         end
         function MouseClicked(this,Tree,args)
             if (args.Button == 1) % left Button

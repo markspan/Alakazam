@@ -434,7 +434,7 @@ classdef ToolGroup < handle
             javaMethodEDT('putClientProperty',this.SwingToolstrip.getComponent(),'toolstrip_namespace',this.PeerModelChannel);
             javaMethodEDT('putClientProperty',this.SwingToolstrip.getComponent(),'toolstrip_host_id',this.ToolstripHostId);
             % render the toolstrip hierarchy
-            render(this.MCOSToolstrip, this.PeerModelChannel, 'Java');
+            render(this.MCOSToolstrip, this.PeerModelChannel);
             % make sure swing toolstrip components are created
             drawnow();
             % place toolstrip in the dom (valid for JS rendering)
@@ -1194,22 +1194,20 @@ function cbSwingSelectedTabChanged(~,ed,toolgroup)
         if ~isempty(oldtab)
             oldtabgroup = oldtab.Parent;
             if oldtabgroup ~= newtabgroup
-                %newtabgroup.UseDrawnow = false;
                 oldtabgroup.SelectedTab = [];
-                %newtabgroup.UseDrawnow = true;
+                drawnow; % To avoid high-speed flickering (g2279726).
                 oldtabgroup.sendSelectedTabChangedEvent(oldtab,[]);        
             end
         end
     end
     %% update selected tab in the tab group of new tab only if not same
     if isempty(newtabgroup.SelectedTab) || (newtabgroup.SelectedTab ~= newtab)
-%        newtabgroup.UseDrawnow = false;
         newtabgroup.SelectedTab = newtab;
-        %newtabgroup.UseDrawnow = true;
+        drawnow; % To avoid high-speed flickering (g2279726).
         newtabgroup.sendSelectedTabChangedEvent(oldtab,newtab);
     end
     %% update selected tab name in ClientMap if there is an active client
-    if ~isempty(toolgroup.ActiveClient)
+    if isvalid(toolgroup) && ~isempty(toolgroup.ActiveClient)
         k = findClientIndex(toolgroup, toolgroup.ActiveClient);
         if k > 0
             toolgroup.ClientMap{k,3} = newtabname;

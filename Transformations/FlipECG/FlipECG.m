@@ -31,6 +31,8 @@ if (size(ecgData,1) > 1 )
     ecgid = strcmpi(options.channelname, {input.chanlocs.labels});
 else
     ecgid=1;
+    options = struct();
+    options.channelname = 'Unknown1';
 end
 
 if sum(ecgid) > 0
@@ -42,6 +44,16 @@ if sum(ecgid) > 0
             EEG.data(c,:) = necgData;
         end
     end
+    if isfield(input, 'Polarchannels')
+        for c = 1:input.Polarchannels.nbchan
+            if strcmp(input.Polarchannels.chanlocs.labels, options.channelname)
+                channel_ecgData = input.Polarchannels.data(c,:);
+                necgData = -(channel_ecgData - median(channel_ecgData,2)) + median(channel_ecgData,2);
+                EEG.Polarchannels.data(c,:) = necgData;
+            end
+        end
+    end
+
 else
     throw(MException('Alakazam:FlipECG','Problem in FlipECG: No ECG trace Found/Supplied'));
 end

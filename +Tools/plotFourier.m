@@ -15,9 +15,9 @@ bands={'Sub-Delta',0,.5,[119 136 153]/255;
 
 hFig = theFig;
 ud = hFig.UserData;
-ud.Freqs = input.freqs;
-ud.Lims = [ 0 floor(input.srate/2) 0 max(input.data(:)) ];
-ud.CurrentTrial = 1;
+ud.EEG.Freqs = input.freqs;
+ud.EEG.Lims = [ 0 floor(input.srate/2) 0 max(input.data(:)) ];
+ud.EEG.CurrentTrial = 1;
 set(theFig, 'Visible', 'off');
 figure(theFig);
 

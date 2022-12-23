@@ -358,38 +358,6 @@ if length(g.channel) ~= EEG.nbchan
 	fprintf('Removing %d channel(s)...\n', EEG.nbchan - length(g.channel));
 end
 
-try
-    % For AMICA probabilities...
-    %-----------------------------------------------------
-    if isfield(EEG.etc, 'amica') && ~isempty(EEG.etc.amica) && isfield(EEG.etc.amica, 'v_smooth') && ~isempty(EEG.etc.amica.v_smooth) && ~isfield(EEG.etc.amica,'prob_added')
-        if isfield(EEG.etc.amica, 'num_models') && ~isempty(EEG.etc.amica.num_models)
-            if size(EEG.data,2) == size(EEG.etc.amica.v_smooth,2) && size(EEG.data,3) == size(EEG.etc.amica.v_smooth,3) && size(EEG.etc.amica.v_smooth,1) == EEG.etc.amica.num_models
-
-                EEG = eeg_formatamica(EEG);
-
-                %-------------------------------------------
-
-                [EEG com] = pop_select(EEG,args{:});
-
-                %-------------------------------------------
-
-                EEG = eeg_reformatamica(EEG);
-                EEG = eeg_checkamica(EEG);
-                return;
-            else
-                disp('AMICA probabilities not compatible with size of data, probabilities cannot be rejected')
-
-                disp('Resuming rejection...')
-            end
-        end
-
-    end
-    % ------------------------------------------------------
-catch
-    warnmsg = strcat('your dataset contains amica information, but the amica plugin is not installed.  Continuing and ignoring amica information.');
-    warning(warnmsg)
-end
-
 
 % recompute latency and epoch number for events
 % ---------------------------------------------
