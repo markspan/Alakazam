@@ -78,7 +78,8 @@ classdef Alakazam < handle
                 if ishandle(a.EEG)
                     %% the function returned a handle: this means there is
                     % no real transformation: the function returned a plot.
-                    plotFigure(this, a.EEG);
+                    % plotFigure(this, a.EEG);
+                    set(f,'Pointer','arrow');
                     return
                 end
 
@@ -129,13 +130,6 @@ classdef Alakazam < handle
             end
         end
 
-        function plotFigure(this, figureHandle)
-            % add plot as a new document
-            %this.Figures(end+1) = figureHandle;
-            %this.ToolGroup.addFigure(this.Figures(end));
-            %this.Figures(end).Visible = 'on';
-            %set(this.Figures(end), 'Toolbar', 'figure');
-        end
 
         function plotCurrent(this)
 
