@@ -38,12 +38,8 @@ if strcmp(options, 'Init')
         'title' , 'PoinCare options',...
         'separator' , 'Plot Parameters:',...
         {'Delta' ;'delta' }, 1,...
-        {'Origin included'; 'origin'}, [true, false],...
         'separator' , 'Ellipses:',...
-        {'Plot Ellipses' ;'ell' }, [true, false], ...
-        'separator' , 'Use Labels:',...
-        {'By Label' ;'bylabel' }, {'on', 'off'}, ...
-        {'Use Unlabeled' ;'unlabeled' }, {'off', 'on'});
+        {'Plot Ellipses' ;'ell' }, [true, false]);
 end
 
 
@@ -112,16 +108,18 @@ ibit = input.IBIevent{1}.RTopTime(1:end-1-options.delta);
             
             xlabel(ax, "IBI_(_t_)");
             ylabel(ax, "IBI_(_t_+_1_)");
-
-            xlim(ax, [0 1])
-            ylim(ax, [0 1])
-
+            m = ceil(10*max(ibix))/10;
+            xlim(ax, [0 m])
+            ylim(ax, [0 m])
+            grid(ax, 'on')
             for i = 1:length(t.Plot)
                 if (t.Plot(i))
                   col = ax.ColorOrder(mod(i-1,7)+1,:);
                   hold(ax, 'on')
                   scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
-                  plot_ellipse(ax, 4*t.SD1(i),4*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
+                  if(options.ell)
+                    plot_ellipse(ax, 4*t.SD1(i),4*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
+                  end
                 end
             end
         end
