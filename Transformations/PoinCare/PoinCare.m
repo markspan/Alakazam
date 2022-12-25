@@ -37,6 +37,7 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
     x={};
     y={};
     tRR={};
+    N=[];
     for i = 1:length(evc)
         label = evc(i);
         event = [strcmp([input.event.type], label)];
@@ -54,13 +55,14 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         RMSSD(end+1) = Tools.HRV.RMSSD(ibix(idx));
         SDNN(end+1) = Tools.HRV.SDNN(ibix(idx));
         mIBI(end+1) = mean(ibix(idx));
+        N(end+1) = sum(idx);
     end
     pSD1SD2 = SD1./SD2;
     cRMSSD = RMSSD./mIBI;
     Plotted = mIBI > 0;
 
-    t = table(Plotted', SD1', SD2', pSD1SD2', RMSSD', mIBI', cRMSSD', SDNN', ...
-        'VariableNames',["Plot","SD1","SD2","SD1/SD2","RMSSD","mean(IBI)","cRMSSD", "SDNN"], ... 
+    t = table(Plotted',N', mIBI', SD1', SD2', pSD1SD2', RMSSD', cRMSSD', SDNN', ...
+        'VariableNames',["Plot","N","mean(IBI)","SD1","SD2","SD1/SD2","RMSSD","cRMSSD", "SDNN"], ... 
         'RowNames',evc);
 
     gl = uigridlayout(fig, [3 2]);
@@ -72,11 +74,12 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
     uit.Layout.Column = 2;
     uit.Data = t;
     uit.ColumnSortable = false;
-    uit.ColumnEditable = [true false false false false false false false];
+    uit.ColumnEditable = [true false false false false false false false false];
     uit.BackgroundColor = [.91 .91 .91;
                             .98 .98 .98];
     uit.DisplayDataChangedFcn = @updatePlot;
-
+    style= uistyle('HorizontalAlignment','right');
+    addStyle(uit,style,'table','');
     % Create PoinCare chart
     ax = uiaxes(gl);
     ax.Layout.Row = [1,3];
@@ -91,11 +94,12 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         % Update the bubble chart when table data changes
         function updatePlot(~,~)
             t = uit.DisplayData;
-            lPoincarePlot(t,x,y)
+            lx = xlim(ax); ly = ylim(ax);
+            lPoincarePlot(t,x,y,tRR)
+            xlim(ax,lx); ylim(ax,ly);
         end
         function lPoincarePlot(t,xibis,yibis, tibis)
             cla(ax);
-            
             xlabel(ax, "IBI_(_t_)");
             ylabel(ax, "IBI_(_t_+_1_)");
             m = ceil(10*max(ibix))/10;
@@ -108,7 +112,7 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
                   col = ax.ColorOrder(mod(i-1,7)+1,:);
                   hold(ax, 'on')
                   h(end+1) = scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
-                  plot_ellipse(ax, 1*t.SD1(i),1*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
+                  plot_ellipse(ax, 2*t.SD1(i),2*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
                 end
             end
         end
@@ -120,8 +124,9 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
 end
 
 function h=plot_ellipse(ax,a,b,cx,cy,angle,color)
-%a: width in pixels
-%b: height in pixels
+%ax: axes to plot on
+%a: width
+%b: height 
 %cx: horizontal center
 %cy: vertical center
 %angle: orientation ellipse in degrees

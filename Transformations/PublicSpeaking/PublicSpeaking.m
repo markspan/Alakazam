@@ -33,10 +33,15 @@ function [EEG, options] = PublicSpeaking(input,opts)
     starts = events(id);
     %ids = {starts.type};
     ids = strrep({starts.type}, " pressed", "");
+    
     for i = 1:length(starts)-1
-        starts(i).type = d(ids(i));
-        starts(i).duration = starts(i+1).latency-starts(i).latency; %% in samples!
-        starts(i).unit = 'samples';
+        try
+            starts(i).type = d(ids(i));        
+            starts(i).duration = starts(i+1).latency-starts(i).latency; %% in samples!
+            starts(i).unit = 'samples';
+        catch e
+            starts(i) = [];
+        end
     end
     starts(end) =[];
     EEG.event = starts;
