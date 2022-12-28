@@ -52,13 +52,17 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         tRR{end+1} = ibit(idx);
         SD1(end+1) = round((sqrt(2)/2.0) * std(ibix(idx)-ibiy(idx)),3);
         SD2(end+1) = round( sqrt(2*std(ibix(idx))^2) - (.5*std(ibix(idx)-ibiy(idx))^2),3);
-        RMSSD(end+1) = Tools.HRV.RMSSD(ibix(idx));
-        SDNN(end+1) = Tools.HRV.SDNN(ibix(idx));
-        mIBI(end+1) = mean(ibix(idx));
+        if isempty(Tools.HRV.RMSSD(ibix(idx)))
+            RMSSD(end+1) = nan;
+        else
+            RMSSD(end+1) = 1000 * Tools.HRV.RMSSD(ibix(idx));
+        end
+        SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(idx));
+        mIBI(end+1) = 1000 * mean(ibix(idx));
         N(end+1) = sum(idx);
     end
     pSD1SD2 = SD1./SD2;
-    cRMSSD = RMSSD./mIBI;
+    cRMSSD = 1000 * (RMSSD./mIBI);
     Plotted = mIBI > 0;
 
     t = table(Plotted',N', mIBI', SD1', SD2', pSD1SD2', RMSSD', cRMSSD', SDNN', ...
@@ -111,9 +115,18 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
                 if (t.Plot(i))
                   col = ax.ColorOrder(mod(i-1,7)+1,:);
                   hold(ax, 'on')
-                  h(end+1) = scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
-                  plot_ellipse(ax, 2*t.SD1(i),2*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
-                end
+                  h = scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
+
+                  [Labels{1:length(tibis{i})}] = deal(t.Row{i});
+                  h.DataTipTemplate.DataTipRows(1) = dataTipTextRow("Period:",Labels);
+                  h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("IBI(t)::",'XData');
+                  h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t+1):",'YData');
+                  h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("Time(s):",tibis{i});
+
+                  e = plot_ellipse(ax, 2*t.SD1(i),2*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
+                  dt = datatip(e,0,0,'Visible','off'); % weird hack to enable datatips on patches
+                  e.DataTipTemplate.DataTipRows = dataTipTextRow("",Labels);
+         end
             end
         end
     end
