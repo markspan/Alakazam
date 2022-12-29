@@ -89,9 +89,9 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
     ax.Layout.Row = [1,3];
     ax.Layout.Column = 1;
 
-    guiPanel = uipanel(gl, title = "Parameters: ");
-    guiPanel.Layout.Column = 2;
-    guiPanel.Layout.Row = 3;
+    %guiPanel = uipanel(gl, title = "Parameters: ");
+    %guiPanel.Layout.Column = 2;
+    %guiPanel.Layout.Row = 3;
 
     lPoincarePlot(t, x, y, tRR)
 
@@ -104,8 +104,8 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         end
         function lPoincarePlot(t,xibis,yibis, tibis)
             cla(ax);
-            xlabel(ax, "IBI_(_t_)");
-            ylabel(ax, "IBI_(_t_+_1_)");
+            xlabel(ax, "IBI(t)");
+            ylabel(ax, "IBI(t+1)");
             m = ceil(10*max(ibix))/10;
             xlim(ax, [0 m])
             ylim(ax, [0 m])
@@ -157,9 +157,3 @@ p1=p*alpha;
 h = patch(ax, cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
 h.FaceAlpha = .05;
 end
-%     h.DataTipTemplate.DataTipRows(1).Label = "ibi_(_t_)";
-%     h.DataTipTemplate.DataTipRows(2).Label = "ibi_(_t_+_1_)";
-%     h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("time (s):",ibit);
-%     [k{1:length(ibit)}] = deal(label);
-%     h.DataTipTemplate.DataTipRows(end+1:end+1) = dataTipTextRow("ID:",k);
-

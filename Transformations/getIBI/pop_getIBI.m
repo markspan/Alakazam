@@ -24,7 +24,7 @@ if strcmp(par, 'Init')
         'title' , 'IBI options',...
         'separator' , 'Parameters:',...
         {'Minimal Peak Distance' ;'MinPeakDistance' }, .3, ...
-        {'WinLength' ;'Tw' }, 50, ...
+        {'WinLength' ;'Tw' }, 51, ...
         {'limit in sd' ;'Nsd' }, 4, ...
         {'Max interpolation duration' ;'Tmax' }, 5, ...
         {'Use:'; 'channame'}, cn);
@@ -52,12 +52,8 @@ if isfield(EEGstruct, 'Polarchannels')
         par.MinPeakHeight = median(ecgData, 'omitnan')+(1.5*std(ecgData, 'omitnan'));
     end
 end
-
-
 %% convert MinPeakDistance from ms to samples
 MinPeakDistance = par.MinPeakDistance*fSample;
-
-
 %% Then, first find the (approximate) peaks
 [vals,locs] = findpeaks(ecgData, 'MinPeakHeight', par.MinPeakHeight,...
     'MinPeakDistance',MinPeakDistance);
@@ -118,15 +114,21 @@ function [RTout, ecgData, classID] = RTCorrection(RTin, ecgData, classID)
         end
         if classID(i) == "L"
             if i>1
-                delta = ecgData(i) / abs(mean([ecgData(i-1), ecgData(i+1)])); 
+                delta = ecgData(i) / mean([ecgData(i-1), ecgData(i+1)]); 
                 if (delta > 2.0)
                     %% interpolate a beat after this one,
                     % and recalculate *this* ibi
-                    nRt     = mean([RTin(i), RTin(i+1)])
-                    nIBI    = ecgData(i)/2
+                    % nRT is the new RtopTime (halfway)
+                    % and the associated IBI is now halved 
+                    nRt     = mean([RTin(i), RTin(i+1)]);
+                    nIBI    = ecgData(i)/2;
                     RTout   = [RTout(1:i) nRt RTout((i+1):end)];
+                    classID(i) = 't'; 
+                    %% t means an interpolated, previously long (L) IBI. 
+                    % Always followed by an 'i', the interpolated rtop 
+
+                    %% The actual interpolation(s) (Rtop and IBI)
                     ecgData = [ecgData(1:i) nIBI ecgData((i+1):end)];
-                    classID(i) = 'T';
                     classID = [classID(1:i) 'i' classID((i+1):end)];
                 end
             end
@@ -141,7 +143,7 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
     %%Classification:
     %
     %   default params:
-    %       Tw = 50 (sec!) (###Implemented as 50 IBIs!###)
+    %       Tw = 50 (sec!) (###Implemented as 51 IBIs!###)
     %       Nsd = 4 (sd)
     %       T refractory = .3
     %       Tmax = 5 (sec)
@@ -169,10 +171,11 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
     
     %% Short Beat:
     % if IBI < Trefractory: 
-    %   Remove R-peak
-    % else:
+    %   Remove R-peak 
+    % Is implemented in the findpeaks function
+    %% else:
     %   if nFit = 1: remove R-Peak %% @AvR: Q1: what is nFit?
-    %   if nFit = 2: remove R-Peak, interpolate
+    %   if nFit = 2: remove R-Peak, interpolate %  implemented
     %   if else: No correction, unknown artefact
     
     %% Long Beat:
@@ -197,20 +200,20 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
 
     avIBIr = movmean(IBI, Tw);
     SDavIBIr = movstd(IBI, Tw);
+    
     lower = avIBIr - (Nsd .* SDavIBIr);
     higher = avIBIr + (Nsd .* SDavIBIr);
 
     classID(IBI > higher) = "L"; %% Long IBI
-    classID(IBI < lower) = "S";  %% Short IBI
-    
-    classID(IBI > Tmax) = "T"; %% Too Long
+    classID(IBI < lower)  = "S"; %% Short IBI
+    classID(IBI > Tmax)   = "T"; %% Too Long
 
     for i = 1:length(classID)-1
         if classID(i) == "S" && classID(i+1) == "L"
             classID(i) = "1"; %% Short - long
         end
         if i ~= length(classID)-2
-            if classID(i) == "S" && classID(i+1) == "N" && classID(i+1) == "S" 
+            if classID(i) == "S" && classID(i+1) == "N" && classID(i+2) == "S" 
                 classID(i) = "2"; %% short - normal - short
             end
         end
@@ -219,4 +222,4 @@ function classID = IBIClassification(RTT, Tw, Nsd, Tmax)
         d = "Found " + length(classID(classID==id)) + " " + id + " rtops";
         disp(d)
     end
- end
+end
