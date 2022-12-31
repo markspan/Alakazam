@@ -1,4 +1,4 @@
-function [pfigure, ropts] = PoinCare(input,opts)
+function [pfigure, ropts] = PoinCare(input,~)
 %% Create a poincare plot for the IBI series
 % The ibis are plotted agains a time-delayed version of the same values. If
 % the 'bylabel' option is used, the plot has different partitions for each
@@ -110,23 +110,25 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
             xlim(ax, [0 m])
             ylim(ax, [0 m])
             grid(ax, 'on')
-            h = [];
-            for i = 1:length(t.Plot)
-                if (t.Plot(i))
-                  col = ax.ColorOrder(mod(i-1,7)+1,:);
+            h = []; %#ok<NASGU> 
+            for ii = 1:length(t.Plot)
+                if (t.Plot(ii))
+                  col = ax.ColorOrder(mod(ii-1,7)+1,:);
                   hold(ax, 'on')
-                  h = scatter(ax,xibis{i}, yibis{i}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(i)) );
+                  h = scatter(ax,xibis{ii}, yibis{ii}, 'MarkerEdgeColor',col, 'DisplayName', char(t.Row(ii)) );
 
-                  [Labels{1:length(tibis{i})}] = deal(t.Row{i});
+                  [Labels{1:length(tibis{ii})}] = deal(t.Row{ii});
                   h.DataTipTemplate.DataTipRows(1) = dataTipTextRow("Period:",Labels);
                   h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("IBI(t)::",'XData');
                   h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t+1):",'YData');
-                  h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("Time(s):",tibis{i});
+                  h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("Time(s):",tibis{ii});
 
-                  e = plot_ellipse(ax, 2*t.SD1(i),2*t.SD2(i),mean(xibis{i}), mean(yibis{i}), 45, col);
-                  dt = datatip(e,0,0,'Visible','off'); % weird hack to enable datatips on patches
-                  e.DataTipTemplate.DataTipRows = dataTipTextRow("",Labels);
-         end
+                  el = plot_ellipse(ax, 2*t.SD1(ii),2*t.SD2(ii),mean(xibis{ii}), mean(yibis{ii}), 45, col);
+                  dt = datatip(el,0,0,'Visible','off'); %#ok<NASGU> % weird hack to enable datatips on patches
+                  [Labels{1:length(el.XData)}] = deal(t.Row{ii});
+                  el.DataTipTemplate.DataTipRows(1)  = dataTipTextRow("", Labels);
+                  el.DataTipTemplate.DataTipRows(2)=[];
+                end
             end
         end
     end
