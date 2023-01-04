@@ -93,16 +93,16 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
     %guiPanel.Layout.Column = 2;
     %guiPanel.Layout.Row = 3;
 
-    lPoincarePlot(t, x, y, tRR)
+    lPoincarePlot(t, x, y, tRR, input.IBIevent{1}.classID(1:end-2));
 
         % Update the bubble chart when table data changes
         function updatePlot(~,~)
             t = uit.DisplayData;
             lx = xlim(ax); ly = ylim(ax);
-            lPoincarePlot(t,x,y,tRR)
+            lPoincarePlot(t,x,y,tRR,input.IBIevent{1}.classID(1:end-2));
             xlim(ax,lx); ylim(ax,ly);
         end
-        function lPoincarePlot(t,xibis,yibis, tibis)
+        function lPoincarePlot(t,xibis,yibis, tibis, labs)
             cla(ax);
             xlabel(ax, "IBI(t)");
             ylabel(ax, "IBI(t+1)");
@@ -119,9 +119,10 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
 
                   [Labels{1:length(tibis{ii})}] = deal(t.Row{ii});
                   h.DataTipTemplate.DataTipRows(1) = dataTipTextRow("Period:",Labels);
-                  h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("IBI(t)::",'XData');
-                  h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t+1):",'YData');
-                  h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("Time(s):",tibis{ii});
+                  h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t):",'XData');
+                  h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("Label",labs);
+                  h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("IBI(t+1):",'YData');
+                  h.DataTipTemplate.DataTipRows(5) = dataTipTextRow("Time(s):",tibis{ii});
 
                   el = plot_ellipse(ax, 2*t.SD1(ii),2*t.SD2(ii),mean(xibis{ii}), mean(yibis{ii}), 45, col);
                   dt = datatip(el,0,0,'Visible','off'); %#ok<NASGU> % weird hack to enable datatips on patches
