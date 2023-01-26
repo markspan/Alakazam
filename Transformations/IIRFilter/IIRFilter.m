@@ -157,6 +157,5 @@ if isfield(input, 'Polarchannels')
             end
         end
     end
+    output.Polarchannels.data = gather(output.Polarchannels.data);
 end
-output.Polarchannels.data = gather(output.Polarchannels.data);
-

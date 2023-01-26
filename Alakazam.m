@@ -49,6 +49,7 @@ classdef Alakazam < handle
             this.Workspace.open();
             % after this, the workspace Panel holds the DataTree
             this.ToolGroup.setDataBrowser(this.Workspace.Panel);
+            assignin('base', 'AlakazamInst', this)
         end
 
         function delete(this)
