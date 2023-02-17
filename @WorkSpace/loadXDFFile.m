@@ -95,9 +95,13 @@ function EEG = loadXDF(filename)
 
     ismarker = (sr==0);
     datachannels = find(~ismarker);
-
     datachannels = datachannels(datachannels ~= maxsrchan);
     datachannels = [datachannels maxsrchan];
+    for i = 1: length(data.item{datachannels}.label)
+        if (isstruct(data.item{datachannels}.label{i}))
+            data.item{datachannels}.label{i} = 'none';
+        end
+    end
 
     EEG = data.export2eeglab(datachannels, find(ismarker), [],false);
 
