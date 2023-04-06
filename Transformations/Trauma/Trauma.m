@@ -1,8 +1,7 @@
 function [EEG, options] = Trauma(input,opts)
     %% Create Epochs from events
     % given event codes create extra labels, and give them a duration.
-    % duration can be based on stop code, or given duration.
-    
+    % duration can be based on stop code, or given duration.    
     %#ok<*AGROW>
     
     %% Check for the EEG dataset input:
@@ -28,7 +27,6 @@ function [EEG, options] = Trauma(input,opts)
              "end film and start QS12", "end QS12", "stop HR measure"];
 
     d = dictionary(keys, names);
-
 
     %% copy input to output.
     EEG = input;
