@@ -76,6 +76,7 @@ function EEG = loadXDF(filename)
     data = Tools.dataSourceXDF( filename , tnf );
     sr=[]; ns=[]; 
     maxsr=-1;
+    maxsrchan = 512;
     polar = [];
     for i = 1:length(data.item)
         sr(i) = data.item{i}.samplingRate; %#ok<AGROW> 
