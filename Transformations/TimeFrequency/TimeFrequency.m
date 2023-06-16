@@ -13,7 +13,9 @@ if (nargin < 1)
 end
 
 [~, name, ~]= fileparts(EEG.filename);
-pfigure = figure('Name', name, 'Visible', false, 'Units', 'normalized');
-figure(pfigure)
+
+%pfigure = figure('Name', name, 'Visible', false, 'Units', 'normalized');
+%figure(pfigure)
 pop_newtimef(EEG,1);
+pfigure = gcf;
 set(pfigure, 'visible', true)
