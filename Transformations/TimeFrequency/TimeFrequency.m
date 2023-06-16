@@ -12,10 +12,12 @@ if (nargin < 1)
     throw(ME);
 end
 
-[~, name, ~]= fileparts(EEG.filename);
+[~, name, ~]= fileparts(EEG.File);
 
 %pfigure = figure('Name', name, 'Visible', false, 'Units', 'normalized');
 %figure(pfigure)
-pop_newtimef(EEG,1);
+EEG.id = ['timefreq:' name];
+[command,fig] = Tools.pop_newtimef(EEG,1);
 pfigure = gcf;
-set(pfigure, 'visible', true)
+set(gcf, 'visible', false)
+
