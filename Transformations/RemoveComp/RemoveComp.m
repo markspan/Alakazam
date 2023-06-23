@@ -18,5 +18,6 @@ end
 [~, name, ~]= fileparts(EEG.File);
 
 EEG.id = ['timefreq:' name];
+pop_viewprops(EEG,0);
 EEG = pop_subcomp(EEG);
 

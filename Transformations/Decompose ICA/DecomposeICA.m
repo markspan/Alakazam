@@ -1,11 +1,11 @@
-function [pfigure, ropts] = DecomposeICA(EEG,~)
+function [EEG, ropts] = DecomposeICA(EEG,~)
 %% Create a poincare plot for the IBI series
 % The ibis are plotted agains a time-delayed version of the same values. If
 % the 'bylabel' option is used, the plot has different partitions for each
 % value the label takes on.
 
 %#ok<*AGROW>
-ropts = 'graph';
+ropts = 'Init';
 %% Check for the EEG dataset input:
 if (nargin < 1)
     ME = MException('Alakazam:DecomposeICA','Problem in DecomposeICA: No Data Supplied');
@@ -21,8 +21,5 @@ EEG = pop_runica(EEG);
 EEG = pop_chanedit(EEG);
 EEG=iclabel(EEG, 'beta');
 
-pop_viewprops(EEG,0);
 
-pfigure = gcf;
-set(gcf, 'visible', false)
 
