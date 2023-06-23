@@ -7,15 +7,15 @@ function input = plotFourier(input, theFig)
 %Tools.HideSliders;
 bands={'Sub-Delta',0,.5,[119 136 153]/255;
     'Delta',.5,3.5,[255 165 0]/255;
-    'Theta',3.5,7.5,'y';
+    'Theta',3.5,7.5,'r';
     'Alpha',7.5,12.5,'g';
     'Beta',12.5,30,'b';
     '', 30,1000,'k'
     };
 
 hFig = theFig;
-ud.EEG = hFig.UserData;
-ud.EEG.freqs = input.freqs;
+ud = hFig.UserData;
+ud.EEG.Freqs = input.freqs;
 ud.EEG.Lims = [ 0 floor(input.srate/2) 0 max(input.data(:)) ];
 ud.EEG.CurrentTrial = 1;
 set(theFig, 'Visible', 'off');
@@ -31,12 +31,12 @@ for p = 1:nchan
     cla;
     hold on;
    for band = 1:6
-        tofill = find(ud.EEG.freqs>cell2mat(bands(band,2)) & ud.EEG.freqs <=cell2mat(bands(band,3)));
+        tofill = find(ud.EEG.Freqs>cell2mat(bands(band,2)) & ud.EEG.Freqs <=cell2mat(bands(band,3)));
         if ~isempty(tofill)
           if tofill(1) >1
             tofill = [tofill(1)-1 tofill]; %#ok<AGROW>
           end
-          area(ud.EEG.freqs(tofill),input.data(p,tofill,ud.EEG.CurrentTrial), 'EdgeColor', 'k', 'EdgeAlpha', .33, 'FaceColor', cell2mat(bands(band,4)));
+          area(ud.EEG.Freqs(tofill),input.data(p,tofill,ud.EEG.CurrentTrial), 'EdgeColor', 'k', 'EdgeAlpha', .33, 'FaceColor', cell2mat(bands(band,4)));
         end
    end
   
@@ -44,7 +44,7 @@ for p = 1:nchan
     hold off;
     ti(p) = title(sprintf('Channel %i: %s', p, input.chanlocs(p).labels)); %#ok<AGROW,NASGU>
     axis(ud.EEG.Lims);
-    set(ax(p), 'ButtonDownFcn', {@axiscallback, ud.EEG.freqs, input.data(p,:),sprintf('Channel %i: %s', p, input.chanlocs(p).labels) });
+    set(ax(p), 'ButtonDownFcn', {@axiscallback, ud.EEG.Freqs, input.data(p,:),sprintf('Channel %i: %s', p, input.chanlocs(p).labels) });
 end
 linkaxes(ax);
 
@@ -165,7 +165,7 @@ oldlim = xlim;
 dist = oldlim(2)-oldlim(1);
 xlim([oldlim(1) oldlim(1)+(dist/2)]);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 
 function zoomout( ~, ~, data)
@@ -173,21 +173,21 @@ oldlim = xlim;
 dist = oldlim(2)-oldlim(1);
 xlim([oldlim(1) min(oldlim(1)+(dist*2), data.srate/2)]);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 function blowup( ~, ~, ~)
 oldlim = ylim;
 dist = oldlim(2)-oldlim(1);
 ylim([oldlim(1) oldlim(1)+(dist/2)]);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 function smaller( ~, ~, ~)
 oldlim = ylim;
 dist = oldlim(2)-oldlim(1);
 ylim([oldlim(1) oldlim(1)+(dist*2)]);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 function goleft( ~, ~, ~)
 oldlim = xlim;
@@ -198,7 +198,7 @@ if (newlim(1) <0)
 end
 xlim(newlim);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 function goright( ~, ~, data)
 oldlim = xlim;
@@ -209,6 +209,6 @@ if (newlim(2) > (data.srate/2))
 end
 xlim(newlim);
 hFig = gcf;
-hFig.UserData.Lims = [xlim ylim];
+hFig.UserData.EEG.Lims = [xlim ylim];
 
 

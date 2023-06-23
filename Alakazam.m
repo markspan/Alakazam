@@ -80,6 +80,10 @@ classdef Alakazam < handle
                     %% the function returned a handle: this means there is
                     % no real transformation: the function returned a plot.
                     % plotFigure(this, a.EEG);
+                    this.Figures(end+1) = a.EEG;
+                    this.ToolGroup.addFigure(this.Figures(end));
+                    this.Figures(end).Visible = 'on';
+                    %set(this.Figures(end), 'Toolbar', 'none');
                     set(f,'Pointer','arrow');
                     return
                 end
