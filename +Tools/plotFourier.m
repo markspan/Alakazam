@@ -14,8 +14,8 @@ bands={'Sub-Delta',0,.5,[119 136 153]/255;
     };
 
 hFig = theFig;
-ud = hFig.UserData;
-ud.EEG.Freqs = input.freqs;
+ud.EEG = hFig.UserData;
+ud.EEG.freqs = input.freqs;
 ud.EEG.Lims = [ 0 floor(input.srate/2) 0 max(input.data(:)) ];
 ud.EEG.CurrentTrial = 1;
 set(theFig, 'Visible', 'off');
@@ -31,20 +31,20 @@ for p = 1:nchan
     cla;
     hold on;
    for band = 1:6
-        tofill = find(ud.Freqs>cell2mat(bands(band,2)) & ud.Freqs <=cell2mat(bands(band,3)));
+        tofill = find(ud.EEG.freqs>cell2mat(bands(band,2)) & ud.EEG.freqs <=cell2mat(bands(band,3)));
         if ~isempty(tofill)
           if tofill(1) >1
             tofill = [tofill(1)-1 tofill]; %#ok<AGROW>
           end
-          area(ud.Freqs(tofill),input.data(p,tofill,ud.CurrentTrial), 'EdgeColor', 'k', 'EdgeAlpha', .33, 'FaceColor', cell2mat(bands(band,4)));
+          area(ud.EEG.freqs(tofill),input.data(p,tofill,ud.EEG.CurrentTrial), 'EdgeColor', 'k', 'EdgeAlpha', .33, 'FaceColor', cell2mat(bands(band,4)));
         end
    end
   
     
     hold off;
     ti(p) = title(sprintf('Channel %i: %s', p, input.chanlocs(p).labels)); %#ok<AGROW,NASGU>
-    axis(ud.Lims);
-    set(ax(p), 'ButtonDownFcn', {@axiscallback, ud.Freqs, input.data(p,:),sprintf('Channel %i: %s', p, input.chanlocs(p).labels) });
+    axis(ud.EEG.Lims);
+    set(ax(p), 'ButtonDownFcn', {@axiscallback, ud.EEG.freqs, input.data(p,:),sprintf('Channel %i: %s', p, input.chanlocs(p).labels) });
 end
 linkaxes(ax);
 
@@ -82,7 +82,7 @@ if nseg > 1
         'Position', [260 5 20 20],...
         'Callback', {@TrialPlus, input});
     
-    mtit(sprintf('Trial: %i',ud.CurrentTrial ));
+    mtit(sprintf('Trial: %i',ud.EEG.CurrentTrial ));
 end
 
 
@@ -145,8 +145,8 @@ uicontrol('Style', 'pushbutton', 'String', '>',...
 function TrialPlus( ~, ~, data)
 hFig = gcf;
 ud = hFig.UserData;
-if ud.CurrentTrial < data.trials
-    ud.CurrentTrial = ud.CurrentTrial + 1;
+if ud.EEG.CurrentTrial < data.trials
+    ud.EEG.CurrentTrial = ud.EEG.CurrentTrial + 1;
     set (gcf, 'UserData', ud);
 end
 plotFourier(data, gcf);
@@ -154,8 +154,8 @@ plotFourier(data, gcf);
 function TrialMinus( ~, ~, data)
 hFig = gcf;
 ud = hFig.UserData;
-if ud.CurrentTrial > 1
-    ud.CurrentTrial = ud.CurrentTrial - 1;
+if ud.EEG.CurrentTrial > 1
+    ud.EEG.CurrentTrial = ud.EEG.CurrentTrial - 1;
     set (gcf, 'UserData', ud);
 end
 plotFourier(data, gcf);

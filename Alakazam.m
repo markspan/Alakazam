@@ -159,7 +159,7 @@ classdef Alakazam < handle
             %% EPOCHED DATA PLOT
             hEEG = Tools.hEEG;
             hEEG.toHandle(this.Workspace.EEG);
-            set(this.Figures(end), 'UserData', hEEG);
+            set(this.Figures(end), 'UserData', this.Workspace.EEG);
             if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED')
                 if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
                     if (this.Workspace.EEG.nbchan > 1)
