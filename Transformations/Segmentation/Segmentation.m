@@ -33,6 +33,7 @@ if isfield(input, 'event') ...
     %durations = {input.event.duration};
     %codes = {input.event.code};
     uniformtypes={};
+
     for e = unique(types)
         evtdurs = unique(durations(strcmp(types,e)));
         if isempty(evtdurs) 
@@ -42,7 +43,8 @@ if isfield(input, 'event') ...
         end
     end
     %uniformtypes = uniformtypes{2:end};
-
+    %% incorrect: only works for now.
+    uniformtypes = unique(types(durations>0));
 
 %% simplest option....
 if strcmp(options, 'Init')
@@ -50,7 +52,7 @@ if strcmp(options, 'Init')
         'Description', 'Set the parameters for Segmentation creation',...
         'title' , 'Segmentation options',...
         'separator' , 'Events:',...
-        {'Start'; 'Label'}, uniformtypes);
+        {'Start'; 'tableLabel'}, uniformtypes);
 else    
     if isempty(uniformtypes) 
         ME = MException('Alakazam:Segmentation','Problem in Segmentation: No events with duration. Try Epoch');
@@ -58,8 +60,11 @@ else
     end
 end
 
-slabel = options.Label;
-selection = input.event(strcmpi({input.event.type}, slabel));
+slabel = options.tableLabel;
+selection = [];
+for l = slabel
+    selection = [selection input.event(strcmpi({input.event.type}, l))]; %#ok<AGROW> 
+end
 
 % Now restructure the data and create a 3D dataset with trials in the
 % z-direction... (channels:points:trials)
