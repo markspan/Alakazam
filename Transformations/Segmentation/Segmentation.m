@@ -43,7 +43,7 @@ if isfield(input, 'event') ...
         end
     end
     %uniformtypes = uniformtypes{2:end};
-    %% incorrect: only works for now.
+    %% incorrect: only works for now. you can select any code that has duration!
     uniformtypes = unique(types(durations>0));
 
 %% simplest option....
