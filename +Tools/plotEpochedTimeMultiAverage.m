@@ -16,22 +16,23 @@ end
     sd = squeeze(ud.stDev(ud.channel,:));
     plot(ud.times, squeeze(ud.data(ud.channel,:,:)) + sd, 'b:');
     plot(ud.times, squeeze(ud.data(ud.channel,:,:)) - sd, 'b:');
-    
     title("Channel: " + ud.labels{ud.channel});
+    xline(0,'Color', 'k', 'LineStyle','--')
+    yline(0,'Color', 'k', 'LineStyle','--')
+    box off
     hold off
     xlim([min(ud.times), max(ud.times)])
+    ylim([min(min(ud.data(:,:,:))) max(max(ud.data(:,:,:)))])
 end
 
 function Key_Pressed_epoched_multi_average(~,evnt)
     ud = get(gcf, 'UserData');
     if strcmpi(evnt.Key, 'uparrow') % previous channel
         ud.channel = max(1, ud.channel - 1);
-        set(gcf, 'UserData', ud)
-        plot_etm();
     end
     if strcmpi(evnt.Key, 'downarrow') % next channel
         ud.channel = min(size(ud.data,1), ud.channel + 1);
-        set(gcf, 'UserData', ud)
-        plot_etm();
     end
+    set(gcf, 'UserData', ud)
+    plot_etm();
 end

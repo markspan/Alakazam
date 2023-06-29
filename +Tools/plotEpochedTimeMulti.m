@@ -5,9 +5,10 @@ function plotEpochedTimeMulti(data, fig)
     data.channel=1;
     data.trial = 1;
     data.labels = {data.chanlocs.labels};
+    data.legend = true;
     set(fig, 'UserData', data);
     plot_etm(1); % all trials, one channel
-    axtoolbar('default');    
+    axtoolbar('default'); 
 end
 
 function plot_etm(mode)
@@ -28,6 +29,16 @@ function plot_etm(mode)
             ceil(length(ud.labels)/35), ...            
             'Location', 'northeast')
     end
+
+    hLeg=findobj(gcf,'type','legend');
+    if (ud.legend)
+        set(hLeg,'visible','on')
+    else
+        set(hLeg,'visible','off')
+    end
+
+    ud.mode = mode;
+    set(gcf, 'UserData', ud);
 end
 
 function Key_Pressed_epoched_multi(~,evnt)
@@ -35,32 +46,27 @@ function Key_Pressed_epoched_multi(~,evnt)
     ud = get(gcf, 'UserData');
     if strcmpi(evnt.Key, 'uparrow') % previous channel
         ud.channel = max(1, ud.channel - 1);
+        ud.mode = 1;
         set(gcf, 'UserData', ud)
-        plot_etm(1);
     end
     if strcmpi(evnt.Key, 'downarrow') % next channel
         ud.channel = min(size(ud.data,1), ud.channel + 1);
+        ud.mode = 1;
         set(gcf, 'UserData', ud)
-        plot_etm(1);
     end
     if strcmpi(evnt.Key, 'leftarrow') % previous trial
         ud.trial = max(1,ud.trial-1);
+        ud.mode = 2;
         set(gcf, 'UserData', ud)
-        plot_etm(2);
     end
     if strcmpi(evnt.Key, 'rightarrow') % next trial
         ud.trial = min(size(ud.data,3), ud.trial + 1);
+        ud.mode = 2;
         set(gcf, 'UserData', ud)
-        plot_etm(2);
     end
-
     if strcmpi(evnt.Key, 'l') % legend toggle
-        hLeg=findobj(gcf,'type','legend');
-        isvis = get(hLeg, 'visible');
-        if (strcmp(isvis, 'off'))
-            set(hLeg,'visible','on')
-        else
-            set(hLeg,'visible','off')
-        end
+        ud.legend = ~ud.legend
+        set(gcf, 'UserData', ud);
     end
+    plot_etm(ud.mode);
 end
