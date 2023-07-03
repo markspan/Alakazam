@@ -34,6 +34,6 @@ end
 EEG = input;
 EEG.ntrials = EEG.trials;
 EEG.trials = 1;
-EEG.data=mean(EEG.data,3);
-EEG.stDev = std(input.data,0,3);
+EEG.data=mean(EEG.data,3,'omitnan');
+EEG.stDev = std(input.data,0,3, 'omitnan');
 
