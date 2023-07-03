@@ -834,7 +834,7 @@ classdef Tree < hgsetget %#ok<HGSTGT>
                 %disp(tObj.jScrollPane.getVerticalScrollBar().getValue())
                 treePath = tObj.jTree.getPathForLocation(...
                     Loc.getX + tObj.jScrollPane.getHorizontalScrollBar().getValue(), Loc.getY + (tObj.jScrollPane.getVerticalScrollBar().getValue()/(tObj.FontSize*2)));
-                disp(treePath)
+                %disp(treePath)
                 if isempty(treePath)
                     % If no target node, the target is the background of
                     % the tree. Assume the root is the intended target.
