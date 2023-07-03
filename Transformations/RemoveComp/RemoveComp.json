@@ -1,1 +1,1 @@
-{"Name":"RemoveComp","Description":"Remove ICA Component","Entry":"RemoveComp.m","Icon":"RemoveComp.png","Section":"PreProcessing","Category":"EOG"}
+{"Name":"RemoveComp","Description":"Remove ICA Component","Entry":"RemoveComp.m","Icon":"RemoveComp.png","Section":"Artifact Rejection / Reduction","Category":"EOG"}

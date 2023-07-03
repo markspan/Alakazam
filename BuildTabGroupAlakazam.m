@@ -114,7 +114,7 @@ function createTransformation(tab, app)
             for tT=T
                 %app.SplashScreen.AddText("Tr: " + {SectionCatTransForms.Name})
                 iTransForm = SectionCatTransForms(strcmp({SectionCatTransForms.Name}, tT ));
-                disp([iTransForm.Icon tT])
+                %disp([iTransForm.Icon tT])
                 item = GalleryItem(iTransForm.Name, Icon(['Transformations\' char(tT) '\' iTransForm.Icon]));
                 item.Description = iTransForm.Description;
                 item.ItemPushedFcn = @(x,y, userData) app.ActionOnTransformation(x,y, iTransForm.Entry);
