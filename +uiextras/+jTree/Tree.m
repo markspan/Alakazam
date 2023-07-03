@@ -1,4 +1,4 @@
-classdef Tree < hgsetget
+classdef Tree < hgsetget %#ok<HGSTGT> 
     % Tree - Class definition for Tree
     %   The Tree object places a tree control within a figure or
     %   container.
@@ -167,7 +167,7 @@ classdef Tree < hgsetget
     
     % The tree needs to be accessible to the nodes also
     properties (SetAccess={?uiextras.jTree.Tree, ?uiextras.jTree.TreeNode},...
-            GetAccess={?uiextras.jTree.Tree, ?uiextras.jTree.TreeNode})
+        GetAccess={?uiextras.jTree.Tree, ?uiextras.jTree.TreeNode})
         jTree       %Java object for tree
     end
     
@@ -222,13 +222,13 @@ classdef Tree < hgsetget
             p.KeepUnmatched = true;
             
             % Define defaults and requirements for each parameter
-            p.addParamValue('FontAngle','normal');
-            p.addParamValue('FontName','MS Sans Serif');
-            p.addParamValue('FontSize',10);
-            p.addParamValue('FontWeight','normal');
-            p.addParamValue('Parent',[]);
-            p.addParamValue('Units','normalized');
-            p.addParamValue('Position',[0 0 1 1]);
+            p.addParameter('FontAngle','normal');
+            p.addParameter('FontName','MS Sans Serif');
+            p.addParameter('FontSize',10);
+            p.addParameter('FontWeight','normal');
+            p.addParameter('Parent',[]);
+            p.addParameter('Units','normalized');
+            p.addParameter('Position',[0 0 1 1]);
             p.parse(varargin{:});
             
             %----- Create Graphics -----%
@@ -358,7 +358,7 @@ classdef Tree < hgsetget
             tObj.CBEnabled = true;
         end
         
-        function removeNode(tObj,nObj,pObj)
+        function removeNode(tObj,nObj,pObj) %#ok<INUSD> 
             if ~isempty([tObj.jModel]) && ishandle(nObj.jNode)
                 tObj.CBEnabled = false;
                 tObj.jModel.removeNodeFromParent(nObj.jNode);
@@ -486,8 +486,8 @@ classdef Tree < hgsetget
             
             % Create a scroll pane
             tObj.jScrollPane = javaObjectEDT('com.mathworks.mwswing.MJScrollPane',tObj.jTree);
-            [tObj.jContainer,tObj.hJContainer] = javacomponent(tObj.jScrollPane,[0 0 100 100],tObj.hPanel);
-            set(tObj.hJContainer,'Units','normalized','Position',[0 0 1 1])
+            [tObj.jContainer,tObj.hJContainer] = javacomponent(tObj.jScrollPane,[0 0 100 100],tObj.hPanel); %#ok<JAVCM> 
+            set(tObj.hJContainer,'Units','pixels','Position',[0 0 1 1])
             
         end
         
@@ -746,7 +746,7 @@ classdef Tree < hgsetget
                 for idx = 1:numel(p)
                     nObj = get(p(idx).getLastPathComponent(),'TreeNode');
                     if isvalid(nObj)
-                        if e.isAddedPath(idx-1); %zero-based index
+                        if e.isAddedPath(idx-1) %zero-based index
                             AddedNodes(end+1) = nObj; %#ok<AGROW>
                         else
                             RemovedNodes(end+1) = nObj; %#ok<AGROW>
@@ -831,8 +831,10 @@ classdef Tree < hgsetget
                 
                 % Get the target node
                 Loc = e.getLocation();
+                %disp(tObj.jScrollPane.getVerticalScrollBar().getValue())
                 treePath = tObj.jTree.getPathForLocation(...
-                    Loc.getX + tObj.jScrollPane.getHorizontalScrollBar().getValue(), Loc.getY + tObj.jScrollPane.getVerticalScrollBar().getValue());
+                    Loc.getX + tObj.jScrollPane.getHorizontalScrollBar().getValue(), Loc.getY + (tObj.jScrollPane.getVerticalScrollBar().getValue()/(tObj.FontSize*2)));
+                disp(treePath)
                 if isempty(treePath)
                     % If no target node, the target is the background of
                     % the tree. Assume the root is the intended target.

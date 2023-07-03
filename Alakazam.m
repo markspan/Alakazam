@@ -225,6 +225,7 @@ classdef Alakazam < handle
         function TreeDropNode(this, ~, args)
             % Called when a Treenode is Dropped on another Treenode.
             % I prefer a switch of "copy" and "move" here.
+            cd(this.RootDir);
             if ~isempty(args.Source.Parent.Parent) % if not a rootnode
                 switch args.DropAction
                     case 'copy'
