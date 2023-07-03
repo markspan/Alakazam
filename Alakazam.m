@@ -9,6 +9,7 @@ classdef Alakazam < handle
     % dept. Experimental Psychology
 
     properties (Transient = true)
+        RootDir
         ToolGroup
         Figures
         Workspace
@@ -17,7 +18,9 @@ classdef Alakazam < handle
     methods
 
         function this = Alakazam(varargin)
-            addpath(pwd);
+            [this.RootDir,~,~] = fileparts(which('Alakazam'));
+            cd(this.RootDir);
+
             close all
             if exist('D:/TMP/tmpXDF','dir')
                 rmdir('D:/TMP/tmpXDF', 's');
@@ -66,6 +69,7 @@ classdef Alakazam < handle
         function ActionOnTransformation(this, ~, ~, userdata)
             % this function is the callback for all transformations.
             try
+                cd(this.RootDir);
                 f = findobj('Type', 'Figure','Tag', this.Workspace.EEG.File);
                 set(f,'Pointer','watch');
 
