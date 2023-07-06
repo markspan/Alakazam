@@ -222,7 +222,7 @@ classdef Alakazam < handle
             end
         end
 
-        function TreeDropNode(this, ~, args)
+        function TreeDropNode(this, tree, args)
             % Called when a Treenode is Dropped on another Treenode.
             % I prefer a switch of "copy" and "move" here.
             cd(this.RootDir);
@@ -252,6 +252,7 @@ classdef Alakazam < handle
         end
 
         function Evaluate(this, NewData, OldData, NewParentNode)
+
             endnode = false;
 
             while endnode == false
@@ -261,50 +262,61 @@ classdef Alakazam < handle
                 idx1 = strfind(Old.EEG.Call, '=');
                 idx2 = strfind(Old.EEG.Call, '(');
                 id = Old.EEG.Call(idx1+1:idx2-1);
-    
-                [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
-                %disp(["I called: " id])
-                %Old.EEG.params
-                CurrentNode = x.EEG.id;
-                Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
-                [parent.dir, parent.name] = fileparts(x.EEG.File);
-                cDir = fullfile(parent.dir,parent.name);
-                if ~exist(cDir, 'dir')
-                    cDir = fullfile(parent.dir,parent.name);
-                    mkdir(cDir);
-                end
-       
-                a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
-    
-                %a.EEG.File = strcat(this.Workspace.CacheDirectory, char(CurrentNode),'\', Key, '.mat');
-                a.EEG.id =  [char(CurrentNode) ' - ' id];
-                a.EEG.Call = Old.EEG.Call;
-                a.EEG.params = Old.EEG.params;
-                % newNode = javaObjectEDT('AlakazamHelpers.EEGLABTreeNode', a.EEG.id, a.EEG.File);
-                NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
-                if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
-                    setIcon(NewNode,this.Workspace.TimeSeriesIcon);
-                elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
-                    setIcon(NewNode,this.Workspace.FrequenciesIcon);
-                end
-                NewNode.Parent.expand();
-                this.Workspace.Tree.SelectedNodes = NewNode;
-    
-                EEG=a.EEG;
-                save(a.EEG.File, 'EEG');
-                this.Workspace.EEG=EEG;
-                
-                [p,n,~] = fileparts(OldData);
-                if exist([p '\' n], 'dir')
-                    NewParentNode = NewNode;
-                    NewData = a.EEG.File;
-                    name = dir([p '\' n '\' '*.mat' ]);
-                    OldData = [p '\' n '\' name.name];
+
+                if strcmpi(id, 'Average') & length(size(x.EEG.data)) == length(size(Old.EEG.data)) & size(x.EEG.data) == size(Old.EEG.data)
+                        hold off
+                        Tools.plotEpochedTimeMultiAverage(Old.EEG, this.Figures(end));
+                        hold on
+                        Tools.plotEpochedTimeMultiAverage(x.EEG, this.Figures(end));
+                        hold off
+                        endnode=true;
                 else
-                    endnode = true;
+
+                    [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
+                    %disp(["I called: " id])
+                    %Old.EEG.params
+                    CurrentNode = x.EEG.id;
+                    Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
+                    [parent.dir, parent.name] = fileparts(x.EEG.File);
+                    cDir = fullfile(parent.dir,parent.name);
+                    if ~exist(cDir, 'dir')
+                        cDir = fullfile(parent.dir,parent.name);
+                        mkdir(cDir);
+                    end
+
+                    a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+
+                    %a.EEG.File = strcat(this.Workspace.CacheDirectory, char(CurrentNode),'\', Key, '.mat');
+                    a.EEG.id =  [char(CurrentNode) ' - ' id];
+                    a.EEG.Call = Old.EEG.Call;
+                    a.EEG.params = Old.EEG.params;
+                    % newNode = javaObjectEDT('AlakazamHelpers.EEGLABTreeNode', a.EEG.id, a.EEG.File);
+                    NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
+                    if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
+                        setIcon(NewNode,this.Workspace.TimeSeriesIcon);
+                    elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
+                        setIcon(NewNode,this.Workspace.FrequenciesIcon);
+                    end
+                    NewNode.Parent.expand();
+                    this.Workspace.Tree.SelectedNodes = NewNode;
+
+                    EEG=a.EEG;
+                    save(a.EEG.File, 'EEG');
+                    this.Workspace.EEG=EEG;
+
+                    [p,n,~] = fileparts(OldData);
+                    if exist([p '\' n], 'dir')
+                        NewParentNode = NewNode;
+                        NewData = a.EEG.File;
+                        name = dir([p '\' n '\' '*.mat' ]);
+                        OldData = [p '\' n '\' name.name];
+                    else
+                        endnode = true;
+                    end
                 end
             end
         end
+
         function MouseClicked(this,Tree,args)
             if (args.Button == 1) % left Button
                 %if (args.Clicks == 2) % double click left button
@@ -333,12 +345,6 @@ classdef Alakazam < handle
 
         function SelectionChanged(this,Tree,args) %#ok<*INUSD>
             disp('Alakazam::SelectionChanged Unimplemented')
-            %             n = randi(5);
-            %             newToolBox = javaObjectEDT('javax.swing.JPanel',javaObjectEDT('java.awt.GroupLayout',n,n));
-            %             for i = 1:(n*n)
-            %                 newToolBox.add(javaObjectEDT('javax.swing.JButton', 'Center'));
-            %             end
-            %             this.Workspace.ChangeToolBox(newToolBox)
         end
 
         function closeCallback(this, event)

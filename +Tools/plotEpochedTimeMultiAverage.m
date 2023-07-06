@@ -9,7 +9,7 @@ function plotEpochedTimeMultiAverage(data, fig)
     axtoolbar('default');   
 end
 
-    function plot_etm()
+function plot_etm()
     ud = get(gcf, 'UserData');
     plot(ud.times, squeeze(ud.data(ud.channel,:,:)));
     hold on
