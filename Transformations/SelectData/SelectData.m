@@ -46,6 +46,9 @@ if (ischar(options))
 else
 
     eval(options.Param)
+    if (EEG.xmax / EEG.times(end) > 500)
+        EEG.times = EEG.times*1000;
+    end
     if ~isstruct(options)
         nOptions.Param = options;
         options = nOptions;
