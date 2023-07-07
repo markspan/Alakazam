@@ -2,7 +2,12 @@ function plotEpochedTimeMultiAverage(data, fig)
     % Multichannel plot epoched
     % channels:time:trial
     set(fig, 'KeyPressFcn',@Key_Pressed_epoched_multi_average);
-    data.channel=1;
+    ud = get(gcf, 'UserData');
+    if isfield(ud, 'channel')
+        data.channel = ud.channel;
+    else
+        data.channel=1;
+    end
     data.labels = {data.chanlocs.labels};
     set(fig, 'UserData', data);
     plot_etm(); % averaged over trials, one channel
@@ -11,11 +16,15 @@ end
 
 function plot_etm()
     ud = get(gcf, 'UserData');
-    plot(ud.times, squeeze(ud.data(ud.channel,:,:)));
+    l=plot(ud.times, squeeze(ud.data(ud.channel,:,:)));
+    col=l.Color;
     hold on
     sd = squeeze(ud.stDev(ud.channel,:));
-    plot(ud.times, squeeze(ud.data(ud.channel,:,:)) + sd, 'b:');
-    plot(ud.times, squeeze(ud.data(ud.channel,:,:)) - sd, 'b:');
+    plot(ud.times, squeeze(ud.data(ud.channel,:,:)) + sd, 'Color', col, 'LineStyle', ':');
+    plot(ud.times, squeeze(ud.data(ud.channel,:,:)) - sd, 'Color', col, 'LineStyle', ':');
+    patch([ud.times, fliplr(ud.times)], ...
+        [squeeze(ud.data(ud.channel,:,:)) + sd, fliplr(squeeze(ud.data(ud.channel,:,:)) - sd)], ...
+        col, 'EdgeColor', 'none', 'FaceAlpha', .3)
     title("Channel: " + ud.labels{ud.channel});
     xline(0,'Color', 'k', 'LineStyle','--')
     yline(0,'Color', 'k', 'LineStyle','--')
