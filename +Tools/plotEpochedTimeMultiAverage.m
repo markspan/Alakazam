@@ -3,12 +3,15 @@ function plotEpochedTimeMultiAverage(data, fig)
     % channels:time:trial
     set(fig, 'KeyPressFcn',@Key_Pressed_epoched_multi_average);
     ud = get(gcf, 'UserData');
+    
     if isfield(ud, 'channel')
         data.channel = ud.channel;
     else
         data.channel=1;
     end
+    
     data.labels = {data.chanlocs.labels};
+
     set(fig, 'UserData', data);
     plot_etm(); % averaged over trials, one channel
     axtoolbar('default');   
@@ -19,7 +22,7 @@ function plot_etm()
     l=plot(ud.times, squeeze(ud.data(ud.channel,:,:)));
     col=l.Color;
     hold on
-    sd = squeeze(ud.stDev(ud.channel,:));
+    sd = 3 * squeeze(ud.stErr(ud.channel,:));
     plot(ud.times, squeeze(ud.data(ud.channel,:,:)) + sd, 'Color', col, 'LineStyle', ':');
     plot(ud.times, squeeze(ud.data(ud.channel,:,:)) - sd, 'Color', col, 'LineStyle', ':');
     patch([ud.times, fliplr(ud.times)], ...

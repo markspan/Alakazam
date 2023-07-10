@@ -37,7 +37,7 @@ if isfield(input, 'event') ...
     for e = unique(types)
         evtdurs = unique(durations(strcmp(types,e)));
         if isempty(evtdurs) 
-            uniformtypes{end+1} = char(e); %#ok<AGROW> 
+            %uniformtypes{end+1} = char(e); %#ok<AGROW> 
         elseif  (length(evtdurs) == 1 && ~isnan(evtdurs) && evtdurs > 0)
             uniformtypes{end+1} = char(e); %#ok<AGROW> 
         end

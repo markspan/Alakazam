@@ -91,4 +91,5 @@ else
             end
         end
     end
+    EEG.event = EEG.event(selev);
 end

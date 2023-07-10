@@ -111,7 +111,7 @@ classdef Alakazam < handle
                     mkdir(cDir);
                 end
 
-                Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
+                Key = [id datestr(datetime('now'), 'DDhhMMss')];
                 a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
                 a.EEG.id =  [char(CurrentNode) ' - ' id];
 
@@ -151,7 +151,6 @@ classdef Alakazam < handle
 
             % add plot as a new document
             this.Figures(end+1) = figure('NumberTitle', 'off', 'Name', this.Workspace.EEG.id,'Tag', this.Workspace.EEG.File, ...
-                'Renderer', 'painters' , ...
                 'Color' ,[.98 .98 .98], ...
                 'PaperOrientation','landscape', ...
                 'PaperPosition',[.05 .05 .9 .9], ...
@@ -221,7 +220,14 @@ classdef Alakazam < handle
 
             end
         end
+        function NodeEdited(this, tree, args)
+            % this = Alakazam, tree = Alakazam.Workspace.Tree, args =
+            % TreeNode that was edited: Name field has changed
+            this.Workspace.EEG.id = args.Nodes.Name;
+            EEG = this.Workspace.EEG;
+            save(this.Workspace.EEG.File, 'EEG');
 
+        end
         function TreeDropNode(this, tree, args)
             % Called when a Treenode is Dropped on another Treenode.
             % I prefer a switch of "copy" and "move" here.
@@ -240,7 +246,7 @@ classdef Alakazam < handle
                         %% Do the Evaluation of the commands here:
                         % dont forget to rename the target Node.
                         %NewSourceNode = copy(args.Source,args.Target);
-                        this.Evaluate(args.Target.UserData, args.Source.UserData, args.Target);
+                        this.Evaluate(args.Source.UserData, args.Target);
 
                         %expand(args.Target)
                         %expand(args.Source)
@@ -251,34 +257,37 @@ classdef Alakazam < handle
             end
         end
 
-        function Evaluate(this, NewData, OldData, NewParentNode)
-
+        function Evaluate(this, OldData, NewParentNode)
             endnode = false;
+            NewData = NewParentNode.UserData;
+            while ~endnode
 
-            while endnode == false
+                NewEEGStruct = load(NewData, 'EEG');
+                OldEEGStruct = load(OldData, 'EEG');
+                idx1 = strfind(OldEEGStruct.EEG.Call, '=');
+                idx2 = strfind(OldEEGStruct.EEG.Call, '(');
 
-                x = load(NewData, 'EEG');
-                Old = load(OldData, 'EEG');
-                idx1 = strfind(Old.EEG.Call, '=');
-                idx2 = strfind(Old.EEG.Call, '(');
-                id = Old.EEG.Call(idx1+1:idx2-1);
+                id = OldEEGStruct.EEG.Call(idx1+1:idx2-1);
 
-                if strcmpi(id, 'Average') & length(size(x.EEG.data)) == length(size(Old.EEG.data)) & size(x.EEG.data) == size(Old.EEG.data)
+                % ugly hack to plot multiple Averages over eachother
+                % The dropsite is OldEEGStruct, the data that is dropped is
+                % NewEEGStruct.
+
+                if strcmpi(id, 'Average') & length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) & size(NewEEGStruct.EEG.data) == size(OldEEGStruct.EEG.data) %#ok<AND2> 
                         hold off
-                        Tools.plotEpochedTimeMultiAverage(Old.EEG, this.Figures(end));
+                        Tools.plotEpochedTimeMultiAverage(OldEEGStruct.EEG, this.Figures(end));
                         hold on
-                        Tools.plotEpochedTimeMultiAverage(x.EEG, this.Figures(end));
+                        Tools.plotEpochedTimeMultiAverage(NewEEGStruct.EEG, this.Figures(end));
                         hold off
                         endnode=true;
                 else
-
-                    [a.EEG, ~] = feval(id, x.EEG, Old.EEG.params);
-                    %disp(["I called: " id])
-                    %Old.EEG.params
-                    CurrentNode = x.EEG.id;
-                    Key = [id datestr(datetime('now'), 'yymmddHHMMSS')];
-                    [parent.dir, parent.name] = fileparts(x.EEG.File);
+                % every other case: dropped a branch on e set
+                    [a.EEG, ~] = feval(id, NewEEGStruct.EEG, OldEEGStruct.EEG.params);
+                    CurrentNode = NewEEGStruct.EEG.id;
+                    Key = [id datestr(datetime('now'), 'DDhhMMss')];
+                    [parent.dir, parent.name] = fileparts(NewEEGStruct.EEG.File);
                     cDir = fullfile(parent.dir,parent.name);
+
                     if ~exist(cDir, 'dir')
                         cDir = fullfile(parent.dir,parent.name);
                         mkdir(cDir);
@@ -286,11 +295,10 @@ classdef Alakazam < handle
 
                     a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
 
-                    %a.EEG.File = strcat(this.Workspace.CacheDirectory, char(CurrentNode),'\', Key, '.mat');
                     a.EEG.id =  [char(CurrentNode) ' - ' id];
-                    a.EEG.Call = Old.EEG.Call;
-                    a.EEG.params = Old.EEG.params;
-                    % newNode = javaObjectEDT('AlakazamHelpers.EEGLABTreeNode', a.EEG.id, a.EEG.File);
+                    a.EEG.Call = OldEEGStruct.EEG.Call;
+                    a.EEG.params = OldEEGStruct.EEG.params;
+
                     NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
                     if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
                         setIcon(NewNode,this.Workspace.TimeSeriesIcon);
@@ -319,22 +327,26 @@ classdef Alakazam < handle
 
         function MouseClicked(this,Tree,args)
             if (args.Button == 1) % left Button
-                %if (args.Clicks == 2) % double click left button
-                % One way or the other: load and display the data.
-                try
-                    id = Tree.SelectedNodes.Name;
-                catch
-                    return
+                if (args.Clicks == 1) % single click
+                    % One way or the other: load and display the data.
+                    try
+                        id = Tree.SelectedNodes.Name;
+                    catch
+                        return
+                    end
+                    matfilename = Tree.SelectedNodes.UserData;
+                    if exist(matfilename, 'file') == 2
+                        % if the file already exists:
+                        a=load(matfilename, 'EEG');
+                        a.EEG.id = string(id);
+                        this.Workspace.EEG = a.EEG;
+                    end
+                    plotCurrent(this);
+                elseif (args.Clicks ==2)
+                    plotCurrent(this);
+                    disp("DoubleClick!")
                 end
-                matfilename = Tree.SelectedNodes.UserData;
-                if exist(matfilename, 'file') == 2
-                    % if the file already exists:
-                    a=load(matfilename, 'EEG');
-                    a.EEG.id = string(id);
-                    this.Workspace.EEG = a.EEG;
-                end
-                plotCurrent(this);
-                %end
+
             end
             if (args.Button == 3) % right Button
                 % show Tearoff Menu!
@@ -344,7 +356,9 @@ classdef Alakazam < handle
 
 
         function SelectionChanged(this,Tree,args) %#ok<*INUSD>
-            disp('Alakazam::SelectionChanged Unimplemented')
+            EEGStruct = load(args.Nodes.UserData, 'EEG');
+            this.Workspace.EEG  = EEGStruct.EEG;
+            plotCurrent(this);
         end
 
         function closeCallback(this, event)

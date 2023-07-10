@@ -3,7 +3,7 @@ function [EEG, opts] = RemoveComp(EEG,~)
 % The ibis are plotted agains a time-delayed version of the same values. If
 % the 'bylabel' option is used, the plot has different partitions for each
 % value the label takes on.
-
+opts = 'Init';
 %#ok<*AGROW>
 ropts = 'graph';
 %% Check for the EEG dataset input:
