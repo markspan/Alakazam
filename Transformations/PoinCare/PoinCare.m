@@ -15,12 +15,13 @@ if ~isfield(input, 'IBIevent')
     ME = MException('Alakazam:PoinCare','Problem in IBIExport: No IBIS availeable (yet)');
     throw(ME);
 end
+
 [~, name, ~]= fileparts(input.filename);
 pfigure = uifigure('Name', name, 'Visible', false, 'Units', 'normalized');
 
 ev = [];
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
-    ev = unique([input.event.type], 'stable');
+    ev = unique({input.event.type}, 'stable');
     evc = ev;
 else 
     evc = [];
