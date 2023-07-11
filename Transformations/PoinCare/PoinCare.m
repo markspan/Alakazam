@@ -44,7 +44,7 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         if (~isempty(evc))
             for i = 1:length(evc)
                 label = evc(i);
-                event = [strcmp([input.event.type], label)];
+                event = [strcmp({input.event.type}, label)];
                 idx = ibit<0;
                 for e = 1:length(input.event(event)) %% when there are more events
                     elist = [input.event(event)];
