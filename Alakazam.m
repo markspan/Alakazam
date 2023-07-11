@@ -111,7 +111,7 @@ classdef Alakazam < handle
                     mkdir(cDir);
                 end
 
-                Key = [id datestr(datetime('now'), 'DDhhMMss')];
+                Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST> 
                 a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
                 a.EEG.id =  [char(CurrentNode) ' - ' id];
 
@@ -284,7 +284,7 @@ classdef Alakazam < handle
                 % every other case: dropped a branch on e set
                     [a.EEG, ~] = feval(id, NewEEGStruct.EEG, OldEEGStruct.EEG.params);
                     CurrentNode = NewEEGStruct.EEG.id;
-                    Key = [id datestr(datetime('now'), 'DDhhMMss')];
+                    Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST> 
                     [parent.dir, parent.name] = fileparts(NewEEGStruct.EEG.File);
                     cDir = fullfile(parent.dir,parent.name);
 
