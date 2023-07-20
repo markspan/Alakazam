@@ -671,7 +671,7 @@ function cdim = CD(RR,m,r,~)
         graph = true;        
     end
     if nargin<3
-        r = [50:100]/1000;
+        r = (50:100)/1000;
     end    
     if nargin<2
         m = 10;
@@ -730,13 +730,13 @@ function apen = ApEn(RR,num,m,r)
     for i=m+1:length(RR)
         d(mod(i-1,m+1)+1,:) = NaN;
         d(mod(i-1,m+1)+1,length(RR)+1-i:2*length(RR)-i) = abs(RR(i)-RR);
-        Dm = max(d(mod([i-m:i-1]-1,m+1)+1,:),[],'includenan');
+        Dm = max(d(mod((i-m:i-1)-1,m+1)+1,:),[],'includenan');
         Dm1 = max(d,[],'includenan');
         Cm(i-m) = sum(Dm<=r,2);
         Cm1(i-m) = sum(Dm1<=r,2);  
     end
     i=i+1;
-    Dm = max(d(mod([i-m:i-1]-1,m+1)+1,:),[],'includenan');
+    Dm = max(d(mod((i-m:i-1)-1,m+1)+1,:),[],'includenan');
     Cm(i-m) = sum(Dm<=r,2);
     
     %correlation integral
@@ -1231,7 +1231,7 @@ function RR = RRfilter(RR,limit)
     RR(rr_pct>max([limit 50]) & [rr_pct(2:end)<-max([limit 50]); false]) = NaN; %one inrecognized beat
     rr_pct = 100*HRV.rrx(RR);
 
-    for wbp_lim = [80:-10:limit]-rem(limit,10)
+    for wbp_lim = (80:-10:limit)-rem(limit,10)
         wbp = find(abs(diff(rr_pct))>wbp_lim);    
         wbp = wbp(diff(wbp)==1);
         wbp = wbp(diff(wbp)==1);  

@@ -65,7 +65,7 @@ function Key_Pressed_epoched_multi(~,evnt)
         set(gcf, 'UserData', ud)
     end
     if strcmpi(evnt.Key, 'l') % legend toggle
-        ud.legend = ~ud.legend
+        ud.legend = ~ud.legend;
         set(gcf, 'UserData', ud);
     end
     plot_etm(ud.mode);

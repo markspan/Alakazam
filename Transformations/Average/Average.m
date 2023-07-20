@@ -27,4 +27,5 @@ EEG.ntrials = EEG.trials;
 EEG.trials = 1;
 EEG.data=mean(EEG.data,3,'omitnan');
 EEG.stErr = (std(input.data,0,3, 'omitnan') / sqrt(input.trials));
+EEG.DataFormat = "Averaged";
 

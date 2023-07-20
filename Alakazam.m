@@ -4,7 +4,6 @@ classdef Alakazam < handle
     % "matlab.ui.internal.desktop.showcaseMPCDesigner()" Author(s): R. Chen
     % Copyright 2015 The MathWorks, Inc.
     % C:\Program Files\MatLAB\R2018b\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
-
     % Author(s): M.Span, University of Groningen,
     % dept. Experimental Psychology
 
@@ -18,6 +17,7 @@ classdef Alakazam < handle
     methods
 
         function this = Alakazam(varargin)
+            % Constructor
             [this.RootDir,~,~] = fileparts(which('Alakazam'));
             cd(this.RootDir);
 
@@ -55,7 +55,20 @@ classdef Alakazam < handle
             assignin('base', 'AlakazamInst', this)
         end
 
+        function deleteNode(this)
+            disp("delete")
+            set(this.treeMenu, 'Visible','off');
+        end
+        function expandSingle(this, src,event,f)
+            node = f.CurrentObject;
+            expand(node)
+        end
+
+        function expandAll(this, src,event,t)
+            expand(t)
+        end
         function delete(this)
+            % Destructor
             if ~isempty(this.ToolGroup) && isvalid(this.ToolGroup)
                 delete(this.ToolGroup);
             end
@@ -167,7 +180,7 @@ classdef Alakazam < handle
             hEEG = Tools.hEEG;
             hEEG.toHandle(this.Workspace.EEG);
             set(this.Figures(end), 'UserData', this.Workspace.EEG);
-            if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED')
+            if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED') | strcmpi(this.Workspace.EEG.DataFormat, 'AVERAGED')
                 if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
                     if (this.Workspace.EEG.nbchan > 1)
                         if (isfield(this.Workspace.EEG, 'trials'))
@@ -270,18 +283,32 @@ classdef Alakazam < handle
                 id = OldEEGStruct.EEG.Call(idx1+1:idx2-1);
 
                 % ugly hack to plot multiple Averages over eachother
-                % The dropsite is OldEEGStruct, the data that is dropped is
-                % NewEEGStruct.
-
-                if strcmpi(id, 'Average') & length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) & size(NewEEGStruct.EEG.data) == size(OldEEGStruct.EEG.data) %#ok<AND2> 
+                % The dropsite is NewEEGStruct, the data that is dropped is
+                % OldEEGStruct.
+                if strcmpi(NewEEGStruct.EEG.DataFormat, 'AVERAGED') & ...
+                        strcmpi(OldEEGStruct.EEG.DataFormat, 'AVERAGED') & ...
+                        length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) & ...
+                        size(NewEEGStruct.EEG.data) == size(OldEEGStruct.EEG.data) %#ok<AND2> 
+                    
                         hold off
-                        Tools.plotEpochedTimeMultiAverage(OldEEGStruct.EEG, this.Figures(end));
+                        f = findobj('Type', 'Figure','Tag', NewEEGStruct.EEG.File);
+                        % was dropsite already plotted?
+                        if ~isempty(f)
+                            % then show it
+                            this.ToolGroup.showClient(get(f, 'Name'));
+                        else
+                            % plot it.
+                            this.Workspace.EEG=NewEEGStruct.EEG;
+                            plotCurrent(this);
+                        end
                         hold on
-                        Tools.plotEpochedTimeMultiAverage(NewEEGStruct.EEG, this.Figures(end));
+                        %and add the new plot
+                        f = findobj('Type', 'Figure','Tag', NewEEGStruct.EEG.File);
+                        Tools.plotEpochedTimeMultiAverage(OldEEGStruct.EEG, f);
                         hold off
                         endnode=true;
                 else
-                % every other case: dropped a branch on e set
+                % every other case: dropped a branch on a set
                     [a.EEG, ~] = feval(id, NewEEGStruct.EEG, OldEEGStruct.EEG.params);
                     CurrentNode = NewEEGStruct.EEG.id;
                     Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST> 
@@ -325,7 +352,7 @@ classdef Alakazam < handle
             end
         end
 
-        function MouseClicked(this,Tree,args)
+        function MouseClicked(this,Tree,args, jmenu)
             if (args.Button == 1) % left Button
                 if (args.Clicks == 1) % single click
                     % One way or the other: load and display the data.
@@ -351,6 +378,7 @@ classdef Alakazam < handle
             if (args.Button == 3) % right Button
                 % show Tearoff Menu!
                 disp('Tear!')
+                jmenu.show(Tree, 10,10)
             end
         end
 
@@ -362,6 +390,7 @@ classdef Alakazam < handle
         end
 
         function closeCallback(this, event)
+            % Callback for the close event of the tool group
             ET = event.EventData.EventType;
             if strcmp(ET, 'CLOSED')
                 delete(this);

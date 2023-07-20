@@ -381,11 +381,11 @@ else
     if(isempty(name))
     	txt=sprintf('%s%s',padding1,numtxt);
     else
-        if(numel(item)==1 && jsonopt('SingletArray',0,varargin{:})==0)
+        %if(numel(item)==1 && jsonopt('SingletArray',0,varargin{:})==0)
            	txt=sprintf('%s"%s": %s',padding1,checkname(name,varargin{:}),numtxt);
-        else
-    	    txt=sprintf('%s"%s": %s',padding1,checkname(name,varargin{:}),numtxt);
-        end
+        %else
+    	%    txt=sprintf('%s"%s": %s',padding1,checkname(name,varargin{:}),numtxt);
+        %end
     end
     return;
 end
