@@ -74,14 +74,14 @@ else
     postsamp = floor(abs(options.post/1000.0) * EEG.srate);
 
     events = input.event;
-<<<<<<< Updated upstream
+
     selev = strcmpi({events.type}, 'dummyerrornext');
     for lab = options.StartLabel
         selev = selev | strcmpi({events.type}, lab);
     end
-=======
-    selev = strcmpi({events.type}, string(options.StartLabel));
->>>>>>> Stashed changes
+
+    % selev = strcmpi({events.type}, string(options.StartLabel));
+
     for i = 1:length(selev)
         if selev(i)
             if (presamp+postsamp+EEG.event(i).latency <= EEG.pnts) && (EEG.event(i).latency - presamp > 1)
