@@ -170,7 +170,7 @@ function [settings, button] = settingsdlg(varargin)
 
 % TODO: not really applicable since defaultUicontrolBackgroundColor
 % doesn't really seem to work on Unix...
-edit_bgcolor = 'White';
+edit_bgcolor = 'White'; %#ok<NASGU> 
 edit_bgcolor = [.98 .98 .98];
 
     % Get basic window properties
@@ -217,7 +217,7 @@ edit_bgcolor = [.98 .98 .98];
          'menubar'         ,'none', ...        % no menubar of course
          'toolbar'         ,'none', ...        % no toolbar
          'NumberTitle'     , 'off',...         % "Figure 1.4728...:" just looks corny
-         'color'           , bgcolor);         % use default colorscheme
+         'color'           , bgcolor);         %#ok<FGREN> % use default colorscheme
 
     %% Draw all required uicontrols(), and unhide window
 
@@ -340,7 +340,7 @@ edit_bgcolor = [.98 .98 .98];
                         'position', [text_offset_X,control_offset_Y-4, ...
                         text_width, control_height]);
 
-                    % Popup, edit box or table?
+                    % Popup, edit box or table
                     style = 'edit';
                     draw_table = false;
                     if iscell(values{ii})
@@ -348,7 +348,12 @@ edit_bgcolor = [.98 .98 .98];
                         if all(cellfun('isclass', values{ii}, 'cell'))
                             draw_table = true; end
                     end
-
+                    if strlength(fields{ii}) > 5
+                    if strcmp(fields{ii}(1:5), 'table')
+                        style = 'list';
+                        draw_table = true;
+                    end
+                    end
                     % Draw appropriate control
                     if ~draw_table
                         controls(ii) = uicontrol(...
@@ -362,10 +367,19 @@ edit_bgcolor = [.98 .98 .98];
                     else
                         % TODO
                         % ...table? ...radio buttons? How to do this?
-                        warning(...
-                            'settingsdlg:not_yet_implemented',...
-                            'Treatment of cells is not yet implemented.');
-
+                        %warning(...
+                        %    'settingsdlg:not_yet_implemented',...
+                        %    'Treatment of cells is not yet implemented.');
+                        controls(ii) = uicontrol(...
+                            'enable'  , enable,...
+                            'style'   , style,...
+                            'Background', edit_bgcolor,...
+                            'parent'  , fighandle,...
+                            'string'  , values{ii},...
+                            'min', 1, ...
+                            'max', 10, ...
+                            'position', [text_width,control_offset_Y,...
+                            control_width, control_height]);
                     end
                 end
 
@@ -435,7 +449,8 @@ edit_bgcolor = [.98 .98 .98];
         % find proper range of controls to switch
         if (num_separators > 1)
              range = (which+1):(separators(separators > which)-1);
-        else range = (which+1):numel(controls);
+        else 
+            range = (which+1):numel(controls);
         end
 
         % enable/disable these controls
@@ -467,14 +482,20 @@ edit_bgcolor = [.98 .98 .98];
             if ~strcmpi(style, 'checkbox')
                 % extract correct string (popups only)
                 if strcmpi(style, 'popupmenu'), str = str{val}; end
-                % try to convert string to double
-                val = str2double(str);
-                % insert this double in [settings]. If it was not a
-                % double, insert string instead
-                if ~isnan(val), settings.(fields{i}) = val;
-                else            settings.(fields{i}) = str;
+                if strcmpi(style, 'listbox') 
+                    val = {str{val}}; %#ok<CCAT1> 
+                    settings.(fields{i}) = val;
+                else
+                    % try to convert string to double
+                    val = str2double(str);
+                    % insert this double in [settings]. If it was not a
+                    % double, insert string instead
+                    if ~isnan(val)
+                        settings.(fields{i}) = val;
+                    else            
+                        settings.(fields{i}) = str;
+                    end
                 end
-
             % checkboxes
             else
                 % we can insert value immediately

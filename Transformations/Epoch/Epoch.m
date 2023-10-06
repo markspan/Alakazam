@@ -27,7 +27,11 @@ if isfield(input, 'event') ...
     %&& ~isempty({input.event.code}) ...
 
     % evc = unique({input.event.code});
-    evt = unique({input.event.type});
+    %if iscell({input.event.type})
+    %    evt = unique(cell2mat({input.event.type}));
+    %else
+        evt = unique(string([input.event.type]));
+    %end
 end
 
 %% simplest option....
@@ -36,9 +40,10 @@ if strcmp(options, 'Init')
         'Description', 'Set the parameters for Epoch creation',...
         'title' , 'Epoch options',...
         'separator' , 'Events:',...
-        {'Start'; 'StartLabel'}, evt, ...
-        {'Use endlabel or duration';'uselab'}, {'label', 'durations'}, ...
+        {'Start'; 'tableStartLabel'}, evt, ...
+        {'Use endlabel or duration';'uselab'}, {'durations', 'label'}, ...
         'separator' , 'Use Endlabels:',...
+        {'Use Start/Stop?'; 'StartStop'},{'no','yes'},... 
         {'Label for end'; 'EndLabel'}, evt, ...
         'separator' , 'Use Durations:',...
         {'Preduration (ms)', 'pre'}, -100, ...
@@ -46,10 +51,17 @@ if strcmp(options, 'Init')
         'separator', 'originals', ...
         {'Remove Originals', 'remove'}, {'yes', 'no'} );
 end
+options.StartLabel = options.tableStartLabel;
+if ~isStringScalar(options.StartLabel)
+    options.StartLabel = string(options.StartLabel);
+end
 
 if strcmpi(options.uselab, 'label')
     events = input.event;
     starts = find(strcmpi({events.type}, options.StartLabel));
+    if strcmp(options.StartStop, 'yes')
+        options.EndLabel = strrep(options.StartLabel, 'Start', 'Stop');
+    end
     ends = find(strcmpi({events.type}, options.EndLabel));
 
     if length(starts) == length(ends)
@@ -65,8 +77,15 @@ else
     presamp =  floor(abs(options.pre/1000.0)  * EEG.srate); %(IN SAMPLES)
     postsamp = floor(abs(options.post/1000.0) * EEG.srate);
 
-    events = input.event;
-    selev = strcmpi({events.type}, options.StartLabel);
+    eventstype = string([input.event.type]);
+
+    selev = strcmpi(eventstype, 'dummyerrornext');
+    for lab = options.StartLabel
+        selev = selev | strcmpi(eventstype, lab);
+    end
+
+    % selev = strcmpi({events.type}, string(options.StartLabel));
+
     for i = 1:length(selev)
         if selev(i)
             if (presamp+postsamp+EEG.event(i).latency <= EEG.pnts) && (EEG.event(i).latency - presamp > 1)
@@ -80,4 +99,5 @@ else
             end
         end
     end
+    EEG.event = EEG.event(selev);
 end

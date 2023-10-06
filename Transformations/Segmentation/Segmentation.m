@@ -24,7 +24,12 @@ if isfield(input, 'event') ...
         %&& ~isempty({input.event.code}) ...
 
     %%select those events that have a uniform length
-    types = {input.event.type};
+    if (isnumeric([input.event.type]))
+        types = string([input.event.type]);
+    else
+        types = string({input.event.type});
+    end
+    
     durations = zeros(1,length(input.event));
     empties = cellfun(@isempty, {input.event.duration});
     nonempties = ~empties;
@@ -33,16 +38,18 @@ if isfield(input, 'event') ...
     %durations = {input.event.duration};
     %codes = {input.event.code};
     uniformtypes={};
+
     for e = unique(types)
         evtdurs = unique(durations(strcmp(types,e)));
         if isempty(evtdurs) 
-            uniformtypes{end+1} = char(e); %#ok<AGROW> 
+            %uniformtypes{end+1} = char(e); %#ok<AGROW> 
         elseif  (length(evtdurs) == 1 && ~isnan(evtdurs) && evtdurs > 0)
             uniformtypes{end+1} = char(e); %#ok<AGROW> 
         end
     end
     %uniformtypes = uniformtypes{2:end};
-
+    %% incorrect: only works for now. you can select any code that has duration!
+    uniformtypes = unique(types(durations>0));
 
 %% simplest option....
 if strcmp(options, 'Init')
@@ -50,7 +57,7 @@ if strcmp(options, 'Init')
         'Description', 'Set the parameters for Segmentation creation',...
         'title' , 'Segmentation options',...
         'separator' , 'Events:',...
-        {'Start'; 'Label'}, uniformtypes);
+        {'Start'; 'tableLabel'}, uniformtypes);
 else    
     if isempty(uniformtypes) 
         ME = MException('Alakazam:Segmentation','Problem in Segmentation: No events with duration. Try Epoch');
@@ -58,8 +65,11 @@ else
     end
 end
 
-slabel = options.Label;
-selection = input.event(strcmpi({input.event.type}, slabel));
+slabel = options.tableLabel;
+selection = [];
+for l = slabel
+    selection = [selection input.event(strcmpi(types, l))]; %#ok<AGROW> 
+end
 
 % Now restructure the data and create a 3D dataset with trials in the
 % z-direction... (channels:points:trials)

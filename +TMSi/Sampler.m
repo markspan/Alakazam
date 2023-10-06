@@ -301,6 +301,7 @@ classdef Sampler < TMSi.HiddenHandle
                 elseif limit == 200
                     impedance_limit = 6;
                 else
+                    impedance_limit = 0;
                     obj.stop();
                     throw(MException('Sampler:startImpedanceMode', 'Invalid impedance limit specified.'));
                 end
@@ -445,14 +446,14 @@ classdef Sampler < TMSi.HiddenHandle
             %   device. If this function is not called before starting sampling, the
             %   library will most likely generate a segmentation fault.
             
-            sample_rate = libpointer('ulongPtr', obj.sample_rate * 1000);
-            buffer_size = libpointer('ulongPtr', obj.buffer_size);
-            successful = calllib(obj.library.alias, 'SetSignalBuffer', obj.library.handle, sample_rate, buffer_size);
+            obj.sample_rate = libpointer('ulongPtr', obj.sample_rate * 1000);
+            obj.buffer_size = libpointer('ulongPtr', obj.buffer_size);
+            successful = calllib(obj.library.alias, 'SetSignalBuffer', obj.library.handle, obj.sample_rate, obj.buffer_size);
             if (~successful)
                 throw(MException('Sampler:setSignalBuffer', 'Could not set buffer size and/or sample rate.'));
             end
-            obj.sample_rate = double(sample_rate.Value / 1000);
-            obj.buffer_size = buffer_size.Value;
+            obj.sample_rate = double(obj.sample_rate.Value / 1000);
+            obj.buffer_size = obj.buffer_size.Value;
 
             obj.sample_buffer_size = obj.buffer_size;
             obj.sample_buffer_size_bytes = obj.sample_buffer_size * 4;

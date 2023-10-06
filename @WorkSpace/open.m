@@ -43,4 +43,10 @@ function open(this,~,~)
         disp(fileList(file).name);
         this.loadPoly5File(this, fileList(file).name)
     end 
+    fileList = dir (strcat(this.RawDirectory, '*.set'));
+    for file = 1:length(fileList)
+        disp(fileList(file).name);
+        this.loadSETFile(this, fileList(file).name)
+    end 
+
 end

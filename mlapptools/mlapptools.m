@@ -175,7 +175,7 @@ classdef (Abstract) mlapptools
       end
       %% Get HTML according to webwindow type:
       if indepWW
-        [~,hWB] = web(hWin.URL, '-new');
+        [~,hWB] = web(hWin.URL, '-new'); %#ok<WEBREMOVE> 
         fullHTML = hWB.getHtmlText();
         close(hWB);
         %% TODO: Try to fix css paths:

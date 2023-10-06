@@ -18,7 +18,9 @@ classdef WorkSpace < handle
         FrequenciesIcon
         javaObjects
         RootNode
+        TreeRoot
         EEG
+        jmenu
     end
     
     methods

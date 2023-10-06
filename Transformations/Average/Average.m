@@ -22,18 +22,10 @@ if ~isfield(input, 'trials')
     throw(MException('Alakazam:Average','Problem in Average: Trials not specified'));
 end
 
-% if strcmp(opts, 'Init')
-%     opts = uiextras.settingsdlg(...
-%         'Description', 'Set the parameters for Average',...
-%         'title' , 'Average options',...
-%         'separator' , 'Location:',...
-%         {'Start'; 'Start'}, -100, ...
-%         {'Stop'; 'Stop'}, 0);
-% end
-
 EEG = input;
 EEG.ntrials = EEG.trials;
 EEG.trials = 1;
-EEG.data=mean(EEG.data,3);
-EEG.stDev = std(input.data,0,3);
+EEG.data=mean(EEG.data,3,'omitnan');
+EEG.stErr = (std(input.data,0,3, 'omitnan') / sqrt(input.trials));
+EEG.DataFormat = "Averaged";
 

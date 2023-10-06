@@ -201,9 +201,9 @@ classdef dataSourceXDF < dataSource
                                 end
                             catch ME
                                 if ~mismatchFlag
-                                    warning(ME.identifier,'%s', ME.message);
+                                    %warning(ME.identifier,'%s', ME.message);
                                     msg = ['Wrong structure or missing fields in stream "' name '".'];
-                                    warning('MoBILAB:mismatch',msg)
+                                    %warning('MoBILAB:mismatch',msg)
                                     fprintf(fLog,'%s\n',msg);
                                     disp('Doing my best to fix this...');
                                     mismatchFlag = true;

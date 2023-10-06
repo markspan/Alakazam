@@ -23,7 +23,6 @@ else
     options = opts;
 end
 
-EEG = input;
 %% if it was, call the interactive version of the Transformation
 % in this case the pop_select version.
 if (ischar(options) && strcmpi(options, 'Init'))
