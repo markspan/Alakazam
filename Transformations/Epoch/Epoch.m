@@ -27,7 +27,11 @@ if isfield(input, 'event') ...
     %&& ~isempty({input.event.code}) ...
 
     % evc = unique({input.event.code});
-    evt = unique({input.event.type});
+    %if iscell({input.event.type})
+    %    evt = unique(cell2mat({input.event.type}));
+    %else
+        evt = unique(string([input.event.type]));
+    %end
 end
 
 %% simplest option....
@@ -73,11 +77,11 @@ else
     presamp =  floor(abs(options.pre/1000.0)  * EEG.srate); %(IN SAMPLES)
     postsamp = floor(abs(options.post/1000.0) * EEG.srate);
 
-    events = input.event;
+    eventstype = string([input.event.type]);
 
-    selev = strcmpi({events.type}, 'dummyerrornext');
+    selev = strcmpi(eventstype, 'dummyerrornext');
     for lab = options.StartLabel
-        selev = selev | strcmpi({events.type}, lab);
+        selev = selev | strcmpi(eventstype, lab);
     end
 
     % selev = strcmpi({events.type}, string(options.StartLabel));

@@ -24,7 +24,12 @@ if isfield(input, 'event') ...
         %&& ~isempty({input.event.code}) ...
 
     %%select those events that have a uniform length
-    types = {input.event.type};
+    if (isnumeric([input.event.type]))
+        types = string([input.event.type]);
+    else
+        types = string({input.event.type});
+    end
+    
     durations = zeros(1,length(input.event));
     empties = cellfun(@isempty, {input.event.duration});
     nonempties = ~empties;
@@ -63,7 +68,7 @@ end
 slabel = options.tableLabel;
 selection = [];
 for l = slabel
-    selection = [selection input.event(strcmpi({input.event.type}, l))]; %#ok<AGROW> 
+    selection = [selection input.event(strcmpi(types, l))]; %#ok<AGROW> 
 end
 
 % Now restructure the data and create a 3D dataset with trials in the
