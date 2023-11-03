@@ -1,7 +1,7 @@
 function [EEG, opts] = EMGSummary(input,opts)
 %% Check for the EEG dataset input:
 if (nargin < 1)
-    throw(MException('Alakazam:EMGSummary','Problem in Average: No Data Supplied'));
+    throw(MException('Alakazam:EMGSummary','Problem in EMGSummary: No Data Supplied'));
 end
 
 if (nargin == 1)
@@ -30,19 +30,20 @@ for i = 1:length(events)
         evn = string(events(i).type);
         startindex = max(events(i).latency - (EEG.srate * opts.pretime),1);
         endindex = min(events(i).latency + (EEG.srate * opts.posttime), EEG.pnts);
-        pre = mean(EEG.data(chan,startindex:events(i).latency)', 'omitnan');
-        post = mean(EEG.data(chan,events(i).latency:endindex)', 'omitnan');
+        pre = mean(EEG.data(chan,startindex:events(i).latency)', 'omitnan'); %#ok<UDIM> 
+        post = mean(EEG.data(chan,events(i).latency:endindex)', 'omitnan'); %#ok<UDIM> 
         line = table(id, evn, pre, post);
         if(exist('csvtable', 'var'))
-            csvtable = [csvtable; line];
+            csvtable = [csvtable; line]; %#ok<AGROW> 
         else
             csvtable=line;
         end
-    catch e
+    catch e %#ok<NASGU> 
         disp("should not occur in EMGSummary");
     end
 end
 fname = string(strrep(EEG.filename, '.xdf', '.csv'));
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 writetable(csvtable, fullfile(ExportsDir,fname))
+system(strcat("C:\Program/ Files\Microsoft Office\root\Office16\EXCEL ", fullfile(ExportsDir,fname)));
 

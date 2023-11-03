@@ -88,6 +88,6 @@ out = sortrows(out,{'RTop','Device'});
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 writetable(out, fullfile(ExportsDir,fname))
 if strcmp(options.np , 'yes')
-    system(['notepad ' fullfile(ExportsDir,fname)]);
+    system(['notepad ' char(fullfile(ExportsDir,fname))]);
 end
 EEG=input;
