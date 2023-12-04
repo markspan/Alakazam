@@ -45,5 +45,4 @@ end
 fname = string(strrep(EEG.filename, '.xdf', '.csv'));
 ExportsDir = evalin('caller', 'this.Workspace.ExportsDirectory');
 writetable(csvtable, fullfile(ExportsDir,fname))
-system(strcat("C:\Program/ Files\Microsoft Office\root\Office16\EXCEL ", fullfile(ExportsDir,fname)));
 
