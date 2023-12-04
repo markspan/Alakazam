@@ -120,8 +120,9 @@ if (nargin < 1)
     throw(MException('Alakazam:FlipECG','Problem in FlipECG: No Data Supplied'));
 end
 
-options = [];
+options = []; % Initialize options
 
+% Check if the 'data' field is present in the input structure
 if ~isfield(input, 'data')
     throw(MException('Alakazam:FlipECG','Problem in FlipECG: No Correct Data Supplied'));
 else
@@ -129,12 +130,18 @@ else
     ecgData = input.data;
 end
 
+% Check if there are multiple channels in the data
 if (size(ecgData,1) > 1 )
+    % Identify channels labeled as 'ECG' (case-insensitive)
     ecgid = startsWith({input.chanlocs.labels},'ECG', 'IgnoreCase', true);
     if sum(ecgid)>0
-        %% there is an ECG trace: flip it
+        % ECG trace found: copy it
         ecgData = ecgData(ecgid,:);
+
+        % Flip the ECG trace
         necgData = -(ecgData - median(ecgData,2)) + median(ecgData,2);
+
+        % Update the EEG data with the flipped ECG trace
         EEG.data(ecgid,:) = necgData;
     else
         throw(MException('Alakazam:FlipECG','Problem in FlipECG: No ECG trace Found/Supplied'));    
