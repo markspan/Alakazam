@@ -23,7 +23,7 @@ ev = [];
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
     try
         ev = unique({input.event.type}, 'stable');
-    catch e
+    catch 
         ev = unique([input.event.type], 'stable');
     end
     evc = ev;
@@ -31,9 +31,16 @@ else
     evc = [];
 end
 
-ibix = input.IBIevent{1}.ibis(1:end-1);
-ibiy = input.IBIevent{1}.ibis(2:end);
-ibit = input.IBIevent{1}.RTopTime(1:end-2);
+%% define all events that are IBI
+events = input.IBIevent{1};
+
+%select the normals
+normals = events.classID == 'N';
+
+events.ibis = events.ibis(normals(1:end-1));
+ibix = events.ibis(1:end-1);
+ibiy = events.ibis(2:end);
+ibit = events.RTopTime(1:end-2);
 
     function t = PoinCarePlot(fig,ibix, ibiy, ibit, evc, input)
         % Create table array
@@ -46,13 +53,13 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         tRR={};
         N=[];
         if (~isempty(evc))
-            for i = 1:length(evc)
+            for i = 1:length(evc) % for each event type:
                 label = evc(i);
                 event = [strcmp([input.event.type], label)];
                 idx = ibit<0;
-                for e = 1:length(input.event(event)) %% when there are more events
+                for e1 = 1:length(input.event(event)) %% when there are more events
                     elist = [input.event(event)];
-                    ev = elist(e);
+                    ev = elist(e1);
                     idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
                 end
                 x{end+1} = ibix(idx);
@@ -147,7 +154,7 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
                     h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t):",'XData');
                     h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("Label",labs);
                     h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("IBI(t+1):",'YData');
-                    h.DataTipTemplate.DataTipRows(5) = dataTipTextRow("Time(s):",tibis{ii});
+                    h.DataTipTemplate.DataTipRows(5) = dataTipTextRow("Time(s):",double(tibis{ii}));
 
                     el = plot_ellipse(ax, 2*t.SD1(ii),2*t.SD2(ii),mean(xibis{ii}), mean(yibis{ii}), 45, col);
                     dt = datatip(el,0,0,'Visible','off'); %#ok<NASGU> % weird hack to enable datatips on patches
