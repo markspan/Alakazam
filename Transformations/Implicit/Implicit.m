@@ -19,15 +19,56 @@ function [EEG, options] = Implicit(input,opts)
     
     %% copy input to output.
     EEG = input;
-    id = contains({input.event.type}, "start ");
-    nid = contains({input.event.type}, "start SAM");
-    id = (id & ~nid);
+    
+    % missing start gender/bigfive
+    if contains(input.event(1).type, "end bigfive")
+        ns = struct(type = {'start bigfive'}, latency=10, duration=1);
+        input.event = [ns input.event];
+    else
+        if contains({input.event.type}, "start bigfive") & ~contains({input.event.type}, "end bigfive")
+            sbf = contains({input.event.type}, "start bigfive");
+            ns = struct(type = {'end bigfive'}, latency = input.event(sbf).latency+2000, duration=1);
+            input.event = [ns input.event];
+        end
+    end
+    idgender =  contains(cellstr({input.event.type}), "stop gender");
+    input.event(idgender).type = "end gender";
+    idgender = contains(cellstr({input.event.type}), "end gender");
+    idg = find(idgender);
+    if ~isempty(idg)
+        if isempty(input.event(idg-1).type)
+            input.event(idg-1).type = 'start gender';
+        else
+            ns = struct(type = {'start gender'}, latency=input.event(idg-1).latency+10, duration=1);
+            input.event(idg).type = "end gender";
+            % Shift elements to the right of the insertion point
+            input.event = [input.event(1:idg-1), ns, input.event(idg:end)];
+           
+        end
+        input.event(idg).type = 'end gender';
+    else
+        idgender = contains({input.event.type}, "start gender");
+        idg = find(idgender);
+        if ~isempty(idg)
+            input.event(idg+1).type = 'end gender';
+        else
+            input.event(idg).type = '';
+        end
+    end
+
+    id = contains(cellstr({input.event.type}), "start ");
+    nid = contains(cellstr({input.event.type}), "start SAM");
+    nid2 = contains(cellstr({input.event.type}), "start IAT");
+    nid3 = contains(cellstr({input.event.type}), "start TASKS");
+    id = (id & ~nid & ~nid2 & ~ nid3);
     events = {input.event};
     events = events{1};
     starts = events(id);
-    id2 = contains({input.event.type}, "end ");
-    nid = contains({input.event.type}, "end SAM");
-    id2 = (id2 & ~nid);
+    id2 = contains(cellstr({input.event.type}), "end ");
+    nid = contains(cellstr({input.event.type}), "end SAM");
+    nid2 = contains(cellstr({input.event.type}), "end IAT");
+    nid3 = contains(cellstr({input.event.type}), "end TASKS");
+    id2 = (id2 & ~nid & ~nid2 & ~nid3);
     events = {input.event};
     events = events{1};
     ends = events(id2);

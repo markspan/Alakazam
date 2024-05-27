@@ -52,6 +52,7 @@ ibit = events.RTopTime(1:end-2);
         y={};
         tRR={};
         N=[];
+        nEVC = strings(0,0);
         if (~isempty(evc))
             for i = 1:length(evc) % for each event type:
                 label = evc(i);
@@ -62,19 +63,23 @@ ibit = events.RTopTime(1:end-2);
                     ev = elist(e1);
                     idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
                 end
-                x{end+1} = ibix(idx);
-                y{end+1} = ibiy(idx);
-                tRR{end+1} = ibit(idx);
-                SD1(end+1) = round((sqrt(2)/2.0) * std(ibix(idx)-ibiy(idx)),3);
-                SD2(end+1) = round( sqrt(2*std(ibix(idx))^2) - (.5*std(ibix(idx)-ibiy(idx))^2),3);
-                if isempty(Tools.HRV.RMSSD(ibix(idx)))
-                    RMSSD(end+1) = nan;
-                else
-                    RMSSD(end+1) = 1000 * Tools.HRV.RMSSD(ibix(idx));
+                if sum(idx > 0)
+                    nEVC(end+1)=evc(i);
+                    idx = idx(1:length(ibix));
+                    x{end+1} = ibix(idx);
+                    y{end+1} = ibiy(idx);
+                    tRR{end+1} = ibit(idx);
+                    SD1(end+1) = round((sqrt(2)/2.0) * std(ibix(idx)-ibiy(idx)),3);
+                    SD2(end+1) = round( sqrt(2*std(ibix(idx))^2) - (.5*std(ibix(idx)-ibiy(idx))^2),3);
+                    if isempty(Tools.HRV.RMSSD(ibix(idx)))
+                        RMSSD(end+1) = nan;
+                    else
+                        RMSSD(end+1) = 1000 * Tools.HRV.RMSSD(ibix(idx));
+                    end
+                    SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(idx));
+                    mIBI(end+1) = 1000 * mean(ibix(idx));
+                    N(end+1) = sum(idx);
                 end
-                SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(idx));
-                mIBI(end+1) = 1000 * mean(ibix(idx));
-                N(end+1) = sum(idx);
             end
         else
             x{end+1} = ibix(:);
@@ -99,7 +104,11 @@ ibit = events.RTopTime(1:end-2);
 
         t = table(Plotted',N', mIBI', SD1', SD2', pSD1SD2', RMSSD', cRMSSD', SDNN', ...
             'VariableNames',["Plot","N","mean(IBI)","SD1","SD2","SD1/SD2","RMSSD","cRMSSD", "SDNN"], ...
-            'RowNames',evc);
+            'RowNames',nEVC);
+        fn = input.filename;
+        [filepath,name,ext] = fileparts(fn);
+
+        writetable(t, ['./Data/' name '.csv'],'WriteRowNames',true);
 
         gl = uigridlayout(fig, [3 2]);
 
@@ -167,8 +176,8 @@ ibit = events.RTopTime(1:end-2);
     end
 
 PoinCarePlot(pfigure, ibix, ibiy, ibit, evc, input);
-
 pfigure.Visible = true;
+
 end
 
 function h=plot_ellipse(ax,a,b,cx,cy,angle,color)

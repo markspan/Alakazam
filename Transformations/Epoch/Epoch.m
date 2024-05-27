@@ -28,7 +28,8 @@ if isfield(input, 'event') ...
 
     % evc = unique({input.event.code});
     if iscell({input.event.type})
-       evt = unique(cell2mat({input.event.type}));
+       %evt = unique(cell2mat({input.event.type}));
+       evt = unique({input.event.type});
     else
         evt = unique(string([input.event.type]));
     end
