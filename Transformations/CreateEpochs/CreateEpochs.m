@@ -21,8 +21,8 @@ function [EEG, options] = CreateEpochs(input,opts)
     EEG = input;
     events = input.event;
     
-    startind = contains(cellstr({input.event.type}), "start");
-    endind = contains(cellstr({input.event.type}), "end");
+    startind = contains(cellstr({input.event.type}), "start", 'IgnoreCase',true);
+    endind = contains(cellstr({input.event.type}), "end",'IgnoreCase',true);
     
     %startevents = events(startind);
     endevents = events(endind);
@@ -34,6 +34,8 @@ function [EEG, options] = CreateEpochs(input,opts)
         if startind(i) == 1 % is it a start?
             % what type does this start have?
             ts = strrep({events(i).type}, "start ", "");
+            ts = strrep(ts, "Start ", "");
+            
             % is there an end with this start type?
             endTypeEvent = {endevents.type} == "end " + ts;
             % only do this when there is only one end wiht this start
