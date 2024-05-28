@@ -20,13 +20,10 @@ classdef Alakazam < handle
             % Constructor
             [this.RootDir,~,~] = fileparts(which('Alakazam'));
             cd(this.RootDir);
-
             close all
-            fname = strrep('D:/TMP/tmpXDF', '/', filesep);
-            if exist('fname','dir')
-                rmdir('fname', 's');
-            end
+
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
+            addpath(this.RootDir, '-end');
             addpath(genpath('Transformations'), 'mlapptools');
 
             % create tool group
