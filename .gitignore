@@ -2,13 +2,9 @@
 *.csv
 *.asv
 *.Rhistory
-*.xdf
 *.BLE
-Temperatuur files Lara.zip
-Data
-untitled.m
+Data/Data
 +uiextras/+jTree/Tree2.m
-elist_bins.txt
 ga.txt
-sanalyse.m
 *.erp
+*.i
