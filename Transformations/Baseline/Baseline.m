@@ -1,5 +1,15 @@
 function [EEG, opts] = Baseline(input,opts)
-%% Flip the EGC trace if it is upside down....
+%% corrects the EEG data by subtracting
+%   the mean of a specified baseline period from each data point within each trial.
+%
+%   Inputs:
+%       input - Struct containing the EEG dataset and related information.
+%       opts  - Struct containing options for baseline correction. If not provided,
+%               default settings dialog is prompted.
+%
+%   Outputs:
+%       EEG   - Struct of the baseline-corrected EEG dataset.
+%       opts  - Struct containing the used or updated baseline options.
 
 %% Check for the EEG dataset input:
 if (nargin < 1)
