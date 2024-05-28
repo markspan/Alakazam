@@ -22,8 +22,9 @@ classdef Alakazam < handle
             cd(this.RootDir);
 
             close all
-            if exist('D:/TMP/tmpXDF','dir')
-                rmdir('D:/TMP/tmpXDF', 's');
+            fname = strrep('D:/TMP/tmpXDF', '/', filesep);
+            if exist('fname','dir')
+                rmdir('fname', 's');
             end
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
             addpath(genpath('Transformations'), 'mlapptools');
@@ -125,7 +126,7 @@ classdef Alakazam < handle
                 end
 
                 Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST> 
-                a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+                a.EEG.File = strcat(parent.dir, filesep ,parent.name, filesep , Key, '.mat');
                 a.EEG.id =  [char(CurrentNode) ' - ' id];
 
                 NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',this.Workspace.Tree.SelectedNodes, 'UserData',a.EEG.File);
@@ -320,7 +321,7 @@ classdef Alakazam < handle
                         mkdir(cDir);
                     end
 
-                    a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+                    a.EEG.File = strcat(parent.dir, filesep ,parent.name, filesep , Key, '.mat');
 
                     a.EEG.id =  [char(CurrentNode) ' - ' id];
                     a.EEG.Call = OldEEGStruct.EEG.Call;
@@ -340,11 +341,11 @@ classdef Alakazam < handle
                     this.Workspace.EEG=EEG;
 
                     [p,n,~] = fileparts(OldData);
-                    if exist([p '\' n], 'dir')
+                    if exist([p filesep n], 'dir')
                         NewParentNode = NewNode;
                         NewData = a.EEG.File;
-                        name = dir([p '\' n '\' '*.mat' ]);
-                        OldData = [p '\' n '\' name.name];
+                        name = dir([p filesep n filesep '*.mat' ]);
+                        OldData = [p filesep n filesep name.name];
                     else
                         endnode = true;
                     end
