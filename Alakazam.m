@@ -18,6 +18,12 @@ classdef Alakazam < handle
 
         function this = Alakazam(varargin)
             % Constructor
+            if isempty(which('eeglab'))
+                cd("./eeglab");
+                eeglab;
+                savepath;
+                cd("..");
+            end
             [this.RootDir,~,~] = fileparts(which('Alakazam'));
             cd(this.RootDir);
             close all
