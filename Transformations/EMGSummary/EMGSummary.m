@@ -1,7 +1,11 @@
 function [EEG, opts] = EMGSummary(input,opts)
 %% Check for the EEG dataset input:
 if (nargin < 1)
+<<<<<<< HEAD
     throw(MException('Alakazam:EMGSummary','Problem in Average: No Data Supplied'));
+=======
+    throw(MException('Alakazam:EMGSummary','Problem in EMGSummary: No Data Supplied'));
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 end
 
 if (nargin == 1)
@@ -30,6 +34,7 @@ for i = 1:length(events)
         evn = string(events(i).type);
         startindex = max(events(i).latency - (EEG.srate * opts.pretime),1);
         endindex = min(events(i).latency + (EEG.srate * opts.posttime), EEG.pnts);
+<<<<<<< HEAD
         pre = mean(EEG.data(chan,startindex:events(i).latency)', 'omitnan');
         post = mean(EEG.data(chan,events(i).latency:endindex)', 'omitnan');
         line = table(id, evn, pre, post);
@@ -39,6 +44,17 @@ for i = 1:length(events)
             csvtable=line;
         end
     catch e
+=======
+        pre = mean(EEG.data(chan,startindex:events(i).latency)', 'omitnan'); %#ok<UDIM> 
+        post = mean(EEG.data(chan,events(i).latency:endindex)', 'omitnan'); %#ok<UDIM> 
+        line = table(id, evn, pre, post);
+        if(exist('csvtable', 'var'))
+            csvtable = [csvtable; line]; %#ok<AGROW> 
+        else
+            csvtable=line;
+        end
+    catch e %#ok<NASGU> 
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
         disp("should not occur in EMGSummary");
     end
 end

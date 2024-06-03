@@ -6,9 +6,9 @@ function load(this,~,~)
     
     load(fullfile(Path, this.Name), '-mat', 'RawDirectory', 'CacheDirectory', 'ExportsDirectory');
     
-    this.RawDirectory = RawDirectory;
-    this.CacheDirectory = CacheDirectory;
-    this.ExportsDirectory = ExportsDirectory;
+    this.RawDirectory = strrep(strrep(RawDirectory, '\', '/'), '/', filesep);
+    this.CacheDirectory = strrep(strrep(CacheDirectory, '\', '/'), '/', filesep);
+    this.ExportsDirectory = strrep(strrep(ExportsDirectory, '\', '/'), '/', filesep);
     
     this.open();
 end

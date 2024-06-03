@@ -23,7 +23,11 @@ ev = [];
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
     try
         ev = unique({input.event.type}, 'stable');
+<<<<<<< HEAD
     catch e
+=======
+    catch 
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
         ev = unique([input.event.type], 'stable');
     end
     evc = ev;
@@ -31,10 +35,24 @@ else
     evc = [];
 end
 
+<<<<<<< HEAD
 ibix = input.IBIevent{1}.ibis(1:end-1);
 ibiy = input.IBIevent{1}.ibis(2:end);
 ibit = input.IBIevent{1}.RTopTime(1:end-2);
 
+=======
+%% define all events that are IBI
+events = input.IBIevent{1};
+
+%select the normals
+normals = events.classID == 'N';
+
+events.ibis = events.ibis(normals(1:end-1));
+ibix = events.ibis(1:end-1);
+ibiy = events.ibis(2:end);
+ibit = events.RTopTime(1:end-2);
+
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
     function t = PoinCarePlot(fig,ibix, ibiy, ibit, evc, input)
         % Create table array
         RMSSD =[]; SDNN = [];
@@ -45,6 +63,7 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
         y={};
         tRR={};
         N=[];
+<<<<<<< HEAD
         if (~isempty(evc))
             for i = 1:length(evc)
                 label = evc(i);
@@ -68,6 +87,36 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
                 SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(idx));
                 mIBI(end+1) = 1000 * mean(ibix(idx));
                 N(end+1) = sum(idx);
+=======
+        nEVC = strings(0,0);
+        if (~isempty(evc))
+            for i = 1:length(evc) % for each event type:
+                label = evc(i);
+                event = [strcmp([input.event.type], label)];
+                idx = ibit<0;
+                for e1 = 1:length(input.event(event)) %% when there are more events
+                    elist = [input.event(event)];
+                    ev = elist(e1);
+                    idx = idx | (ibit > ev.latency/input.srate) & (ibit < (((ev.latency+ev.duration)/input.srate)));
+                end
+                if sum(idx > 0)
+                    nEVC(end+1)=evc(i);
+                    idx = idx(1:length(ibix));
+                    x{end+1} = ibix(idx);
+                    y{end+1} = ibiy(idx);
+                    tRR{end+1} = ibit(idx);
+                    SD1(end+1) = round((sqrt(2)/2.0) * std(ibix(idx)-ibiy(idx)),3);
+                    SD2(end+1) = round( sqrt(2*std(ibix(idx))^2) - (.5*std(ibix(idx)-ibiy(idx))^2),3);
+                    if isempty(Tools.HRV.RMSSD(ibix(idx)))
+                        RMSSD(end+1) = nan;
+                    else
+                        RMSSD(end+1) = 1000 * Tools.HRV.RMSSD(ibix(idx));
+                    end
+                    SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(idx));
+                    mIBI(end+1) = 1000 * mean(ibix(idx));
+                    N(end+1) = sum(idx);
+                end
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
             end
         else
             x{end+1} = ibix(:);
@@ -92,7 +141,15 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
 
         t = table(Plotted',N', mIBI', SD1', SD2', pSD1SD2', RMSSD', cRMSSD', SDNN', ...
             'VariableNames',["Plot","N","mean(IBI)","SD1","SD2","SD1/SD2","RMSSD","cRMSSD", "SDNN"], ...
+<<<<<<< HEAD
             'RowNames',evc);
+=======
+            'RowNames',nEVC);
+        fn = input.filename;
+        [filepath,name,ext] = fileparts(fn);
+
+        writetable(t, ['./Data/' name '.csv'],'WriteRowNames',true);
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 
         gl = uigridlayout(fig, [3 2]);
 
@@ -147,7 +204,11 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
                     h.DataTipTemplate.DataTipRows(3) = dataTipTextRow("IBI(t):",'XData');
                     h.DataTipTemplate.DataTipRows(2) = dataTipTextRow("Label",labs);
                     h.DataTipTemplate.DataTipRows(4) = dataTipTextRow("IBI(t+1):",'YData');
+<<<<<<< HEAD
                     h.DataTipTemplate.DataTipRows(5) = dataTipTextRow("Time(s):",tibis{ii});
+=======
+                    h.DataTipTemplate.DataTipRows(5) = dataTipTextRow("Time(s):",double(tibis{ii}));
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 
                     el = plot_ellipse(ax, 2*t.SD1(ii),2*t.SD2(ii),mean(xibis{ii}), mean(yibis{ii}), 45, col);
                     dt = datatip(el,0,0,'Visible','off'); %#ok<NASGU> % weird hack to enable datatips on patches
@@ -160,8 +221,13 @@ ibit = input.IBIevent{1}.RTopTime(1:end-2);
     end
 
 PoinCarePlot(pfigure, ibix, ibiy, ibit, evc, input);
+<<<<<<< HEAD
 
 pfigure.Visible = true;
+=======
+pfigure.Visible = true;
+
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 end
 
 function h=plot_ellipse(ax,a,b,cx,cy,angle,color)

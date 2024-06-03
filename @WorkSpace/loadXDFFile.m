@@ -27,14 +27,29 @@ if exist(matfilename, 'file') == 2
     end
 else
     % no matfile: create the matfile
+<<<<<<< HEAD
     EEG = loadXDF(xdffilename);
+=======
+    try
+        EEG = eeg_load_xdf(xdffilename, 'streamtype', 'ECG');
+        EEG.chanlocs(1).labels = "ECG";
+    catch 
+         EEG = eeg_emptyset();
+    end
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
     % DAMN YOU!!
     %rmdir([tempdir 'tmpXDF'], 's')
 
     [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
     [EEG.filepath,fname,fext] = fileparts(xdffilename); EEG.filename = [fname fext];
+<<<<<<< HEAD
     EEG.times = EEG.times/1000;
     EEG=Tools.eeg_checkset(EEG);
+=======
+   
+    EEG=Tools.eeg_checkset(EEG);    
+    EEG.times = EEG.times./1000;
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
     EEG.DataType = 'TIMEDOMAIN';
     EEG.DataFormat = 'CONTINUOUS';
     EEG.id = id;

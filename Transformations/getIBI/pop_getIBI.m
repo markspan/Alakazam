@@ -16,7 +16,12 @@ if (~isempty(varargin))
 end
 %%  default values:
 %% simplest option....
-cn = unique({EEGstruct.chanlocs.labels});
+try
+    cn = unique({EEGstruct.chanlocs.labels});
+catch
+    ecgid=1;
+    cn='ECG';
+end
 
 if strcmp(par, 'Init')
     par = uiextras.settingsdlg(...
@@ -29,8 +34,10 @@ if strcmp(par, 'Init')
         {'Max interpolation duration' ;'Tmax' }, 5, ...
         {'Use:'; 'channame'}, cn);
 end
-
-ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
+try
+    ecgid = contains({EEGstruct.chanlocs.labels},par.channame);
+catch
+end
 ecgData = ecgData(ecgid,:);
 par.MinPeakHeight = median(ecgData,'omitnan')+(2*std(ecgData, 'omitnan'));
 fSample = EEGstruct.srate;

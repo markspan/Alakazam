@@ -18,14 +18,27 @@ classdef Alakazam < handle
 
         function this = Alakazam(varargin)
             % Constructor
+<<<<<<< HEAD
             [this.RootDir,~,~] = fileparts(which('Alakazam'));
             cd(this.RootDir);
 
             close all
             if exist('D:/TMP/tmpXDF','dir')
                 rmdir('D:/TMP/tmpXDF', 's');
+=======
+            if isempty(which('eeglab'))
+                cd("./eeglab");
+                eeglab;
+                savepath;
+                cd("..");
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
             end
+            [this.RootDir,~,~] = fileparts(which('Alakazam'));
+            cd(this.RootDir);
+            close all
+
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
+            addpath(this.RootDir, '-end');
             addpath(genpath('Transformations'), 'mlapptools');
 
             % create tool group
@@ -125,7 +138,11 @@ classdef Alakazam < handle
                 end
 
                 Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST> 
+<<<<<<< HEAD
                 a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+=======
+                a.EEG.File = strcat(parent.dir, filesep ,parent.name, filesep , Key, '.mat');
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
                 a.EEG.id =  [char(CurrentNode) ' - ' id];
 
                 NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',this.Workspace.Tree.SelectedNodes, 'UserData',a.EEG.File);
@@ -320,7 +337,11 @@ classdef Alakazam < handle
                         mkdir(cDir);
                     end
 
+<<<<<<< HEAD
                     a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+=======
+                    a.EEG.File = strcat(parent.dir, filesep ,parent.name, filesep , Key, '.mat');
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 
                     a.EEG.id =  [char(CurrentNode) ' - ' id];
                     a.EEG.Call = OldEEGStruct.EEG.Call;
@@ -340,11 +361,19 @@ classdef Alakazam < handle
                     this.Workspace.EEG=EEG;
 
                     [p,n,~] = fileparts(OldData);
+<<<<<<< HEAD
                     if exist([p '\' n], 'dir')
                         NewParentNode = NewNode;
                         NewData = a.EEG.File;
                         name = dir([p '\' n '\' '*.mat' ]);
                         OldData = [p '\' n '\' name.name];
+=======
+                    if exist([p filesep n], 'dir')
+                        NewParentNode = NewNode;
+                        NewData = a.EEG.File;
+                        name = dir([p filesep n filesep '*.mat' ]);
+                        OldData = [p filesep n filesep name.name];
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
                     else
                         endnode = true;
                     end

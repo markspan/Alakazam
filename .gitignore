@@ -2,9 +2,18 @@
 *.csv
 *.asv
 *.Rhistory
+<<<<<<< HEAD
 *.xdf
 *.BLE
 Temperatuur files Lara.zip
 Data
 untitled.m
 +uiextras/+jTree/Tree2.m
+=======
+*.BLE
+Data/Data
++uiextras/+jTree/Tree2.m
+ga.txt
+*.erp
+*.i
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d

@@ -69,8 +69,8 @@ end
 
 function info = getIndividualTransInfos(TName)
     TName = char(TName);
-    json = dir(strcat(['Transformations\' TName '\'], [TName '.json']));
-    json = [json.folder '\' json.name];
+    json = dir(strcat(['Transformations' filesep TName filesep], [TName '.json']));
+    json = [json.folder filesep json.name];
     jsonfile = fopen(json);
     jsonraw = fread(jsonfile, inf);
     fclose(jsonfile);
@@ -78,7 +78,7 @@ function info = getIndividualTransInfos(TName)
 end
 
 function transInfo = getTransInfos()
-    fL = dir (strcat('Transformations\', '.'));
+    fL = dir (strcat('Transformations', filesep, '.'));
     dirs = find(vertcat(fL.isdir));
 
     tF = {fL(dirs).name}; %#ok<*FNDSB>
@@ -115,7 +115,11 @@ function createTransformation(tab, app)
                 %app.SplashScreen.AddText("Tr: " + {SectionCatTransForms.Name})
                 iTransForm = SectionCatTransForms(strcmp({SectionCatTransForms.Name}, tT ));
                 %disp([iTransForm.Icon tT])
+<<<<<<< HEAD
                 item = GalleryItem(iTransForm.Name, Icon(['Transformations\' char(tT) '\' iTransForm.Icon]));
+=======
+                item = GalleryItem(iTransForm.Name, Icon(['Transformations' filesep char(tT) filesep iTransForm.Icon]));
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
                 item.Description = iTransForm.Description;
                 item.ItemPushedFcn = @(x,y, userData) app.ActionOnTransformation(x,y, iTransForm.Entry);
                 cat.add(item);

@@ -57,7 +57,11 @@ if strcmp(options, 'Init')
         'Description', 'Set the parameters for Segmentation creation',...
         'title' , 'Segmentation options',...
         'separator' , 'Events:',...
+<<<<<<< HEAD
         {'Start'; 'tableLabel'}, uniformtypes);
+=======
+        {'Start'; 'tableLabel'}, {uniformtypes});
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 else    
     if isempty(uniformtypes) 
         ME = MException('Alakazam:Segmentation','Problem in Segmentation: No events with duration. Try Epoch');
@@ -73,7 +77,7 @@ end
 
 % Now restructure the data and create a 3D dataset with trials in the
 % z-direction... (channels:points:trials)
-
+pts = EEG.pnts;
 EEG.trials = length(selection);
 EEG.pnts   = selection(1).duration; %(as they are confirmed uniform)
 if (isfield(selection(1), 'preevent') && isfield(selection(1), 'postevent'))
@@ -83,7 +87,8 @@ end
 data = EEG.data;
 EEG.data = zeros(EEG.nbchan,EEG.pnts, EEG.trials);
 for i = 1:EEG.trials
-    EEG.data(:,:,i) = data(:,selection(i).latency:selection(i).latency+(EEG.pnts-1));
+    tlen = selection(i).latency:min(selection(i).latency+(EEG.pnts-1), pts) ;
+    EEG.data(:,1:length(tlen),i) = data(:,tlen);
 end
 EEG.DataFormat = 'EPOCHED';
 end

@@ -38,6 +38,7 @@ function plotEpochedTimeMultiAverage_helper(fig)
     figure(fig.Number)
     clf;
     for i = 1:length(EEGS)
+<<<<<<< HEAD
         if length(EEGS) == 1
             EEG = EEGS;
         else
@@ -48,18 +49,30 @@ function plotEpochedTimeMultiAverage_helper(fig)
         col = l.Color;
         hold on
 
+=======
+        if (length(EEGS) == 1); EEG = EEGS; else; EEG = EEGS{i}; end
+        l = plot(EEG.times, squeeze(EEG.data(EEG.channel, :, :)));
+        col = l.Color;
+        hold on
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
         sd = 3 * squeeze(EEG.stErr(EEG.channel, :));
         plot(EEG.times, squeeze(EEG.data(EEG.channel, :, :)) + sd, 'Color', col, 'LineStyle', ':');
         plot(EEG.times, squeeze(EEG.data(EEG.channel, :, :)) - sd, 'Color', col, 'LineStyle', ':');
         patch([EEG.times, fliplr(EEG.times)], ...
               [squeeze(EEG.data(EEG.channel, :, :)) + sd, fliplr(squeeze(EEG.data(EEG.channel, :, :)) - sd)], ...
               col, 'EdgeColor', 'none', 'FaceAlpha', 0.3);
+<<<<<<< HEAD
 
+=======
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
         title("Channel: " + EEG.labels{EEG.channel});
         xline(0, 'Color', 'k', 'LineStyle', '--');
         yline(0, 'Color', 'k', 'LineStyle', '--');
         box off;
+<<<<<<< HEAD
 
+=======
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
         xlim([min(EEG.times), max(EEG.times)]);
         ylim([min(min(EEG.data(:, :, :))), max(max(EEG.data(:, :, :)))]);
     end

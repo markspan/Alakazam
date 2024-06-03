@@ -18,7 +18,7 @@ else
 end
 %% copy input to output.
 EEG = input;
-
+input.event = input.urevent;
 %% What events are availeable in the dataset:
 if isfield(input, 'event') ...
         && isfield(input.event, 'type') ...
@@ -27,11 +27,20 @@ if isfield(input, 'event') ...
     %&& ~isempty({input.event.code}) ...
 
     % evc = unique({input.event.code});
+<<<<<<< HEAD
     %if iscell({input.event.type})
     %    evt = unique(cell2mat({input.event.type}));
     %else
         evt = unique(string([input.event.type]));
     %end
+=======
+    if iscell({input.event.type})
+       %evt = unique(cell2mat({input.event.type}));
+       evt = unique({input.event.type});
+    else
+        evt = unique(string([input.event.type]));
+    end
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 end
 
 %% simplest option....
@@ -52,6 +61,10 @@ if strcmp(options, 'Init')
         {'Remove Originals', 'remove'}, {'yes', 'no'} );
 end
 options.StartLabel = options.tableStartLabel;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 if ~isStringScalar(options.StartLabel)
     options.StartLabel = string(options.StartLabel);
 end
@@ -77,7 +90,11 @@ else
     presamp =  floor(abs(options.pre/1000.0)  * EEG.srate); %(IN SAMPLES)
     postsamp = floor(abs(options.post/1000.0) * EEG.srate);
 
+<<<<<<< HEAD
     eventstype = string([input.event.type]);
+=======
+    eventstype = string({input.event.type});
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 
     selev = strcmpi(eventstype, 'dummyerrornext');
     for lab = options.StartLabel

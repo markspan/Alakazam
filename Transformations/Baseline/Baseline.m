@@ -1,5 +1,9 @@
 function [EEG, opts] = Baseline(input,opts)
+<<<<<<< HEAD
 %%    [EEG, opts] = Baseline(input,opts) corrects the EEG data by subtracting
+=======
+%% corrects the EEG data by subtracting
+>>>>>>> 79bc135e3522bb590b8d234eb5507e60f6ec588d
 %   the mean of a specified baseline period from each data point within each trial.
 %
 %   Inputs:

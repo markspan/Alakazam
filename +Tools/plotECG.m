@@ -1,6 +1,28 @@
 function [ varargout ] = plotECG( varargin )
-%    Created:         Daniel Frisch        (15.02.2015)
-%    Last modified:   M.Span               (07.09.2021)
+% plotECG - Plot ECG signals with options for customization
+%
+% Syntax: [lineHandle, hs] = plotECG(X, Y, options)
+%
+% Inputs:
+%    X - Time vector or sample rate
+%    Y - Signal data
+%    options - (optional) additional parameters
+%
+% Outputs:
+%    lineHandle - Handle to the plotted line
+%    hs - Structure containing handles to GUI components
+%
+% Example:
+%    [lineHandle, hs] = plotECG(1:1000, randn(1000,1), 'ColorOrder', [0 0 1])
+%
+% Other m-files required: none
+% Subfunctions: editToSlider, sliderToEdit, isLineSpec, auto_stack, auto_stack_nooverlap
+% MAT-files required: none
+%
+% Author: Daniel Frisch
+% Created: 15-Feb-2015
+% Last modified: M.Span
+% Modified: 07-Sep-2021
 
 %% Parse Inputs
 args = varargin;
@@ -124,7 +146,7 @@ if ~strcmp(parser.Results.ShowEvents, 'off')
         try
             SIG.EventLabel = evtypes(evdur < 1);
             SIG.EventTime = SIG.EEG.times(evlati);
-        catch ME
+        catch 
             SIG.EventLabel = [];
             SIG.EventTime = [];
         end
@@ -148,7 +170,6 @@ if ~strcmp(parser.Results.ShowEvents, 'off')
         SIG.ShowEvents = 'on';
     else
         SIG.ShowEvents = 'off';
-        a=0;
     end
 end
 
