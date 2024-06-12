@@ -1,10 +1,35 @@
-function [pfigure, ropts] = PoinCare(input,~)
-%% Create a poincare plot for the IBI series
-% The ibis are plotted agains a time-delayed version of the same values. If
-% the 'bylabel' option is used, the plot has different partitions for each
-% value the label takes on.
+function [pfigure, ropts] = PoinCare(input,~) %#ok<*AGROW>
+% PoinCare - Create a Poincare plot for the IBI series
+%
+% Syntax: [pfigure, ropts] = PoinCare(input, ~)
+%
+% Inputs:
+%   input - Structure containing the IBI data and related event information
+%       .IBIevent - Cell array of structures with IBI data
+%       .filename - Name of the file containing the data
+%       .event - Array of event structures
+%           .type - Type of the event
+%           .latency - Latency of the event
+%           .duration - Duration of the event
+%       .srate - Sampling rate of the data
+%
+% Outputs:
+%   pfigure - Handle to the created Poincare plot figure
+%   ropts - String indicating the type of plot created ('graph')
+%
+% Description:
+%   This function creates an interactive Poincare plot of the inter-beat intervals (IBIs)
+%   from the provided input data. It checks for the presence of IBI data and
+%   generates the plot by comparing the IBI values at time t with those at
+%   time t+1. The plot includes different partitions based on the event
+%   types if specified. The function also calculates and displays various
+%   heart rate variability (HRV) metrics.
+%
+% Example:
+%   input = load('ibi_data.mat'); % Load IBI data
+%   [pfigure, ropts] = PoinCare(input); % Create Poincare plot
 
-%#ok<*AGROW>
+% Set default return options
 ropts = 'graph';
 %% Check for the EEG dataset input:
 if (nargin < 1)
@@ -23,11 +48,11 @@ ev = [];
 if isfield(input, 'event') && isfield(input.event, 'type') && ~isempty({input.event.type})
     try
         ev = unique({input.event.type}, 'stable');
-    catch 
+    catch
         ev = unique([input.event.type], 'stable');
     end
     evc = ev;
-else 
+else
     evc = [];
 end
 
@@ -56,7 +81,7 @@ ibit = events.RTopTime(1:end-2);
         if (~isempty(evc))
             for i = 1:length(evc) % for each event type:
                 label = evc(i);
-                event = [strcmp([input.event.type], label)];
+                event = [strcmp({input.event.type}, label)];
                 idx = ibit<0;
                 for e1 = 1:length(input.event(event)) %% when there are more events
                     elist = [input.event(event)];
@@ -95,9 +120,9 @@ ibit = events.RTopTime(1:end-2);
             SDNN(end+1) = 1000 * Tools.HRV.SDNN(ibix(:));
             mIBI(end+1) = 1000 * mean(ibix(:));
             N(end+1) = length(x);
-            evc = "full epoch";
+            evc = "full epoch"; %#ok<NASGU>
         end
-        
+
         pSD1SD2 = SD1./SD2;
         cRMSSD = 1000 * (RMSSD./mIBI);
         Plotted = mIBI > 0;
@@ -106,7 +131,7 @@ ibit = events.RTopTime(1:end-2);
             'VariableNames',["Plot","N","mean(IBI)","SD1","SD2","SD1/SD2","RMSSD","cRMSSD", "SDNN"], ...
             'RowNames',nEVC);
         fn = input.filename;
-        [filepath,name,ext] = fileparts(fn);
+        [~,name,~] = fileparts(fn);
 
         writetable(t, ['./Data/' name '.csv'],'WriteRowNames',true);
 
@@ -181,23 +206,36 @@ pfigure.Visible = true;
 end
 
 function h=plot_ellipse(ax,a,b,cx,cy,angle,color)
-%ax: axes to plot on
-%a: width
-%b: height
-%cx: horizontal center
-%cy: vertical center
-%angle: orientation ellipse in degrees
-%color: color code (e.g., 'r' or [0.4 0.5 0.1])
-
-angle=angle/180*pi;
-
-r=0:0.1:2*pi+0.1;
-p=[(a*cos(r))' (b*sin(r))'];
-
-alpha=[cos(angle) -sin(angle)
-    sin(angle) cos(angle)];
-
-p1=p*alpha;
-h = patch(ax, cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
-h.FaceAlpha = .05;
+% plot_ellipse - Plot an ellipse on the given axes
+%
+% Syntax: h = plot_ellipse(ax, a, b, cx, cy, angle, color)
+%
+% Inputs:
+%   ax - Axes handle to plot the ellipse on
+%   a - Width of the ellipse
+%   b - Height of the ellipse
+%   cx - Horizontal center of the ellipse
+%   cy - Vertical center of the ellipse
+%   angle - Orientation of the ellipse in degrees
+%   color - Color of the ellipse
+%
+% Outputs:
+%   h - Handle to the plotted ellipse
+%
+% Description:
+%   This function plots an ellipse on the specified axes with the given
+%   dimensions, position, orientation, and color.
+    angle=angle/180*pi;
+    
+    r=0:0.1:2*pi+0.1;
+    p=[(a*cos(r))' (b*sin(r))'];
+    
+    alpha=[cos(angle) -sin(angle)
+        sin(angle) cos(angle)];
+    
+    p1=p*alpha;
+    h = patch(ax, cx+p1(:,1),cy+p1(:,2),color,'EdgeColor',color);
+    h.FaceAlpha = .05;
 end
+
+

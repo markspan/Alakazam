@@ -1,13 +1,11 @@
 function CreateTreeComponent(this)
 % using a very slightly modified tree component, hence the copy in +uiextra
 % the panel is the databrowsert
-    % this = workspace;
-    % parent = AlakazamObject
+% this = workspace;
+% parent = AlakazamObject
 
     this.Panel = javaObjectEDT('javax.swing.JPanel',javaObjectEDT('java.awt.BorderLayout'));   
-    
     this.TreeRoot = figure('Visible', 'off');
-
 %
 % Prepare the context menu (note the use of HTML labels)
 menuItem1 = javax.swing.JMenuItem('action #1');

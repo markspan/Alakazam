@@ -28,7 +28,7 @@ classdef WorkSpace < handle
             this.Parent = myParent;
             this.CreateTreeComponent();
 
-            if nargin == 1 || nargin ==4
+            if nargin == 1 || nargin == 4
             if nargin == 1
                 DIRS = load('DefaultWorkSpace.wksp', '-mat');
                 this.RawDirectory = DIRS.RawDirectory;
@@ -43,10 +43,6 @@ classdef WorkSpace < handle
                 throw('Workspace must be called with a parent, and either 3 of none directories (none = read default workspace)')
             end
         end
-%         function rawclear(this,~,~)
-%             delete(strcat(this.CacheDirectory, '*.mat'));
-%             open(this);
-%         end
     end
 end
 
