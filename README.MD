@@ -1,10 +1,10 @@
-# Alakazam: A Modular EEG Analysis Software Package in MATLAB
+# Alakazam: A Modular EEG/ECG Analysis Software Package in MATLAB
 
 ![Screenshot](ScreenShot.jpg)
 
 ## Overview
 
-Alakazam is a developing software package designed to provide a user-friendly interface for performing EEG (electroencephalogram) analysis within MATLAB. The goal is to streamline and enhance the process of analyzing EEG data through a modular and interactive platform. This project is currently a work in progress, and contributions are welcome.
+Alakazam is a developing software package designed to provide a user-friendly interface for performing EEG (electroencephalogram) or ECG (electrocardiogram) analysis within MATLAB. The goal is to streamline and enhance the process of analyzing timeseries data through a modular and interactive platform. This project is currently a work in progress, and contributions are welcome.
 
 ### Key Features
 
