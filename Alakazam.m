@@ -37,7 +37,7 @@ classdef Alakazam < handle
         function setupToolGroup(this)
             % Sets up the tool group for the application.
             % Initializes the tool group, tab group, and figure properties.
-            this.ToolGroup = ToolGroup('Alakazam', 'AlakazamApp'); %#ok<CPROP>
+            this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp'); %#ok<CPROP>
             addlistener(this.ToolGroup, 'GroupAction', @(src, event) closeCallback(this, event));
             this.Figures = gobjects(1, 1);
             tabgroup = BuildTabGroupAlakazam(this);
