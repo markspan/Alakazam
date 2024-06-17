@@ -1,11 +1,16 @@
 classdef Alakazam < handle
-    % Based On:
-    % "matlab.ui.internal.desktop.showcaseMPCDesigner()" Author(s): R. Chen
-    % Copyright 2015 The MathWorks, Inc.
-    % .\MatLAB\R2018b\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
-    % Author(s): M.Span, University of Groningen,
-    % dept. Experimental Psychology
-
+% This function is based on the implementation of:
+% "matlab.ui.internal.desktop.showcaseMPCDesigner()" by R. Chen.
+% The original work is © 2015 The MathWorks, Inc.
+% The relevant file can be found at:
+% .\MatLAB\Rxxxx\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
+% 
+% This specific adaptation has been further developed by:
+% M.M. Span from the University of Groningen,
+% Department of Experimental Psychology.
+%
+% For further inquiries or information, please refer to the original authors
+% or the adapted version's contributors.
     properties (Transient = true)
         RootDir
         ToolGroup
