@@ -37,7 +37,7 @@ if (nargin < 1)
     throw(ME);
 end
 if ~isfield(input, 'IBIevent')
-    ME = MException('Alakazam:PoinCare','Problem in IBIExport: No IBIS availeable (yet)');
+    ME = MException('Alakazam:PoinCare','Problem in PoinCare: No IBIS availeable (yet)');
     throw(ME);
 end
 
