@@ -2,7 +2,7 @@ classdef Alakazam < handle
     % Based On:
     % "matlab.ui.internal.desktop.showcaseMPCDesigner()" Author(s): R. Chen
     % Copyright 2015 The MathWorks, Inc.
-    % C:\Program Files\MatLAB\R2018b\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
+    % .\MatLAB\R2018b\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
     % Author(s): M.Span, University of Groningen,
     % dept. Experimental Psychology
 
@@ -13,7 +13,7 @@ classdef Alakazam < handle
         Workspace
     end
     methods (Access = private)
-        function setupEEGLab(~)
+        function setupEEGLab(this)
             % Sets up EEGLab if it is not already available in the path.
             [this.RootDir,~,~] = fileparts(which('Alakazam'));
             cd(this.RootDir);
