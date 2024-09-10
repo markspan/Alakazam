@@ -1,7 +1,67 @@
 function [ output, options ] = Fourier( varargin )
-%FOURIER Transform input to fourier
-%   Detailed explanation goes here
-
+%FOURIER Computes Fourier transform of input data with customizable options.
+%   [ output, options ] = Fourier( input, opts ) computes the Fourier
+%   transform of the input data using various options specified in 'opts'.
+%   The function supports several output formats such as voltage, power,
+%   voltage density, and power density.
+%
+%   Input Arguments:
+%   ----------------
+%   varargin : Can be one of the following:
+%       - input : Struct containing data to be transformed.
+%       - input, opts : Structs specifying options for transformation.
+%
+%   Output Arguments:
+%   -----------------
+%   output : Struct
+%       Struct containing the Fourier transformed data.
+%       Fields include:
+%       - DataType : Type of data (always 'FrequencyDomain').
+%       - trials : Number of segments processed.
+%       - freqs : Frequencies corresponding to the Fourier transform.
+%       - data : Transformed data in the specified format (volt, power, etc.).
+%       - pnts : Number of points in the transformed data.
+%
+%   options : Struct
+%       Updated options struct after processing input arguments. Contains
+%       parameters for the Fourier transformation such as:
+%       - Resolution : Resolution mode ('Max' or 'Other').
+%       - Output : Output format ('Voltage', 'Power', 'VoltageDens', 'PowerDens').
+%       - Complex : Complex transform ('On' or 'Off').
+%       - FullSpectrum : Full spectrum calculation ('On' or 'Off').
+%       - Normalize : Normalization ('On' or 'Off').
+%       - Interval : Frequency interval for transformation.
+%       - Window : Windowing function used ('Hanning', 'Hamming', etc.).
+%       - Window_Length : Length of the windowing function in percentage.
+%       - Compression : Compression ('On' or 'Off').
+%       - CompRes : Compression resolution.
+%       - ResVal : Resolution value for custom mode.
+%
+%   Notes:
+%   ------
+%   - If 'opts' is not provided, default options are used for transformation.
+%   - Supports windowing functions like Hanning, Hamming, Bartlett, etc.
+%   - Computes the Fourier transform for each segment of the input data.
+%
+%   Example:
+%   --------
+%   % Create a sample EEG structure
+%   EEG.data = randn(4, 100); % 4 channels of random data
+%   EEG.srate = 250; % Sampling rate
+%
+%   % Compute Fourier transform with default options
+%   [output, options] = Fourier(EEG);
+%
+%   See also: fft, TransTools.progressbar
+%
+%   Reference: Alakazam Toolbox Documentation
+%
+%   Author: M.M.Span
+%
+%   Version: 1.0
+%   License: GPLv2 or Newer
+%
+%   Contact: m.m.span@rug.nl
 
 if (nargin == 1)
     options = [];

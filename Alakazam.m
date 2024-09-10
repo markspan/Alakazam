@@ -42,7 +42,7 @@ classdef Alakazam < handle
         function setupToolGroup(this)
             % Sets up the tool group for the application.
             % Initializes the tool group, tab group, and figure properties.
-            this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp'); %#ok<CPROP>
+            this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp');
             addlistener(this.ToolGroup, 'GroupAction', @(src, event) closeCallback(this, event));
             this.Figures = gobjects(1, 1);
             tabgroup = BuildTabGroupAlakazam(this);
@@ -76,7 +76,7 @@ classdef Alakazam < handle
             assignin('base', 'AlakazamInst', this)
         end
 
-        function deleteNode(this)
+        function deleteNode(this) %#ok<MANU> 
         % deleteNode - Display a delete message.
         %
         % Syntax: deleteNode()
@@ -167,13 +167,16 @@ classdef Alakazam < handle
                 if ishandle(a.EEG)
                     %% the function returned a handle: this means there is
                     % no real transformation: the function returned a plot.
-                    % plotFigure(this, a.EEG);
-                    this.Figures(end+1) = a.EEG;
-                    this.ToolGroup.addFigure(this.Figures(end));
-                    this.Figures(end).Visible = 'on';
-                    %set(this.Figures(end), 'Toolbar', 'none');
-                    set(f,'Pointer','arrow');
+                    % plotFigure(this, a.EEG); This could be an uifigure of
+                    % a normal figure.
+                    disp(a);
                     return
+                else
+                    %this.Figures(end+1) = a.EEG;                        
+                    %this.ToolGroup.addFigure(this.Figures(end));
+                    %this.Figures(end).Visible = 'on';
+                    %set(this.Figures(end), 'Toolbar', 'none');
+                    %set(f,'Pointer','arrow');
                 end
 
                 a.EEG.Call = functionCall;
@@ -252,7 +255,7 @@ classdef Alakazam < handle
             hEEG = Tools.hEEG;
             hEEG.toHandle(this.Workspace.EEG);
             set(this.Figures(end), 'UserData', this.Workspace.EEG);
-            if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED') | strcmpi(this.Workspace.EEG.DataFormat, 'AVERAGED')
+            if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED') || strcmpi(this.Workspace.EEG.DataFormat, 'AVERAGED')
                 if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
                     if (this.Workspace.EEG.nbchan > 1)
                         if (isfield(this.Workspace.EEG, 'trials'))
@@ -361,9 +364,9 @@ classdef Alakazam < handle
                 % ugly hack to plot multiple Averages over eachother
                 % The dropsite is NewEEGStruct, the data that is dropped is
                 % OldEEGStruct.
-                if strcmpi(NewEEGStruct.EEG.DataFormat, 'AVERAGED') & ...
-                        strcmpi(OldEEGStruct.EEG.DataFormat, 'AVERAGED') & ...
-                        length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) & ...
+                if strcmpi(NewEEGStruct.EEG.DataFormat, 'AVERAGED') && ...
+                        strcmpi(OldEEGStruct.EEG.DataFormat, 'AVERAGED') && ...
+                        length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) && ...
                         size(NewEEGStruct.EEG.data) == size(OldEEGStruct.EEG.data)
 
                     hold off

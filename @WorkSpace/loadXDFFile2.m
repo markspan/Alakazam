@@ -1,75 +1,134 @@
 function loadXDFFile(this, WS, name)
-% loadXDFFile - Load an XDF file and convert it to a readable format for Alakazam.
+%%
+%   Loads the XDF file into an readeable format for Alakazam
+%   Needs the EEGLAB to be in the path, and needs an installed Mobilab
+%   plugin to be activated.....
+%   
 %
-% Syntax: loadXDFFile(this, WS, name)
-%
-% Inputs:
-%   this - Reference to the current object
-%   WS - Workspace containing cache and raw directories
-%   name - Name of the XDF file to load
-%
-% Description:
-%   This function loads an XDF file and converts it to a MATLAB-readable format
-%   (EEG structure). It checks if a cached version of the file exists and is
-%   up-to-date. If so, it loads the cached version. If not, it processes the
-%   raw XDF file and caches the result. The function also integrates the loaded
-%   EEG data into a tree structure for further processing.
-    
-    % Extract the file identifier (id) from the file name
-    
-    [~,id,~] = fileparts(name);
-    
-    % Construct paths for the .mat cache file and the raw XDF file
-    matfilename = strcat(WS.CacheDirectory, id, '.mat');
-    xdffilename = strcat(WS.RawDirectory, name);
-    CacheLoad = [];
-    % Check if the .mat cache file exists
-    if exist(matfilename, 'file') == 2
-        % If the .mat file exists, check if it is up-to-date with the raw XDF file
-        matfile = dir(matfilename);
-        xdffile = dir(xdffilename);
-        if xdffile.datenum <= matfile.datenum
-            % Load the cached .mat file if it is up-to-date
-            CacheLoad = load(matfilename, 'EEG');
-            this.EEG = CacheLoad.EEG;
-            this.EEG.id = id;
-            this.EEG.File = matfilename;
-        end
-    end 
-    if isempty(CacheLoad)
-        % no matfile: Read the RAW XDF and create the matfile
-        try
-            % Attempt to load the XDF file using eeg_load_xdf function
-            EEG = eeg_load_xdf(xdffilename, 'streamtype', 'ECG');
-            % Set the label for the first channel to "ECG"
-            % EEG.chanlocs(1).labels = "ECG";
-        catch 
-            % If loading fails, create an empty EEG structure
-             EEG = eeg_emptyset();
-        end
-    
-        % Set EEG properties
-        [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
-        [EEG.filepath,fname,fext] = fileparts(xdffilename); EEG.filename = [fname fext];
-       
-        EEG=Tools.eeg_checkset(EEG);    % Validate and set EEG structure properties
-        EEG.times = EEG.times./1000;    % Convert times from milliseconds to seconds
-        EEG.DataType = 'TIMEDOMAIN';
-        EEG.DataFormat = 'CONTINUOUS';
-        EEG.id = id;
-        EEG.File = matfilename;
-    
-         % Save the EEG structure to the .mat file
-        save(matfilename, 'EEG', '-v7.3');
-        this.EEG=EEG;
+%%
+[~,id,~] = fileparts(name);
+
+% add the (semi)rootnode:
+
+matfilename = strcat(WS.CacheDirectory, id, '.mat');
+xdffilename = strcat(WS.RawDirectory, name);
+
+if exist(matfilename, 'file') == 2
+    % if the file already exists:
+    matfile = dir(matfilename);
+    xdffile = dir(xdffilename);
+    if xdffile.datenum > matfile.datenum
+    else
+        % else read the rawfile
+        a=load(strcat(WS.CacheDirectory, id, '.mat'), 'EEG');
+        this.EEG = a.EEG;
+        this.EEG.id = id;
+        this.EEG.File = matfilename;
     end
-    
-    % Add the loaded EEG to the tree structure
-    tn = uiextras.jTree.TreeNode('Name',id, 'UserData', matfilename, 'Parent', this.Tree.Root);
-    setIcon(tn,this.RawFileIcon);
-    
-    % Recursively check for children files and read them if they exist
-    this.treeTraverse(id, WS.CacheDirectory, tn);
+else
+    % no matfile: create the matfile
+    try
+         EEG = loadXDF(xdffilename);
+    catch 
+         EEG = eeg_emptyset();
+    end
+    % DAMN YOU!!
+    %rmdir([tempdir 'tmpXDF'], 's')
+
+    [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
+    [EEG.filepath,fname,fext] = fileparts(xdffilename); EEG.filename = [fname fext];
+   
+    EEG=Tools.eeg_checkset(EEG);    
+    EEG.times = EEG.times./1000;
+    EEG.DataType = 'TIMEDOMAIN';
+    EEG.DataFormat = 'CONTINUOUS';
+    EEG.id = id;
+    EEG.File = matfilename;
+    % EEG.lss = Tools.EEG2labeledSignalSet(this.EEG);
+    save(matfilename, 'EEG', '-v7.3');
+    this.EEG=EEG;
 end
 
+%% Adds the loaded 'EEG' to the tree.
+tn = uiextras.jTree.TreeNode('Name',id, 'UserData', matfilename, 'Parent', this.Tree.Root);
+setIcon(tn,this.RawFileIcon);
 
+%% Now recursively check for children of this file, and read them if they are there there.
+this.treeTraverse(id, WS.CacheDirectory, tn);
+end
+
+function EEG = loadXDF2(filename)
+    EEG = Tools.eeg_emptyset;
+    tt = load_xdf(filename);
+    EEG.data = tt{1}.time_series;
+    [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
+    EEG.srate = str2double(tt{1}.info.nominal_srate); 
+    EEG.xmin = 0;
+    EEG.xmax = (EEG.pnts-1)/EEG.srate;
+    EEG.etc.desc = '';
+    EEG.etc.info = 'desc';
+
+    for c =1:EEG.nbchan
+        EEG.chanlocs(c).labels = tt{1}.info.desc.channels.channel{c}.label;
+    end
+    EEG=Tools.eeg_checkset(EEG);
+    EEG.times = 1000*tt{1}.time_stamps;
+end
+
+function EEG = loadXDF(filename)
+    td = tempdir;
+    tnf = tempname(td);
+    mkdir (tnf)
+    data = Tools.dataSourceXDF( filename , tnf );
+    sr=[]; ns=[]; 
+    maxsr=-1;
+    maxsrchan = 512;
+    polar = [];
+    for i = 1:length(data.item)
+        sr(i) = data.item{i}.samplingRate; %#ok<AGROW> 
+        ns(i) = size(data.item{i},1); %#ok<AGROW> 
+        if strcmp(class(data.item{i}), 'markerStream') %#ok<STISA> 
+            sr(i)=0; %#ok<AGROW> 
+        end
+        if sr(i) > maxsr 
+            maxsr=sr(i);
+            maxsrchan = i;
+        end
+        if sr(i) == 130
+            %polarband
+            polar = [polar i]; %#ok<AGROW> 
+        end
+    end
+
+    ismarker = (sr==0);
+    datachannels = find(~ismarker);
+    datachannels = datachannels(datachannels ~= maxsrchan);
+    datachannels = [datachannels maxsrchan];
+    for i = 1: length(data.item{datachannels}.label)
+        if (isstruct(data.item{datachannels}.label{i}))
+            data.item{datachannels}.label{i} = 'none';
+        end
+    end
+
+    EEG = data.export2eeglab(datachannels, find(ismarker), [],false);
+
+    if polar
+        datachannels = datachannels(datachannels ~= polar);
+        datachannels = [datachannels polar];
+        polarchannels = data.export2eeglab(datachannels, find(ismarker), [],false);
+        polarchannels.data = polarchannels.data(1,:);
+        polarchannels.nbchan = 1;
+        polarchannels.chanlocs = polarchannels.chanlocs(1);
+        %for c = 1:size(polarchannels.data,1)
+        %    polarchannels.data(c,isnan(polarchannels.data(c,:))) = mean(polarchannels.data(c,:), 'omitnan');
+        %end
+        
+    end
+
+    for c = 1:size(EEG.data,1)
+            EEG.data(c,isnan(EEG.data(c,:))) = mean(EEG.data(c,:), 'omitnan');
+    end
+    if polar
+        EEG.Polarchannels = polarchannels;
+    end
+end
