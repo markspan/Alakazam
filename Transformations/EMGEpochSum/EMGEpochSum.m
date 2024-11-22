@@ -19,7 +19,6 @@ end
 % Assign input to EEG variable for processing
 EEG = input;
 % Extract channel labels from input
-cn = {input.chanlocs.labels};
 
 %% Initialize Options Dialog
 if strcmp(opts, 'Init')
@@ -28,10 +27,8 @@ if strcmp(opts, 'Init')
         'Description', 'Set the parameters for EMGEpochSum',...
         'title', 'Rectify options',...
         'separator', 'Parameters:',...
-        {'Use:', 'channame'}, cn, ... % Channel name dropdown from available labels
-        {'Pre-Time (s):', 'pretime'}, 10, ... % Pre-event time in seconds
-        {'Post-Time (s):', 'posttime'}, 10, ... % Post-event time in seconds
-        {'StartEvent', 'se'}, '2', ... % Pre-event time in seconds
+        {'Scenario', 'se'}, '2', ... % Pre-event time in seconds
+        {'Imagination', 'ie'}, '4', ... % washout time in seconds
         {'EndEvent:', 'ee'}, '8'); % Post-event time in seconds
 end
 
@@ -39,45 +36,43 @@ end
 events = input.event;
 
 % Process Each Event
-chan = find(strcmp({EEG.chanlocs.labels}, opts.channame));
 trialnumber = 1;
 csvtable = table();  % Initialize the table
 
 for i = 1:length(events)
-    if strcmp(events(i).type, ['E' int2str(opts.se)])  % Start event
-        start_latency = events(i).latency;
-        % Find the corresponding end event
+    if strcmp(events(i).type, ['E' int2str(opts.se)])  % scenario event
+        scen_latency = events(i).latency;
+        % Find the corresponding scenario imagination event
         for j = i+1:length(events)
-            if strcmp(events(j).type, ['E' int2str(opts.ee)])  % End event
-                end_latency = events(j).latency; % + (10 * EEG.srate);
-                middle_latency = round((start_latency + end_latency) / 2);
+            if strcmp(events(j).type, ['E' int2str(opts.ie)])  % Imagination event
+                imag_latency = events(j).latency; % + (10 * EEG.srate);
+                for k = j+1:length(events) 
+                    if strcmp(events(k).type, ['E' int2str(opts.ee)])  % event end event
+                        endevent_latency = events(k).latency;
+                        baseline1 = mean(EEG.data(1, scen_latency - (.5*EEG.srate):scen_latency));
+                        scenario1 = mean(EEG.data(1, scen_latency:imag_latency));
+                        imagination1 = mean(EEG.data(1, imag_latency:endevent_latency));
+                        baseline2 = mean(EEG.data(2, scen_latency - (.5*EEG.srate):scen_latency));
+                        scenario2 = mean(EEG.data(2, scen_latency:imag_latency));
+                        imagination2 = mean(EEG.data(2, imag_latency:endevent_latency));
 
-                % Compute mean and max values in different intervals
-                pre_startindex = max(start_latency - (EEG.srate * opts.pretime), 1);
-                pre_endindex = middle_latency;
-                post_startindex = middle_latency;
-                %post_endindex = min(end_latency + (EEG.srate * opts.posttime), EEG.pnts);
-                post_endindex = min(end_latency, EEG.pnts);
-
-                % Pre and Post means and max values
-                pre_mean = mean(EEG.data(chan, pre_startindex:pre_endindex)', 'omitnan');
-                post_mean = mean(EEG.data(chan, post_startindex:post_endindex)', 'omitnan');
-                pre_max = max(EEG.data(chan, pre_startindex:pre_endindex)', [], 'omitnan');
-                post_max = max(EEG.data(chan, post_startindex:post_endindex)', [], 'omitnan');
-                roundstart = mean(EEG.data(chan, pre_startindex-(opts.pretime*EEG.srate):pre_startindex+(opts.posttime*EEG.srate))', 'omitnan')
-                % Create a table row for current event data
-                eventnr = i
-                line = table(eventnr, trialnumber, pre_mean, post_mean, pre_max, post_max, roundstart);
-
-                % Append to CSV table or initialize if not exists
-                if exist('csvtable', 'var')
-                    csvtable = [csvtable; line]; %#ok<AGROW>
-                else
-                    csvtable = line;
+                        % Create a table row for current event data
+                        eventnr = i;
+                        
+                        line = table(trialnumber, baseline1, scenario1, imagination1, baseline2, scenario2, imagination2 );
+        
+                        % Append to CSV table or initialize if not exists
+                        if exist('csvtable', 'var')
+                            csvtable = [csvtable; line]; %#ok<AGROW>
+                        else
+                            csvtable = line;
+                        end
+        
+                        trialnumber = trialnumber + 1;
+                        break;  % Break out of the inner loop once ee is found
+                    end
                 end
-
-                trialnumber = trialnumber + 1;
-                break;  % Break out of the inner loop once ee is found
+            break
             end
         end
     end
