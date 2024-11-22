@@ -31,11 +31,32 @@ else
     %n = [pathname,'\',filename,extension]
     TMSIDATA = TMSi.Poly5.read([pathname,'\',filename,extension]);
     EEG = toEEGLab(TMSIDATA);
-
+    
+    eid = find(strcmp({EEG.chanlocs.labels}, 'Events'));
+    if ~isempty(eid)
+        event = struct('type', {}, 'latency', {}, 'duration', {}, 'urevent', {});
+        e_vals = diff(EEG.data(eid,:));
+        numEvents = sum(e_vals>0);
+        e_latency = find(e_vals>0);
+        e_id = e_vals(e_latency);
+        for i = 1:numEvents
+            % Set each field with relevant values
+            event(i).type = sprintf('E%d', e_id(i));  % Define event type, e.g., 'E1', 'E2', etc.
+            event(i).latency = e_latency(i);          % latency value in samples 
+            event(i).duration = 0;                    % Example duration value in samples. Event = 0!
+            event(i).urevent = i;                     % Original event index, usually same as event index in this case
+        end
+        EEG.event = event;
+        EEG.data(eid,:) = []; % Remove original eventchannel
+        EEG.nbchan = EEG.nbchan - 1;
+        EEG.chanlocs(eid) = [];
+    end
     EEG.DataType = 'TIMEDOMAIN';
     EEG.DataFormat = 'CONTINUOUS';
     EEG.id = id;
     EEG.File = matfilename;
+    EEG.filename = matfilename;
+    
     % EEG.lss = Tools.EEG2labeledSignalSet(this.EEG);
     save(matfilename, 'EEG', '-v7.3');
     this.EEG=EEG;
