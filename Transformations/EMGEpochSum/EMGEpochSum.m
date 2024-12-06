@@ -43,36 +43,31 @@ for i = 1:length(events)
     if strcmp(events(i).type, ['E' int2str(opts.se)])  % scenario event
         scen_latency = events(i).latency;
         % Find the corresponding scenario imagination event
-        for j = i+1:length(events)
-            if strcmp(events(j).type, ['E' int2str(opts.ie)])  % Imagination event
-                imag_latency = events(j).latency; % + (10 * EEG.srate);
-                for k = j+1:length(events) 
-                    if strcmp(events(k).type, ['E' int2str(opts.ee)])  % event end event
-                        endevent_latency = events(k).latency;
-                        baseline1 = mean(EEG.data(1, scen_latency - (.5*EEG.srate):scen_latency));
-                        scenario1 = mean(EEG.data(1, scen_latency:imag_latency));
-                        imagination1 = mean(EEG.data(1, imag_latency:endevent_latency));
-                        baseline2 = mean(EEG.data(2, scen_latency - (.5*EEG.srate):scen_latency));
-                        scenario2 = mean(EEG.data(2, scen_latency:imag_latency));
-                        imagination2 = mean(EEG.data(2, imag_latency:endevent_latency));
+        for k = i+1:length(events)
+            if strcmp(events(k).type, ['E' int2str(opts.ee)])  % event end event
+                imag_latency = events(k).latency - (10 * EEG.srate);
+                endevent_latency = events(k).latency;
+                baseline1 = mean(EEG.data(1, scen_latency - (.5*EEG.srate):scen_latency));
+                scenario1 = mean(EEG.data(1, scen_latency:imag_latency));
+                imagination1 = mean(EEG.data(1, imag_latency:endevent_latency));
+                baseline2 = mean(EEG.data(2, scen_latency - (.5*EEG.srate):scen_latency));
+                scenario2 = mean(EEG.data(2, scen_latency:imag_latency));
+                imagination2 = mean(EEG.data(2, imag_latency:endevent_latency));
 
-                        % Create a table row for current event data
-                        eventnr = i;
-                        
-                        line = table(trialnumber, baseline1, scenario1, imagination1, baseline2, scenario2, imagination2 );
-        
-                        % Append to CSV table or initialize if not exists
-                        if exist('csvtable', 'var')
-                            csvtable = [csvtable; line]; %#ok<AGROW>
-                        else
-                            csvtable = line;
-                        end
-        
-                        trialnumber = trialnumber + 1;
-                        break;  % Break out of the inner loop once ee is found
-                    end
+                % Create a table row for current event data
+                eventnr = i;
+
+                line = table(trialnumber, baseline1, scenario1, imagination1, baseline2, scenario2, imagination2 );
+
+                % Append to CSV table or initialize if not exists
+                if exist('csvtable', 'var')
+                    csvtable = [csvtable; line]; %#ok<AGROW>
+                else
+                    csvtable = line;
                 end
-            break
+
+                trialnumber = trialnumber + 1;
+                break;  % Break out of the inner loop once ee is found
             end
         end
     end
