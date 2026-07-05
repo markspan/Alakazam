@@ -21,7 +21,7 @@ if exist(matfilename, 'file') == 2
     bvafile = dir(bvafilename);
     if bvafile.datenum > matfile.datenum
         % if the raw file is newer then the Mat file reread it
-        EEG=Tools.pop_loadbv(WS.RawDirectory,name);
+        EEG=pop_loadbv(WS.RawDirectory,name);
         EEG=eeg_checkset(EEG);
         EEG.times = ((1:EEG.pnts)-1)/EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
@@ -39,7 +39,7 @@ if exist(matfilename, 'file') == 2
     end
 else
     % no matfile: create the matfile
-    EEG=Tools.pop_loadbv(WS.RawDirectory,name);
+    EEG=pop_loadbv(WS.RawDirectory,name);
 %    EEG=eeg_checkset(EEG);
     EEG.DataType = 'TIMEDOMAIN';
     EEG.DataFormat = 'CONTINUOUS';
@@ -47,7 +47,6 @@ else
     EEG.id = id;
     EEG.times = (((1:EEG.pnts)-1)/EEG.srate);
     EEG.File = matfilename;
-%    EEG.lss = Tools.EEG2labeledSignalSet(EEG);
     save(matfilename, 'EEG', '-v7.3');
     this.EEG=EEG;
 end

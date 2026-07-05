@@ -21,9 +21,8 @@ classdef EEGLabEnvironment
     properties (Constant, Access = private)
         % Plugin registry name and a function it provides, per EEGLAB plugin.
         Plugins = { ...
-            'bva-io',    'pop_loadbv';  ...  % BrainVision (.vhdr) import
-            'xdfimport', 'load_xdf';    ...  % XDF / Lab Streaming Layer import
-            'ICLabel',   'iclabel'}          % IC classification
+            'bva-io',  'pop_loadbv';  ...  % BrainVision (.vhdr) import
+            'ICLabel', 'iclabel'}          % IC classification
 
         EEGLabUrl  = 'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip'
         FastIcaUrl = 'https://research.ics.aalto.fi/ica/fastica/code/FastICA_2.5.zip'

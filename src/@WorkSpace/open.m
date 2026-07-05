@@ -23,16 +23,6 @@ function open(this,~,~)
         disp(fileList(file).name);
         this.loadBVAFile(this, fileList(file).name)
     end
-    fileList = dir (strcat(this.RawDirectory, '*.XDF'));
-    for file = 1:length(fileList)
-        disp(fileList(file).name);
-        this.loadXDFFile2(this, fileList(file).name)
-    end
-    fileList = dir (strcat(this.RawDirectory, '*.EDF'));
-    for file = 1:length(fileList)       
-        disp(fileList(file).name);
-        this.loadEDFFile(this, fileList(file).name)       
-    end
     fileList = dir (strcat(this.RawDirectory, '*.BLE'));
     for file = 1:length(fileList)
         disp(fileList(file).name);

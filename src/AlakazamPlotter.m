@@ -63,10 +63,7 @@ classdef AlakazamPlotter < handle
                 "Visible",           "off");
             app.Figures(end + 1) = newFig;
 
-            % Attach a handle-graphics view of the dataset (used for the
-            % interactive R-peak / cursor editing elsewhere in the app).
-            hEEG = Tools.hEEG;
-            hEEG.toHandle(eeg);
+            % Store the dataset on the figure for downstream access.
             set(newFig, "UserData", eeg);
 
             % Draw the view that matches the dataset's format and type.
