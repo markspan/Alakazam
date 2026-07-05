@@ -29,9 +29,12 @@ classdef SignalView < handle
         Panel           % uipanel holding the axes and sliders
         Axes            % axes the signal is drawn in
         Lines           % 1 x nchan array of line handles (one per channel)
-        ScrollSlider    % uicontrol slider, horizontal position
-        ZoomSlider      % uicontrol slider, time span shown
-        ScaleSlider     % uicontrol slider, amplitude gain
+        ScrollSlider    % uicontrol slider, horizontal position (pan)
+        ZoomSlider      % uicontrol slider, time span shown (zoom)
+        ScaleSlider     % uicontrol slider, amplitude gain (magnify y)
+        PanLabel        % uicontrol text, "pan" label left of the scroll slider
+        ZoomLabel       % uicontrol text, "zoom" label left of the zoom slider
+        MagLabel        % uicontrol text, "mag" label left of the scale slider
 
         Pyramid         % MinMaxPyramid over the signal, the decimation engine
         Time            % NumSamples x 1 double, sample times
@@ -181,9 +184,12 @@ classdef SignalView < handle
             this.Axes.XAxis.Exponent = 0;
             this.Axes.YAxis.Exponent = 0;
 
-            this.ScrollSlider = this.makeSlider(0, 1, 0,   "Scroll the signal");
-            this.ZoomSlider   = this.makeSlider(0, 1, 0.5, "Zoom the signal");
-            this.ScaleSlider  = this.makeSlider(0.001, 100, 1, "Scale the signal");
+            this.ScrollSlider = this.makeSlider(0, 1, 0,   "Pan the signal in time");
+            this.ZoomSlider   = this.makeSlider(0, 1, 0.5, "Zoom the time axis");
+            this.ScaleSlider  = this.makeSlider(0.001, 100, 1, "Magnify the y-axis");
+            this.PanLabel  = this.makeLabel("pan");
+            this.ZoomLabel = this.makeLabel("zoom");
+            this.MagLabel  = this.makeLabel("mag");
 
             this.applyAxisLabels(eeg);
         end
@@ -196,6 +202,12 @@ classdef SignalView < handle
                 "Interruptible", "on", "Callback", @(~, ~) this.redraw());
             listener = addlistener(s, "ContinuousValueChange", @(~, ~) this.redraw());
             setappdata(s, "sliderListener", listener);
+        end
+
+        function t = makeLabel(this, text)
+        %MAKELABEL  Create a static text label shown to the left of a slider.
+            t = uicontrol("Parent", this.Panel, "Style", "text", ...
+                "String", text, "HorizontalAlignment", "right", "FontSize", 8);
         end
 
         function applyAxisLabels(this, eeg)
@@ -298,17 +310,25 @@ classdef SignalView < handle
                 return;
             end
             oldUnits = this.Panel.Units;
-            set([this.Panel, this.Axes, this.ScaleSlider, this.ScrollSlider, this.ZoomSlider], ...
-                "Units", "centimeters");
+            set([this.Panel, this.Axes, this.ScaleSlider, this.ScrollSlider, this.ZoomSlider, ...
+                 this.ZoomLabel, this.PanLabel, this.MagLabel], "Units", "centimeters");
             width  = this.Panel.Position(3);
             height = this.Panel.Position(4);
             sp = this.Space;
             hgt = this.SliderHeight;
 
+            % Each slider row is a small text label on the left plus the slider.
+            labelW  = 1.4;                                 % label column width (cm)
+            sliderX = sp + labelW;
+            sliderW = max(0, width - 2 * sp - labelW);
+
             y = sp;
-            set(this.ZoomSlider,   "Position", [sp, y, max(0, width - 2 * sp), hgt]); y = y + hgt + sp;
-            set(this.ScrollSlider, "Position", [sp, y, max(0, width - 2 * sp), hgt]); y = y + hgt + sp;
-            set(this.ScaleSlider,  "Position", [sp, y, max(0, width - 2 * sp), hgt]); y = y + hgt + sp;
+            set(this.ZoomLabel,    "Position", [sp, y, labelW, hgt]);
+            set(this.ZoomSlider,   "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
+            set(this.PanLabel,     "Position", [sp, y, labelW, hgt]);
+            set(this.ScrollSlider, "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
+            set(this.MagLabel,     "Position", [sp, y, labelW, hgt]);
+            set(this.ScaleSlider,  "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
 
             if this.Options.ShowAxisTicks
                 insets = get(this.Axes, "TightInset");
