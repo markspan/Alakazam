@@ -68,7 +68,8 @@ classdef Alakazam < handle
         %   ToolGroup names and tags are char arrays, as that desktop API expects.
             this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp');
             addlistener(this.ToolGroup, 'GroupAction', @(src, event) this.onGroupAction(event));
-            this.Figures = gobjects(1, 1);
+            this.Figures = gobjects(1, 0); % grown as documents are opened
+
             tabgroup = BuildTabGroupAlakazam(this);
             this.ToolGroup.addTabGroup(tabgroup);
             this.ToolGroup.SelectedTab = 'tabHome';
@@ -211,10 +212,11 @@ classdef Alakazam < handle
         %   graphics handle it was a pure plot and nothing is persisted.
             figHandle = [];
             try
-                % Run from the repository root: individual plugins may resolve
-                % resources relative to it (historic behaviour). Path resolution
-                % elsewhere no longer depends on the working directory.
-                cd(this.RepoRoot);
+                % Run from the repository root (historic behaviour): individual
+                % plugins may resolve resources relative to it. Restore the
+                % previous directory on exit, including on error.
+                originalDir = cd(this.RepoRoot);
+                restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
 
                 figHandle = findobj("Type", "Figure", "Tag", this.Workspace.EEG.File);
                 set(figHandle, "Pointer", "watch");
@@ -328,9 +330,11 @@ classdef Alakazam < handle
         %   "move" drop (Ctrl held) re-applies the dragged branch onto the
         %   target via evaluateDroppedBranch. Root nodes are ignored. The
         %   DropAction is a char array, so the case labels are char arrays too.
-            % Run from the repository root: evaluateDroppedBranch triggers
-            % plugins that may resolve resources relative to it.
-            cd(this.RepoRoot);
+            % Run from the repository root (historic behaviour): the drop
+            % triggers plugins that may resolve resources relative to it.
+            % Restore the previous directory when this callback returns.
+            originalDir = cd(this.RepoRoot);
+            restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at callback exit
 
             if isempty(eventData.Source.Parent.Parent)
                 return; % a root node was dropped; ignore
