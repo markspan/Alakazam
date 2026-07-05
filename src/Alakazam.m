@@ -51,21 +51,47 @@ classdef Alakazam < handle
         %   not found, the user is asked for permission to download and install
         %   the latest version into <home>/Documents/MATLAB/eeglab. We do not
         %   call savepath, so the user's global MATLAB path is left untouched.
-            if ~isempty(which('eeglab'))
-                return; % already available
+        %   Once EEGLAB is available, the import plugins Alakazam relies on are
+        %   installed through EEGLAB itself (see ensureEEGLabPlugins).
+            if isempty(which('eeglab'))
+                answer = questdlg([ ...
+                    'EEGLAB was not found on the MATLAB path, and Alakazam requires it. ', ...
+                    'Download and install the latest EEGLAB now (about 150 MB) into ', ...
+                    'your Documents/MATLAB folder?'], ...
+                    'EEGLAB not found', ...
+                    'Download and install', 'Cancel', 'Download and install');
+                if ~strcmp(answer, 'Download and install')
+                    error('Alakazam:eeglabMissing', ...
+                        'EEGLAB is required but was not found on the MATLAB path.');
+                end
+                this.installEEGLab();
             end
+            this.ensureEEGLabPlugins();
+        end
 
-            answer = questdlg([ ...
-                'EEGLAB was not found on the MATLAB path, and Alakazam requires it. ', ...
-                'Download and install the latest EEGLAB now (about 150 MB) into ', ...
-                'your Documents/MATLAB folder?'], ...
-                'EEGLAB not found', ...
-                'Download and install', 'Cancel', 'Download and install');
-            if ~strcmp(answer, 'Download and install')
-                error('Alakazam:eeglabMissing', ...
-                    'EEGLAB is required but was not found on the MATLAB path.');
+        function ensureEEGLabPlugins(~)
+        %ENSUREEEGLABPLUGINS  Install the EEGLAB import plugins Alakazam needs.
+        %   Uses EEGLAB's own plugin manager (plugin_askinstall) to fetch the
+        %   BrainVision (bva-io) and XDF import plugins if their entry functions
+        %   are missing. A failure (for example, offline) is warned about but is
+        %   not fatal, so the app still starts.
+            needed = { ...
+                'bva-io',    'pop_loadbv';  ...  % BrainVision (.vhdr) import
+                'xdfimport', 'load_xdf'};        % XDF / Lab Streaming Layer import
+            for i = 1:size(needed, 1)
+                pluginName = needed{i, 1};
+                probeFcn   = needed{i, 2};
+                if ~isempty(which(probeFcn))
+                    continue; % plugin already provides this function
+                end
+                try
+                    plugin_askinstall(pluginName, probeFcn, true);
+                catch installError
+                    warning('Alakazam:pluginInstall', ...
+                        'Could not install EEGLAB plugin ''%s'': %s', ...
+                        pluginName, installError.message);
+                end
             end
-            this.installEEGLab();
         end
 
         function installEEGLab(~)
