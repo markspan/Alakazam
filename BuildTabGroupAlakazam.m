@@ -97,20 +97,21 @@ function createWorkSpace(tab, app)
     add(column2, ClearWorkSpaceButton);
 end
 
-function info = getIndividualTransInfos(TName)
+function info = getIndividualTransInfos(TName, transRoot)
     % Retrieve individual transformation information from a JSON file.
     %
     % Args:
     %     TName: The name of the transformation.
+    %     transRoot: Absolute path to the Transformations directory.
     %
     % Returns:
     %     info: A structure containing the transformation information.
 
     % Convert TName to a character array
     TName = char(TName);
-    
+
     % Locate and read the JSON file containing the transformation information
-    json = dir(fullfile('Transformations', TName, [TName '.json']));
+    json = dir(fullfile(transRoot, TName, [TName '.json']));
     json = fullfile(json.folder, json.name);
     jsonfile = fopen(json);
     jsonraw = fread(jsonfile, inf);
@@ -120,14 +121,17 @@ function info = getIndividualTransInfos(TName)
     info = jsondecode(char(jsonraw'));
 end
 
-function transInfo = getTransInfos()
+function transInfo = getTransInfos(transRoot)
     % Retrieve information for all transformations.
+    %
+    % Args:
+    %     transRoot: Absolute path to the Transformations directory.
     %
     % Returns:
     %     transInfo: A structure array containing information for all transformations.
 
     % List directories within the 'Transformations' folder
-    fL = dir(fullfile('Transformations', '.'));
+    fL = dir(fullfile(transRoot, '.'));
     dirs = find([fL.isdir]);
 
     % Filter out unwanted directory names
@@ -136,13 +140,13 @@ function transInfo = getTransInfos()
 
     % Import necessary MATLAB UI toolstrip components
     import matlab.ui.internal.toolstrip.*
-    
+
     % Initialize an empty cell array to store transformation information
     transInfo = {};
-    
+
     % Retrieve and store information for each transformation
     for Trans = tF
-        transInfo{end+1} = getIndividualTransInfos(Trans{1}); %#ok<AGROW>
+        transInfo{end+1} = getIndividualTransInfos(Trans{1}, transRoot); %#ok<AGROW>
     end
     
     % Convert the cell array to a structure array
@@ -157,9 +161,13 @@ function createTransformation(tab, app)
     %     app: The main application object.
 
     import matlab.ui.internal.toolstrip.*
-    
+
+    % Resolve the Transformations directory absolutely from the app root,
+    % so tab building does not depend on the current working directory.
+    transRoot = fullfile(app.RootDir, 'Transformations');
+
     % Retrieve transformation information
-    transInfo = getTransInfos();
+    transInfo = getTransInfos(transRoot);
     
     % Identify unique sections within the transformations
     uniqueSections = unique({transInfo.Section});
@@ -190,7 +198,7 @@ function createTransformation(tab, app)
                 iTransForm = SectionCatTransForms(strcmp({SectionCatTransForms.Name}, tT));
                 
                 % Create a gallery item for the current transformation
-                item = GalleryItem(iTransForm.Name, Icon(fullfile('Transformations', char(tT), iTransForm.Icon)));
+                item = GalleryItem(iTransForm.Name, Icon(fullfile(transRoot, char(tT), iTransForm.Icon)));
                 item.Description = iTransForm.Description;
                 item.ItemPushedFcn = @(x, y, userData) app.ActionOnTransformation(x, y, iTransForm.Entry);
                 cat.add(item);

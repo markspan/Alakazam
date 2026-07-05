@@ -43,7 +43,8 @@ this.jmenu.add(menuItem3);
     
     %% For no obvious reason I put the used icons within "this" class, the Workspace...
     
-    this.RawFileIcon = fullfile(pwd,'Icons','bookicon.gif');
-    this.TimeSeriesIcon = fullfile(pwd,'Icons','pagesicon.gif');
-    this.FrequenciesIcon = fullfile(pwd,'Icons','frequencyIcon.gif');
+    root = this.Parent.RootDir;
+    this.RawFileIcon = fullfile(root,'Icons','bookicon.gif');
+    this.TimeSeriesIcon = fullfile(root,'Icons','pagesicon.gif');
+    this.FrequenciesIcon = fullfile(root,'Icons','frequencyIcon.gif');
 end

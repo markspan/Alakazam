@@ -16,28 +16,29 @@ classdef Alakazam < handle
         ToolGroup
         Figures
         Workspace
+        Debug = false
     end
     methods (Access = private)
         function setupEEGLab(this)
             % Sets up EEGLab if it is not already available in the path.
-            [this.RootDir,~,~] = fileparts(which('Alakazam'));
-            cd(this.RootDir);
-
+            % Adds the bundled EEGLAB to the path for this session only: we
+            % deliberately do NOT call savepath, so the user's global MATLAB
+            % path is left untouched. EEGLAB configures its own sub-paths
+            % when it is called.
             if isempty(which('eeglab'))
-                cd("./eeglab");
+                addpath(fullfile(this.RootDir, 'eeglab'));
                 eeglab;
-                savepath;
-                cd("..");
             end
         end
         function setupDirectories(this)
-            % Sets up the necessary directories and paths for the application.
-            [this.RootDir,~,~] = fileparts(which('Alakazam'));
-            cd(this.RootDir);
+            % Sets up the necessary paths for the application. All paths are
+            % resolved absolutely from RootDir, so the app does not depend on
+            % the current working directory.
             close all;
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
             addpath(this.RootDir, '-end');
-            addpath(genpath('Transformations'), 'mlapptools');
+            addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
+                    fullfile(this.RootDir, 'mlapptools'));
         end
         function setupToolGroup(this)
             % Sets up the tool group for the application.
@@ -59,6 +60,11 @@ classdef Alakazam < handle
             % Constructor for the Alakazam class.
             % Initializes EEGLab, sets up directories, tool group, and workspace.
 
+            % Resolve the application root once, from this file's own
+            % location, so nothing downstream depends on the current
+            % working directory or on Alakazam being found via which().
+            this.RootDir = fileparts(mfilename('fullpath'));
+
             this.setupEEGLab();
             this.setupDirectories();
             this.setupToolGroup();
@@ -68,12 +74,13 @@ classdef Alakazam < handle
 
             % after this, the workspace Panel holds the DataTree
             this.ToolGroup.setDataBrowser(this.Workspace.Panel);
-            % for debugging: create a variable holding this
-            % Alakazam instance in the base MATLAB
-            % workspace. When we create this instance,
-            % without assignment it will be referenced only
-            % by 'ans', and this is easily overwritten.
-            assignin('base', 'AlakazamInst', this)
+
+            % Optional debug aid: expose this instance in the base MATLAB
+            % workspace as 'AlakazamInst' (otherwise it is only reachable
+            % via 'ans', which is easily overwritten). Off by default.
+            if this.Debug
+                assignin('base', 'AlakazamInst', this);
+            end
         end
 
         function deleteNode(this) %#ok<MANU> 
@@ -153,6 +160,9 @@ classdef Alakazam < handle
         % Callback for all transformations.
         % Handles the transformation action, updates the workspace, and plots the result.
             try
+                % Run transformations from RootDir: individual plugins may
+                % still resolve resources relative to the app root. Path
+                % resolution elsewhere no longer depends on this.
                 cd(this.RootDir);
                 f = findobj('Type', 'Figure','Tag', this.Workspace.EEG.File);
                 set(f,'Pointer','watch');
@@ -199,7 +209,7 @@ classdef Alakazam < handle
                 end
 
                 Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
-                a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+                a.EEG.File = fullfile(parent.dir, parent.name, [Key '.mat']);
                 a.EEG.id =  [char(CurrentNode) ' - ' id];
 
                 NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',this.Workspace.Tree.SelectedNodes, 'UserData',a.EEG.File);
@@ -321,6 +331,8 @@ classdef Alakazam < handle
             % Performs copy or move operations based on the drop action.
             % Called when a Treenode is Dropped on another Treenode.
             % I prefer a switch of "copy" and "move" here.
+            % Run from RootDir: the drop triggers transformation plugins via
+            % Evaluate, which may resolve resources relative to the app root.
             cd(this.RootDir);
             if ~isempty(args.Source.Parent.Parent) % if not a rootnode
                 switch args.DropAction
@@ -399,7 +411,7 @@ classdef Alakazam < handle
                         mkdir(cDir);
                     end
 
-                    a.EEG.File = strcat(parent.dir, '\',parent.name, '\' , Key, '.mat');
+                    a.EEG.File = fullfile(parent.dir, parent.name, [Key '.mat']);
 
                     a.EEG.id =  [char(CurrentNode) ' - ' id];
                     a.EEG.Call = OldEEGStruct.EEG.Call;
@@ -419,11 +431,11 @@ classdef Alakazam < handle
                     this.Workspace.EEG=EEG;
 
                     [p,n,~] = fileparts(OldData);
-                    if exist([p '\' n], 'dir')
+                    if exist(fullfile(p, n), 'dir')
                         NewParentNode = NewNode;
                         NewData = a.EEG.File;
-                        name = dir([p '\' n '\' '*.mat' ]);
-                        OldData = [p '\' n '\' name.name];
+                        name = dir(fullfile(p, n, '*.mat'));
+                        OldData = fullfile(p, n, name.name);
                     else
                         endnode = true;
                     end
