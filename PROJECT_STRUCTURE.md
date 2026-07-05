@@ -66,7 +66,7 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 |---|---|
 | `eeglab/` | EEGLAB (untracked, obtained externally) |
 | `ledalab/` | Ledalab EDA analysis |
-| `HRV.m`, `+Tools/HRV.m` | Vollmer HRV toolbox |
+| `+Tools/HRV.m` | Vollmer HRV toolbox |
 | `+uiextras/`, `mlapptools/` | GUI layout / uifigure helpers |
 | `findjobj.m`, `findjobj_fast.m`, `uiinspect.m` | Yair Altman Java helpers |
 | `copyrights/` | jsonlab, dndcontrol, ECG class, … |
