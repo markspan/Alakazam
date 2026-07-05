@@ -35,7 +35,7 @@ if strcmp(options.useTable, 'Off')
             for chan = 1:nchan
                 TransTools.progressbar(chan/nchan);
                 drawnow;
-                output.data(chan,:,seg)=Tools.filtfilt(b,a,output.data(chan,:,seg));
+                output.data(chan,:,seg)=filtfilt(b,a,output.data(chan,:,seg));
             end
         end
     end
@@ -52,7 +52,7 @@ if strcmp(options.useTable, 'Off')
             for chan = 1:nchan
                 TransTools.progressbar(chan/nchan);
                 drawnow;
-                output.data(chan,:,seg)=Tools.filtfilt(b,a,output.data(chan,:,seg));
+                output.data(chan,:,seg)=filtfilt(b,a,output.data(chan,:,seg));
             end
         end
     end
@@ -73,13 +73,13 @@ else % Individual channel Setting:
                 [b,a] = TransTools.CreateFilter('low', input.srate, options.TableData.LCFreqValues(chan), str2double(char(options.TableData.LCSlopeValues(chan))));
                 TransTools.progressbar(chan/nchan);
                 drawnow;
-                output.data(chan,:,seg)=Tools.filtfilt(b,a,output.data(chan,:,seg));
+                output.data(chan,:,seg)=filtfilt(b,a,output.data(chan,:,seg));
             end
             if options.TableData.HCSelected(chan)
                 [b,a] = TransTools.CreateFilter('high', input.srate, options.TableData.HCFreqValues(chan), str2double(char(options.TableData.HCSlopeValues(chan))));
                 TransTools.progressbar(chan/nchan);
                 drawnow;
-                output.data(chan,:,seg)=Tools.filtfilt(b,a,output.data(chan,:,seg));
+                output.data(chan,:,seg)=filtfilt(b,a,output.data(chan,:,seg));
             end
         end
     end
@@ -108,7 +108,7 @@ if isfield(input, 'Polarchannels')
                 for chan = 1:nchan
                     TransTools.progressbar(chan/nchan);
                     drawnow;
-                    output.Polarchannels.data(chan,:,seg)=Tools.filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
+                    output.Polarchannels.data(chan,:,seg)=filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
                 end
             end
         end
@@ -125,7 +125,7 @@ if isfield(input, 'Polarchannels')
                 for chan = 1:nchan
                     TransTools.progressbar(chan/nchan);
                     drawnow;
-                    output.Polarchannels.data(chan,:,seg)=Tools.filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
+                    output.Polarchannels.data(chan,:,seg)=filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
                 end
             end
         end
@@ -146,13 +146,13 @@ if isfield(input, 'Polarchannels')
                     [b,a] = TransTools.CreateFilter('low', 130, options.TableData.LCFreqValues(chan), str2double(char(options.TableData.LCSlopeValues(chan))));
                     TransTools.progressbar(chan/nchan);
                     drawnow;
-                    output.Polarchannels.data(chan,:,seg)=Tools.filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
+                    output.Polarchannels.data(chan,:,seg)=filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
                 end
                 if options.TableData.HCSelected(chan)
                     [b,a] = TransTools.CreateFilter('high', 130, options.TableData.HCFreqValues(chan), str2double(char(options.TableData.HCSlopeValues(chan))));
                     TransTools.progressbar(chan/nchan);
                     drawnow;
-                    output.Polarchannels.data(chan,:,seg)=Tools.filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
+                    output.Polarchannels.data(chan,:,seg)=filtfilt(b,a,output.Polarchannels.data(chan,:,seg));
                 end
             end
         end

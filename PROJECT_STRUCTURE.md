@@ -28,17 +28,16 @@ resources stay at the repository root. The app resolves two roots at startup:
 
 - **`RootDir`** = the `src/` folder (this file's own location). Holds the
   authored code plus `Transformations/`, `Icons/`, `DefaultWorkSpace.wksp`, and
-  the bundled helper packages `+Tools/`, `+TMSi/`, `+uiextras/` and `mlapptools/`.
-- **`RepoRoot`** = the repository root (parent of `src/`). Holds `copyrights/`
-  (jsonlab, dndcontrol) and the shared data-file resources. EEGLAB is no longer
-  bundled: it is expected on the MATLAB path, and `setupEEGLab` offers to
-  download and install it if missing.
+  the `+uiextras/` helper package (the data-browser tree).
+- **`RepoRoot`** = the repository root (parent of `src/`). Holds only the shared
+  data-file resources. EEGLAB is not bundled: it is expected on the MATLAB path,
+  and `EEGLabEnvironment` offers to download and install it (and the plugins) if
+  missing.
 
 ## Launching
 
 Run **`startAlakazam`** (function at the repo root): it adds `src/` to the path
-and constructs the app; the app then puts its `src/` packages and `copyrights/`
-on the path.
+and constructs the app; the app then adds its `Transformations/`.
 To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 (via `pathtool` or a `startup.m`).
 
@@ -63,26 +62,19 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | `src/Icons/` | Tree/node icons used by the data browser. |
 | `src/DefaultWorkSpace.wksp` | Default directory config loaded at startup. |
 
-> Note: the eeglab-core copies have been removed from `+Tools/`; the app now
-> calls the installed EEGLAB (`eeg_checkset`, `eeg_emptyset`, `pop_select`,
-> `pop_newtimef`, ...) directly, so EEGLAB must be on the MATLAB path at
-> runtime. What remains in `+Tools/` is the BrainVision import cluster
-> (`pop_loadbv`, `readbvconf`, `parsebvmrk`, `ismatlab`) pending a switch to
-> the bva-io plugin, the MoBILAB helpers (`EEG2labeledSignalSet`,
-> `dataSourceXDF`) which carry local edits, `filtfilt`, and the authored
-> `hEEG`. The authored plotting code lives in `src/` (SignalView, EpochView,
-> AverageView, FourierView, MinMaxPyramid).
+> Note: the copied EEGLAB helpers are gone; the app calls the installed
+> EEGLAB directly (`eeg_checkset`, `pop_select`, `pop_loadbv`, ...), so EEGLAB
+> and the bva-io / ICLabel plugins must be on the MATLAB path at runtime.
+> `+Tools/` no longer exists. The authored plotting code lives in `src/`
+> (SignalView, EpochView, AverageView, FourierView, MinMaxPyramid).
 
-## Vendored toolkits (do not edit — see dependencies.md)
+## Vendored toolkits (do not edit, see dependencies.md)
 
 | Path | Toolkit |
 |---|---|
-| EEGLAB | installed on the MATLAB path, not bundled (see `setupEEGLab`) |
-| `src/+uiextras/`, `src/mlapptools/` | GUI layout / uifigure helpers |
-| `src/+TMSi/` | TMSi device SDK |
-| `src/+Tools/` (partly) | copied EEGLAB BrainVision helpers plus authored `hEEG` |
+| EEGLAB (+ bva-io, ICLabel, FastICA) | on the MATLAB path, not bundled (see `EEGLabEnvironment`) |
+| `src/+uiextras/` | GUI Layout Toolbox / jTree (the data-browser tree) |
 | `findjobj.m`, `findjobj_fast.m`, `uiinspect.m` | Yair Altman Java helpers |
-| `copyrights/` | jsonlab, dndcontrol, ECG class, etc. |
 
 ## How the pieces connect
 

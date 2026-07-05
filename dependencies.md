@@ -29,26 +29,18 @@ external installs in a later pass (see "Follow-up" below).
 
 | Toolkit | Location | Purpose | Source |
 |---|---|---|---|
-| GUI Layout Toolbox / uiextras | `+uiextras/`, `uix.*` | Dockable panel layout, jTree | MathWorks / R. Jackey |
-| mlapptools | `mlapptools/` | uifigure styling helpers | https://github.com/StackOverflowMATLABchat/mlapptools |
+| GUI Layout Toolbox / uiextras | `src/+uiextras/`, `uix.*` | Dockable panel layout, jTree | MathWorks / R. Jackey |
 | findjobj / uiinspect | `findjobj.m`, `uiinspect.m` | Java handle access (Y. Altman) | https://undocumentedmatlab.com |
-| jsonlab | `copyrights/jsonlab/` | JSON encode/decode | Q. Fang |
-| dndcontrol | `copyrights/dndcontrol/` | Drag-and-drop support | M. van der Seijs |
-| ECG Class for HRV | `copyrights/ECG Class.../` | ECG helper class | see folder |
 
-## Device SDKs (vendor code, read-only)
-
-| SDK | Location | Purpose |
-|---|---|---|
-| TMSi MATLAB interface | `+TMSi/` | Read Poly5 / TMSi amplifier data |
-| Cortrium C3 reader | `+Cortrium/` | Parse Cortrium C3 ECG-patch BLE files |
+The MoBILAB, TMSi, Cortrium, jsonlab, dndcontrol and mlapptools code has been
+removed: the app now reads only BrainVision files (via the bva-io EEGLAB
+plugin) and previously-saved `.mat` datasets.
 
 ## Follow-up (not done in this pass)
 
-- **Un-track the utility toolkits** (`ledalab/`, `copyrights/`, `mlapptools/`,
-  `+uiextras/`) and fetch them as external installs, the way EEGLAB already is.
-  Deferred because a fresh clone would then need a documented setup step; decide
-  the trade-off before doing it.
+- **Un-track `src/+uiextras/`** and fetch it as an external install, the way
+  EEGLAB already is. Deferred because a fresh clone would then need a
+  documented setup step; decide the trade-off before doing it.
 - **History size:** `.git` is ~214 MB, inflated by the old `eeglabolder/`
   history. Shrinking it needs a history rewrite (`git filter-repo`) and a
   force-push, which is destructive and coordinated separately.

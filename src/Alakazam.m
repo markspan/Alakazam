@@ -10,11 +10,11 @@ classdef Alakazam < handle
 %   Application roots (resolved once, in the constructor, from this file's
 %   own location so nothing depends on the current working directory):
 %     RootDir  - the authored source tree (this src/ folder). Holds the
-%                Transformations, Icons, the default workspace and the bundled
-%                helper packages (+Tools, +TMSi, +uiextras, mlapptools).
-%     RepoRoot - the repository root (parent of src/). Holds copyrights/ and
-%                the shared data-file resources. EEGLAB is not bundled; it is
-%                expected on the path (see EEGLabEnvironment).
+%                Transformations, Icons, the default workspace and the
+%                +uiextras helper package.
+%     RepoRoot - the repository root (parent of src/). Holds the shared
+%                data-file resources. EEGLAB is not bundled; it is expected on
+%                the path (see EEGLabEnvironment).
 %
 %   Launch with the startAlakazam function at the repository root, or add
 %   src/ to the MATLAB path and construct Alakazam directly.
@@ -49,16 +49,13 @@ classdef Alakazam < handle
         function setupDirectories(this)
         %SETUPDIRECTORIES  Put the authored source tree on the path.
         %   All paths are resolved absolutely, so the app does not depend on the
-        %   current working directory. RootDir (src) now also holds the +Tools,
-        %   +TMSi and +uiextras packages and mlapptools, so adding it puts those
-        %   on the path too. The Transformations and the copyright helper
-        %   functions (kept at the repository root) are added as well.
+        %   current working directory. RootDir (src) holds the app code and the
+        %   +uiextras package (added by putting src on the path); the
+        %   Transformations are added with their subfolders.
             close all;
             warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
             addpath(this.RootDir, '-end');
-            addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
-                    fullfile(this.RootDir, 'mlapptools'), ...
-                    genpath(fullfile(this.RepoRoot, 'copyrights')));
+            addpath(genpath(fullfile(this.RootDir, 'Transformations')));
         end
 
         function setupToolGroup(this)
