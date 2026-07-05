@@ -30,11 +30,12 @@ external installs in a later pass (see "Follow-up" below).
 | Toolkit | Location | Purpose | Source |
 |---|---|---|---|
 | GUI Layout Toolbox / uiextras | `src/+uiextras/`, `uix.*` | Dockable panel layout, jTree | MathWorks / R. Jackey |
+| mlapptools | `src/mlapptools/` | uifigure styling for App Designer transform GUIs | https://github.com/StackOverflowMATLABchat/mlapptools |
 | findjobj / uiinspect | `findjobj.m`, `uiinspect.m` | Java handle access (Y. Altman) | https://undocumentedmatlab.com |
 
-The MoBILAB, TMSi, Cortrium, jsonlab, dndcontrol and mlapptools code has been
-removed: the app now reads only BrainVision files (via the bva-io EEGLAB
-plugin) and previously-saved `.mat` datasets.
+The MoBILAB, TMSi, Cortrium, jsonlab and dndcontrol code has been removed: the
+app now reads only BrainVision files (via the bva-io EEGLAB plugin) and
+previously-saved `.mat` datasets.
 
 ## Follow-up (not done in this pass)
 

@@ -28,7 +28,8 @@ resources stay at the repository root. The app resolves two roots at startup:
 
 - **`RootDir`** = the `src/` folder (this file's own location). Holds the
   authored code plus `Transformations/`, `Icons/`, `DefaultWorkSpace.wksp`, and
-  the `+uiextras/` helper package (the data-browser tree).
+  the `+uiextras/` (data-browser tree) and `mlapptools/` (App Designer GUI
+  styling, used by transforms such as IIRFilter) helper packages.
 - **`RepoRoot`** = the repository root (parent of `src/`). Holds only the shared
   data-file resources. EEGLAB is not bundled: it is expected on the MATLAB path,
   and `EEGLabEnvironment` offers to download and install it (and the plugins) if
@@ -74,6 +75,7 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 |---|---|
 | EEGLAB (+ bva-io, ICLabel, FastICA) | on the MATLAB path, not bundled (see `EEGLabEnvironment`) |
 | `src/+uiextras/` | GUI Layout Toolbox / jTree (the data-browser tree) |
+| `src/mlapptools/` | uifigure styling for App Designer transform GUIs (IIRFilter) |
 | `findjobj.m`, `findjobj_fast.m`, `uiinspect.m` | Yair Altman Java helpers |
 
 ## How the pieces connect

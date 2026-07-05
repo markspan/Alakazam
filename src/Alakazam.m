@@ -11,7 +11,7 @@ classdef Alakazam < handle
 %   own location so nothing depends on the current working directory):
 %     RootDir  - the authored source tree (this src/ folder). Holds the
 %                Transformations, Icons, the default workspace and the
-%                +uiextras helper package.
+%                +uiextras and mlapptools helper packages.
 %     RepoRoot - the repository root (parent of src/). Holds the shared
 %                data-file resources. EEGLAB is not bundled; it is expected on
 %                the path (see EEGLabEnvironment).
@@ -51,11 +51,13 @@ classdef Alakazam < handle
         %   All paths are resolved absolutely, so the app does not depend on the
         %   current working directory. RootDir (src) holds the app code and the
         %   +uiextras package (added by putting src on the path); the
-        %   Transformations are added with their subfolders.
+        %   Transformations and mlapptools (used by App Designer transform GUIs
+        %   such as IIRFilterApp) are added too.
             close all;
             warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
             addpath(this.RootDir, '-end');
-            addpath(genpath(fullfile(this.RootDir, 'Transformations')));
+            addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
+                    fullfile(this.RootDir, 'mlapptools'));
         end
 
         function setupToolGroup(this)
