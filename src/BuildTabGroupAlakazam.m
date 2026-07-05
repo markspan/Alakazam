@@ -132,10 +132,9 @@ function transInfo = getTransInfos(transRoot)
 
     % List directories within the 'Transformations' folder
     fL = dir(fullfile(transRoot, '.'));
-    dirs = find([fL.isdir]);
 
-    % Filter out unwanted directory names
-    tF = {fL(dirs).name};
+    % Filter out unwanted directory names (keep real sub-directories only)
+    tF = {fL([fL.isdir]).name};
     tF = tF(~ismember(tF, {'.', '..', '+TransTools'}));
 
     % Import necessary MATLAB UI toolstrip components
@@ -200,7 +199,7 @@ function createTransformation(tab, app)
                 % Create a gallery item for the current transformation
                 item = GalleryItem(iTransForm.Name, Icon(fullfile(transRoot, char(tT), iTransForm.Icon)));
                 item.Description = iTransForm.Description;
-                item.ItemPushedFcn = @(x, y, userData) app.ActionOnTransformation(x, y, iTransForm.Entry);
+                item.ItemPushedFcn = @(x, y, userData) app.onTransformation(x, y, iTransForm.Entry);
                 cat.add(item);
             end
         end

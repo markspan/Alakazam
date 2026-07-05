@@ -1,42 +1,64 @@
 classdef Alakazam < handle
-% This function is based on the implementation of:
-% "matlab.ui.internal.desktop.showcaseMPCDesigner()" by R. Chen.
-% The original work is © 2015 The MathWorks, Inc.
-% The relevant file can be found at:
-% .\MatLAB\Rxxxx\toolbox\matlab\toolstrip\+matlab\+ui\+internal\+desktop
-% 
-% This specific adaptation has been further developed by:
-% M.M. Span from the University of Groningen,
-% Department of Experimental Psychology.
+%ALAKAZAM  Toolstrip application for modular EEG / physiology analysis.
 %
-% For further inquiries or information, please refer to the original authors
-% or the adapted version's contributors.
+%   Alakazam presents a "tree of datasets plus draggable transformations"
+%   workflow (inspired by BrainVision Analyzer). A WorkSpace holds a data
+%   browser tree of EEGLAB EEG structures; transformations in the toolstrip
+%   gallery are applied to the selected dataset to produce new child nodes,
+%   and dragging a branch onto another dataset re-applies that chain.
+%
+%   Application roots (resolved once, in the constructor, from this file's
+%   own location so nothing depends on the current working directory):
+%     RootDir  - the authored source tree (this src/ folder), holding the
+%                Transformations, Icons and the default workspace.
+%     RepoRoot - the repository root (parent of src/), holding the vendored
+%                toolkits (EEGLAB, mlapptools, +Tools, +uiextras, device SDKs)
+%                and the shared data-file resources.
+%
+%   Launch with the startAlakazam function at the repository root, or add
+%   src/ to the MATLAB path and construct Alakazam directly.
+%
+%   Naming conventions used throughout:
+%     * Classes    PascalCase   (Alakazam, WorkSpace, AlakazamPlotter)
+%     * Methods    camelCase, verb first (onTransformation, evaluateDroppedBranch)
+%     * Properties PascalCase   (RootDir, ToolGroup, Workspace)
+%     * Locals     descriptive camelCase
+%
+%   Adapted from "matlab.ui.internal.desktop.showcaseMPCDesigner()" by
+%   R. Chen; original work (c) 2015 The MathWorks, Inc. Further developed by
+%   M.M. Span, University of Groningen, Department of Experimental Psychology.
+%
+%   See also ALAKAZAMPLOTTER, WORKSPACE, BUILDTABGROUPALAKAZAM.
+
     properties (Transient = true)
-        RootDir
-        RepoRoot
-        ToolGroup
-        Figures
-        Workspace
-        Debug = false
+        RootDir       % char, absolute path to the authored source tree (src/)
+        RepoRoot      % char, absolute path to the repository root (vendored code)
+        ToolGroup     % matlab.ui.internal.desktop.ToolGroup, the app window
+        Figures       % array of figure handles opened as documents
+        Workspace     % WorkSpace, the data-browser tree and session state
+        Plotter       % AlakazamPlotter, renders datasets into figures
+        Debug = false % logical, when true expose the instance in the base workspace
     end
+
     methods (Access = private)
         function setupEEGLab(this)
-            % Sets up EEGLab if it is not already available in the path.
-            % Adds the bundled EEGLAB (kept at the repository root) to the
-            % path for this session only: we deliberately do NOT call
-            % savepath, so the user's global MATLAB path is left untouched.
-            % EEGLAB configures its own sub-paths when it is called.
+        %SETUPEEGLAB  Put the bundled EEGLAB on the path if it is not already.
+        %   Adds the bundled EEGLAB (kept at the repository root) to the path
+        %   for this session only: we deliberately do NOT call savepath, so
+        %   the user's global MATLAB path is left untouched. EEGLAB configures
+        %   its own sub-paths when it is called.
             if isempty(which('eeglab'))
                 addpath(fullfile(this.RepoRoot, 'eeglab'));
                 eeglab;
             end
         end
+
         function setupDirectories(this)
-            % Sets up the necessary paths for the application. All paths are
-            % resolved absolutely, so the app does not depend on the current
-            % working directory. Authored source (src) and the repository
-            % root (vendored toolkits, packages and data-file resources) are
-            % both placed on the path.
+        %SETUPDIRECTORIES  Put the authored and vendored trees on the path.
+        %   All paths are resolved absolutely, so the app does not depend on
+        %   the current working directory. The authored source (RootDir) and
+        %   the repository root (RepoRoot, with the vendored toolkits and
+        %   packages) are both placed on the path.
             close all;
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
             addpath(this.RootDir, '-end');
@@ -44,466 +66,326 @@ classdef Alakazam < handle
             addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
                     fullfile(this.RepoRoot, 'mlapptools'));
         end
+
         function setupToolGroup(this)
-            % Sets up the tool group for the application.
-            % Initializes the tool group, tab group, and figure properties.
+        %SETUPTOOLGROUP  Create and open the toolstrip document window.
+        %   Builds the ToolGroup, wires its close listener, populates the tab
+        %   group from BuildTabGroupAlakazam, and tiles the document area.
             this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp');
-            addlistener(this.ToolGroup, 'GroupAction', @(src, event) closeCallback(this, event));
+            addlistener(this.ToolGroup, 'GroupAction', @(src, event) this.onGroupAction(event));
             this.Figures = gobjects(1, 1);
             tabgroup = BuildTabGroupAlakazam(this);
             this.ToolGroup.addTabGroup(tabgroup);
             this.ToolGroup.SelectedTab = 'tabHome';
             this.ToolGroup.setPosition(100, 100, 1080, 720);
             this.ToolGroup.open();
-            MD = com.mathworks.mlservices.MatlabDesktopServices.getDesktop; %#ok<JAPIMATHWORKS>
-            MD.setDocumentArrangement(this.ToolGroup.Name, MD.TILED, java.awt.Dimension(1, 1));
+            desktop = com.mathworks.mlservices.MatlabDesktopServices.getDesktop; %#ok<JAPIMATHWORKS>
+            desktop.setDocumentArrangement(this.ToolGroup.Name, desktop.TILED, java.awt.Dimension(1, 1));
+        end
+
+        function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, displayBase, transformId, parentTreeNode)
+        %PERSISTRESULTNODE  Save a transformation result and add it to the tree.
+        %   [RESULTEEG, NEWNODE] = PERSISTRESULTNODE(THIS, RESULTEEG, SOURCEFILE,
+        %   DISPLAYBASE, TRANSFORMID, PARENTTREENODE) performs the persistence
+        %   step shared by onTransformation and evaluateDroppedBranch:
+        %     * derive a timestamped cache file next to SOURCEFILE (in a folder
+        %       named after the source dataset), creating that folder if needed;
+        %     * set RESULTEEG.File and RESULTEEG.id (DISPLAYBASE plus TRANSFORMID);
+        %     * add a tree node under PARENTTREENODE with the matching icon,
+        %       expand its parent and select it;
+        %     * save RESULTEEG to disk and make it the workspace's current EEG.
+        %   Returns the updated dataset and the new tree node.
+
+            % Timestamped key, e.g. 'Fourier051423'. The DDhhMMss format is
+            % kept for backwards compatibility with existing cache trees.
+            nodeKey = [transformId datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
+
+            % The result is cached in a folder named after the source dataset,
+            % which is how the tree is later rebuilt from disk.
+            [parentDir, parentName] = fileparts(sourceFile);
+            childDir = fullfile(parentDir, parentName);
+            if ~exist(childDir, 'dir')
+                mkdir(childDir);
+            end
+
+            resultEEG.File = fullfile(childDir, [nodeKey '.mat']);
+            resultEEG.id   = [char(displayBase) ' - ' transformId];
+
+            % Add the node to the data browser and select it.
+            newNode = uiextras.jTree.TreeNode('Name', resultEEG.id, ...
+                'Parent', parentTreeNode, 'UserData', resultEEG.File);
+            this.setNodeIcon(newNode, resultEEG.DataType);
+            newNode.Parent.expand();
+            this.Workspace.Tree.SelectedNodes = newNode;
+
+            % Persist to disk under the variable name 'EEG' and adopt it as the
+            % workspace's current dataset.
+            EEG = resultEEG; % saved to disk under the variable name 'EEG'
+            save(resultEEG.File, 'EEG');
+            this.Workspace.EEG = resultEEG;
+        end
+
+        function setNodeIcon(this, node, dataType)
+        %SETNODEICON  Give a tree node the icon matching its data type.
+        %   Time-domain datasets get the time-series icon and frequency-domain
+        %   datasets the frequencies icon; other types are left unchanged.
+            if strcmpi(dataType, 'TIMEDOMAIN')
+                setIcon(node, this.Workspace.TimeSeriesIcon);
+            elseif strcmpi(dataType, 'FREQUENCYDOMAIN')
+                setIcon(node, this.Workspace.FrequenciesIcon);
+            end
+        end
+
+        function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
+        %ISOVERLAYABLEAVERAGE  True when two datasets are averages of equal shape.
+        %   Used by evaluateDroppedBranch to decide whether dropping one
+        %   dataset onto another should overlay their average plots rather than
+        %   re-apply a transformation.
+            tf = strcmpi(targetEEG.DataFormat, 'AVERAGED') && ...
+                 strcmpi(sourceEEG.DataFormat, 'AVERAGED') && ...
+                 isequal(size(targetEEG.data), size(sourceEEG.data));
+        end
+
+        function overlayAverage(this, targetEEG, sourceEEG)
+        %OVERLAYAVERAGE  Overlay a dropped average dataset on the target's plot.
+        %   Ensures the target average is shown (reusing its figure if open),
+        %   then draws the source average on top of it.
+            hold off;
+            existingFig = findobj('Type', 'Figure', 'Tag', targetEEG.File);
+            if ~isempty(existingFig)
+                this.ToolGroup.showClient(get(existingFig, 'Name'));
+            else
+                this.Workspace.EEG = targetEEG;
+                this.Plotter.plotCurrent();
+            end
+
+            hold on;
+            existingFig = findobj('Type', 'Figure', 'Tag', targetEEG.File);
+            Tools.plotEpochedTimeMultiAverage(sourceEEG, existingFig);
+            hold off;
         end
     end
+
     methods
         function this = Alakazam(varargin)
-            % Constructor for the Alakazam class.
-            % Initializes EEGLab, sets up directories, tool group, and workspace.
-
-            % Resolve the application roots once, from this file's own
-            % location, so nothing downstream depends on the current working
-            % directory or on Alakazam being found via which().
-            %   RootDir  : the authored source tree (this src/ folder),
-            %              holding Transformations, Icons and the default
-            %              workspace.
-            %   RepoRoot : the repository root, holding the vendored toolkits
-            %              (EEGLAB, mlapptools, +Tools, +uiextras, device
-            %              SDKs) and the shared data-file resources.
+        %ALAKAZAM  Construct and open the application.
+        %   Resolves the application roots, sets up EEGLAB and the paths,
+        %   opens the toolstrip window, creates the plotter and the workspace,
+        %   and loads the data tree.
             this.RootDir  = fileparts(mfilename('fullpath'));
             this.RepoRoot = fileparts(this.RootDir);
 
             this.setupEEGLab();
             this.setupDirectories();
             this.setupToolGroup();
-            % create Workspace: this will load the data
+            this.Plotter = AlakazamPlotter(this);
+
+            % Create the workspace (this loads the data) and attach its tree to
+            % the document browser panel.
             this.Workspace = WorkSpace(this);
             this.Workspace.open();
-
-            % after this, the workspace Panel holds the DataTree
             this.ToolGroup.setDataBrowser(this.Workspace.Panel);
 
-            % Optional debug aid: expose this instance in the base MATLAB
-            % workspace as 'AlakazamInst' (otherwise it is only reachable
-            % via 'ans', which is easily overwritten). Off by default.
+            % Optional debug aid: expose this instance in the base workspace as
+            % 'AlakazamInst' (otherwise it is only reachable via 'ans', which is
+            % easily overwritten). Off by default.
             if this.Debug
                 assignin('base', 'AlakazamInst', this);
             end
         end
 
-        function deleteNode(this) %#ok<MANU> 
-        % deleteNode - Display a delete message.
-        %
-        % Syntax: deleteNode()
-        %
-        % Description:
-        %   This function displays a message indicating that a node is being deleted.
-            disp("delete")
-        end
-
-        function expandSingle(this, src,event,f)
-        % expandSingle - Expand a single node in the tree.
-        %
-        % Syntax: expandSingle(this, src, event, f)
-        %
-        % Inputs:
-        %   this - Reference to the current object
-        %   src - Source of the event (typically a UI component)
-        %   event - Event data
-        %   f - Figure or UI context containing the tree node to expand
-        %
-        % Description:
-        %   This function expands a single node in the tree structure based on the
-        %   current object context.
-            node = f.CurrentObject;
-            expand(node)
-        end
-
-        function expandAll(this, src,event,tree)
-        % expandAll - Expand all nodes in the tree.
-        %
-        % Syntax: expandAll(this, src, event, tree)
-        %
-        % Inputs:
-        %   this - Reference to the current object
-        %   src - Source of the event (typically a UI component)
-        %   event - Event data
-        %   tree - Tree object containing the nodes to expand
-        %
-        % Description:
-        %   This function expands all nodes in the tree structure.
-            expand(tree)
-        end
-
         function delete(this)
-        % delete - Destructor for the object.
-        %
-        % Syntax: delete(this)
-        %
-        % Description:
-        %   This function serves as the destructor for the object. It deletes the
-        %   ToolGroup and Figures properties if they are valid.
+        %DELETE  Destructor: close the document window and figures.
             if ~isempty(this.ToolGroup) && isvalid(this.ToolGroup)
                 delete(this.ToolGroup);
             end
             delete(this.Figures);
         end
 
-        function dropTargetCallback(src,data)
-        % dropTargetCallback - Handle drop target callback.
+        function onTransformation(this, ~, ~, entry)
+        %ONTRANSFORMATION  Gallery callback: run a transformation on the current EEG.
+        %   ONTRANSFORMATION(THIS, ~, ~, ENTRY) executes the transformation
+        %   whose entry file is ENTRY (for example 'Fourier.m') on the selected
+        %   dataset, stores the result as a new child node, and plots it. The
+        %   stem of ENTRY is both the transformation id and the function that is
+        %   invoked with feval.
         %
-        % Syntax: dropTargetCallback(src, data)
-        %
-        % Inputs:
-        %   src - Source of the drop event
-        %   data - Data associated with the drop event
-        %
-        % Description:
-        %   This function handles the callback for a drop target, displaying a
-        %   message indicating that an item has been dropped.
-            disp('Dropped');
-        end
-
-        function ActionOnTransformation(this, ~, ~, userdata)
-        % Callback for all transformations.
-        % Handles the transformation action, updates the workspace, and plots the result.
+        %   A transformation returns [EEG, params]; if it instead returns a
+        %   graphics handle it was a pure plot and nothing is persisted.
+            figHandle = [];
             try
-                % Run transformations from the repository root (unchanged
-                % from historic behaviour): individual plugins may still
-                % resolve resources relative to it. Path resolution elsewhere
-                % no longer depends on the working directory.
+                % Run from the repository root: individual plugins may resolve
+                % resources relative to it (historic behaviour). Path resolution
+                % elsewhere no longer depends on the working directory.
                 cd(this.RepoRoot);
-                f = findobj('Type', 'Figure','Tag', this.Workspace.EEG.File);
-                set(f,'Pointer','watch');
 
-                callfnction = char(userdata);
-                lastdotpos = find(callfnction == '.', 1, 'last');
-                id = callfnction(1:lastdotpos-1);
-                functionCall= ['EEG=' id '(x.EEG);'];
+                figHandle = findobj('Type', 'Figure', 'Tag', this.Workspace.EEG.File);
+                set(figHandle, 'Pointer', 'watch');
 
-                [a.EEG, used_params] = feval(id, this.Workspace.EEG);
+                % The gallery passes the entry file name (e.g. 'Fourier.m');
+                % its stem is the transformation id and the function to call.
+                entryName   = char(entry);
+                transformId = entryName(1:find(entryName == '.', 1, 'last') - 1);
+                callExpr    = ['EEG=' transformId '(x.EEG);'];
 
-                if ishandle(a.EEG)
-                    %% the function returned a handle: this means there is
-                    % no real transformation: the function returned a plot.
-                    % plotFigure(this, a.EEG); This could be an uifigure of
-                    % a normal figure.
-                    disp(a);
-                    return
+                % Apply the transformation to the current dataset.
+                [result.EEG, usedParams] = feval(transformId, this.Workspace.EEG);
+
+                if ishandle(result.EEG)
+                    % The plugin returned a graphics handle, not a dataset: it
+                    % was a pure plot, so there is nothing to persist.
+                    return;
+                end
+
+                % Record how the result was produced, so it can be re-applied
+                % when this branch is later dragged onto another dataset.
+                result.EEG.Call = callExpr;
+                if isstruct(usedParams)
+                    result.EEG.params = usedParams;
                 else
-                    %this.Figures(end+1) = a.EEG;                        
-                    %this.ToolGroup.addFigure(this.Figures(end));
-                    %this.Figures(end).Visible = 'on';
-                    %set(this.Figures(end), 'Toolbar', 'none');
-                    %set(f,'Pointer','arrow');
+                    result.EEG.params = struct('Param', usedParams);
                 end
 
-                a.EEG.Call = functionCall;
-                if (isstruct(used_params))
-                    a.EEG.params = used_params;
-                else
-                    a.EEG.params = struct( 'Param', used_params);
-                end
+                % Persist under the selected node (its file is the source cache
+                % file at this point) and display the result.
+                displayBase = this.Workspace.Tree.SelectedNodes.Name;
+                this.persistResultNode(result.EEG, result.EEG.File, displayBase, ...
+                    transformId, this.Workspace.Tree.SelectedNodes);
 
-                CurrentNode = this.Workspace.Tree.SelectedNodes.Name;
-                % Build new FileID (Name) based on the name of the current
-                % node, the used transformationID and a timestamp.
-                % does the transdir for this file exist?
-                [parent.dir, parent.name] = fileparts(a.EEG.File);
-
-                cDir = fullfile(parent.dir,parent.name);
-                if ~exist(cDir, 'dir')
-                    cDir = fullfile(parent.dir,parent.name);
-                    mkdir(cDir);
-                end
-
-                Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
-                a.EEG.File = fullfile(parent.dir, parent.name, [Key '.mat']);
-                a.EEG.id =  [char(CurrentNode) ' - ' id];
-
-                NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',this.Workspace.Tree.SelectedNodes, 'UserData',a.EEG.File);
-                if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
-                    setIcon(NewNode,this.Workspace.TimeSeriesIcon);
-                elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
-                    setIcon(NewNode,this.Workspace.FrequenciesIcon);
-                end
-                NewNode.Parent.expand();
-                this.Workspace.Tree.SelectedNodes = NewNode;
-
-                EEG=a.EEG;
-                save(a.EEG.File, 'EEG');
-                this.Workspace.EEG=EEG;
-
-                plotCurrent(this);
-                set(f,'Pointer','arrow');
+                this.Plotter.plotCurrent();
+                set(figHandle, 'Pointer', 'arrow');
 
             catch ME
-                set(f,'Pointer','arrow');
+                set(figHandle, 'Pointer', 'arrow');
                 warndlg(ME.message, 'Error in transformation');
-                throw (ME)
-                %;
+                rethrow(ME);
             end
         end
 
+        function evaluateDroppedBranch(this, sourceFile, targetNode)
+        %EVALUATEDROPPEDBRANCH  Re-apply a dragged branch onto a target dataset.
+        %   EVALUATEDROPPEDBRANCH(THIS, SOURCEFILE, TARGETNODE) walks the branch
+        %   rooted at SOURCEFILE and re-applies each stored transformation onto
+        %   the dataset at TARGETNODE, chaining down the tree while the source
+        %   branch has children.
+        %
+        %   Special case: dropping one AVERAGED dataset onto a matching AVERAGED
+        %   dataset overlays their plots instead of transforming.
+            atLeaf     = false;
+            targetFile = targetNode.UserData;
 
-        function plotCurrent(this)
-            % Plots the current EEG data.
-            % Opens a new figure or shows an existing one for the current EEG data.
-            f = findobj('Type', 'Figure','Tag', this.Workspace.EEG.File);
-            if ~isempty(f)
-                % then just show it
-                this.ToolGroup.showClient(get(f, 'Name'));
-                return
-            end
+            while ~atLeaf
+                targetStruct = load(targetFile, 'EEG');
+                sourceStruct = load(sourceFile, 'EEG');
 
-            % add plot as a new document
-            this.Figures(end+1) = figure('NumberTitle', 'off', 'Name', this.Workspace.EEG.id,'Tag', this.Workspace.EEG.File, ...
-                'Color' ,[.98 .98 .98], ...
-                'PaperOrientation','landscape', ...
-                'PaperPosition',[.05 .05 .9 .9], ...
-                'PaperPositionMode', 'auto',...
-                'PaperType', 'A0', ...
-                'Units', 'normalized', ...
-                'MenuBar', 'none', ...
-                'Toolbar', 'none',...
-                'DockControls','on', ...
-                'Visible','off' ...
-                );
+                % Recover the transformation id from the stored call expression
+                % 'EEG=<id>(x.EEG);'.
+                callExpr    = sourceStruct.EEG.Call;
+                eqPos       = strfind(callExpr, '=');
+                parenPos    = strfind(callExpr, '(');
+                transformId = callExpr(eqPos + 1 : parenPos - 1);
 
-            %% EPOCHED DATA PLOT
-            hEEG = Tools.hEEG;
-            hEEG.toHandle(this.Workspace.EEG);
-            set(this.Figures(end), 'UserData', this.Workspace.EEG);
-            if strcmpi(this.Workspace.EEG.DataFormat, 'EPOCHED') || strcmpi(this.Workspace.EEG.DataFormat, 'AVERAGED')
-                if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
-                    if (this.Workspace.EEG.nbchan > 1)
-                        if (isfield(this.Workspace.EEG, 'trials'))
-                            if (this.Workspace.EEG.trials > 1)
-                                % Multichannel plot epoched
-                                % channels:time:trial
-                                Tools.plotEpochedTimeMulti(this.Workspace.EEG, this.Figures(end));
-                            elseif (this.Workspace.EEG.trials == 1)
-                                % Average: we have std....
-                                Tools.plotEpochedTimeMultiAverage(this.Workspace.EEG, this.Figures(end));
-                            end
-                        end
-                    else
-                        % Singlechannel plot epoched
-                    end
-
-                elseif strcmpi(this.Workspace.EEG.DataType, 'FREQUENCYDOMAIN')
-                    %% Fourier Plot (Multichannel and singlechannel) epoched
-                    Tools.plotFourier(this.Workspace.EEG, this.Figures(end));
-                end
-                this.ToolGroup.addFigure(this.Figures(end));
-                this.Figures(end).Visible = 'on';
-            else
-                %% NOT EPOPCHED: CONTINUOUS
-                if strcmpi(this.Workspace.EEG.DataType, 'TIMEDOMAIN')
-                    if (this.Workspace.EEG.nbchan > 1)
-                        % Multichannel plot
-                        Tools.plotECG(this.Workspace.EEG.times, this.Workspace.EEG, ...
-                            'ShowAxisTicks','on',...
-                            'YLimMode', 'fixed', ...
-                            'mmPerSec', 25,...
-                            'AutoStackSignals', {this.Workspace.EEG.chanlocs.labels},...
-                            'Parent',  this.Figures(end));
-                    else
-                        % Singlechannel Plot,
-                        Tools.plotECG(this.Workspace.EEG.times, this.Workspace.EEG, 'b-',...
-                            'mmPerSec', 25,...
-                            'ShowAxisTicks','on',...
-                            'YLimMode', 'fixed',...
-                            'Parent',  this.Figures(end));
-                    end
+                if this.isOverlayableAverage(targetStruct.EEG, sourceStruct.EEG)
+                    % Overlay the dropped average on top of the target average.
+                    this.overlayAverage(targetStruct.EEG, sourceStruct.EEG);
+                    atLeaf = true;
                 else
-                    %Fourier Plot
-                    Tools.plotFourier(this.Workspace.EEG, this.Figures(end));
-                end
-                this.ToolGroup.addFigure(this.Figures(end));
-                this.Figures(end).Visible = 'on';
-                set(this.Figures(end), 'Toolbar', 'none');
-                %[tb,btns] = axtoolbar(gca,{'export','brush','datacursor','restoreview'});
+                    % General case: re-apply the stored transformation to the
+                    % target, carrying over the source's call and parameters.
+                    [result.EEG, ~] = feval(transformId, targetStruct.EEG, sourceStruct.EEG.params);
+                    result.EEG.Call   = sourceStruct.EEG.Call;
+                    result.EEG.params = sourceStruct.EEG.params;
 
+                    [result.EEG, newNode] = this.persistResultNode(result.EEG, ...
+                        targetStruct.EEG.File, sourceStruct.EEG.id, transformId, targetNode);
+
+                    % Descend: if the source has a child dataset, continue the
+                    % chain with it against the newly created node.
+                    [srcDir, srcName] = fileparts(sourceFile);
+                    childDir = fullfile(srcDir, srcName);
+                    if exist(childDir, 'dir')
+                        targetNode = newNode;
+                        targetFile = result.EEG.File;
+                        childMat   = dir(fullfile(childDir, '*.mat'));
+                        sourceFile = fullfile(childDir, childMat.name);
+                    else
+                        atLeaf = true;
+                    end
+                end
             end
         end
-        function NodeEdited(this, tree, args)
-            % Callback for when a node is edited.
-            % Updates the EEG id and saves the changes.
-            this.Workspace.EEG.id = args.Nodes.Name;
+
+        function onNodeEdited(this, ~, eventData)
+        %ONNODEEDITED  Tree callback: persist a renamed node's new label.
+        %   Updates the current dataset's id to the node's new name and saves.
+            this.Workspace.EEG.id = eventData.Nodes.Name;
             EEG = this.Workspace.EEG;
             save(this.Workspace.EEG.File, 'EEG');
-
         end
-        function TreeDropNode(this, tree, args)
-            % Handles node drop actions in the tree.
-            % Performs copy or move operations based on the drop action.
-            % Called when a Treenode is Dropped on another Treenode.
-            % I prefer a switch of "copy" and "move" here.
-            % Run from the repository root: the drop triggers transformation
-            % plugins via Evaluate, which may resolve resources relative to it.
+
+        function onNodeDropped(this, ~, eventData)
+        %ONNODEDROPPED  Tree callback: handle a node dropped onto another node.
+        %   A 'copy' drop (no modifier key) moves the node within the tree; a
+        %   'move' drop (Ctrl held) re-applies the dragged branch onto the
+        %   target via evaluateDroppedBranch. Root nodes are ignored.
+            % Run from the repository root: evaluateDroppedBranch triggers
+            % plugins that may resolve resources relative to it.
             cd(this.RepoRoot);
-            if ~isempty(args.Source.Parent.Parent) % if not a rootnode
-                switch args.DropAction
-                    case 'copy'
-                        % No action modifier: actually moves.
-                        set(args.Source,'Parent',args.Target)
-                        %% Do the Evaluation of the commands here:
-                        % dont forget to rename the target Node.
-                        expand(args.Target)
-                        expand(args.Source)
-                    case 'move'
-                        % control click: action modifier: actually copies.
-                        %% Do the Evaluation of the commands here:
-                        % dont forget to rename the target Node.
-                        %NewSourceNode = copy(args.Source,args.Target);
-                        this.Evaluate(args.Source.UserData, args.Target);
 
-                        %expand(args.Target)
-                        %expand(args.Source)
-                        %expand(NewSourceNode)
-                    otherwise
-                        % Do nothing
-                end
+            if isempty(eventData.Source.Parent.Parent)
+                return; % a root node was dropped; ignore
+            end
+
+            switch eventData.DropAction
+                case 'copy' % no modifier key: move the node in the tree
+                    set(eventData.Source, 'Parent', eventData.Target);
+                    expand(eventData.Target);
+                    expand(eventData.Source);
+                case 'move' % Ctrl held: re-apply the dragged branch to the target
+                    this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
             end
         end
 
-        function Evaluate(this, OldData, NewParentNode)
-        % Evaluates and processes EEG data for a given node.
-        % Loads the EEG data, applies transformations, and updates the tree structure.
-            endnode = false;
-            NewData = NewParentNode.UserData;
-            while ~endnode
-
-                NewEEGStruct = load(NewData, 'EEG');
-                OldEEGStruct = load(OldData, 'EEG');
-                idx1 = strfind(OldEEGStruct.EEG.Call, '=');
-                idx2 = strfind(OldEEGStruct.EEG.Call, '(');
-
-                id = OldEEGStruct.EEG.Call(idx1+1:idx2-1);
-
-                % ugly hack to plot multiple Averages over eachother
-                % The dropsite is NewEEGStruct, the data that is dropped is
-                % OldEEGStruct.
-                if strcmpi(NewEEGStruct.EEG.DataFormat, 'AVERAGED') && ...
-                        strcmpi(OldEEGStruct.EEG.DataFormat, 'AVERAGED') && ...
-                        length(size(NewEEGStruct.EEG.data)) == length(size(OldEEGStruct.EEG.data)) && ...
-                        size(NewEEGStruct.EEG.data) == size(OldEEGStruct.EEG.data)
-
-                    hold off
-                    f = findobj('Type', 'Figure','Tag', NewEEGStruct.EEG.File);
-                    % was dropsite already plotted?
-                    if ~isempty(f)
-                        % then show it
-                        this.ToolGroup.showClient(get(f, 'Name'));
-                    else
-                        % plot it.
-                        this.Workspace.EEG=NewEEGStruct.EEG;
-                        plotCurrent(this);
+        function onMouseClicked(this, tree, eventData, jmenu)
+        %ONMOUSECLICKED  Tree callback: load/plot on click, context menu on right-click.
+        %   A single left click loads and displays the clicked dataset; a double
+        %   left click redisplays it; a right click shows the tear-off menu.
+            switch eventData.Button
+                case 1 % left button
+                    if eventData.Clicks == 1
+                        % Single click: load the selected dataset and show it.
+                        try
+                            nodeName = tree.SelectedNodes.Name;
+                        catch
+                            return; % nothing selected
+                        end
+                        matFile = tree.SelectedNodes.UserData;
+                        if exist(matFile, 'file') == 2
+                            loaded = load(matFile, 'EEG');
+                            loaded.EEG.id = string(nodeName);
+                            this.Workspace.EEG = loaded.EEG;
+                        end
+                        this.Plotter.plotCurrent();
+                    elseif eventData.Clicks == 2
+                        this.Plotter.plotCurrent();
                     end
-                    hold on
-                    %and add the new plot
-                    f = findobj('Type', 'Figure','Tag', NewEEGStruct.EEG.File);
-                    Tools.plotEpochedTimeMultiAverage(OldEEGStruct.EEG, f);
-                    hold off
-                    endnode=true;
-                else
-                    % every other case: dropped a branch on a set
-                    [a.EEG, ~] = feval(id, NewEEGStruct.EEG, OldEEGStruct.EEG.params);
-                    CurrentNode = NewEEGStruct.EEG.id;
-                    Key = [id datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
-                    [parent.dir, parent.name] = fileparts(NewEEGStruct.EEG.File);
-                    cDir = fullfile(parent.dir,parent.name);
-
-                    if ~exist(cDir, 'dir')
-                        cDir = fullfile(parent.dir,parent.name);
-                        mkdir(cDir);
-                    end
-
-                    a.EEG.File = fullfile(parent.dir, parent.name, [Key '.mat']);
-
-                    a.EEG.id =  [char(CurrentNode) ' - ' id];
-                    a.EEG.Call = OldEEGStruct.EEG.Call;
-                    a.EEG.params = OldEEGStruct.EEG.params;
-
-                    NewNode=uiextras.jTree.TreeNode('Name',a.EEG.id,'Parent',NewParentNode, 'UserData',a.EEG.File);
-                    if strcmpi(a.EEG.DataType, 'TIMEDOMAIN')
-                        setIcon(NewNode,this.Workspace.TimeSeriesIcon);
-                    elseif strcmpi(a.EEG.DataType, 'FREQUENCYDOMAIN')
-                        setIcon(NewNode,this.Workspace.FrequenciesIcon);
-                    end
-                    NewNode.Parent.expand();
-                    this.Workspace.Tree.SelectedNodes = NewNode;
-
-                    EEG=a.EEG;
-                    save(a.EEG.File, 'EEG');
-                    this.Workspace.EEG=EEG;
-
-                    [p,n,~] = fileparts(OldData);
-                    if exist(fullfile(p, n), 'dir')
-                        NewParentNode = NewNode;
-                        NewData = a.EEG.File;
-                        name = dir(fullfile(p, n, '*.mat'));
-                        OldData = fullfile(p, n, name.name);
-                    else
-                        endnode = true;
-                    end
-                end
+                case 3 % right button: show the tear-off context menu
+                    jmenu.show(tree, 10, 10);
             end
         end
 
-        function MouseClicked(this,Tree,args, jmenu)
-        % Handles mouse click events on the tree.
-        % Differentiates between single, double, and right clicks to perform different actions.
-            if (args.Button == 1) % left Button
-                if (args.Clicks == 1) % single click
-                    % One way or the other: load and display the data.
-                    try
-                        id = Tree.SelectedNodes.Name;
-                    catch
-                        return
-                    end
-                    matfilename = Tree.SelectedNodes.UserData;
-                    if exist(matfilename, 'file') == 2
-                        % if the file already exists:
-                        a=load(matfilename, 'EEG');
-                        a.EEG.id = string(id);
-                        this.Workspace.EEG = a.EEG;
-                    end
-                    plotCurrent(this);
-                elseif (args.Clicks ==2)
-                    plotCurrent(this);
-                    disp("DoubleClick!")
-                end
-
-            end
-            if (args.Button == 3) % right Button
-                % show Tearoff Menu!
-                disp('Tear!')
-                jmenu.show(Tree, 10,10)
-            end
+        function onSelectionChanged(this, ~, eventData)
+        %ONSELECTIONCHANGED  Tree callback: load and plot the newly selected dataset.
+            loaded = load(eventData.Nodes.UserData, 'EEG');
+            this.Workspace.EEG = loaded.EEG;
+            this.Plotter.plotCurrent();
         end
 
-
-        function SelectionChanged(this,Tree,args) %#ok<*INUSD>
-            % Handles changes in tree selection.
-            % Loads the selected EEG data and updates the workspace.
-            EEGStruct = load(args.Nodes.UserData, 'EEG');
-            this.Workspace.EEG  = EEGStruct.EEG;
-            plotCurrent(this);
-        end
-
-        function closeCallback(this, event)
-            % Callback for when the tool group is closed.
-            % Deletes the current instance of Alakazam.
-            ET = event.EventData.EventType;
-            if strcmp(ET, 'CLOSED')
+        function onGroupAction(this, eventData)
+        %ONGROUPACTION  ToolGroup listener: destroy the app when its window closes.
+            if strcmp(eventData.EventData.EventType, 'CLOSED')
                 delete(this);
             end
         end
-
     end
 end
