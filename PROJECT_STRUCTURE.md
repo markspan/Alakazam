@@ -48,6 +48,7 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 |---|---|
 | `startAlakazam.m` | Root launcher: adds `src/` to the path, constructs the app. |
 | `src/Alakazam.m` | Main application class: lifecycle, tree callbacks, transformation dispatch, persistence. |
+| `src/EEGLabEnvironment.m` | Ensures EEGLAB and the required plugins (bva-io, XDF, ICLabel, FastICA) are installed; called once at startup. |
 | `src/AlakazamPlotter.m` | Renders EEG datasets into docked figures (plotting split out of the main class). |
 | `src/MinMaxPyramid.m` | Precomputed min/max pyramid: the decimation engine for fast signal plotting. |
 | `src/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed Tools.plotECG). |

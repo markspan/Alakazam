@@ -9,11 +9,12 @@ classdef Alakazam < handle
 %
 %   Application roots (resolved once, in the constructor, from this file's
 %   own location so nothing depends on the current working directory):
-%     RootDir  - the authored source tree (this src/ folder), holding the
-%                Transformations, Icons and the default workspace.
-%     RepoRoot - the repository root (parent of src/), holding the vendored
-%                toolkits (EEGLAB, mlapptools, +Tools, +uiextras, device SDKs)
-%                and the shared data-file resources.
+%     RootDir  - the authored source tree (this src/ folder). Holds the
+%                Transformations, Icons, the default workspace and the bundled
+%                helper packages (+Tools, +TMSi, +uiextras, mlapptools).
+%     RepoRoot - the repository root (parent of src/). Holds copyrights/ and
+%                the shared data-file resources. EEGLAB is not bundled; it is
+%                expected on the path (see EEGLabEnvironment).
 %
 %   Launch with the startAlakazam function at the repository root, or add
 %   src/ to the MATLAB path and construct Alakazam directly.
@@ -32,7 +33,7 @@ classdef Alakazam < handle
 %   R. Chen; original work (c) 2015 The MathWorks, Inc. Further developed by
 %   M.M. Span, University of Groningen, Department of Experimental Psychology.
 %
-%   See also ALAKAZAMPLOTTER, WORKSPACE, BUILDTABGROUPALAKAZAM.
+%   See also ALAKAZAMPLOTTER, EEGLABENVIRONMENT, WORKSPACE, BUILDTABGROUPALAKAZAM.
 
     properties (Transient = true)
         RootDir       % char, absolute path to the authored source tree (src/)
@@ -45,115 +46,6 @@ classdef Alakazam < handle
     end
 
     methods (Access = private)
-        function setupEEGLab(this)
-        %SETUPEEGLAB  Ensure EEGLAB is on the MATLAB path, offering to install it.
-        %   EEGLAB is expected to be installed and already on the path. If it is
-        %   not found, the user is asked for permission to download and install
-        %   the latest version into <home>/Documents/MATLAB/eeglab. We do not
-        %   call savepath, so the user's global MATLAB path is left untouched.
-        %   Once EEGLAB is available, the import plugins Alakazam relies on are
-        %   installed through EEGLAB itself (see ensureEEGLabPlugins).
-            if isempty(which('eeglab'))
-                answer = questdlg([ ...
-                    'EEGLAB was not found on the MATLAB path, and Alakazam requires it. ', ...
-                    'Download and install the latest EEGLAB now (about 150 MB) into ', ...
-                    'your Documents/MATLAB folder?'], ...
-                    'EEGLAB not found', ...
-                    'Download and install', 'Cancel', 'Download and install');
-                if ~strcmp(answer, 'Download and install')
-                    error('Alakazam:eeglabMissing', ...
-                        'EEGLAB is required but was not found on the MATLAB path.');
-                end
-                this.installEEGLab();
-            end
-            this.ensureEEGLabPlugins();
-        end
-
-        function ensureEEGLabPlugins(this)
-        %ENSUREEEGLABPLUGINS  Install the EEGLAB plugins Alakazam relies on.
-        %   The import plugins (BrainVision, XDF) and ICLabel are installed
-        %   through EEGLAB's own plugin manager (plugin_askinstall). FastICA is
-        %   not an EEGLAB-registry plugin, so it is downloaded directly. Each
-        %   item is installed only if its entry function is missing; a failure
-        %   (for example, offline) is warned about, not fatal, so the app still
-        %   starts.
-            plugins = { ...
-                'bva-io',    'pop_loadbv';  ...  % BrainVision (.vhdr) import
-                'xdfimport', 'load_xdf';    ...  % XDF / Lab Streaming Layer import
-                'ICLabel',   'iclabel'};         % IC classification
-            for i = 1:size(plugins, 1)
-                pluginName = plugins{i, 1};
-                probeFcn   = plugins{i, 2};
-                if ~isempty(which(probeFcn))
-                    continue; % plugin already provides this function
-                end
-                try
-                    plugin_askinstall(pluginName, probeFcn, true);
-                catch installError
-                    warning('Alakazam:pluginInstall', ...
-                        'Could not install EEGLAB plugin ''%s'': %s', ...
-                        pluginName, installError.message);
-                end
-            end
-
-            % FastICA is a standalone package (not in the EEGLAB registry).
-            if isempty(which('fastica'))
-                try
-                    this.installFromZip( ...
-                        'https://research.ics.aalto.fi/ica/fastica/code/FastICA_2.5.zip', ...
-                        'FastICA', 'fastica.m');
-                catch installError
-                    warning('Alakazam:pluginInstall', ...
-                        'Could not install FastICA: %s', installError.message);
-                end
-            end
-        end
-
-        function installEEGLab(this)
-        %INSTALLEEGLAB  Download and install the latest EEGLAB, then start it.
-            this.installFromZip( ...
-                'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip', ...
-                'eeglab', 'eeglab.m');
-            eeglab;
-        end
-
-        function installFromZip(~, url, targetName, probeFile)
-        %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
-        %   Downloads the archive at URL into a temporary file, unzips it under
-        %   <home>/Documents/MATLAB/<targetName>, locates PROBEFILE in the
-        %   unzipped tree and adds that folder to the MATLAB path. Errors if the
-        %   download, unzip or probe-file lookup fails. We do not call savepath.
-            home = getenv('USERPROFILE');
-            if isempty(home)
-                home = char(java.lang.System.getProperty('user.home'));
-            end
-            target = fullfile(home, 'Documents', 'MATLAB', targetName);
-            if ~exist(target, 'dir')
-                mkdir(target);
-            end
-
-            zipPath = fullfile(tempdir, [targetName '.zip']);
-            try
-                fprintf('Downloading %s ...\n', url);
-                websave(zipPath, url, weboptions('Timeout', 600));
-                fprintf('Unzipping into %s ...\n', target);
-                unzip(zipPath, target);
-            catch downloadError
-                error('Alakazam:download', ...
-                    'Could not download or unzip %s: %s', url, downloadError.message);
-            end
-
-            % The archive usually unzips into a versioned subfolder; locate the
-            % probe file within it and add that folder to the path.
-            found = dir(fullfile(target, '**', probeFile));
-            if isempty(found)
-                error('Alakazam:installMissing', ...
-                    '%s was not found under %s after unzipping %s.', ...
-                    probeFile, target, url);
-            end
-            addpath(found(1).folder);
-        end
-
         function setupDirectories(this)
         %SETUPDIRECTORIES  Put the authored source tree on the path.
         %   All paths are resolved absolutely, so the app does not depend on the
@@ -274,13 +166,13 @@ classdef Alakazam < handle
     methods
         function this = Alakazam(varargin)
         %ALAKAZAM  Construct and open the application.
-        %   Resolves the application roots, sets up EEGLAB and the paths,
-        %   opens the toolstrip window, creates the plotter and the workspace,
-        %   and loads the data tree.
+        %   Resolves the application roots, makes sure EEGLAB and its plugins
+        %   are available, sets up the paths, opens the toolstrip window,
+        %   creates the plotter and the workspace, and loads the data tree.
             this.RootDir  = fileparts(mfilename('fullpath'));
             this.RepoRoot = fileparts(this.RootDir);
 
-            this.setupEEGLab();
+            EEGLabEnvironment.ensure();
             this.setupDirectories();
             this.setupToolGroup();
             this.Plotter = AlakazamPlotter(this);
