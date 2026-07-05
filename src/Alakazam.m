@@ -13,6 +13,7 @@ classdef Alakazam < handle
 % or the adapted version's contributors.
     properties (Transient = true)
         RootDir
+        RepoRoot
         ToolGroup
         Figures
         Workspace
@@ -21,24 +22,27 @@ classdef Alakazam < handle
     methods (Access = private)
         function setupEEGLab(this)
             % Sets up EEGLab if it is not already available in the path.
-            % Adds the bundled EEGLAB to the path for this session only: we
-            % deliberately do NOT call savepath, so the user's global MATLAB
-            % path is left untouched. EEGLAB configures its own sub-paths
-            % when it is called.
+            % Adds the bundled EEGLAB (kept at the repository root) to the
+            % path for this session only: we deliberately do NOT call
+            % savepath, so the user's global MATLAB path is left untouched.
+            % EEGLAB configures its own sub-paths when it is called.
             if isempty(which('eeglab'))
-                addpath(fullfile(this.RootDir, 'eeglab'));
+                addpath(fullfile(this.RepoRoot, 'eeglab'));
                 eeglab;
             end
         end
         function setupDirectories(this)
             % Sets up the necessary paths for the application. All paths are
-            % resolved absolutely from RootDir, so the app does not depend on
-            % the current working directory.
+            % resolved absolutely, so the app does not depend on the current
+            % working directory. Authored source (src) and the repository
+            % root (vendored toolkits, packages and data-file resources) are
+            % both placed on the path.
             close all;
             warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
             addpath(this.RootDir, '-end');
+            addpath(this.RepoRoot, '-end');
             addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
-                    fullfile(this.RootDir, 'mlapptools'));
+                    fullfile(this.RepoRoot, 'mlapptools'));
         end
         function setupToolGroup(this)
             % Sets up the tool group for the application.
@@ -60,10 +64,17 @@ classdef Alakazam < handle
             % Constructor for the Alakazam class.
             % Initializes EEGLab, sets up directories, tool group, and workspace.
 
-            % Resolve the application root once, from this file's own
-            % location, so nothing downstream depends on the current
-            % working directory or on Alakazam being found via which().
-            this.RootDir = fileparts(mfilename('fullpath'));
+            % Resolve the application roots once, from this file's own
+            % location, so nothing downstream depends on the current working
+            % directory or on Alakazam being found via which().
+            %   RootDir  : the authored source tree (this src/ folder),
+            %              holding Transformations, Icons and the default
+            %              workspace.
+            %   RepoRoot : the repository root, holding the vendored toolkits
+            %              (EEGLAB, mlapptools, +Tools, +uiextras, device
+            %              SDKs) and the shared data-file resources.
+            this.RootDir  = fileparts(mfilename('fullpath'));
+            this.RepoRoot = fileparts(this.RootDir);
 
             this.setupEEGLab();
             this.setupDirectories();
@@ -160,10 +171,11 @@ classdef Alakazam < handle
         % Callback for all transformations.
         % Handles the transformation action, updates the workspace, and plots the result.
             try
-                % Run transformations from RootDir: individual plugins may
-                % still resolve resources relative to the app root. Path
-                % resolution elsewhere no longer depends on this.
-                cd(this.RootDir);
+                % Run transformations from the repository root (unchanged
+                % from historic behaviour): individual plugins may still
+                % resolve resources relative to it. Path resolution elsewhere
+                % no longer depends on the working directory.
+                cd(this.RepoRoot);
                 f = findobj('Type', 'Figure','Tag', this.Workspace.EEG.File);
                 set(f,'Pointer','watch');
 
@@ -331,9 +343,9 @@ classdef Alakazam < handle
             % Performs copy or move operations based on the drop action.
             % Called when a Treenode is Dropped on another Treenode.
             % I prefer a switch of "copy" and "move" here.
-            % Run from RootDir: the drop triggers transformation plugins via
-            % Evaluate, which may resolve resources relative to the app root.
-            cd(this.RootDir);
+            % Run from the repository root: the drop triggers transformation
+            % plugins via Evaluate, which may resolve resources relative to it.
+            cd(this.RepoRoot);
             if ~isempty(args.Source.Parent.Parent) % if not a rootnode
                 switch args.DropAction
                     case 'copy'
