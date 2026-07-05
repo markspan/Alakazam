@@ -27,15 +27,18 @@ The authored code lives under `src/`. Vendored toolkits and shared data-file
 resources stay at the repository root. The app resolves two roots at startup:
 
 - **`RootDir`** = the `src/` folder (this file's own location). Holds the
-  authored code plus `Transformations/`, `Icons/` and `DefaultWorkSpace.wksp`.
-- **`RepoRoot`** = the repository root (parent of `src/`). Holds the vendored
-  toolkits (`eeglab/`, `mlapptools/`, `+Tools/`, `+uiextras/`, device SDKs) and
-  the shared data-file resources.
+  authored code plus `Transformations/`, `Icons/`, `DefaultWorkSpace.wksp`, and
+  the bundled helper packages `+Tools/`, `+TMSi/`, `+uiextras/` and `mlapptools/`.
+- **`RepoRoot`** = the repository root (parent of `src/`). Holds `copyrights/`
+  (jsonlab, dndcontrol) and the shared data-file resources. EEGLAB is no longer
+  bundled: it is expected on the MATLAB path, and `setupEEGLab` offers to
+  download and install it if missing.
 
 ## Launching
 
 Run **`startAlakazam`** (function at the repo root): it adds `src/` to the path
-and constructs the app; the app then adds the vendored toolkits from `RepoRoot`.
+and constructs the app; the app then puts its `src/` packages and `copyrights/`
+on the path.
 To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 (via `pathtool` or a `startup.m`).
 
@@ -73,12 +76,12 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 
 | Path | Toolkit |
 |---|---|
-| `eeglab/` | EEGLAB (untracked, obtained externally) |
-| `ledalab/` | Ledalab EDA analysis |
-| `+uiextras/`, `mlapptools/` | GUI layout / uifigure helpers |
+| EEGLAB | installed on the MATLAB path, not bundled (see `setupEEGLab`) |
+| `src/+uiextras/`, `src/mlapptools/` | GUI layout / uifigure helpers |
+| `src/+TMSi/` | TMSi device SDK |
+| `src/+Tools/` (partly) | copied EEGLAB BrainVision helpers plus authored `hEEG` |
 | `findjobj.m`, `findjobj_fast.m`, `uiinspect.m` | Yair Altman Java helpers |
-| `copyrights/` | jsonlab, dndcontrol, ECG class, … |
-| `+TMSi/`, `+Cortrium/` | Device-vendor SDKs |
+| `copyrights/` | jsonlab, dndcontrol, ECG class, etc. |
 
 ## How the pieces connect
 

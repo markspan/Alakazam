@@ -46,29 +46,78 @@ classdef Alakazam < handle
 
     methods (Access = private)
         function setupEEGLab(this)
-        %SETUPEEGLAB  Put the bundled EEGLAB on the path if it is not already.
-        %   Adds the bundled EEGLAB (kept at the repository root) to the path
-        %   for this session only: we deliberately do NOT call savepath, so
-        %   the user's global MATLAB path is left untouched. EEGLAB configures
-        %   its own sub-paths when it is called.
-            if isempty(which('eeglab'))
-                addpath(fullfile(this.RepoRoot, 'eeglab'));
-                eeglab;
+        %SETUPEEGLAB  Ensure EEGLAB is on the MATLAB path, offering to install it.
+        %   EEGLAB is expected to be installed and already on the path. If it is
+        %   not found, the user is asked for permission to download and install
+        %   the latest version into <home>/Documents/MATLAB/eeglab. We do not
+        %   call savepath, so the user's global MATLAB path is left untouched.
+            if ~isempty(which('eeglab'))
+                return; % already available
             end
+
+            answer = questdlg([ ...
+                'EEGLAB was not found on the MATLAB path, and Alakazam requires it. ', ...
+                'Download and install the latest EEGLAB now (about 150 MB) into ', ...
+                'your Documents/MATLAB folder?'], ...
+                'EEGLAB not found', ...
+                'Download and install', 'Cancel', 'Download and install');
+            if ~strcmp(answer, 'Download and install')
+                error('Alakazam:eeglabMissing', ...
+                    'EEGLAB is required but was not found on the MATLAB path.');
+            end
+            this.installEEGLab();
+        end
+
+        function installEEGLab(~)
+        %INSTALLEEGLAB  Download and install the latest EEGLAB, then start it.
+        %   Downloads eeglab_current.zip from the SCCN site, unzips it under
+        %   <home>/Documents/MATLAB/eeglab, adds the unzipped EEGLAB folder to
+        %   the path and launches it.
+            home = getenv('USERPROFILE');
+            if isempty(home)
+                home = char(java.lang.System.getProperty('user.home'));
+            end
+            target = fullfile(home, 'Documents', 'MATLAB', 'eeglab');
+            if ~exist(target, 'dir')
+                mkdir(target);
+            end
+
+            url = 'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip';
+            zipPath = fullfile(tempdir, 'eeglab_current.zip');
+            try
+                fprintf('Downloading EEGLAB from %s ...\n', url);
+                websave(zipPath, url, weboptions('Timeout', 600));
+                fprintf('Unzipping into %s ...\n', target);
+                unzip(zipPath, target);
+            catch downloadError
+                error('Alakazam:eeglabDownload', ...
+                    'Could not download or unzip EEGLAB: %s', downloadError.message);
+            end
+
+            % The archive unzips into a versioned folder (e.g. eeglab2024.2);
+            % locate eeglab.m within it and add that folder to the path.
+            found = dir(fullfile(target, '**', 'eeglab.m'));
+            if isempty(found)
+                error('Alakazam:eeglabMissing', ...
+                    'EEGLAB was downloaded but eeglab.m was not found under %s.', target);
+            end
+            addpath(found(1).folder);
+            eeglab;
         end
 
         function setupDirectories(this)
-        %SETUPDIRECTORIES  Put the authored and vendored trees on the path.
-        %   All paths are resolved absolutely, so the app does not depend on
-        %   the current working directory. The authored source (RootDir) and
-        %   the repository root (RepoRoot, with the vendored toolkits and
-        %   packages) are both placed on the path.
+        %SETUPDIRECTORIES  Put the authored source tree on the path.
+        %   All paths are resolved absolutely, so the app does not depend on the
+        %   current working directory. RootDir (src) now also holds the +Tools,
+        %   +TMSi and +uiextras packages and mlapptools, so adding it puts those
+        %   on the path too. The Transformations and the copyright helper
+        %   functions (kept at the repository root) are added as well.
             close all;
             warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
             addpath(this.RootDir, '-end');
-            addpath(this.RepoRoot, '-end');
             addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
-                    fullfile(this.RepoRoot, 'mlapptools'));
+                    fullfile(this.RootDir, 'mlapptools'), ...
+                    genpath(fullfile(this.RepoRoot, 'copyrights')));
         end
 
         function setupToolGroup(this)
