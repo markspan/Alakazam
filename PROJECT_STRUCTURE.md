@@ -48,6 +48,9 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | `src/AlakazamPlotter.m` | Renders EEG datasets into docked figures (plotting split out of the main class). |
 | `src/MinMaxPyramid.m` | Precomputed min/max pyramid: the decimation engine for fast signal plotting. |
 | `src/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed Tools.plotECG). |
+| `src/EpochView.m` | Keyboard-driven epoched multichannel view (replaces Tools.plotEpochedTimeMulti). |
+| `src/AverageView.m` | Trial-average view with error bands and overlay (replaces Tools.plotEpochedTimeMultiAverage). |
+| `src/FourierView.m` | Frequency-domain view with band shading and zoom/pan (replaces Tools.plotFourier). |
 | `src/BuildTabGroupAlakazam.m` | Builds the toolstrip; discovers transformations from `src/Transformations/*/*.json`. |
 | `src/@WorkSpace/` | Data-browser tree, per-format file loaders, `.wksp` session persistence. |
 | `src/@cursor/`, `src/@label/` | Small UI helper classes (plot cursors and labels). |

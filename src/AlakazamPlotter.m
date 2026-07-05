@@ -95,22 +95,23 @@ classdef AlakazamPlotter < handle
         function plotEpoched(~, eeg, fig)
         %PLOTEPOCHED  Render an epoched or averaged dataset into FIG.
         %   Multichannel time-domain data is drawn either as individual trials
-        %   (trials > 1) or as a trial average (trials == 1). Frequency-domain
-        %   data is drawn as a Fourier plot. Single-channel epoched data is not
-        %   yet handled and leaves the figure empty.
+        %   (trials > 1, EpochView) or as a trial average (trials == 1,
+        %   AverageView). Frequency-domain data is drawn as a FourierView. The
+        %   view handle is stored on the figure so it lives as long as it does.
+        %   Single-channel epoched data is not yet handled (empty figure).
             if strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1
                         % Multichannel epoched data (channels x time x trials).
-                        Tools.plotEpochedTimeMulti(eeg, fig);
+                        setappdata(fig, "EpochView", EpochView(fig, eeg));
                     elseif eeg.trials == 1
-                        % Trial average (carries a standard deviation).
-                        Tools.plotEpochedTimeMultiAverage(eeg, fig);
+                        % Trial average (carries a standard error).
+                        setappdata(fig, "AverageView", AverageView(fig, eeg));
                     end
                 end
                 % (single-channel epoched data is not yet supported)
             elseif strcmpi(eeg.DataType, "FREQUENCYDOMAIN")
-                Tools.plotFourier(eeg, fig);
+                setappdata(fig, "FourierView", FourierView(fig, eeg));
             end
         end
 
@@ -139,7 +140,7 @@ classdef AlakazamPlotter < handle
                 setappdata(fig, "SignalView", view);
             else
                 % Frequency-domain data.
-                Tools.plotFourier(eeg, fig);
+                setappdata(fig, "FourierView", FourierView(fig, eeg));
             end
         end
     end

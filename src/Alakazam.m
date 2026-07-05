@@ -156,20 +156,20 @@ classdef Alakazam < handle
         function overlayAverage(this, targetEEG, sourceEEG)
         %OVERLAYAVERAGE  Overlay a dropped average dataset on the target's plot.
         %   Ensures the target average is shown (reusing its figure if open),
-        %   then draws the source average on top of it.
-            hold off;
+        %   then adds the source average to that figure's AverageView.
             existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
-            if ~isempty(existingFig)
-                this.ToolGroup.showClient(get(existingFig, "Name"));
-            else
+            if isempty(existingFig)
                 this.Workspace.EEG = targetEEG;
                 this.Plotter.plotCurrent();
+                existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
+            else
+                this.ToolGroup.showClient(get(existingFig, "Name"));
             end
 
-            hold on;
-            existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
-            Tools.plotEpochedTimeMultiAverage(sourceEEG, existingFig);
-            hold off;
+            view = getappdata(existingFig, "AverageView");
+            if ~isempty(view) && isvalid(view)
+                view.addDataset(sourceEEG);
+            end
         end
     end
 
