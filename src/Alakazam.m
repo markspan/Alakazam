@@ -69,18 +69,21 @@ classdef Alakazam < handle
             this.ensureEEGLabPlugins();
         end
 
-        function ensureEEGLabPlugins(~)
-        %ENSUREEEGLABPLUGINS  Install the EEGLAB import plugins Alakazam needs.
-        %   Uses EEGLAB's own plugin manager (plugin_askinstall) to fetch the
-        %   BrainVision (bva-io) and XDF import plugins if their entry functions
-        %   are missing. A failure (for example, offline) is warned about but is
-        %   not fatal, so the app still starts.
-            needed = { ...
+        function ensureEEGLabPlugins(this)
+        %ENSUREEEGLABPLUGINS  Install the EEGLAB plugins Alakazam relies on.
+        %   The import plugins (BrainVision, XDF) and ICLabel are installed
+        %   through EEGLAB's own plugin manager (plugin_askinstall). FastICA is
+        %   not an EEGLAB-registry plugin, so it is downloaded directly. Each
+        %   item is installed only if its entry function is missing; a failure
+        %   (for example, offline) is warned about, not fatal, so the app still
+        %   starts.
+            plugins = { ...
                 'bva-io',    'pop_loadbv';  ...  % BrainVision (.vhdr) import
-                'xdfimport', 'load_xdf'};        % XDF / Lab Streaming Layer import
-            for i = 1:size(needed, 1)
-                pluginName = needed{i, 1};
-                probeFcn   = needed{i, 2};
+                'xdfimport', 'load_xdf';    ...  % XDF / Lab Streaming Layer import
+                'ICLabel',   'iclabel'};         % IC classification
+            for i = 1:size(plugins, 1)
+                pluginName = plugins{i, 1};
+                probeFcn   = plugins{i, 2};
                 if ~isempty(which(probeFcn))
                     continue; % plugin already provides this function
                 end
@@ -92,43 +95,63 @@ classdef Alakazam < handle
                         pluginName, installError.message);
                 end
             end
+
+            % FastICA is a standalone package (not in the EEGLAB registry).
+            if isempty(which('fastica'))
+                try
+                    this.installFromZip( ...
+                        'https://research.ics.aalto.fi/ica/fastica/code/FastICA_2.5.zip', ...
+                        'FastICA', 'fastica.m');
+                catch installError
+                    warning('Alakazam:pluginInstall', ...
+                        'Could not install FastICA: %s', installError.message);
+                end
+            end
         end
 
-        function installEEGLab(~)
+        function installEEGLab(this)
         %INSTALLEEGLAB  Download and install the latest EEGLAB, then start it.
-        %   Downloads eeglab_current.zip from the SCCN site, unzips it under
-        %   <home>/Documents/MATLAB/eeglab, adds the unzipped EEGLAB folder to
-        %   the path and launches it.
+            this.installFromZip( ...
+                'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip', ...
+                'eeglab', 'eeglab.m');
+            eeglab;
+        end
+
+        function installFromZip(~, url, targetName, probeFile)
+        %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
+        %   Downloads the archive at URL into a temporary file, unzips it under
+        %   <home>/Documents/MATLAB/<targetName>, locates PROBEFILE in the
+        %   unzipped tree and adds that folder to the MATLAB path. Errors if the
+        %   download, unzip or probe-file lookup fails. We do not call savepath.
             home = getenv('USERPROFILE');
             if isempty(home)
                 home = char(java.lang.System.getProperty('user.home'));
             end
-            target = fullfile(home, 'Documents', 'MATLAB', 'eeglab');
+            target = fullfile(home, 'Documents', 'MATLAB', targetName);
             if ~exist(target, 'dir')
                 mkdir(target);
             end
 
-            url = 'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip';
-            zipPath = fullfile(tempdir, 'eeglab_current.zip');
+            zipPath = fullfile(tempdir, [targetName '.zip']);
             try
-                fprintf('Downloading EEGLAB from %s ...\n', url);
+                fprintf('Downloading %s ...\n', url);
                 websave(zipPath, url, weboptions('Timeout', 600));
                 fprintf('Unzipping into %s ...\n', target);
                 unzip(zipPath, target);
             catch downloadError
-                error('Alakazam:eeglabDownload', ...
-                    'Could not download or unzip EEGLAB: %s', downloadError.message);
+                error('Alakazam:download', ...
+                    'Could not download or unzip %s: %s', url, downloadError.message);
             end
 
-            % The archive unzips into a versioned folder (e.g. eeglab2024.2);
-            % locate eeglab.m within it and add that folder to the path.
-            found = dir(fullfile(target, '**', 'eeglab.m'));
+            % The archive usually unzips into a versioned subfolder; locate the
+            % probe file within it and add that folder to the path.
+            found = dir(fullfile(target, '**', probeFile));
             if isempty(found)
-                error('Alakazam:eeglabMissing', ...
-                    'EEGLAB was downloaded but eeglab.m was not found under %s.', target);
+                error('Alakazam:installMissing', ...
+                    '%s was not found under %s after unzipping %s.', ...
+                    probeFile, target, url);
             end
             addpath(found(1).folder);
-            eeglab;
         end
 
         function setupDirectories(this)
