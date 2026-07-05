@@ -27,7 +27,8 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | Path | Role |
 |---|---|
 | `startAlakazam.m` | Root launcher: adds `src/` to the path, constructs the app. |
-| `src/Alakazam.m` | Main application class: lifecycle, tree callbacks, plotting, transformation dispatch, persistence. |
+| `src/Alakazam.m` | Main application class: lifecycle, tree callbacks, transformation dispatch, persistence. |
+| `src/AlakazamPlotter.m` | Renders EEG datasets into docked figures (plotting split out of the main class). |
 | `src/BuildTabGroupAlakazam.m` | Builds the toolstrip; discovers transformations from `src/Transformations/*/*.json`. |
 | `src/@WorkSpace/` | Data-browser tree, per-format file loaders, `.wksp` session persistence. |
 | `src/@cursor/`, `src/@label/` | Small UI helper classes (plot cursors and labels). |
@@ -70,10 +71,14 @@ Alakazam fields (`File`, `id`, `Call`, `params`, `DataType`, `DataFormat`).
   `.gitignore`, documented the authored/vendored split.
 - **Phase 1** (path independence): compute roots from the file location, drop
   `savepath` and the working-directory dependence, resolve resources absolutely.
-- **`src/` move** (this change): authored code relocated under `src/`; the app
-  now resolves `RootDir` (src) and `RepoRoot` (repo root) separately, and
-  launches via `startAlakazam`.
+- **`src/` move**: authored code relocated under `src/`; the app resolves
+  `RootDir` (src) and `RepoRoot` (repo root) separately, launches via
+  `startAlakazam`.
+- **Phase 2** (decompose the main class): plotting split into
+  `AlakazamPlotter`; the duplicated persistence block extracted into
+  `persistResultNode`; dead code removed; methods and locals renamed to the
+  naming standard above; docstrings added throughout.
 
-Next: **Phase 2**, decompose the `Alakazam` class (extract the duplicated
-node-creation / persistence block shared by `ActionOnTransformation` and
-`Evaluate`, and split plotting out of the main class).
+Next: **Phase 3** (formalise the transformation contract: replace the
+`EEG.Call` string-parsing and `eval` replay with a typed `{id, params}`
+record) and **Phase 4** (table-drive the `@WorkSpace` loaders).
