@@ -59,9 +59,10 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | `src/Icons/` | Tree/node icons used by the data browser. |
 | `src/DefaultWorkSpace.wksp` | Default directory config loaded at startup. |
 
-> Note: `+Tools/` (at the repo root) mixes authored plot helpers (`plot*.m`)
-> with files copied from EEGLAB / third parties (`pop_*`, `eeg_*`, `load_xdf`,
-> `HRV`, ...). Splitting it is a later task; treat the copied files as vendored.
+> Note: `+Tools/` (at the repo root) now holds files copied from EEGLAB and
+> other third parties (`pop_*`, `eeg_*`, `load_xdf`, ...); treat them as
+> vendored. The authored plotting code lives in `src/` (SignalView, EpochView,
+> AverageView, FourierView, MinMaxPyramid).
 
 ## Vendored toolkits (do not edit — see dependencies.md)
 
@@ -69,7 +70,6 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 |---|---|
 | `eeglab/` | EEGLAB (untracked, obtained externally) |
 | `ledalab/` | Ledalab EDA analysis |
-| `+Tools/HRV.m` | Vollmer HRV toolbox |
 | `+uiextras/`, `mlapptools/` | GUI layout / uifigure helpers |
 | `findjobj.m`, `findjobj_fast.m`, `uiinspect.m` | Yair Altman Java helpers |
 | `copyrights/` | jsonlab, dndcontrol, ECG class, … |
