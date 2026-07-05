@@ -29,8 +29,7 @@ external installs in a later pass (see "Follow-up" below).
 
 | Toolkit | Location | Purpose | Source |
 |---|---|---|---|
-| HRV Toolbox (M. Vollmer) | `HRV.m`, `+Tools/HRV.m` | Heart-rate-variability metrics | v0.3, MIT — https://github.com/MarcusVollmer/HRV |
-| plotECG (D. Frisch) | `+Tools/plotECG*.m` | Time-series plotting | MATLAB FEX 59296 |
+| HRV Toolbox (M. Vollmer) | `HRV.m`, `+Tools/HRV.m` | Heart-rate-variability metrics | v0.3, MIT, https://github.com/MarcusVollmer/HRV |
 | GUI Layout Toolbox / uiextras | `+uiextras/`, `uix.*` | Dockable panel layout, jTree | MathWorks / R. Jackey |
 | mlapptools | `mlapptools/` | uifigure styling helpers | https://github.com/StackOverflowMATLABchat/mlapptools |
 | findjobj / uiinspect | `findjobj.m`, `uiinspect.m` | Java handle access (Y. Altman) | https://undocumentedmatlab.com |
