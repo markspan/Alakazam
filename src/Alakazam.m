@@ -19,10 +19,14 @@ classdef Alakazam < handle
 %   src/ to the MATLAB path and construct Alakazam directly.
 %
 %   Naming conventions used throughout:
-%     * Classes    PascalCase   (Alakazam, WorkSpace, AlakazamPlotter)
-%     * Methods    camelCase, verb first (onTransformation, evaluateDroppedBranch)
-%     * Properties PascalCase   (RootDir, ToolGroup, Workspace)
-%     * Locals     descriptive camelCase
+%     * Classes    UpperCamelCase (Alakazam, WorkSpace, AlakazamPlotter)
+%     * Methods    lowerCamelCase, verb first (onTransformation, evaluateDroppedBranch)
+%     * Properties UpperCamelCase (RootDir, ToolGroup, Workspace)
+%     * Locals     descriptive lowerCamelCase
+%   Double quotes are used for string literals, except where a char array is
+%   required: literals that build command strings later indexed character by
+%   character (EEG.Call), element-wise char comparisons, path components, and
+%   arguments to the char-only jTree / ToolGroup APIs.
 %
 %   Adapted from "matlab.ui.internal.desktop.showcaseMPCDesigner()" by
 %   R. Chen; original work (c) 2015 The MathWorks, Inc. Further developed by
@@ -60,7 +64,7 @@ classdef Alakazam < handle
         %   the repository root (RepoRoot, with the vendored toolkits and
         %   packages) are both placed on the path.
             close all;
-            warning('off', 'MATLAB:ui:javacomponent:FunctionToBeRemoved');
+            warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
             addpath(this.RootDir, '-end');
             addpath(this.RepoRoot, '-end');
             addpath(genpath(fullfile(this.RootDir, 'Transformations')), ...
@@ -70,7 +74,8 @@ classdef Alakazam < handle
         function setupToolGroup(this)
         %SETUPTOOLGROUP  Create and open the toolstrip document window.
         %   Builds the ToolGroup, wires its close listener, populates the tab
-        %   group from BuildTabGroupAlakazam, and tiles the document area.
+        %   group from BuildTabGroupAlakazam, and tiles the document area. The
+        %   ToolGroup names and tags are char arrays, as that desktop API expects.
             this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp');
             addlistener(this.ToolGroup, 'GroupAction', @(src, event) this.onGroupAction(event));
             this.Figures = gobjects(1, 1);
@@ -96,32 +101,34 @@ classdef Alakazam < handle
         %     * save RESULTEEG to disk and make it the workspace's current EEG.
         %   Returns the updated dataset and the new tree node.
 
-            % Timestamped key, e.g. 'Fourier051423'. The DDhhMMss format is
-            % kept for backwards compatibility with existing cache trees.
+            % Timestamped key, e.g. "Fourier051423". The DDhhMMss format is
+            % kept for backwards compatibility with existing cache trees. The
+            % key stays a char array because it is used to build a file name.
             nodeKey = [transformId datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
 
             % The result is cached in a folder named after the source dataset,
             % which is how the tree is later rebuilt from disk.
             [parentDir, parentName] = fileparts(sourceFile);
             childDir = fullfile(parentDir, parentName);
-            if ~exist(childDir, 'dir')
+            if ~exist(childDir, "dir")
                 mkdir(childDir);
             end
 
             resultEEG.File = fullfile(childDir, [nodeKey '.mat']);
             resultEEG.id   = [char(displayBase) ' - ' transformId];
 
-            % Add the node to the data browser and select it.
+            % Add the node to the data browser and select it. The jTree
+            % property names are char arrays, as that API expects.
             newNode = uiextras.jTree.TreeNode('Name', resultEEG.id, ...
                 'Parent', parentTreeNode, 'UserData', resultEEG.File);
             this.setNodeIcon(newNode, resultEEG.DataType);
             newNode.Parent.expand();
             this.Workspace.Tree.SelectedNodes = newNode;
 
-            % Persist to disk under the variable name 'EEG' and adopt it as the
+            % Persist to disk under the variable name "EEG" and adopt it as the
             % workspace's current dataset.
-            EEG = resultEEG; % saved to disk under the variable name 'EEG'
-            save(resultEEG.File, 'EEG');
+            EEG = resultEEG; % saved to disk under the variable name "EEG"
+            save(resultEEG.File, "EEG");
             this.Workspace.EEG = resultEEG;
         end
 
@@ -129,9 +136,9 @@ classdef Alakazam < handle
         %SETNODEICON  Give a tree node the icon matching its data type.
         %   Time-domain datasets get the time-series icon and frequency-domain
         %   datasets the frequencies icon; other types are left unchanged.
-            if strcmpi(dataType, 'TIMEDOMAIN')
+            if strcmpi(dataType, "TIMEDOMAIN")
                 setIcon(node, this.Workspace.TimeSeriesIcon);
-            elseif strcmpi(dataType, 'FREQUENCYDOMAIN')
+            elseif strcmpi(dataType, "FREQUENCYDOMAIN")
                 setIcon(node, this.Workspace.FrequenciesIcon);
             end
         end
@@ -141,8 +148,8 @@ classdef Alakazam < handle
         %   Used by evaluateDroppedBranch to decide whether dropping one
         %   dataset onto another should overlay their average plots rather than
         %   re-apply a transformation.
-            tf = strcmpi(targetEEG.DataFormat, 'AVERAGED') && ...
-                 strcmpi(sourceEEG.DataFormat, 'AVERAGED') && ...
+            tf = strcmpi(targetEEG.DataFormat, "AVERAGED") && ...
+                 strcmpi(sourceEEG.DataFormat, "AVERAGED") && ...
                  isequal(size(targetEEG.data), size(sourceEEG.data));
         end
 
@@ -151,16 +158,16 @@ classdef Alakazam < handle
         %   Ensures the target average is shown (reusing its figure if open),
         %   then draws the source average on top of it.
             hold off;
-            existingFig = findobj('Type', 'Figure', 'Tag', targetEEG.File);
+            existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
             if ~isempty(existingFig)
-                this.ToolGroup.showClient(get(existingFig, 'Name'));
+                this.ToolGroup.showClient(get(existingFig, "Name"));
             else
                 this.Workspace.EEG = targetEEG;
                 this.Plotter.plotCurrent();
             end
 
             hold on;
-            existingFig = findobj('Type', 'Figure', 'Tag', targetEEG.File);
+            existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
             Tools.plotEpochedTimeMultiAverage(sourceEEG, existingFig);
             hold off;
         end
@@ -187,10 +194,10 @@ classdef Alakazam < handle
             this.ToolGroup.setDataBrowser(this.Workspace.Panel);
 
             % Optional debug aid: expose this instance in the base workspace as
-            % 'AlakazamInst' (otherwise it is only reachable via 'ans', which is
+            % "AlakazamInst" (otherwise it is only reachable via "ans", which is
             % easily overwritten). Off by default.
             if this.Debug
-                assignin('base', 'AlakazamInst', this);
+                assignin("base", "AlakazamInst", this);
             end
         end
 
@@ -205,7 +212,7 @@ classdef Alakazam < handle
         function onTransformation(this, ~, ~, entry)
         %ONTRANSFORMATION  Gallery callback: run a transformation on the current EEG.
         %   ONTRANSFORMATION(THIS, ~, ~, ENTRY) executes the transformation
-        %   whose entry file is ENTRY (for example 'Fourier.m') on the selected
+        %   whose entry file is ENTRY (for example "Fourier.m") on the selected
         %   dataset, stores the result as a new child node, and plots it. The
         %   stem of ENTRY is both the transformation id and the function that is
         %   invoked with feval.
@@ -219,13 +226,15 @@ classdef Alakazam < handle
                 % elsewhere no longer depends on the working directory.
                 cd(this.RepoRoot);
 
-                figHandle = findobj('Type', 'Figure', 'Tag', this.Workspace.EEG.File);
-                set(figHandle, 'Pointer', 'watch');
+                figHandle = findobj("Type", "Figure", "Tag", this.Workspace.EEG.File);
+                set(figHandle, "Pointer", "watch");
 
-                % The gallery passes the entry file name (e.g. 'Fourier.m');
-                % its stem is the transformation id and the function to call.
+                % The gallery passes the entry file name (e.g. "Fourier.m"); its
+                % stem is the transformation id and the function to call. The
+                % '.' is a char so the element-wise comparison works, and the
+                % call expression stays char because it is later sliced by index.
                 entryName   = char(entry);
-                transformId = entryName(1:find(entryName == '.', 1, 'last') - 1);
+                transformId = entryName(1:find(entryName == '.', 1, "last") - 1);
                 callExpr    = ['EEG=' transformId '(x.EEG);'];
 
                 % Apply the transformation to the current dataset.
@@ -253,11 +262,11 @@ classdef Alakazam < handle
                     transformId, this.Workspace.Tree.SelectedNodes);
 
                 this.Plotter.plotCurrent();
-                set(figHandle, 'Pointer', 'arrow');
+                set(figHandle, "Pointer", "arrow");
 
             catch ME
-                set(figHandle, 'Pointer', 'arrow');
-                warndlg(ME.message, 'Error in transformation');
+                set(figHandle, "Pointer", "arrow");
+                warndlg(ME.message, "Error in transformation");
                 rethrow(ME);
             end
         end
@@ -275,14 +284,14 @@ classdef Alakazam < handle
             targetFile = targetNode.UserData;
 
             while ~atLeaf
-                targetStruct = load(targetFile, 'EEG');
-                sourceStruct = load(sourceFile, 'EEG');
+                targetStruct = load(targetFile, "EEG");
+                sourceStruct = load(sourceFile, "EEG");
 
                 % Recover the transformation id from the stored call expression
-                % 'EEG=<id>(x.EEG);'.
+                % "EEG=<id>(x.EEG);". Call is a char array, indexed by position.
                 callExpr    = sourceStruct.EEG.Call;
-                eqPos       = strfind(callExpr, '=');
-                parenPos    = strfind(callExpr, '(');
+                eqPos       = strfind(callExpr, "=");
+                parenPos    = strfind(callExpr, "(");
                 transformId = callExpr(eqPos + 1 : parenPos - 1);
 
                 if this.isOverlayableAverage(targetStruct.EEG, sourceStruct.EEG)
@@ -303,7 +312,7 @@ classdef Alakazam < handle
                     % chain with it against the newly created node.
                     [srcDir, srcName] = fileparts(sourceFile);
                     childDir = fullfile(srcDir, srcName);
-                    if exist(childDir, 'dir')
+                    if exist(childDir, "dir")
                         targetNode = newNode;
                         targetFile = result.EEG.File;
                         childMat   = dir(fullfile(childDir, '*.mat'));
@@ -320,14 +329,15 @@ classdef Alakazam < handle
         %   Updates the current dataset's id to the node's new name and saves.
             this.Workspace.EEG.id = eventData.Nodes.Name;
             EEG = this.Workspace.EEG;
-            save(this.Workspace.EEG.File, 'EEG');
+            save(this.Workspace.EEG.File, "EEG");
         end
 
         function onNodeDropped(this, ~, eventData)
         %ONNODEDROPPED  Tree callback: handle a node dropped onto another node.
-        %   A 'copy' drop (no modifier key) moves the node within the tree; a
-        %   'move' drop (Ctrl held) re-applies the dragged branch onto the
-        %   target via evaluateDroppedBranch. Root nodes are ignored.
+        %   A "copy" drop (no modifier key) moves the node within the tree; a
+        %   "move" drop (Ctrl held) re-applies the dragged branch onto the
+        %   target via evaluateDroppedBranch. Root nodes are ignored. The
+        %   DropAction is a char array, so the case labels are char arrays too.
             % Run from the repository root: evaluateDroppedBranch triggers
             % plugins that may resolve resources relative to it.
             cd(this.RepoRoot);
@@ -360,8 +370,8 @@ classdef Alakazam < handle
                             return; % nothing selected
                         end
                         matFile = tree.SelectedNodes.UserData;
-                        if exist(matFile, 'file') == 2
-                            loaded = load(matFile, 'EEG');
+                        if exist(matFile, "file") == 2
+                            loaded = load(matFile, "EEG");
                             loaded.EEG.id = string(nodeName);
                             this.Workspace.EEG = loaded.EEG;
                         end
@@ -376,14 +386,14 @@ classdef Alakazam < handle
 
         function onSelectionChanged(this, ~, eventData)
         %ONSELECTIONCHANGED  Tree callback: load and plot the newly selected dataset.
-            loaded = load(eventData.Nodes.UserData, 'EEG');
+            loaded = load(eventData.Nodes.UserData, "EEG");
             this.Workspace.EEG = loaded.EEG;
             this.Plotter.plotCurrent();
         end
 
         function onGroupAction(this, eventData)
         %ONGROUPACTION  ToolGroup listener: destroy the app when its window closes.
-            if strcmp(eventData.EventData.EventType, 'CLOSED')
+            if strcmp(eventData.EventData.EventType, "CLOSED")
                 delete(this);
             end
         end

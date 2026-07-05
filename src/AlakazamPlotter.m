@@ -10,8 +10,10 @@ classdef AlakazamPlotter < handle
 %   The public entry point is plotCurrent; the remaining methods are private
 %   helpers that select and draw the correct view for a dataset.
 %
-%   Naming conventions match the Alakazam class: classes PascalCase, methods
-%   camelCase (verb first), properties PascalCase, locals descriptive camelCase.
+%   Naming conventions match the Alakazam class: classes UpperCamelCase,
+%   methods lowerCamelCase (verb first), properties UpperCamelCase, locals
+%   descriptive lowerCamelCase. Double quotes are used for string literals
+%   except where a char array is required by a third-party API.
 %
 %   See also ALAKAZAM.
 
@@ -38,46 +40,46 @@ classdef AlakazamPlotter < handle
             eeg = app.Workspace.EEG;
 
             % If a figure already exists for this dataset, just show it.
-            existingFig = findobj('Type', 'Figure', 'Tag', eeg.File);
+            existingFig = findobj("Type", "Figure", "Tag", eeg.File);
             if ~isempty(existingFig)
-                app.ToolGroup.showClient(get(existingFig, 'Name'));
+                app.ToolGroup.showClient(get(existingFig, "Name"));
                 return;
             end
 
             % Otherwise open a new (initially hidden) document figure for it.
             newFig = figure( ...
-                'NumberTitle',       'off', ...
-                'Name',              eeg.id, ...
-                'Tag',               eeg.File, ...
-                'Color',             [.98 .98 .98], ...
-                'PaperOrientation',  'landscape', ...
-                'PaperPosition',     [.05 .05 .9 .9], ...
-                'PaperPositionMode', 'auto', ...
-                'PaperType',         'A0', ...
-                'Units',             'normalized', ...
-                'MenuBar',           'none', ...
-                'Toolbar',           'none', ...
-                'DockControls',      'on', ...
-                'Visible',           'off');
+                "NumberTitle",       "off", ...
+                "Name",              eeg.id, ...
+                "Tag",               eeg.File, ...
+                "Color",             [.98 .98 .98], ...
+                "PaperOrientation",  "landscape", ...
+                "PaperPosition",     [.05 .05 .9 .9], ...
+                "PaperPositionMode", "auto", ...
+                "PaperType",         "A0", ...
+                "Units",             "normalized", ...
+                "MenuBar",           "none", ...
+                "Toolbar",           "none", ...
+                "DockControls",      "on", ...
+                "Visible",           "off");
             app.Figures(end + 1) = newFig;
 
             % Attach a handle-graphics view of the dataset (used for the
             % interactive R-peak / cursor editing elsewhere in the app).
             hEEG = Tools.hEEG;
             hEEG.toHandle(eeg);
-            set(newFig, 'UserData', eeg);
+            set(newFig, "UserData", eeg);
 
             % Draw the view that matches the dataset's format and type.
             if this.isEpoched(eeg)
                 this.plotEpoched(eeg, newFig);
             else
                 this.plotContinuous(eeg, newFig);
-                set(newFig, 'Toolbar', 'none');
+                set(newFig, "Toolbar", "none");
             end
 
             % Dock the finished figure and reveal it.
             app.ToolGroup.addFigure(newFig);
-            newFig.Visible = 'on';
+            newFig.Visible = "on";
         end
     end
 
@@ -85,9 +87,9 @@ classdef AlakazamPlotter < handle
         function tf = isEpoched(~, eeg)
         %ISEPOCHED  True for epoched or averaged datasets.
         %   TF = ISEPOCHED(~, EEG) returns true when EEG.DataFormat is either
-        %   'EPOCHED' or 'AVERAGED', and false for continuous data.
-            tf = strcmpi(eeg.DataFormat, 'EPOCHED') || ...
-                 strcmpi(eeg.DataFormat, 'AVERAGED');
+        %   "EPOCHED" or "AVERAGED", and false for continuous data.
+            tf = strcmpi(eeg.DataFormat, "EPOCHED") || ...
+                 strcmpi(eeg.DataFormat, "AVERAGED");
         end
 
         function plotEpoched(~, eeg, fig)
@@ -96,8 +98,8 @@ classdef AlakazamPlotter < handle
         %   (trials > 1) or as a trial average (trials == 1). Frequency-domain
         %   data is drawn as a Fourier plot. Single-channel epoched data is not
         %   yet handled and leaves the figure empty.
-            if strcmpi(eeg.DataType, 'TIMEDOMAIN')
-                if eeg.nbchan > 1 && isfield(eeg, 'trials')
+            if strcmpi(eeg.DataType, "TIMEDOMAIN")
+                if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1
                         % Multichannel epoched data (channels x time x trials).
                         Tools.plotEpochedTimeMulti(eeg, fig);
@@ -107,7 +109,7 @@ classdef AlakazamPlotter < handle
                     end
                 end
                 % (single-channel epoched data is not yet supported)
-            elseif strcmpi(eeg.DataType, 'FREQUENCYDOMAIN')
+            elseif strcmpi(eeg.DataType, "FREQUENCYDOMAIN")
                 Tools.plotFourier(eeg, fig);
             end
         end
@@ -116,8 +118,9 @@ classdef AlakazamPlotter < handle
         %PLOTCONTINUOUS  Render a continuous dataset into FIG.
         %   Time-domain data is drawn with plotECG, stacking the channels for
         %   multichannel recordings; frequency-domain data is drawn as a
-        %   Fourier plot.
-            if strcmpi(eeg.DataType, 'TIMEDOMAIN')
+        %   Fourier plot. The plotECG name-value names and the line spec are
+        %   kept as char arrays, which that third-party helper expects.
+            if strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1
                     % Multichannel: stack the channels on shared time axis.
                     Tools.plotECG(eeg.times, eeg, ...
