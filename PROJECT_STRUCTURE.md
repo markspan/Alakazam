@@ -4,6 +4,23 @@ This map separates **Alakazam's own code** from **vendored third-party
 toolkits**. Only the authored code should be edited here; see `dependencies.md`
 for the external toolkits.
 
+## Coding standards
+
+New and refactored code follows the MATLAB coding standard at
+https://github.com/matlab/rules/blob/main/matlab-coding-standards.md
+(lowerCamelCase functions/methods, UpperCamelCase classes/properties,
+4-space indents, an H1 line after each declaration, no repeated blocks,
+`fullfile`/`fileparts` for paths, `try`/`catch` with `MException`).
+
+Deliberate, documented exception: **`eval` is retained** for the plugin
+system. Transformations wrap EEGLAB `pop_*` functions, which return their
+"eegh" command history as a code string; that string is stored on the
+dataset and re-executed with `eval` to replay the operation headlessly when
+a branch is dragged onto another dataset. The strings originate from EEGLAB
+and the app itself (not untrusted external input). The transformation
+*dispatch* already uses the safer `feval(transformId, EEG)`; only the
+history *replay* uses `eval`, and it should stay contained and commented.
+
 ## Layout at a glance
 
 The authored code lives under `src/`. Vendored toolkits and shared data-file
