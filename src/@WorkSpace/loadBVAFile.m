@@ -22,7 +22,7 @@ if exist(matfilename, 'file') == 2
     if bvafile.datenum > matfile.datenum
         % if the raw file is newer then the Mat file reread it
         EEG=Tools.pop_loadbv(WS.RawDirectory,name);
-        EEG=Tools.eeg_checkset(EEG);
+        EEG=eeg_checkset(EEG);
         EEG.times = ((1:EEG.pnts)-1)/EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = 'CONTINUOUS';

@@ -52,7 +52,7 @@ function loadXDFFile(this, WS, name)
         [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
         [EEG.filepath,fname,fext] = fileparts(xdffilename); EEG.filename = [fname fext];
        
-        EEG=Tools.eeg_checkset(EEG);    % Validate and set EEG structure properties
+        EEG=eeg_checkset(EEG);    % Validate and set EEG structure properties
         EEG.times = EEG.times./1000;    % Convert times from milliseconds to seconds
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = 'CONTINUOUS';

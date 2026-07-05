@@ -59,9 +59,14 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | `src/Icons/` | Tree/node icons used by the data browser. |
 | `src/DefaultWorkSpace.wksp` | Default directory config loaded at startup. |
 
-> Note: `+Tools/` (at the repo root) now holds files copied from EEGLAB and
-> other third parties (`pop_*`, `eeg_*`, `load_xdf`, ...); treat them as
-> vendored. The authored plotting code lives in `src/` (SignalView, EpochView,
+> Note: the eeglab-core copies have been removed from `+Tools/`; the app now
+> calls the installed EEGLAB (`eeg_checkset`, `eeg_emptyset`, `pop_select`,
+> `pop_newtimef`, ...) directly, so EEGLAB must be on the MATLAB path at
+> runtime. What remains in `+Tools/` is the BrainVision import cluster
+> (`pop_loadbv`, `readbvconf`, `parsebvmrk`, `ismatlab`) pending a switch to
+> the bva-io plugin, the MoBILAB helpers (`EEG2labeledSignalSet`,
+> `dataSourceXDF`) which carry local edits, `filtfilt`, and the authored
+> `hEEG`. The authored plotting code lives in `src/` (SignalView, EpochView,
 > AverageView, FourierView, MinMaxPyramid).
 
 ## Vendored toolkits (do not edit — see dependencies.md)

@@ -38,7 +38,7 @@ else
     [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
     [EEG.filepath,fname,fext] = fileparts(xdffilename); EEG.filename = [fname fext];
    
-    EEG=Tools.eeg_checkset(EEG);    
+    EEG=eeg_checkset(EEG);    
     EEG.times = EEG.times./1000;
     EEG.DataType = 'TIMEDOMAIN';
     EEG.DataFormat = 'CONTINUOUS';
@@ -58,7 +58,7 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
 end
 
 function EEG = loadXDF2(filename)
-    EEG = Tools.eeg_emptyset;
+    EEG = eeg_emptyset;
     tt = load_xdf(filename);
     EEG.data = tt{1}.time_series;
     [EEG.nbchan,EEG.pnts,EEG.trials] = size(EEG.data);
@@ -71,7 +71,7 @@ function EEG = loadXDF2(filename)
     for c =1:EEG.nbchan
         EEG.chanlocs(c).labels = tt{1}.info.desc.channels.channel{c}.label;
     end
-    EEG=Tools.eeg_checkset(EEG);
+    EEG=eeg_checkset(EEG);
     EEG.times = 1000*tt{1}.time_stamps;
 end
 

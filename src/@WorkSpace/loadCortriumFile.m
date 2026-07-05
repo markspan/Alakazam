@@ -51,7 +51,7 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
  
         data = [sum(C3.ecg.dataRaw,2) C3.ecg.dataRaw resample([C3.accel.dataRaw C3.accelmag.dataRaw C3.resp.dataRaw double(C3.eventCounter) double(C3.serialNumber)],6,1)];
         
-        EEG        = Tools.eeg_emptyset();
+        EEG        = eeg_emptyset();
         EEG.data   = data';
         EEG.srate  = C3.ecg.fs;
         EEG.pnts   = size(data,1);
@@ -92,7 +92,7 @@ this.treeTraverse(id, WS.CacheDirectory, tn);
         EEG.trials = 1;
         EEG.xmin = min(EEG.times);
         EEG.xmax = max(EEG.times);
-        EEG = Tools.eeg_checkset(EEG);
+        EEG = eeg_checkset(EEG);
     end
 
 

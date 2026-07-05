@@ -17,7 +17,7 @@ end
 %pfigure = figure('Name', name, 'Visible', false, 'Units', 'normalized');
 %figure(pfigure)
 EEG.id = ['timefreq:' name];
-[command,fig] = Tools.pop_newtimef(EEG,1);
+[command,fig] = pop_newtimef(EEG,1);
 pfigure = gcf;
 set(gcf, 'visible', false)
 

@@ -24,7 +24,7 @@ if exist(matfilename, 'file') == 2
     end
 else
     % no matfile: create the matfile
-    EEG = Tools.eeg_emptyset;
+    EEG = eeg_emptyset;
     tt = edfread(edffilename);
     data = [tt.(1){:}];
     EEG.data = data(1:end);
@@ -41,7 +41,7 @@ else
     EEG.chanlocs(1).labels = 'ECG';
     EEG.chanlocs = EEG.chanlocs';
 
-    EEG=Tools.eeg_checkset(EEG);
+    EEG=eeg_checkset(EEG);
     EEG.DataType = 'TIMEDOMAIN';
     EEG.DataFormat = 'CONTINUOUS';
     EEG.id = id;
