@@ -30,7 +30,7 @@ external installs in a later pass (see "Follow-up" below).
 | Toolkit | Location | Purpose | Source |
 |---|---|---|---|
 | GUI Layout Toolbox / uiextras | `src/+uiextras/`, `uix.*` | Dockable panel layout, jTree | MathWorks / R. Jackey |
-| mlapptools | `src/mlapptools/` | uifigure styling for App Designer transform GUIs | https://github.com/StackOverflowMATLABchat/mlapptools |
+| mlapptools | `src/Transformations/IIRFilter/` | uifigure styling for the IIRFilter App Designer GUI | https://github.com/StackOverflowMATLABchat/mlapptools |
 | findjobj / uiinspect | `findjobj.m`, `uiinspect.m` | Java handle access (Y. Altman) | https://undocumentedmatlab.com |
 
 The MoBILAB, TMSi, Cortrium, jsonlab and dndcontrol code has been removed: the
