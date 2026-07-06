@@ -26,8 +26,8 @@ classdef AverageView < handle
         % Fixed per-line colours so a bin keeps its colour while stepping
         % electrodes: bin 1 red, bin 2 blue, then a stable palette.
         Palette = [ ...
-            1.00 0.00 0.00;   % red
             0.00 0.00 1.00;   % blue
+            1.00 0.00 0.00;   % red
             0.00 0.55 0.00;   % green
             0.75 0.00 0.75;   % magenta
             0.00 0.55 0.55;   % teal
