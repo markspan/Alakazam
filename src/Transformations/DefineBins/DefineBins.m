@@ -106,6 +106,8 @@ function [EEG, options] = DefineBins(input, opts)
     if interactive
         script = promptForScript();
         spec   = parseSpec(script);              % may throw parse errors
+        % Remember the last valid script so it prefills the editor next time.
+        setpref('Alakazam', 'DefineBinsScript', script);
         options = struct('script', script, 'bins', spec.bins, 'epoch', spec.epoch);
     else
         if ~isstruct(options) || ~isfield(options, 'bins')
@@ -193,7 +195,11 @@ function script = promptForScript()
         'bin 1 "Related"   {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms' newline ...
         'bin 2 "Unrelated" "s??" not {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms' ];
 
-    answer = inputdlg('Bin definitions:', 'DefineBins', [20 90], {template});
+    % Prefill with the last script the user ran (remembered across sessions),
+    % falling back to the built-in template on first use.
+    default = getpref('Alakazam', 'DefineBinsScript', template);
+
+    answer = inputdlg('Bin definitions:', 'DefineBins', [20 90], {default});
     if isempty(answer)
         throw(MException('Alakazam:DefineBins', 'DefineBins cancelled.'));
     end
