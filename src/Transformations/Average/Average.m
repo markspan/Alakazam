@@ -1,5 +1,5 @@
 function [EEG, opts] = Average(input,opts)
-% Average - Compute the average of epoched EEG data.
+% Average - Compute the trial average of epoched EEG data.
 %
 % Syntax: [EEG, opts] = Average(input, opts)
 %
@@ -8,28 +8,29 @@ function [EEG, opts] = Average(input,opts)
 %       .data - 3D matrix of EEG data (channels x samples x epochs)
 %       .DataFormat - Format of the data, must be 'EPOCHED'
 %       .trials - Number of trials (epochs)
+%       .bindesc - (optional) per-bin descriptors written by DefineBins; when
+%                  present, the average is computed separately per bin.
 %   opts - Options for the function, default is 'Init' if not provided
 %
 % Outputs:
 %   EEG - Modified EEG structure with averaged data
-%       .data - 2D matrix of averaged EEG data (channels x samples)
-%       .stErr - Standard error of the mean across epochs
-%       .DataFormat - Format of the data, set to 'Averaged'
+%       .data  - averaged EEG data: channels x samples (no bins) or
+%                channels x samples x bins (one average per bin)
+%       .stErr - Standard error of the mean, matching .data
+%       .DataFormat - Set to 'Averaged'
 %       .ntrials - Original number of trials
 %       .trials - Set to 1 indicating the data is now averaged
 %   opts - Options for the function, returned unchanged
 %
 % Description:
-%   This function computes the average of epoched EEG data along the third
-%   dimension (epochs). It checks the validity of the input data, ensuring
-%   it is properly segmented (epoched). If the input data is valid, the
-%   function calculates the mean and standard error of the mean across epochs
-%   and updates the EEG structure accordingly. If any input arguments are
-%   missing or invalid, an error is thrown.
+%   Computes the average of epoched EEG data along the third (epoch)
+%   dimension. When the dataset carries bin membership (EEG.bindesc / the
+%   per-epoch .bini tags produced by DefineBins), each bin is averaged over
+%   just the trials that belong to it, giving one channels x samples slice per
+%   bin plus a matching standard error and per-bin trial count. Without bins it
+%   averages across all trials, as before. A trial in several bins contributes
+%   to each of them.
 %
-% Example:
-%   EEG = load('eeg_data.mat'); % Load EEG data
-%   [EEG_avg, opts] = Average(EEG); % Compute average of epoched data
 %% Check for the EEG dataset input:
 if (nargin < 1)
     throw(MException('Alakazam:Average','Problem in Average: No Data Supplied'));
@@ -50,11 +51,45 @@ end
 if ~isfield(input, 'trials')
     throw(MException('Alakazam:Average','Problem in Average: Trials not specified'));
 end
-% Compute the average across epochs
+
 EEG = input;
-EEG.ntrials = EEG.trials;
-EEG.trials = 1;
-EEG.data=mean(EEG.data,3,'omitnan');
-EEG.stErr = (std(input.data,0,3, 'omitnan') / sqrt(input.trials));
+[nchan, npnts, ntrials] = size(input.data);
+EEG.ntrials = ntrials;
+EEG.trials  = 1;
 EEG.DataFormat = "Averaged";
 
+if isfield(input, 'bindesc') && ~isempty(input.bindesc)
+    % Bin-aware: one average per bin, over the trials that belong to it.
+    nbin  = numel(input.bindesc);
+    data  = nan(nchan, npnts, nbin);
+    stErr = nan(nchan, npnts, nbin);
+    for b = 1:nbin
+        idx = binTrials(input, b);
+        EEG.bindesc(b).n = numel(idx);
+        if isempty(idx)
+            continue;
+        end
+        data(:, :, b)  = mean(input.data(:, :, idx), 3, 'omitnan');
+        stErr(:, :, b) = std(input.data(:, :, idx), 0, 3, 'omitnan') / sqrt(numel(idx));
+    end
+    EEG.data  = data;
+    EEG.stErr = stErr;
+else
+    % No bins: average across every trial.
+    EEG.data  = mean(input.data, 3, 'omitnan');
+    EEG.stErr = std(input.data, 0, 3, 'omitnan') / sqrt(ntrials);
+end
+end
+
+function idx = binTrials(EEG, b)
+%BINTRIALS  Trial indices (into the epoch stack) belonging to bin b.
+%   Prefers the explicit trial list DefineBins stores on each bin; falls back
+%   to scanning the per-epoch .bini membership tags.
+    idx = [];
+    if isfield(EEG.bindesc, 'trials') && ~isempty(EEG.bindesc(b).trials)
+        idx = EEG.bindesc(b).trials;
+    elseif isfield(EEG, 'epoch') && ~isempty(EEG.epoch) && isfield(EEG.epoch, 'bini')
+        binIndex = EEG.bindesc(b).index;
+        idx = find(arrayfun(@(e) any(e.bini == binIndex), EEG.epoch));
+    end
+end
