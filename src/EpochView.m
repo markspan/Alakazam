@@ -28,6 +28,9 @@ classdef EpochView < handle
         Trial = 1       % current trial (trial mode)
         Mode = "channel" % "channel" or "trial"
         ShowLegend = true
+        HasBins = false      % true when epochs carry .bini membership
+        BinNameMap           % containers.Map: bin index -> label (if known)
+        BinNamesKnown = false
     end
 
     methods
@@ -37,6 +40,20 @@ classdef EpochView < handle
             this.EEG    = eeg;
             this.Times  = eeg.times;
             this.Labels = {eeg.chanlocs.labels};
+
+            % Bin membership per trial (written by DefineBins). Optional, so
+            % epoched datasets without bins still draw.
+            this.HasBins = isfield(eeg, "epoch") && ~isempty(eeg.epoch) ...
+                && isfield(eeg.epoch, "bini");
+            if isfield(eeg, "bindesc") && ~isempty(eeg.bindesc)
+                this.BinNameMap = containers.Map("KeyType", "double", ...
+                                                 "ValueType", "char");
+                for b = 1:numel(eeg.bindesc)
+                    this.BinNameMap(eeg.bindesc(b).index) = char(eeg.bindesc(b).label);
+                end
+                this.BinNamesKnown = true;
+            end
+
             this.Axes   = axes("Parent", fig);
             set(fig, "KeyPressFcn", @(~, e) this.onKey(e));
             this.redraw();
@@ -51,11 +68,24 @@ classdef EpochView < handle
             if this.Mode == "channel"
                 plot(ax, this.Times, squeeze(this.EEG.data(this.Channel, :, :)));
                 title(ax, "Channel: " + this.Labels{this.Channel});
-                legendText = cellstr(num2str((1:nTrials)', 'Trial=%-d'));
+                legendText = cell(nTrials, 1);
+                for t = 1:nTrials
+                    bins = this.binsForTrial(t, false);   % compact "1,2"
+                    if isempty(bins)
+                        legendText{t} = sprintf('Trial=%d', t);
+                    else
+                        legendText{t} = sprintf('Trial=%d [bin %s]', t, bins);
+                    end
+                end
                 legend(ax, legendText, "NumColumns", ceil(nTrials / 35), "Location", "northeast");
             else
                 plot(ax, this.Times, squeeze(this.EEG.data(:, :, this.Trial)));
-                title(ax, "Trial: " + this.Trial);
+                bins = this.binsForTrial(this.Trial, true);   % "1 Related, 2 ..."
+                if isempty(bins)
+                    title(ax, "Trial: " + this.Trial);
+                else
+                    title(ax, sprintf('Trial %d   (bins: %s)', this.Trial, bins));
+                end
                 legend(ax, this.Labels, "NumColumns", ceil(numel(this.Labels) / 35), "Location", "northeast");
             end
             legendHandle = findobj(this.Figure, "Type", "legend");
@@ -68,6 +98,32 @@ classdef EpochView < handle
     end
 
     methods (Access = private)
+        function s = binsForTrial(this, trial, verbose)
+        %BINSFORTRIAL  Describe the bins a trial belongs to.
+        %   Returns '' when the dataset carries no bin membership or the trial
+        %   is in no bin. With VERBOSE, entries read "1 Related"; otherwise
+        %   they are just the bin numbers ("1,2").
+            s = '';
+            if ~this.HasBins
+                return;
+            end
+            bini = this.EEG.epoch(trial).bini;
+            if isempty(bini)
+                return;
+            end
+            parts = strings(1, numel(bini));
+            for i = 1:numel(bini)
+                bn = bini(i);
+                if verbose && this.BinNamesKnown && isKey(this.BinNameMap, bn)
+                    parts(i) = sprintf('%d %s', bn, this.BinNameMap(bn));
+                else
+                    parts(i) = sprintf('%d', bn);
+                end
+            end
+            if verbose; sep = ', '; else; sep = ','; end
+            s = char(strjoin(parts, sep));
+        end
+
         function onKey(this, event)
         %ONKEY  Arrow keys step channel / trial; "l" toggles the legend.
             switch lower(event.Key)
