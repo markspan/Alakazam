@@ -242,26 +242,63 @@ function [script, epochWin] = promptForScript()
     % The epoch window (ms, cut around each matched event) is a per-run choice,
     % so it is two small fields above the script rather than a keyword. Leave
     % both blank to keep the data continuous (tag events only).
-    answer = inputdlg( ...
-        {'Epoch start (ms; e.g. -200; blank + blank = no epoching)', ...
-         'Epoch stop (ms; e.g. 800)', ...
-         'Bin definitions:'}, ...
-        'DefineBins', [1 60; 1 60; 20 90], [prevEpoch, {default}]);
-    if isempty(answer)
+    result = showDefineBinsDialog(default, prevEpoch);
+    if isempty(result)
         throw(MException('Alakazam:DefineBins', 'DefineBins cancelled.'));
     end
 
-    startStr = strtrim(char(answer{1}));
-    stopStr  = strtrim(char(answer{2}));
-    script   = answer{3};
-    if ischar(script) && size(script, 1) > 1
-        % inputdlg returns a char matrix for multi-line input; join to a
-        % single newline-separated row.
-        script = strjoin(cellstr(script), newline);
+    script   = result.script;
+    epochWin = parseEpochBounds(result.start, result.stop);
+    setpref('Alakazam', 'DefineBinsEpoch', {result.start, result.stop});
+end
+
+function result = showDefineBinsDialog(defaultScript, prevEpoch)
+%SHOWDEFINEBINSDIALOG  Modal editor: epoch start/stop side by side, script below.
+%   Returns a struct with .start, .stop (raw text) and .script, or [] if the
+%   user cancelled or closed the window.
+    result = [];
+
+    fig = uifigure('Name', 'DefineBins', 'Position', [100 100 640 480]);
+    outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 44});
+
+    % Row 1: epoch start/stop fields, side by side.
+    epochRow = uigridlayout(outer, [1 4], ...
+        'ColumnWidth', {'fit', 90, 'fit', 90}, 'Padding', [8 8 8 0]);
+    epochRow.Layout.Row = 1;
+    uilabel(epochRow, 'Text', 'Epoch start (ms):');
+    startField = uieditfield(epochRow, 'text', 'Value', prevEpoch{1});
+    uilabel(epochRow, 'Text', 'Epoch stop (ms):');
+    stopField = uieditfield(epochRow, 'text', 'Value', prevEpoch{2});
+
+    % Row 2: bin definitions, a multi-line text area.
+    scriptArea = uitextarea(outer, 'Value', strsplit(defaultScript, newline), ...
+        'FontName', 'Consolas');
+    scriptArea.Layout.Row = 2;
+
+    % Row 3: OK / Cancel, right-aligned.
+    buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, ...
+        'Padding', [8 6 8 6]);
+    buttons.Layout.Row = 3;
+    cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
+    cancelBtn.Layout.Column = 2;
+    okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
+    okBtn.Layout.Column = 3;
+    fig.CloseRequestFcn = @(~,~) onCancel();
+
+    uiwait(fig);
+
+    function onOK()
+        result = struct('start', strtrim(startField.Value), ...
+            'stop', strtrim(stopField.Value), ...
+            'script', strjoin(scriptArea.Value, newline));
+        uiresume(fig);
+        delete(fig);
     end
-    script   = char(script);
-    epochWin = parseEpochBounds(startStr, stopStr);
-    setpref('Alakazam', 'DefineBinsEpoch', {startStr, stopStr});
+
+    function onCancel()
+        uiresume(fig);
+        delete(fig);
+    end
 end
 
 function win = parseEpochBounds(startStr, stopStr)
