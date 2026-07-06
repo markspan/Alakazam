@@ -72,6 +72,33 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         data(:, :, b)  = mean(input.data(:, :, idx), 3, 'omitnan');
         stErr(:, :, b) = std(input.data(:, :, idx), 0, 3, 'omitnan') / sqrt(numel(idx));
     end
+
+    % Second pass: combination (difference) bins defined in DefineBins with
+    % "bin N = bin A - bin B". They have no trials of their own; their average
+    % is the signed sum of the referenced bins' averages, and the standard
+    % error propagates as the root of the summed squared errors.
+    pos = containers.Map('KeyType', 'double', 'ValueType', 'double');
+    for b = 1:nbin; pos(input.bindesc(b).index) = b; end
+    for b = 1:nbin
+        if ~isfield(input.bindesc, 'combo') || isempty(input.bindesc(b).combo)
+            continue;
+        end
+        combo   = input.bindesc(b).combo;
+        acc     = zeros(nchan, npnts);
+        varAcc  = zeros(nchan, npnts);
+        ok = true;
+        for t = 1:numel(combo)
+            if ~isKey(pos, combo(t).bin); ok = false; break; end
+            r      = pos(combo(t).bin);
+            acc    = acc    + combo(t).coeff * data(:, :, r);
+            varAcc = varAcc + (combo(t).coeff * stErr(:, :, r)).^2;
+        end
+        if ok
+            data(:, :, b)  = acc;
+            stErr(:, :, b) = sqrt(varAcc);
+        end
+    end
+
     EEG.data  = data;
     EEG.stErr = stErr;
 else

@@ -4,17 +4,17 @@
 event-selection language. It replaces the ERPLAB EVENTLIST + BINLISTER step:
 instead of a bin-descriptor file, you write one short statement per bin.
 
-A script has two kinds of statement:
+A script is a list of statements:
 
 - **`bin` statements** — one per bin. Each is a **predicate over the events**
   in the recording; every event for which the predicate is true becomes a
   time-locked point (t = 0) for that bin.
-- **one optional `epoch` statement** — the time window to cut around each
-  matched event. It is written **once** and applies to **all** bins (every bin
-  shares the same epoch window). With an `epoch` statement, `DefineBins`
-  returns a segmented (`channels × time × trials`) dataset ready to plot and
-  average; without it, the data stays continuous and only the bin tags are
-  added.
+- **`let` statements** (optional) — name a reusable set of codes, so several
+  bins can share one list without repeating it (see [Aliases](#aliases-the-let-statement)).
+
+The **epoch window** (the time to cut around each matched event) is **not** a
+statement in the script: it is set in the two **Epoch start / stop (ms)** fields
+above the editor, and applies to every bin (see [Epoching](#epoching-the-epoch-fields)).
 
 - An event may belong to **several bins** at once.
 - Events are considered in **latency order**.
@@ -29,56 +29,96 @@ A script has two kinds of statement:
 
 ```
 bin <number> "<label>" [:] <expression>
+bin <number> "<label>" = <bin-combination>
 ```
 
 - `<number>` — the bin index, an integer (`1`, `2`, …).
 - `"<label>"` — a quoted description of the bin.
 - `:` — **optional** separator between the label and the expression.
 - `<expression>` — the predicate (see below).
+- `= <bin-combination>` — an alternative body that builds this bin by
+  **combining other bins** rather than matching events
+  (see [Difference bins](#difference-and-combination-bins)).
 
 Write one statement per line. An expression may also spill across several
-lines; a new statement simply begins at the next `bin` (or `epoch`) keyword.
+lines; a new statement simply begins at the next `bin` or `let` keyword. (A
+`bin` inside a combination, `= bin 1 - bin 2`, is not a new statement: a `bin`
+starts a statement only when it is followed by a number and a quoted label.)
 
 Comments run from `%` or `#` to the end of the line, and may sit on their own
 line or after an expression:
 
 ```
 % N400: prime-target pairs with a plausible response
-epoch [-200,800] ms
 bin 1 "Related"   : 112 and next(118) within (200,1200] ms   # in RT window
 ```
 
 ---
 
-## Epoching (the `epoch` statement)
+## Epoching (the Epoch fields)
 
-To segment the data, add a single `epoch` statement giving the window to cut
-around every matched event:
+To segment the data, fill in the two **Epoch start (ms)** and **Epoch stop
+(ms)** fields above the editor, for example `-200` and `800`. This cuts a
+window from 200 ms before to 800 ms after each time-locking event, with
+t = 0 at the event. The same window applies to **every** bin.
+
+- Both fields blank → the data stays **continuous** and `DefineBins` only
+  writes the bin tags. Useful if you want to inspect or edit the tagging before
+  committing to a window.
+- Both filled → the result is a segmented dataset
+  (`channels × time × trials`, `DataFormat = "EPOCHED"`) that plots
+  trial-by-trial in EpochView.
+- Filling only one of the two is an error.
+- The values are remembered between runs.
+
+Every matched event becomes one trial; an event that satisfies several bins is
+a **single** trial carrying all those bin tags (no data is duplicated). Windows
+that run past the start or end of the recording are padded with `NaN`. Each bin
+also records the trial indices it owns in `EEG.bindesc(b).trials`, ready for a
+later per-bin average.
+
+---
+
+## Aliases (the `let` statement)
+
+A `let` statement names a set of codes so several bins can share it without
+repeating the list:
 
 ```
-epoch [-200,800] ms
+let related   = {"s11" "s22" "s33" "s44" "s55"}
+let unrelated = {"s21" "s22" "s23"}
+
+bin 1 "Related"   : related   and next("S201") within (200,1200] ms
+bin 2 "Unrelated" : unrelated and next("S201") within (200,1200] ms
 ```
 
-- The window uses the same interval syntax as relation windows: bounds in
-  `( )` / `[ ]`, an optional `ms` (default) or `samples` unit, and signed
-  values (negative = before the event). `[-200,800] ms` means "from 200 ms
-  before to 800 ms after the time-locking event", with t = 0 at the event.
-- There is **at most one** `epoch` statement and it applies to **all** bins —
-  every bin is cut with the same window. (Giving two `epoch` statements is an
-  error.)
-- Order does not matter; the `epoch` line may sit above or below the bins.
+- The right-hand side is any [code set](#sets-of-codes) (pipe form or braced
+  list).
+- An alias may be used anywhere a code set is allowed — as an anchor or inside
+  a relation, e.g. `next(related)`.
+- `let` statements may appear anywhere in the script (they are read before the
+  bins), but each name must be defined once.
 
-With an `epoch` statement, the result is a segmented dataset
-(`channels × time × trials`, `DataFormat = "EPOCHED"`) that plots trial-by-trial
-in EpochView. Every matched event becomes one trial; an event that satisfies
-several bins is a **single** trial carrying all those bin tags (no data is
-duplicated). Windows that run past the start or end of the recording are padded
-with `NaN`. Each bin then also records the trial indices it owns in
-`EEG.bindesc(b).trials`, ready for a later per-bin average.
+---
 
-Without an `epoch` statement, `DefineBins` leaves the data continuous and only
-writes the bin tags — useful if you want to inspect or edit the tagging before
-committing to a window.
+## Difference and combination bins
+
+A bin may be defined as a **signed combination of other bins** instead of an
+event predicate. This is how you build difference waves:
+
+```
+bin 1 "Related"   : 112 and next(118) within (200,1200] ms
+bin 2 "Unrelated" : 122 and next(118) within (200,1200] ms
+bin 3 "N400 effect" = bin 2 - bin 1
+```
+
+- The right-hand side is a sum/difference of `bin <n>` terms, e.g.
+  `bin 2 - bin 1`, `bin 1 + bin 3`.
+- The referenced bins must be ordinary (event-matching) bins.
+- A combination bin has **no trials of its own**. It is computed **after
+  averaging**: `Average` first averages the ordinary bins, then forms the
+  combination from those averages. Its standard error propagates as the root of
+  the summed squared errors of the terms.
 
 ---
 
@@ -252,6 +292,42 @@ Example — the interactive summary reports, per bin, the count and mean delay:
 bin 1 "Related": 148 events  (mean delay 623 ms)
 ```
 
+### Filtering on reaction time (`rt within`)
+
+Append `rt within <window>` to a bin to **keep only** the matches whose recorded
+RT falls in a window. It is a post-filter on the bin's own reaction time (the
+same value stored in `.rt`), not a relation:
+
+```
+bin 1 "Fast responses" : 112 and next(118) rt within (200,500] ms
+bin 2 "Slow responses" : 112 and next(118) rt within (500,1200] ms
+```
+
+- Uses the same interval syntax as relation windows (`ms` is the only unit).
+- A match with no RT (a pure anchor bin, or `NaN` RT) is dropped by an
+  `rt within` filter.
+- `rt within` is written **after** the expression, and after any `timelock`.
+
+---
+
+## Response-locking (`timelock`)
+
+By default a bin time-locks (t = 0) to the anchor event. `timelock <relation>`
+re-centres each epoch on a **neighbour** instead — typically the response — so
+you can build a response-locked average:
+
+```
+bin 1 "Response-locked" : 112 and next(118) timelock next(118)
+```
+
+- The `timelock` relation is one of `next` / `prev` / `adjacent` over a code
+  set (the same relations used in expressions), optionally with a window.
+- For each matched anchor, the epoch is cut around the event that relation picks
+  out. If the relation finds no neighbour for a given match, that match is
+  dropped.
+- `timelock` only affects **where the window is centred**; bin membership is
+  still decided by the expression.
+
 ---
 
 ## Worked example (N400-style)
@@ -259,9 +335,11 @@ bin 1 "Related": 148 events  (mean delay 623 ms)
 Prime–target pairs with a button-press response; stimulus markers `112`
 (related) and `122` (unrelated), response marker `118`:
 
+Set the Epoch fields to `-200` and `800`; the bins are:
+
 ```
 % --- N400 bins -------------------------------------------------------------
-epoch [-200,800] ms                     % one window, shared by every bin
+let target = 112|122
 
 bin 1 "Related, in-window response"   : 112 and next(118) within (200,1200] ms
 bin 2 "Unrelated, in-window response" : 122 and next(118) within (200,1200] ms
@@ -271,7 +349,10 @@ bin 3 "Related, no response"   : 112 and not next(118) within (0,2000] ms
 bin 4 "Unrelated, no response" : 122 and not next(118) within (0,2000] ms
 
 % Collapsed across relatedness, answered only
-bin 5 "All targets, answered" : (112|122) and next(118) within (200,1200] ms
+bin 5 "All targets, answered" : target and next(118) within (200,1200] ms
+
+% The relatedness effect as a difference wave (built after averaging)
+bin 6 "N400 effect (Unrel - Rel)" = bin 2 - bin 1
 ```
 
 The braced-list form is handy when a condition spans many stimulus codes:
@@ -285,9 +366,11 @@ bin 1 "Related" {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,120
 ## Quick reference
 
 ```
-script      : ( <bin> | <epoch> )+                      % one epoch at most
-bin         : bin <int> "<label>" [:] <expr>
-epoch       : epoch <window>                            % shared by all bins
+script      : ( <let> | <bin> )+                        % epoch set in the GUI fields
+let         : let <name> = <codeset>                    % reusable code set
+bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
+            | bin <int> "<label>" = <combo>             % combination / difference bin
+combo       : [ '+' | '-' ] bin <int> ( ( '+' | '-' ) bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
             | <anchor> | <relation>          % 'and' optional between terms
 anchor      : <codeset>
@@ -297,6 +380,7 @@ relation    : next( <codeset> ) [within <window>]
             | any( <codeset> ) within <window>          % window required
 codeset     : <code> ( '|' <code> )*                    % pipe form
             | '{' <code> [ , ] <code> … '}'             % braced list
+            | <name>                                    % a 'let' alias
 code        : <integer> | "<text marker>"               % ? = any char, * = any run
 window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples ]
 comment     : % … end-of-line   |   # … end-of-line

@@ -104,18 +104,25 @@ function [EEG, options] = DefineBins(input, opts)
         && strcmpi(string(options), "Init");
 
     if interactive
-        script = promptForScript();
+        [script, epochWin] = promptForScript();
         spec   = parseSpec(script);              % may throw parse errors
         % Remember the last valid script so it prefills the editor next time.
         setpref('Alakazam', 'DefineBinsScript', script);
-        options = struct('script', script, 'bins', spec.bins, 'epoch', spec.epoch);
+        options = struct('script', script, 'bins', spec.bins, 'epoch', epochWin);
+    elseif isstruct(options) && isfield(options, 'script') && ~isfield(options, 'bins')
+        % Script mode: parse a supplied script without a dialog (for scripting
+        % and tests). Optionally carries an 'epoch' window struct.
+        script = char(options.script);
+        spec   = parseSpec(script);
+        if isfield(options, 'epoch'); epochWin = options.epoch; else; epochWin = []; end
+        options = struct('script', script, 'bins', spec.bins, 'epoch', epochWin);
     else
         if ~isstruct(options) || ~isfield(options, 'bins')
             throw(MException('Alakazam:DefineBins', ...
                 'Problem in DefineBins: invalid stored options'));
         end
         spec.bins = options.bins;
-        if isfield(options, 'epoch'); spec.epoch = options.epoch; else; spec.epoch = []; end
+        if isfield(options, 'epoch'); epochWin = options.epoch; else; epochWin = []; end
     end
     bins = spec.bins;
 
@@ -137,31 +144,50 @@ function [EEG, options] = DefineBins(input, opts)
 
     %% Evaluate each bin predicate against every event
     membership = cell(1, nEv);                   % per ordered position
-    bindesc = struct('index', {}, 'label', {}, 'script', {}, ...
-                     'plan', {}, 'events', {}, 'rt', {}, 'n', {});
+    % The sample each event's epoch is centred on. Defaults to the event's own
+    % latency; a 'timelock' bin overrides it with a neighbour's latency.
+    centerLat  = round([EEG.event.latency]);
+    bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
+                     'combo', {}, 'events', {}, 'rt', {}, 'n', {});
 
     for b = 1:numel(bins)
+        if ~isempty(bins(b).combo)
+            % Combination (difference) bin: no event predicate; the Average
+            % step computes it from the referenced bins' averages.
+            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo);
+            continue;
+        end
+
         matchedOrig = [];
         rts = [];
         for p = 1:nEv
             [tf, capLat] = evalNode(bins(b).expr, p, ctx);
-            if tf
-                matchedOrig(end+1) = order(p);
-                if isnan(capLat)
-                    rts(end+1) = NaN;
-                else
-                    rts(end+1) = (capLat - ctx.lat(p)) / ctx.srate * 1000;
-                end
-                membership{p}(end+1) = bins(b).index;
+            if ~tf; continue; end
+
+            if isnan(capLat)
+                rtMs = NaN;
+            else
+                rtMs = (capLat - ctx.lat(p)) / ctx.srate * 1000;
             end
+
+            % 'rt within W': keep the match only if its reaction time is in W.
+            if ~isempty(bins(b).rtWindow) ...
+                    && (isnan(rtMs) || ~inInterval(rtMs, bins(b).rtWindow))
+                continue;
+            end
+
+            % 'timelock <rel>': centre the epoch on a neighbour, not the anchor.
+            if ~isempty(bins(b).timelock)
+                [okTL, tlLat] = evalRel(bins(b).timelock, p, ctx);
+                if ~okTL; continue; end          % nothing to lock to -> drop
+                centerLat(order(p)) = round(tlLat);
+            end
+
+            matchedOrig(end+1)   = order(p);
+            rts(end+1)           = rtMs;
+            membership{p}(end+1) = bins(b).index;
         end
-        bindesc(b).index  = bins(b).index;
-        bindesc(b).label  = bins(b).label;
-        bindesc(b).script = bins(b).text;
-        bindesc(b).plan   = bins(b).expr;
-        bindesc(b).events = matchedOrig;
-        bindesc(b).rt     = rts;
-        bindesc(b).n      = numel(matchedOrig);
+        bindesc(b) = binRecord(bins(b), matchedOrig, rts, []);
     end
 
     %% Tag events with their bin membership (ERPLAB-style .bini)
@@ -169,11 +195,11 @@ function [EEG, options] = DefineBins(input, opts)
         EEG.event(order(p)).bini = membership{p};
     end
 
-    %% Cut epochs when an 'epoch' window was given, so the result plots as an
-    %  epoched dataset (EpochView). Without it, the data stays continuous and
-    %  only the bin tags are added.
-    if ~isempty(spec.epoch)
-        [EEG, bindesc] = cutEpochs(EEG, bindesc, spec.epoch);
+    %% Cut epochs when an epoch window was given (dialog), so the result plots
+    %  as an epoched dataset (EpochView). Without it, the data stays continuous
+    %  and only the bin tags are added.
+    if ~isempty(epochWin)
+        [EEG, bindesc] = cutEpochs(EEG, bindesc, epochWin, centerLat);
     end
     EEG.bindesc = bindesc;
 
@@ -183,33 +209,88 @@ function [EEG, options] = DefineBins(input, opts)
     end
 end
 
+function rec = binRecord(bin, events, rts, combo)
+%BINRECORD  Build one EEG.bindesc entry with a stable field order.
+    rec.index  = bin.index;
+    rec.label  = bin.label;
+    rec.script = bin.text;
+    rec.plan   = bin.expr;
+    rec.combo  = combo;
+    rec.events = events;
+    rec.rt     = rts;
+    rec.n      = numel(events);
+end
+
 % ======================================================================= %
 %  Interactive prompt
 % ======================================================================= %
-function script = promptForScript()
+function [script, epochWin] = promptForScript()
     template = [ ...
-        '% Codes are markers; ? matches any single character; { } lists alternatives.' newline ...
-        '% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.'         newline ...
-        '% Combine with and / or / not (adjacent terms are and-ed). ''epoch'' segments.' newline ...
-        'epoch [-200,800] ms'                                                          newline ...
-        'bin 1 "Related"   {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms' newline ...
-        'bin 2 "Unrelated" "s??" not {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms' ];
+        '% Codes are markers; ? = any char; { } lists alternatives; | is or.'              newline ...
+        '% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.'             newline ...
+        '% let names a code set; = makes a difference bin; rt / timelock refine a bin.'    newline ...
+        'let related = {"s11" "s22" "s33" "s44" "s55"}'                                    newline ...
+        'bin 1 "Related"    related           and next("S201") within (200,1200] ms'       newline ...
+        'bin 2 "Unrelated"  "s??" not related and next("S201") within (200,1200] ms'       newline ...
+        'bin 3 "Effect"     = bin 1 - bin 2' ];
 
-    % Prefill with the last script the user ran (remembered across sessions),
-    % falling back to the built-in template on first use.
-    default = getpref('Alakazam', 'DefineBinsScript', template);
+    % Prefill with the last script and epoch bounds the user ran (remembered
+    % across sessions), falling back to the built-in template on first use.
+    default   = getpref('Alakazam', 'DefineBinsScript', template);
+    prevEpoch = getpref('Alakazam', 'DefineBinsEpoch', {'-200', '800'});
 
-    answer = inputdlg('Bin definitions:', 'DefineBins', [20 90], {default});
+    % The epoch window (ms, cut around each matched event) is a per-run choice,
+    % so it is two small fields above the script rather than a keyword. Leave
+    % both blank to keep the data continuous (tag events only).
+    answer = inputdlg( ...
+        {'Epoch start (ms; e.g. -200; blank + blank = no epoching)', ...
+         'Epoch stop (ms; e.g. 800)', ...
+         'Bin definitions:'}, ...
+        'DefineBins', [1 60; 1 60; 20 90], [prevEpoch, {default}]);
     if isempty(answer)
         throw(MException('Alakazam:DefineBins', 'DefineBins cancelled.'));
     end
-    script = answer{1};
+
+    startStr = strtrim(char(answer{1}));
+    stopStr  = strtrim(char(answer{2}));
+    script   = answer{3};
     if ischar(script) && size(script, 1) > 1
         % inputdlg returns a char matrix for multi-line input; join to a
         % single newline-separated row.
         script = strjoin(cellstr(script), newline);
     end
-    script = char(script);
+    script   = char(script);
+    epochWin = parseEpochBounds(startStr, stopStr);
+    setpref('Alakazam', 'DefineBinsEpoch', {startStr, stopStr});
+end
+
+function win = parseEpochBounds(startStr, stopStr)
+%PARSEEPOCHBOUNDS  Turn the dialog's start/stop text (ms) into an epoch window.
+%   Both blank means no epoching ([]); otherwise both bounds are required and
+%   the window is inclusive, in milliseconds.
+    if isempty(startStr) && isempty(stopStr)
+        win = [];
+        return;
+    end
+    lo = epochNum(startStr, 'start');
+    hi = epochNum(stopStr,  'stop');
+    if hi <= lo
+        throw(MException('Alakazam:DefineBins', ...
+            'Epoch stop (%g ms) must be after the start (%g ms).', hi, lo));
+    end
+    win = struct('lo', lo, 'hi', hi, 'unit', 'ms');
+end
+
+function v = epochNum(str, which)
+    if isempty(str)
+        throw(MException('Alakazam:DefineBins', ...
+            'Give both an epoch start and stop, or leave both blank (the %s is missing).', which));
+    end
+    v = str2double(str);
+    if isnan(v)
+        throw(MException('Alakazam:DefineBins', ...
+            'Epoch %s "%s" is not a number of milliseconds.', which, str));
+    end
 end
 
 function reportBins(bindesc, EEG)
@@ -374,7 +455,7 @@ end
 % ======================================================================= %
 %  Epoching
 % ======================================================================= %
-function [EEG, bindesc] = cutEpochs(EEG, bindesc, win)
+function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
 %CUTEPOCHS  Cut a chan x time x trials stack around every matched anchor.
 %   The union of all bins' matched events becomes the trial set (an event in
 %   several bins is one trial carrying several bin tags). Windows that run off
@@ -412,7 +493,7 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win)
     nchan = size(EEG.data, 1);
     total = size(EEG.data, 2);
     ntr   = numel(allEvents);
-    lat   = round([EEG.event.latency]);
+    lat   = centerLat;   % sample to centre each epoch on (timelock-aware)
 
     data = nan(nchan, pnts, ntr);
     for k = 1:ntr
@@ -465,69 +546,172 @@ function spec = parseSpec(script)
     script = char(script);
     toks   = tokenize(script);
 
-    % Statements start at each top-level 'bin' or 'epoch' keyword.
-    isStart = arrayfun(@(t) t.kind == "kw" && ...
-        (t.val == "bin" || t.val == "epoch"), toks);
+    % Statements start at a 'let', or at a 'bin <num> "<label>"' (a bare
+    % 'bin <num>' inside a combination, = bin 1 - bin 2, is not a statement).
+    isStart = false(1, numel(toks));
+    for i = 1:numel(toks)
+        if toks(i).kind ~= "kw"; continue; end
+        if toks(i).val == "let"
+            isStart(i) = true;
+        elseif toks(i).val == "bin"
+            isStart(i) = (i + 2 <= numel(toks)) ...
+                && toks(i+1).kind == "num" && toks(i+2).kind == "str";
+        end
+    end
     starts = find(isStart);
     if isempty(starts)
         throw(MException('Alakazam:DefineBins', ...
             'No bin definitions found. Each line is:  bin <n> "label" : <expr>'));
     end
 
-    bins = struct('index', {}, 'label', {}, 'text', {}, 'expr', {});
-    epochWin = [];
+    stmts = cell(1, numel(starts));
     for s = 1:numel(starts)
         first = starts(s);
         if s < numel(starts); last = starts(s+1) - 1; else; last = numel(toks); end
-        stmt = toks(first:last);
+        stmts{s} = toks(first:last);
+    end
 
-        if stmt(1).val == "epoch"
-            if ~isempty(epochWin)
+    % First pass: collect 'let' aliases (order-independent, like a header).
+    aliases = struct();
+    for s = 1:numel(stmts)
+        if stmts{s}(1).val == "let"
+            [name, codes] = parseLetStatement(stmts{s});
+            if isfield(aliases, name)
                 throw(MException('Alakazam:DefineBins', ...
-                    'Only one ''epoch'' window may be given.'));
+                    'Alias ''%s'' is defined more than once.', name));
             end
-            epochWin = parseEpochDirective(stmt);
-        else
-            bins(end + 1) = parseBinStatement(stmt, script); %#ok<AGROW>
+            aliases.(name) = codes;
         end
     end
 
-    spec.bins  = bins;
-    spec.epoch = epochWin;
+    % Second pass: the bins.
+    bins = struct('index', {}, 'label', {}, 'text', {}, ...
+                  'expr', {}, 'combo', {}, 'rtWindow', {}, 'timelock', {});
+    for s = 1:numel(stmts)
+        if stmts{s}(1).val == "bin"
+            bins(end + 1) = parseBinStatement(stmts{s}, script, aliases);
+        end
+    end
+    spec.bins = bins;
 end
 
-function bin = parseBinStatement(stmt, script)
-    % bin <num> "<label>" [:] <expr>
-    [~,     stmt] = expectTok(stmt, "kw", "bin", 'the keyword ''bin''');
-    [idx,   stmt] = expectTok(stmt, "num", 'a bin number after ''bin''');
-    [label, stmt] = expectTok(stmt, "str", 'a quoted label');
-    % The ':' separating the label from the expression is optional.
-    if ~isempty(stmt) && stmt(1).kind == "punc" && stmt(1).val == ":"
-        stmt = stmt(2:end);
+function bin = parseBinStatement(stmt, script, aliases)
+    % bin <num> "<label>" [:] <expr> [rt within W] [timelock <rel>]
+    %   or   bin <num> "<label>" = <combination>
+    [~,     rest] = expectTok(stmt, "kw", "bin", 'the keyword ''bin''');
+    [idx,   rest] = expectTok(rest, "num", 'a bin number after ''bin''');
+    [label, rest] = expectTok(rest, "str", 'a quoted label');
+
+    bin.index    = round(idx.val);
+    bin.label    = char(label.val);
+    bin.text     = char(strtrim(sliceSource(script, rest)));
+    bin.expr     = [];
+    bin.combo    = [];
+    bin.rtWindow = [];
+    bin.timelock = [];
+
+    % A '=' after the label makes this a combination (difference) bin, defined
+    % from earlier bins' averages rather than by an event predicate.
+    if ~isempty(rest) && rest(1).kind == "punc" && rest(1).val == "="
+        bin.combo = parseCombo(rest(2:end), bin.index, bin.label);
+        return;
     end
-    if isempty(stmt)
+
+    % Otherwise an optional ':' then a predicate, with optional suffixes.
+    if ~isempty(rest) && rest(1).kind == "punc" && rest(1).val == ":"
+        rest = rest(2:end);
+    end
+    if isempty(rest)
         throw(MException('Alakazam:DefineBins', ...
             'bin %g "%s": expression is empty.', idx.val, label.val));
     end
-    bin.index = round(idx.val);
-    bin.label = char(label.val);
-    bin.text  = char(strtrim(sliceSource(script, stmt)));
-    bin.expr  = parseExprTokens(stmt);
+    [bin.expr, k] = parseExprTokens(rest, aliases);
+
+    % Suffixes (either order): rt within <window>, timelock <relation>.
+    while k <= numel(rest)
+        t = rest(k);
+        if t.kind == "kw" && t.val == "rt"
+            [bin.rtWindow, k] = scanRtWindow(rest, k + 1, bin.index);
+        elseif t.kind == "kw" && t.val == "timelock"
+            [bin.timelock, k] = parseTimelock(rest, k + 1, aliases, bin.index);
+        else
+            throw(MException('Alakazam:DefineBins', ...
+                'Parse error near column %d: unexpected token after the expression.', t.pos));
+        end
+    end
 end
 
-function iv = parseEpochDirective(stmt)
-    % epoch <window>, e.g.  epoch [-200,800] ms
-    T = stmt(2:end);                                  % drop the 'epoch' keyword
-    if isempty(T)
+function [name, codes] = parseLetStatement(stmt)
+    % let <ident> = <codeset>
+    [~,     rest] = expectTok(stmt, "kw", "let", 'the keyword ''let''');
+    [nameT, rest] = expectTok(rest, "ident", 'an alias name after ''let''');
+    name = char(nameT.val);
+    if isempty(rest) || ~(rest(1).kind == "punc" && rest(1).val == "=")
         throw(MException('Alakazam:DefineBins', ...
-            '''epoch'' needs a window, e.g.  epoch [-200,800] ms'));
+            'let %s: expected ''='' after the alias name.', name));
     end
-    [iv, k] = scanInterval(T, 1);
-    if k <= numel(T)
+    rest = rest(2:end);
+    if isempty(rest)
         throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: unexpected token after epoch window.', ...
-            T(k).pos));
+            'let %s: expected a code or code list after ''=''.', name));
     end
+    % Aliases hold literal codes only (they may not reference other aliases).
+    [codes, k] = scanCodeset(rest, 1, struct());
+    if k <= numel(rest)
+        throw(MException('Alakazam:DefineBins', ...
+            'let %s: unexpected token near column %d.', name, rest(k).pos));
+    end
+end
+
+function combo = parseCombo(T, binIndex, label)
+    % <coeff>? bin <n> ( ('+'|'-') <coeff>? bin <n> )*  -> struct(coeff, bin)
+    combo = struct('coeff', {}, 'bin', {});
+    k = 1; sgn = 1;
+    while true
+        coeff = sgn;
+        t = tokAt(T, k);
+        if t.kind == "num"; coeff = sgn * t.val; k = k + 1; t = tokAt(T, k); end
+        if ~(t.kind == "kw" && t.val == "bin")
+            throw(MException('Alakazam:DefineBins', ...
+                'bin %g "%s": expected ''bin <n>'' in the combination near column %d.', ...
+                binIndex, label, t.pos));
+        end
+        k = k + 1;
+        [num, k] = scanNum(T, k);
+        combo(end+1) = struct('coeff', coeff, 'bin', round(num));
+        op = tokAt(T, k);
+        if op.kind == "eof"
+            break;
+        elseif op.kind == "punc" && op.val == "+"
+            sgn = 1; k = k + 1;
+        elseif op.kind == "punc" && op.val == "-"
+            sgn = -1; k = k + 1;
+        else
+            throw(MException('Alakazam:DefineBins', ...
+                'bin %g "%s": expected ''+'' or ''-'' in the combination near column %d.', ...
+                binIndex, label, op.pos));
+        end
+    end
+end
+
+function [iv, k] = scanRtWindow(T, k, binIndex)
+    t = tokAt(T, k);
+    if ~(t.kind == "kw" && t.val == "within")
+        throw(MException('Alakazam:DefineBins', ...
+            'bin %g: ''rt'' must be followed by ''within (lo,hi] ms''.', binIndex));
+    end
+    [iv, k] = scanInterval(T, k + 1);
+end
+
+function [rel, k] = parseTimelock(T, kStart, aliases, binIndex)
+    % timelock <relation>  -- reuse the expression parser, require one relation.
+    [node, kLocal] = parseExprTokens(T(kStart:end), aliases);
+    if ~isstruct(node) || ~strcmp(node.op, 'rel')
+        throw(MException('Alakazam:DefineBins', ...
+            'bin %g: ''timelock'' must be a single relation, e.g. timelock next(118).', binIndex));
+    end
+    rel = node;
+    k   = kStart + kLocal - 1;
 end
 
 % Standalone interval scanner, shared by the epoch directive and the
@@ -608,14 +792,12 @@ function txt = sliceSource(script, stmt)
     txt = script(a:min(b, numel(script)));
 end
 
-% Recursive-descent expression parser over a token subarray.
-function node = parseExprTokens(T)
+% Recursive-descent expression parser over a token subarray. Returns the parsed
+% node and the cursor after it; the caller handles any trailing tokens (bin
+% suffixes such as rt/timelock, or its own error).
+function [node, k] = parseExprTokens(T, aliases)
     k = 1;
     node = pOr();
-    if k <= numel(T)
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: unexpected token.', T(k).pos));
-    end
 
     function nd = pOr()
         kids = {pAnd()};
@@ -679,38 +861,7 @@ function node = parseExprTokens(T)
     end
 
     function codes = pCodeset()
-        if isPunc('{')
-            advance();
-            codes = strings(1, 0);
-            while ~isPunc('}')
-                if cur().kind == "eof"
-                    throw(MException('Alakazam:DefineBins', ...
-                        'Unterminated ''{'' code list.'));
-                end
-                if isPunc(','); advance(); continue; end   % optional separators
-                codes(end+1) = codeElem();
-            end
-            advance();                                     % consume '}'
-            if isempty(codes)
-                throw(MException('Alakazam:DefineBins', ...
-                    'Empty ''{}'' code list near column %d.', curCol()));
-            end
-        else
-            codes = codeElem();
-            while isPunc('|'); advance(); codes(end+1) = codeElem(); end
-        end
-    end
-
-    function e = codeElem()
-        t = cur();
-        if t.kind == "num"
-            e = canonType(t.val); advance();
-        elseif t.kind == "str"
-            e = canonType(t.val); advance();
-        else
-            throw(MException('Alakazam:DefineBins', ...
-                'Parse error near column %d: expected a marker code.', curCol()));
-        end
+        [codes, k] = scanCodeset(T, k, aliases);   % shared scanner; advances k
     end
 
     function iv = pInterval()
@@ -735,12 +886,63 @@ function node = parseExprTokens(T)
     end
 end
 
+% Standalone codeset scanner, shared by the expression parser and 'let'.
+% Expands identifiers (alias references) to their code lists. Returns the codes
+% and the next cursor.
+function [codes, k] = scanCodeset(T, k, aliases)
+    o = tokAt(T, k);
+    if o.kind == "punc" && o.val == "{"
+        k = k + 1;
+        codes = strings(1, 0);
+        while ~(tokAt(T, k).kind == "punc" && tokAt(T, k).val == "}")
+            if tokAt(T, k).kind == "eof"
+                throw(MException('Alakazam:DefineBins', 'Unterminated ''{'' code list.'));
+            end
+            if tokAt(T, k).kind == "punc" && tokAt(T, k).val == ","
+                k = k + 1; continue;                       % optional separators
+            end
+            [c, k] = scanCodeElem(T, k, aliases);
+            codes = [codes, c];
+        end
+        k = k + 1;                                          % consume '}'
+        if isempty(codes)
+            throw(MException('Alakazam:DefineBins', ...
+                'Empty ''{}'' code list near column %d.', tokAt(T, k).pos));
+        end
+    else
+        [codes, k] = scanCodeElem(T, k, aliases);
+        while tokAt(T, k).kind == "punc" && tokAt(T, k).val == "|"
+            k = k + 1;
+            [c, k] = scanCodeElem(T, k, aliases);
+            codes = [codes, c];
+        end
+    end
+end
+
+function [codes, k] = scanCodeElem(T, k, aliases)
+    t = tokAt(T, k);
+    if t.kind == "num" || t.kind == "str"
+        codes = canonType(t.val); k = k + 1;
+    elseif t.kind == "ident"
+        name = char(t.val);
+        if ~isfield(aliases, name)
+            throw(MException('Alakazam:DefineBins', ...
+                'Unknown name ''%s'' near column %d. Define it with ''let %s = ...'', or quote a text marker as "%s".', ...
+                name, t.pos, name, name));
+        end
+        codes = aliases.(name); k = k + 1;                  % expand the alias
+    else
+        throw(MException('Alakazam:DefineBins', ...
+            'Parse error near column %d: expected a marker code.', t.pos));
+    end
+end
+
 % ======================================================================= %
 %  Tokenizer
 % ======================================================================= %
 function toks = tokenize(s)
-    keywords = ["bin","epoch","and","or","not","next","prev","adjacent","any", ...
-                "within","ms","samples"];
+    keywords = ["bin","let","rt","timelock","and","or","not", ...
+                "next","prev","adjacent","any","within","ms","samples"];
     toks = struct('kind', {}, 'val', {}, 'pos', {}, 'len', {});
     i = 1; n = numel(s);
     while i <= n
@@ -772,12 +974,13 @@ function toks = tokenize(s)
             if any(strcmpi(word, keywords))
                 toks(end+1) = mkTok("kw", lower(string(word)), i, j-i);
             else
-                throw(MException('Alakazam:DefineBins', ...
-                    'Unknown word ''%s'' at column %d. Quote text markers as "%s".', ...
-                    word, i, word));
+                % A bare word is an identifier (an alias name); the parser
+                % reports "quote text markers" if it is used where a code is
+                % expected and is not a defined alias.
+                toks(end+1) = mkTok("ident", string(word), i, j-i);
             end
             i = j;
-        elseif any(c == '()[]{}|,:')
+        elseif any(c == '()[]{}|,:=+-')
             toks(end+1) = mkTok("punc", string(c), i, 1);
             i = i + 1;
         else
