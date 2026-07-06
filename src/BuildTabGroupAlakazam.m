@@ -24,6 +24,7 @@ function tabgroup = BuildTabGroupAlakazam(app)
     tabHome = Tab('Alakazam');
     tabHome.Tag = 'tabHome';
     createWorkSpace(tabHome, app); % Populate the 'Alakazam' tab with workspace components
+    createSettings(tabHome, app);  % Add the global Settings button
     
     % Create the 'Tools' tab
     tabTool = Tab('Tools');
@@ -95,6 +96,33 @@ function createWorkSpace(tab, app)
     add(column1, SaveWorkSpaceButton);
     add(column2, EditWorkSpaceButton);
     add(column2, ClearWorkSpaceButton);
+end
+
+function createSettings(tab, app)
+    % Create the Settings section on the Home tab: a single button that opens
+    % the global settings dialog (AlakazamSettings via SettingsDialog).
+    %
+    % Args:
+    %     tab: The tab in which to create the Settings section.
+    %     app: The main application object.
+
+    import matlab.ui.internal.toolstrip.*
+
+    iconpath = fullfile(matlabroot, 'toolbox', 'matlab', 'toolstrip', 'web', 'mpcdesigner_icons', filesep);
+
+    section = Section('Settings');
+    section.Tag = 'SettingsSection';
+    column = Column();
+
+    SettingsIcon = Icon([iconpath, '..', filesep, 'image', filesep, 'control_app_24.png']);
+    SettingsButton = Button('Settings', SettingsIcon);
+    SettingsButton.Tag = 'SettingsButton';
+    SettingsButton.Description = 'Edit the global Alakazam settings';
+    SettingsButton.ButtonPushedFcn = @(x, y) app.openSettings(); % Set the callback function
+
+    add(tab, section);
+    add(section, column);
+    add(column, SettingsButton);
 end
 
 function info = getIndividualTransInfos(TName, transRoot)

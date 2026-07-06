@@ -74,6 +74,8 @@ classdef AverageView < handle
 
             handles = gobjects(1, numel(this.Series));   % mean line per series
             names   = strings(1, numel(this.Series));
+            showBand = AlakazamSettings.get('graphics', 'erpPlot', 'showConfInt');
+            confN    = AlakazamSettings.get('graphics', 'erpPlot', 'confIntN');
 
             for i = 1:numel(this.Series)
                 s = this.Series{i};
@@ -81,20 +83,25 @@ classdef AverageView < handle
 
                 % Force row vectors so the band arithmetic is unambiguous.
                 meanCh = reshape(s.data(ch, :), 1, []);
-                band   = 3 * reshape(s.stErr(ch, :), 1, []);
+                band   = confN * reshape(s.stErr(ch, :), 1, []);
 
                 if manyIds; names(i) = sprintf('%s: %s', s.id, s.name); else; names(i) = s.name; end
 
                 colour = this.Palette(mod(i - 1, size(this.Palette, 1)) + 1, :);
                 line   = plot(ax, s.times, meanCh, "Color", colour, "LineWidth", 1.5);
-                plot(ax, s.times, meanCh + band, "Color", colour, "LineStyle", ":");
-                plot(ax, s.times, meanCh - band, "Color", colour, "LineStyle", ":");
-                patch(ax, [s.times, fliplr(s.times)], [meanCh + band, fliplr(meanCh - band)], ...
-                    colour, "EdgeColor", "none", "FaceAlpha", 0.3);
+                if showBand
+                    plot(ax, s.times, meanCh + band, "Color", colour, "LineStyle", ":");
+                    plot(ax, s.times, meanCh - band, "Color", colour, "LineStyle", ":");
+                    patch(ax, [s.times, fliplr(s.times)], [meanCh + band, fliplr(meanCh - band)], ...
+                        colour, "EdgeColor", "none", "FaceAlpha", 0.3);
+                    lo = meanCh - band; hi = meanCh + band;
+                else
+                    lo = meanCh; hi = meanCh;
+                end
 
                 handles(i) = line;
-                ymin = min(ymin, min(meanCh - band, [], "omitnan"));
-                ymax = max(ymax, max(meanCh + band, [], "omitnan"));
+                ymin = min(ymin, min(lo, [], "omitnan"));
+                ymax = max(ymax, max(hi, [], "omitnan"));
             end
 
             first = this.Series{1};
@@ -104,8 +111,20 @@ classdef AverageView < handle
             yline(ax, 0, "Color", "k", "LineStyle", "--");
             box(ax, "off");
             xlim(ax, [min(first.times), max(first.times)]);
+            % Clamp every electrode to the largest range (graphics > erpPlot >
+            % clampYAxis) so the amplitude axis stays fixed while stepping
+            % electrodes; otherwise rescale to the shown electrode.
+            if AlakazamSettings.get('graphics', 'erpPlot', 'clampYAxis')
+                [ymin, ymax] = this.globalExtent();
+            end
             if isfinite(ymin) && isfinite(ymax) && ymax > ymin
                 ylim(ax, [ymin, ymax]);
+            end
+            % Orientation of the amplitude axis (graphics > erpPlot > positiveUp).
+            if AlakazamSettings.get('graphics', 'erpPlot', 'positiveUp')
+                set(ax, 'YDir', 'normal');
+            else
+                set(ax, 'YDir', 'reverse');
             end
             % Build the legend from the mean-line handles only, so the bin
             % names always appear and bands/reference lines never leak in.
@@ -115,6 +134,27 @@ classdef AverageView < handle
     end
 
     methods (Access = private)
+        function [lo, hi] = globalExtent(this)
+        %GLOBALEXTENT  Min/max over every channel and series, so a clamped axis
+        %   fits the electrode with the largest deflection. Includes the +/- 3 SE
+        %   band only when it is being drawn.
+            showBand = AlakazamSettings.get('graphics', 'erpPlot', 'showConfInt');
+            confN    = AlakazamSettings.get('graphics', 'erpPlot', 'confIntN');
+            lo = inf; hi = -inf;
+            for i = 1:numel(this.Series)
+                s = this.Series{i};
+                if showBand
+                    loMat = s.data - confN * s.stErr;
+                    hiMat = s.data + confN * s.stErr;
+                else
+                    loMat = s.data;
+                    hiMat = s.data;
+                end
+                lo = min(lo, min(loMat(:), [], "omitnan"));
+                hi = max(hi, max(hiMat(:), [], "omitnan"));
+            end
+        end
+
         function onKey(this, event)
         %ONKEY  Up / down arrows step the channel shown for all lines.
             switch lower(event.Key)

@@ -198,6 +198,33 @@ classdef Alakazam < handle
             delete(this.Figures);
         end
 
+        function openSettings(this)
+        %OPENSETTINGS  Open the global settings dialog (toolstrip callback).
+        %   Applied changes refresh the open views via onSettingsChanged.
+            SettingsDialog(@() this.onSettingsChanged());
+        end
+
+        function onSettingsChanged(this)
+        %ONSETTINGSCHANGED  Re-draw open views so changed settings take effect.
+            for k = 1:numel(this.Figures)
+                fig = this.Figures(k);
+                if ~isgraphics(fig) || ~isvalid(fig)
+                    continue;
+                end
+                for viewName = ["AverageView", "EpochView"]
+                    view = getappdata(fig, char(viewName));
+                    if ~isempty(view) && isvalid(view)
+                        try
+                            view.redraw();
+                        catch err
+                            warning('Alakazam:viewRefresh', ...
+                                'Could not refresh %s: %s', char(viewName), err.message);
+                        end
+                    end
+                end
+            end
+        end
+
         function onTransformation(this, ~, ~, entry)
         %ONTRANSFORMATION  Gallery callback: run a transformation on the current EEG.
         %   ONTRANSFORMATION(THIS, ~, ~, ENTRY) executes the transformation
