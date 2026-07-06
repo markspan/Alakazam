@@ -499,25 +499,25 @@ function [tf, cap] = evalNode(node, p, ctx)
 end
 
 function [tf, cap] = evalRel(node, p, ctx)
-    n     = numel(ctx.lat);
-    codes = node.codes;
-    iv    = node.interval;
-    found = 0;
+    n       = numel(ctx.lat);
+    matcher = node.matcher;
+    iv      = node.interval;
+    found   = 0;
 
     switch node.quant
         case 'next'
             for q = p+1:n
-                if matchCode(ctx.typ(q), codes); found = q; break; end
+                if evalNode(matcher, q, ctx); found = q; break; end
             end
         case 'prev'
             for q = p-1:-1:1
-                if matchCode(ctx.typ(q), codes); found = q; break; end
+                if evalNode(matcher, q, ctx); found = q; break; end
             end
         case 'adjacent'
-            if p+1 <= n && matchCode(ctx.typ(p+1), codes); found = p+1; end
+            if p+1 <= n && evalNode(matcher, p+1, ctx); found = p+1; end
         case 'any'
             for q = 1:n
-                if q ~= p && matchCode(ctx.typ(q), codes) ...
+                if q ~= p && evalNode(matcher, q, ctx) ...
                         && inInterval(delta(q, p, ctx, iv), iv)
                     found = q; break;
                 end
@@ -667,16 +667,18 @@ function spec = parseSpec(script)
         stmts{s} = toks(first:last);
     end
 
-    % First pass: collect 'let' aliases (order-independent, like a header).
+    % First pass: collect 'let' aliases, in file order, so a later alias may
+    % reference any earlier one (a forward-reference or a cycle is an
+    % "unknown name" error from the alias not existing yet).
     aliases = struct();
     for s = 1:numel(stmts)
         if stmts{s}(1).val == "let"
-            [name, codes] = parseLetStatement(stmts{s});
+            [name, node] = parseLetStatement(stmts{s}, aliases);
             if isfield(aliases, name)
                 throw(MException('Alakazam:DefineBins', ...
                     'Alias ''%s'' is defined more than once.', name));
             end
-            aliases.(name) = codes;
+            aliases.(name) = node;
         end
     end
 
@@ -737,8 +739,10 @@ function bin = parseBinStatement(stmt, script, aliases)
     end
 end
 
-function [name, codes] = parseLetStatement(stmt)
-    % let <ident> = <codeset>
+function [name, node] = parseLetStatement(stmt, aliases)
+    % let <ident> = <expr>   (codes combined with not/and/or/parens; may
+    % reference any alias defined earlier in the script, but not relations
+    % such as next(...)/prev(...), which belong in the bin's own expression).
     [~,     rest] = expectTok(stmt, "kw", "let", 'the keyword ''let''');
     [nameT, rest] = expectTok(rest, "ident", 'an alias name after ''let''');
     name = char(nameT.val);
@@ -749,13 +753,29 @@ function [name, codes] = parseLetStatement(stmt)
     rest = rest(2:end);
     if isempty(rest)
         throw(MException('Alakazam:DefineBins', ...
-            'let %s: expected a code or code list after ''=''.', name));
+            'let %s: expected a code or code expression after ''=''.', name));
     end
-    % Aliases hold literal codes only (they may not reference other aliases).
-    [codes, k] = scanCodeset(rest, 1, struct());
+    [node, k] = parseExprTokens(rest, aliases);
     if k <= numel(rest)
         throw(MException('Alakazam:DefineBins', ...
             'let %s: unexpected token near column %d.', name, rest(k).pos));
+    end
+    forbidRelations(node, name);
+end
+
+function forbidRelations(node, name)
+%FORBIDRELATIONS  A let's body may combine codes with not/and/or/parens, but
+%   not relations (next/prev/adjacent/any); those stay in the bin's own
+%   expression, where "which event's neighbour" is unambiguous.
+    switch node.op
+        case 'rel'
+            throw(MException('Alakazam:DefineBins', ...
+                'let %s: relations like next(...)/prev(...) are not allowed here; write them in the bin''s own expression.', ...
+                name));
+        case 'not'
+            forbidRelations(node.kid, name);
+        case {'and', 'or'}
+            for i = 1:numel(node.kids); forbidRelations(node.kids{i}, name); end
     end
 end
 
@@ -937,14 +957,14 @@ function [node, k] = parseExprTokens(T, aliases)
         elseif isKw('next') || isKw('prev') || isKw('adjacent') || isKw('any')
             nd = pRelation();
         else
-            nd.op = 'anchor'; nd.codes = pCodeset();
+            nd = pCodeset();   % already a fully-formed anchor/not/and/or node
         end
     end
 
     function nd = pRelation()
         quant = char(cur().val); advance();
         expectPunc('(');
-        codes = pCodeset();
+        matcher = pCodeset();
         expectPunc(')');
         iv = [];
         if isKw('within'); advance(); iv = pInterval(); end
@@ -953,11 +973,11 @@ function [node, k] = parseExprTokens(T, aliases)
                 'any(...) requires a ''within'' window (near column %d).', ...
                 curCol()));
         end
-        nd.op = 'rel'; nd.quant = quant; nd.codes = codes; nd.interval = iv;
+        nd.op = 'rel'; nd.quant = quant; nd.matcher = matcher; nd.interval = iv;
     end
 
-    function codes = pCodeset()
-        [codes, k] = scanCodeset(T, k, aliases);   % shared scanner; advances k
+    function node = pCodeset()
+        [node, k] = scanCodeset(T, k, aliases);   % shared scanner; advances k
     end
 
     function iv = pInterval()
@@ -983,13 +1003,15 @@ function [node, k] = parseExprTokens(T, aliases)
 end
 
 % Standalone codeset scanner, shared by the expression parser and 'let'.
-% Expands identifiers (alias references) to their code lists. Returns the codes
-% and the next cursor.
-function [codes, k] = scanCodeset(T, k, aliases)
+% Expands identifiers (alias references) to their expression node, which may
+% itself be compound (not/and/or) rather than a flat code list. Returns a node
+% (op 'anchor', with the common case a flat .codes list; or 'not'/'and'/'or'
+% when an alias expands to a combination) and the next cursor.
+function [node, k] = scanCodeset(T, k, aliases)
     o = tokAt(T, k);
     if o.kind == "punc" && o.val == "{"
         k = k + 1;
-        codes = strings(1, 0);
+        kids = {};
         while ~(tokAt(T, k).kind == "punc" && tokAt(T, k).val == "}")
             if tokAt(T, k).kind == "eof"
                 throw(MException('Alakazam:DefineBins', 'Unterminated ''{'' code list.'));
@@ -998,27 +1020,64 @@ function [codes, k] = scanCodeset(T, k, aliases)
                 k = k + 1; continue;                       % optional separators
             end
             [c, k] = scanCodeElem(T, k, aliases);
-            codes = [codes, c];
+            kids{end + 1} = c;
         end
         k = k + 1;                                          % consume '}'
-        if isempty(codes)
+        if isempty(kids)
             throw(MException('Alakazam:DefineBins', ...
                 'Empty ''{}'' code list near column %d.', tokAt(T, k).pos));
         end
+        node = combineOr(kids);
     else
-        [codes, k] = scanCodeElem(T, k, aliases);
+        [first, k] = scanCodeElem(T, k, aliases);
+        kids = {first};
         while tokAt(T, k).kind == "punc" && tokAt(T, k).val == "|"
             k = k + 1;
             [c, k] = scanCodeElem(T, k, aliases);
-            codes = [codes, c];
+            kids{end + 1} = c;
         end
+        node = combineOr(kids);
     end
 end
 
-function [codes, k] = scanCodeElem(T, k, aliases)
+function node = combineOr(kids)
+%COMBINEOR  OR together codeset terms, merging adjacent literal ('anchor')
+%   nodes into one flat code list. A plain pipe/brace list of literals (and/or
+%   aliases that are themselves plain code lists) therefore still collapses to
+%   a single 'anchor' node, exactly as before; only a compound alias (one
+%   built with not/and/or) produces a richer tree.
+    merged = {};
+    litAcc = strings(1, 0);
+    for i = 1:numel(kids)
+        kid = kids{i};
+        if strcmp(kid.op, 'anchor')
+            litAcc = [litAcc, kid.codes];
+        else
+            if ~isempty(litAcc)
+                merged{end + 1} = anchorNode(litAcc);
+                litAcc = strings(1, 0);
+            end
+            merged{end + 1} = kid;
+        end
+    end
+    if ~isempty(litAcc)
+        merged{end + 1} = anchorNode(litAcc);
+    end
+    if numel(merged) == 1
+        node = merged{1};
+    else
+        node.op = 'or'; node.kids = merged;
+    end
+end
+
+function node = anchorNode(codes)
+    node.op = 'anchor'; node.codes = codes;
+end
+
+function [node, k] = scanCodeElem(T, k, aliases)
     t = tokAt(T, k);
     if t.kind == "num" || t.kind == "str"
-        codes = canonType(t.val); k = k + 1;
+        node = anchorNode(canonType(t.val)); k = k + 1;
     elseif t.kind == "ident"
         name = char(t.val);
         if ~isfield(aliases, name)
@@ -1026,7 +1085,7 @@ function [codes, k] = scanCodeElem(T, k, aliases)
                 'Unknown name ''%s'' near column %d. Define it with ''let %s = ...'', or quote a text marker as "%s".', ...
                 name, t.pos, name, name));
         end
-        codes = aliases.(name); k = k + 1;                  % expand the alias
+        node = aliases.(name); k = k + 1;                   % splice in the alias's expression
     else
         throw(MException('Alakazam:DefineBins', ...
             'Parse error near column %d: expected a marker code.', t.pos));

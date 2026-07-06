@@ -98,12 +98,28 @@ bin 1 "Related"   : related   and next("S201") within (200,1200] ms
 bin 2 "Unrelated" : unrelated and next("S201") within (200,1200] ms
 ```
 
-- The right-hand side is any [code set](#sets-of-codes) (pipe form or braced
-  list).
+- The right-hand side is a [code set](#sets-of-codes) (pipe form or braced
+  list), optionally combined with `not` / `and` / `or` and parentheses — the
+  same combinators a `bin` expression uses, just without relations:
+
+  ```
+  let related   = {"s11" "s22" "s33" "s44" "s55"}
+  let unrelated = "s??" not related     % every two-char s-stimulus not in related
+  ```
+
+- An alias may reference any **other alias defined earlier** in the script
+  (`let`s are read top to bottom, before the bins); referencing one not yet
+  defined, or itself, is an "unknown name" error.
+- An alias may **not** contain a relation (`next(...)`, `prev(...)`,
+  `adjacent(...)`, `any(...)`) — those depend on which event is the current
+  candidate, so they belong in the bin's own expression, not in a reusable
+  alias.
 - An alias may be used anywhere a code set is allowed — as an anchor or inside
-  a relation, e.g. `next(related)`.
-- `let` statements may appear anywhere in the script (they are read before the
-  bins), but each name must be defined once.
+  a relation, e.g. `next(related)`, `next(unrelated)` — including a compound
+  alias built with `not`/`and`/`or`. A relation's own parentheses still take a
+  single code set, though; to combine codes with `not`/`and`/`or` inside
+  `next(...)`, define an alias for the combination first and reference that.
+- Each alias name must be defined once.
 
 ---
 
@@ -373,7 +389,9 @@ bin 1 "Related" {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,120
 
 ```
 script      : ( <let> | <bin> )+                        % epoch set in the GUI fields
-let         : let <name> = <codeset>                    % reusable code set
+let         : let <name> = <anchorExpr>                 % may use earlier let names
+anchorExpr  : anchorExpr or anchorExpr | anchorExpr [and] anchorExpr
+            | not anchorExpr | ( anchorExpr ) | <codeset>   % no relations here
 bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
             | bin <int> "<label>" = <combo>             % combination / difference bin
 combo       : [ '+' | '-' ] bin <int> ( ( '+' | '-' ) bin <int> )*
