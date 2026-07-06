@@ -122,7 +122,7 @@ else
     options = { 'fig'      varargin{1} 'geomhoriz' varargin{2} ...
                 'geomvert' varargin{3} 'uilist'    varargin(4:end) }; 
 end
-g = Tools.finputcheck(options, { 'geomhoriz' 'cell'   []      {};
+g = finputcheck(options, { 'geomhoriz' 'cell'   []      {};
                            'fig'       ''       []      0;
                            'geom'      'cell'   []      {};
                            'uilist'    'cell'   []      {};

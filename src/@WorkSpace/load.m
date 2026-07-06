@@ -1,5 +1,5 @@
 function load(this,~,~)
-    [this.Name, Path] = Tools.uigetfile2('*.wksp');
+    [this.Name, Path] = uigetfile2('*.wksp');
     if (this.Name == 0) %% Cancel
         return; 
     end

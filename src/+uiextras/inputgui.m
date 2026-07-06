@@ -16,9 +16,9 @@
 %                  following manner: { nb_row nb_col [x_topcorner y_topcorner]
 %                  [x_bottomcorner y_bottomcorner] };
 %   'geometry'   - cell array describing horizontal geometry. This corresponds 
-%                  to the Tools.supergui function input 'geomhoriz'
+%                  to the supergui function input 'geomhoriz'
 %   'geomvert'   - vertical geometry argument, this argument is passed on to
-%                  the Tools.supergui function
+%                  the supergui function
 %   'uilist'     - list of uicontrol lists describing elements properties
 %                  { { ui1 }, { ui2 }... }, { 'uiX' } being GUI matlab 
 %                  uicontrol arguments such as { 'style', 'radiobutton', 
@@ -34,7 +34,7 @@
 %                  input (fignumber). Default is 'normal'.
 %   'eval'       - [string] command to evaluate at the end of the creation 
 %                  of the GUI but before waiting for user input. 
-%   'screenpos'  - see Tools.supergui.m help message.
+%   'screenpos'  - see supergui.m help message.
 %   'skipline'   - ['on'|'off'] skip a row before the "OK" and "Cancel"
 %                  button. Default is 'on'.
 %
@@ -67,7 +67,7 @@
 %
 % Author: Arnaud Delorme, CNL / Salk Institute, La Jolla, 1 Feb 2002
 %
-% See also: Tools.supergui(), eeglab()
+% See also: supergui(), eeglab()
 
 % Copyright (C) Arnaud Delorme, CNL/Salk Institute, 27 Jan 2002, arno@salk.edu
 %
@@ -104,7 +104,7 @@ end;
 
 % checking inputs
 % ---------------
-g = Tools.finputcheck(options, { 'geom'     'cell'                []      {}; ...
+g = finputcheck(options, { 'geom'     'cell'                []      {}; ...
                            'geometry' {'cell','integer'}    []      []; ...
                            'uilist'   'cell'                []      {}; ...
                            'helpcom'  { 'string','cell' }   { [] [] }      ''; ...
