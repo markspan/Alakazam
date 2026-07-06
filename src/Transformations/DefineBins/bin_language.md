@@ -141,6 +141,12 @@ bin 3 "N400 effect" = bin 2 - bin 1
   averaging**: `Average` first averages the ordinary bins, then forms the
   combination from those averages. Its standard error propagates as the root of
   the summed squared errors of the terms.
+- Because the terms are ordinary bins matched on different anchors, they
+  typically comprise **different trials in different numbers** (e.g. 74
+  Related trials vs 68 Unrelated ones) — there is no shared trial count to
+  report for the combination itself. Rather than showing a misleading "0
+  trials", its legend/label shows the constituent counts signed the same way
+  as the combination, e.g. `N400 effect (n=68-74)`.
 
 ---
 

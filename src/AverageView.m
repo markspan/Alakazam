@@ -183,7 +183,11 @@ classdef AverageView < handle
                 for b = 1:size(eeg.data, 3)
                     name = char(string(eeg.bindesc(b).label));
                     if isfield(eeg.bindesc, "n") && ~isempty(eeg.bindesc(b).n)
-                        name = sprintf('%s (n=%d)', name, eeg.bindesc(b).n);
+                        % A regular bin's n is numeric (trial count); a
+                        % combination bin's is a string built from its
+                        % constituents' counts (e.g. "68-74"), since it has
+                        % no trials of its own.
+                        name = sprintf('%s (n=%s)', name, string(eeg.bindesc(b).n));
                     end
                     s.id     = id;
                     s.name   = name;

@@ -86,16 +86,26 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         combo   = input.bindesc(b).combo;
         acc     = zeros(nchan, npnts);
         varAcc  = zeros(nchan, npnts);
+        nParts  = strings(1, numel(combo));
         ok = true;
         for t = 1:numel(combo)
             if ~isKey(pos, combo(t).bin); ok = false; break; end
             r      = pos(combo(t).bin);
             acc    = acc    + combo(t).coeff * data(:, :, r);
             varAcc = varAcc + (combo(t).coeff * stErr(:, :, r)).^2;
+            if combo(t).coeff < 0;     sign = "-";
+            elseif t == 1;             sign = "";
+            else;                      sign = "+";
+            end
+            nParts(t) = sign + string(EEG.bindesc(r).n);
         end
         if ok
             data(:, :, b)  = acc;
             stErr(:, :, b) = sqrt(varAcc);
+            % A combination bin has no trials of its own; report the
+            % constituent bins' trial counts (e.g. "68-74") rather than the
+            % misleading "0" its own (empty) trial list would otherwise give.
+            EEG.bindesc(b).n = char(strjoin(nParts, ""));
         end
     end
 
