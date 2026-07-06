@@ -5,10 +5,12 @@ function load(this,~,~)
     end
     
     load(fullfile(Path, this.Name), '-mat', 'RawDirectory', 'CacheDirectory', 'ExportsDirectory');
-    
-    this.RawDirectory = strrep(strrep(RawDirectory, '\', '/'), '/', filesep);
-    this.CacheDirectory = strrep(strrep(CacheDirectory, '\', '/'), '/', filesep);
-    this.ExportsDirectory = strrep(strrep(ExportsDirectory, '\', '/'), '/', filesep);
+
+    % Expand any home-relative ("~/...") directories to absolute paths for this
+    % machine; absolute paths (other drives, network mounts) pass through.
+    this.RawDirectory     = this.fromStoredPath(RawDirectory);
+    this.CacheDirectory   = this.fromStoredPath(CacheDirectory);
+    this.ExportsDirectory = this.fromStoredPath(ExportsDirectory);
     
     this.open();
 end

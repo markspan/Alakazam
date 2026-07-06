@@ -31,9 +31,9 @@ classdef WorkSpace < handle
             if nargin == 1 || nargin == 4
             if nargin == 1
                 DIRS = load(fullfile(this.Parent.RepoRoot, 'DefaultWorkSpace.wksp'), '-mat');
-                this.RawDirectory = DIRS.RawDirectory;
-                this.CacheDirectory = DIRS.CacheDirectory;
-                this.ExportsDirectory = DIRS.ExportsDirectory;
+                this.RawDirectory     = this.fromStoredPath(DIRS.RawDirectory);
+                this.CacheDirectory   = this.fromStoredPath(DIRS.CacheDirectory);
+                this.ExportsDirectory = this.fromStoredPath(DIRS.ExportsDirectory);
             elseif nargin == 4
                 this.RawDirectory = varargin{1};
                 this.CacheDirectory = varargin{2};
