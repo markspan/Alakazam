@@ -71,6 +71,12 @@ t = 0 at the event. The same window applies to **every** bin.
 - Filling only one of the two is an error.
 - The values are remembered between runs.
 
+**Save.../Load...** in the dialog write/read the epoch bounds and the bin
+definitions together as a single `.binscript` file, so a saved script restores
+the dialog exactly as it was: a `% epoch_start_ms: …` / `% epoch_stop_ms: …`
+header followed by the script text. Loading a plain script file with no header
+is also fine (the epoch fields are just left as they were).
+
 Every matched event becomes one trial; an event that satisfies several bins is
 a **single** trial carrying all those bin tags (no data is duplicated). Windows
 that run past the start or end of the recording are padded with `NaN`. Each bin

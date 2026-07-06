@@ -275,14 +275,18 @@ function result = showDefineBinsDialog(defaultScript, prevEpoch)
         'FontName', 'Consolas');
     scriptArea.Layout.Row = 2;
 
-    % Row 3: OK / Cancel, right-aligned.
-    buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, ...
+    % Row 3: Save / Load on the left, OK / Cancel right-aligned.
+    buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {90, 90, '1x', 90, 90}, ...
         'Padding', [8 6 8 6]);
     buttons.Layout.Row = 3;
+    saveBtn = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~,~) onSave());
+    saveBtn.Layout.Column = 1;
+    loadBtn = uibutton(buttons, 'Text', 'Load...', 'ButtonPushedFcn', @(~,~) onLoad());
+    loadBtn.Layout.Column = 2;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
-    cancelBtn.Layout.Column = 2;
+    cancelBtn.Layout.Column = 4;
     okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
-    okBtn.Layout.Column = 3;
+    okBtn.Layout.Column = 5;
     fig.CloseRequestFcn = @(~,~) onCancel();
 
     uiwait(fig);
@@ -299,6 +303,61 @@ function result = showDefineBinsDialog(defaultScript, prevEpoch)
         uiresume(fig);
         delete(fig);
     end
+
+    function onSave()
+        % Save the epoch bounds and script text together, so a saved file
+        % restores the dialog exactly as it was when saved.
+        [file, path] = uiextras.uiputfile2('*.binscript', 'Save bin definitions as');
+        if isequal(file, 0); return; end
+        try
+            writeScriptFile(fullfile(path, file), strtrim(startField.Value), ...
+                strtrim(stopField.Value), strjoin(scriptArea.Value, newline));
+        catch err
+            uialert(fig, err.message, 'Save failed');
+        end
+    end
+
+    function onLoad()
+        [file, path] = uiextras.uigetfile2('*.binscript', 'Load bin definitions');
+        if isequal(file, 0); return; end
+        try
+            [startStr, stopStr, script] = readScriptFile(fullfile(path, file));
+            startField.Value = startStr;
+            stopField.Value  = stopStr;
+            scriptArea.Value = splitlines(script);
+        catch err
+            uialert(fig, err.message, 'Load failed');
+        end
+    end
+end
+
+function writeScriptFile(filePath, startStr, stopStr, script)
+%WRITESCRIPTFILE  Save epoch bounds + script text as a small header + body.
+    fid = fopen(filePath, 'w');
+    if fid < 0
+        throw(MException('Alakazam:DefineBins', 'Could not write %s.', filePath));
+    end
+    cleanup = onCleanup(@() fclose(fid));
+    fprintf(fid, '%% epoch_start_ms: %s\n', startStr);
+    fprintf(fid, '%% epoch_stop_ms: %s\n', stopStr);
+    fprintf(fid, '%s', script);
+end
+
+function [startStr, stopStr, script] = readScriptFile(filePath)
+%READSCRIPTFILE  Inverse of writeScriptFile; tolerates a body with no header.
+    lines = splitlines(fileread(filePath));
+    startStr = '';
+    stopStr  = '';
+    i = 1;
+    if numel(lines) >= i
+        tok = regexp(lines{i}, '^%\s*epoch_start_ms:\s*(.*)$', 'tokens', 'once');
+        if ~isempty(tok); startStr = strtrim(tok{1}); i = i + 1; end
+    end
+    if numel(lines) >= i
+        tok = regexp(lines{i}, '^%\s*epoch_stop_ms:\s*(.*)$', 'tokens', 'once');
+        if ~isempty(tok); stopStr = strtrim(tok{1}); i = i + 1; end
+    end
+    script = strjoin(lines(i:end), newline);
 end
 
 function win = parseEpochBounds(startStr, stopStr)
