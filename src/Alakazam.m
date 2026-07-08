@@ -486,15 +486,16 @@ classdef Alakazam < handle
         %ONMOUSECLICKED  Tree callback: load/plot on click, context menu on right-click.
         %   A single left click loads and displays the clicked dataset; a
         %   double left click redisplays it. A right click shows the tree's
-        %   context menu (this.Workspace.jmenu) at the click position.
+        %   context menu (this.Workspace.jmenu, a raw Java JPopupMenu) at the
+        %   click position.
         %
-        %   Shown manually here rather than via Tree.UIContextMenu: Tree.m's
-        %   own auto-show is gated on the Java event's isMetaDown, which does
-        %   not reliably indicate a right-click in this environment, whereas
-        %   eventData.Button (built from getButton()) does. The position
-        %   formula mirrors Tree.m's own internal one (onMouseClick, around
-        %   the "tPos = getpixelposition(...)" line) so the menu lands at the
-        %   click rather than a fixed corner.
+        %   jmenu.show(invoker, x, y) positions the popup relative to
+        %   INVOKER's own coordinate space, so INVOKER must be the exact
+        %   component the click coordinates came from -- Tree.m sets
+        %   MouseClickedCallback on tObj.jTree itself (createTreeCustomizations),
+        %   so eventData.Position ([e.getX, e.getY]) is already relative to
+        %   that same jTree; no further coordinate conversion is needed or
+        %   correct here.
             switch eventData.Button
                 case 1 % left button
                     if eventData.Clicks == 1
@@ -520,12 +521,8 @@ classdef Alakazam < handle
                         tree.SelectedNodes = eventData.Nodes;
                     end
                     javaObjs = tree.getJavaObjects();
-                    tPos = getpixelposition(javaObjs.hJContainer, true);
-                    x = eventData.Position(1);
-                    y = eventData.Position(2);
-                    mPos = [x + tPos(1), ...
-                            tPos(2) + tPos(4) - y + javaObjs.jScrollPane.getVerticalScrollBar().getValue()];
-                    set(this.Workspace.jmenu, 'Position', mPos, 'Visible', 'on');
+                    this.Workspace.jmenu.show(javaObjs.jTree, ...
+                        eventData.Position(1), eventData.Position(2));
             end
         end
 
