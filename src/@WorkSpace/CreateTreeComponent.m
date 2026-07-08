@@ -8,19 +8,15 @@ function CreateTreeComponent(this)
     this.TreeRoot = figure('Visible', 'off');
 %
 % Prepare the tree node context menu: rename, recalculate (not yet
-% implemented, greyed out) and delete.
-menuRename = javax.swing.JMenuItem('Rename');
-menuRecalc = javax.swing.JMenuItem('Recalculate');
-menuDelete = javax.swing.JMenuItem('Delete');
-set(menuRename, 'ActionPerformedCallback', @(~,~) this.Parent.onRenameNode());
-set(menuRecalc, 'Enabled', false); % not implemented yet
-set(menuDelete, 'ActionPerformedCallback', @(~,~) this.Parent.onDeleteNode());
-
-this.jmenu = javax.swing.JPopupMenu;
-this.jmenu.add(menuRename);
-this.jmenu.add(menuRecalc);
-this.jmenu.addSeparator;
-this.jmenu.add(menuDelete);
+% implemented, greyed out) and delete. Tree.UIContextMenu requires a
+% genuine HG uicontextmenu (ishghandle), not a raw Java JPopupMenu, so this
+% is built with uicontextmenu/uimenu rather than javax.swing classes.
+this.jmenu = uicontextmenu(this.TreeRoot);
+uimenu(this.jmenu, 'Text', 'Rename', ...
+    'MenuSelectedFcn', @(~,~) this.Parent.onRenameNode());
+uimenu(this.jmenu, 'Text', 'Recalculate', 'Enable', 'off'); % not implemented yet
+uimenu(this.jmenu, 'Text', 'Delete', 'Separator', 'on', ...
+    'MenuSelectedFcn', @(~,~) this.Parent.onDeleteNode());
 
 %
 
