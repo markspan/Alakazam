@@ -371,6 +371,91 @@ classdef Alakazam < handle
             save(this.Workspace.EEG.File, "EEG");
         end
 
+        function onRenameNode(this)
+        %ONRENAMENODE  Context-menu callback: rename the selected node.
+        %   Prompts for a new label and persists it both to the tree (its
+        %   display name) and to the underlying cached dataset's id
+        %   (EEG.id, re-saved to its own file) -- not just the currently
+        %   active dataset, since a right-click need not target it. Root
+        %   nodes are not renamable here.
+            node = this.Workspace.Tree.SelectedNodes;
+            if isempty(node) || isempty(node.Parent) || isempty(node.Parent.Parent)
+                return; % nothing selected, or a root node
+            end
+
+            answer = inputdlg('New name:', 'Rename node', 1, {node.Name});
+            if isempty(answer)
+                return; % cancelled
+            end
+            newName = strtrim(answer{1});
+            if isempty(newName)
+                return;
+            end
+
+            file = node.UserData;
+            loaded = load(file, "EEG");
+            loaded.EEG.id = newName;
+            EEG = loaded.EEG; % saved to disk under the variable name "EEG"
+            save(file, "EEG");
+
+            node.Name = newName;
+
+            % Keep the in-memory active dataset in sync if it is this node.
+            if isequal(this.Workspace.EEG.File, file)
+                this.Workspace.EEG.id = newName;
+            end
+        end
+
+        function onDeleteNode(this)
+        %ONDELETENODE  Context-menu callback: delete the selected node and
+        %   every dataset computed from it, on disk and in the tree, after
+        %   confirmation. Root nodes are not deletable here: that would also
+        %   remove everything ever computed from the source recording, a
+        %   much bigger action than pruning a single branch.
+            node = this.Workspace.Tree.SelectedNodes;
+            if isempty(node) || isempty(node.Parent) || isempty(node.Parent.Parent)
+                return; % nothing selected, or a root node
+            end
+
+            answer = questdlg( ...
+                sprintf('Delete "%s" and everything computed from it? This cannot be undone.', node.Name), ...
+                'Delete node', 'Delete', 'Cancel', 'Cancel');
+            if ~strcmp(answer, 'Delete')
+                return;
+            end
+
+            % A node's descendants are cached in a folder named after its own
+            % stem, sibling to its own file (see persistResultNode).
+            file = node.UserData;
+            [folder, stem] = fileparts(file);
+            childDir = fullfile(folder, stem);
+
+            % Close any open figure for this node or one of its descendants
+            % before their cache files disappear out from under them.
+            descendantFiles = {file};
+            if exist(childDir, "dir")
+                found = dir(fullfile(childDir, '**', '*.mat'));
+                for k = 1:numel(found)
+                    descendantFiles{end + 1} = fullfile(found(k).folder, found(k).name); %#ok<AGROW>
+                end
+            end
+            for k = 1:numel(descendantFiles)
+                fig = findobj("Type", "Figure", "Tag", descendantFiles{k});
+                if ~isempty(fig)
+                    close(fig);
+                end
+            end
+
+            if exist(file, "file")
+                delete(file);
+            end
+            if exist(childDir, "dir")
+                rmdir(childDir, "s");
+            end
+
+            delete(node);
+        end
+
         function onNodeDropped(this, ~, eventData)
         %ONNODEDROPPED  Tree callback: handle a node dropped onto another node.
         %   A "copy" drop (no modifier key) moves the node within the tree; a
@@ -397,10 +482,13 @@ classdef Alakazam < handle
             end
         end
 
-        function onMouseClicked(this, tree, eventData, jmenu)
-        %ONMOUSECLICKED  Tree callback: load/plot on click, context menu on right-click.
-        %   A single left click loads and displays the clicked dataset; a double
-        %   left click redisplays it; a right click shows the tear-off menu.
+        function onMouseClicked(this, tree, eventData)
+        %ONMOUSECLICKED  Tree callback: load/plot on click.
+        %   A single left click loads and displays the clicked dataset; a
+        %   double left click redisplays it. A right click's context menu is
+        %   handled entirely by the tree itself (Tree.UIContextMenu, wired in
+        %   CreateTreeComponent), which is what positions it correctly at the
+        %   click; there is nothing left to do for it here.
             switch eventData.Button
                 case 1 % left button
                     if eventData.Clicks == 1
@@ -420,8 +508,6 @@ classdef Alakazam < handle
                     elseif eventData.Clicks == 2
                         this.Plotter.plotCurrent();
                     end
-                case 3 % right button: show the tear-off context menu
-                    jmenu.show(tree, 10, 10);
             end
         end
 

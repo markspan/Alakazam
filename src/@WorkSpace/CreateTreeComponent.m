@@ -7,31 +7,36 @@ function CreateTreeComponent(this)
     this.Panel = javaObjectEDT('javax.swing.JPanel',javaObjectEDT('java.awt.BorderLayout'));   
     this.TreeRoot = figure('Visible', 'off');
 %
-% Prepare the context menu (note the use of HTML labels)
-menuItem1 = javax.swing.JMenuItem('action #1');
-menuItem2 = javax.swing.JMenuItem('<html><b>action #2');
-menuItem3 = javax.swing.JMenuItem('<html><i>action #3');
-% Set the menu items' callbacks
-set(menuItem1,'ActionPerformedCallback',@myFunc1);
-set(menuItem2,'ActionPerformedCallback',@myfunc2);
-set(menuItem3,'ActionPerformedCallback','disp ''action #3...'' ');
-% Add all menu items to the context menu (with internal separator)
+% Prepare the tree node context menu: rename, recalculate (not yet
+% implemented, greyed out) and delete.
+menuRename = javax.swing.JMenuItem('Rename');
+menuRecalc = javax.swing.JMenuItem('Recalculate');
+menuDelete = javax.swing.JMenuItem('Delete');
+set(menuRename, 'ActionPerformedCallback', @(~,~) this.Parent.onRenameNode());
+set(menuRecalc, 'Enabled', false); % not implemented yet
+set(menuDelete, 'ActionPerformedCallback', @(~,~) this.Parent.onDeleteNode());
+
 this.jmenu = javax.swing.JPopupMenu;
-this.jmenu.add(menuItem1);
-this.jmenu.add(menuItem2);
+this.jmenu.add(menuRename);
+this.jmenu.add(menuRecalc);
 this.jmenu.addSeparator;
-this.jmenu.add(menuItem3);
+this.jmenu.add(menuDelete);
 
 %
 
 
+    % UIContextMenu wires the popup menu through the tree's own right-click
+    % handling (Tree.onMouseClick), which positions it correctly at the click
+    % (accounting for scroll offset); showing it manually from
+    % onMouseClicked used to hardcode a (10,10) position instead.
     this.Tree = uiextras.jTree.Tree('DndEnabled', true, ...
         'Editable', true, ...
         'Parent', this.TreeRoot, ...
         'FontSize', 11, ...
         'RootVisible', 'off', ...
+        'UIContextMenu', this.jmenu, ...
         'SelectionChangeFcn', @(h,e) this.Parent.onSelectionChanged(h,e), ...
-        'MouseClickedCallback', @(h,e, jmenu) this.Parent.onMouseClicked(h,e, this.jmenu), ...
+        'MouseClickedCallback', @(h,e) this.Parent.onMouseClicked(h,e), ...
         'NodeDroppedCallback',  @(h,e) this.Parent.onNodeDropped(h,e), ...
         'NodeEditedCallback',  @(h,e) this.Parent.onNodeEdited(h,e) ...
     );
