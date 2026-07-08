@@ -52,10 +52,16 @@ classdef AlakazamPlotter < handle
             % must be unique per dataset. EEG.id is just the transform name
             % now (e.g. "Average" for every averaged dataset in the tree), so
             % it collides across nodes; the file's own stem is the node's
-            % timestamped key and is unique by construction (see
-            % Alakazam.persistResultNode), while still starting with the
-            % transform name so the tab stays recognisable.
+            % timestamped key (transformId + timestamp, glued with no
+            % separator, e.g. "Average051423") and is unique by construction
+            % (see Alakazam.persistResultNode). Split it back into "id
+            % (timestamp)" for display -- e.g. "Average (051423)" -- rather
+            % than showing the glued form as-is.
             [~, tabName, ~] = fileparts(eeg.File);
+            idStr = char(string(eeg.id));
+            if startsWith(tabName, idStr) && ~strcmp(tabName, idStr)
+                tabName = sprintf('%s (%s)', idStr, tabName(numel(idStr) + 1:end));
+            end
             newFig = figure( ...
                 "NumberTitle",       "off", ...
                 "Name",              tabName, ...
