@@ -64,6 +64,8 @@ if isempty(eyeCol)
 end
 
 eyeComps = find(probs(:, eyeCol) > opts.EyeThreshold);
+fprintf('AutoEyeICA: pruned %d of %d component(s) as eye (threshold %.2f).\n', ...
+    numel(eyeComps), size(probs, 1), opts.EyeThreshold);
 if ~isempty(eyeComps)
     EEG = pop_subcomp(EEG, eyeComps, 0);
 end
