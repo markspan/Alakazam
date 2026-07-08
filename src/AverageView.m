@@ -49,13 +49,16 @@ classdef AverageView < handle
         end
 
         function addDataset(this, eeg)
-        %ADDDATASET  Overlay another averaged dataset (ignores duplicates by id).
+        %ADDDATASET  Overlay another averaged dataset (ignores duplicates by
+        %   source file). EEG.id is just the transform name (e.g. "Average"
+        %   for every averaged dataset in the tree), so it cannot identify
+        %   *which* dataset this is; EEG.File is the unique cache path.
             newSeries = this.prepare(eeg);
             if isempty(newSeries)
                 return;
             end
-            existingIds = cellfun(@(s) string(s.id), this.Series);
-            if ~any(existingIds == string(newSeries{1}.id))
+            existingFiles = cellfun(@(s) string(s.file), this.Series);
+            if ~any(existingFiles == string(newSeries{1}.file))
                 this.Series  = [this.Series, newSeries];
                 this.Visible = [this.Visible, true(1, numel(newSeries))];
             end
@@ -81,8 +84,8 @@ classdef AverageView < handle
             % Reserve a strip on the right of the figure for the tickboxes.
             set(ax, "Units", "normalized", "Position", [0.08 0.11 0.62 0.815]);
 
-            ids = cellfun(@(s) string(s.id), this.Series);
-            manyIds = numel(unique(ids)) > 1;   % overlaying > 1 dataset
+            fileKeys = cellfun(@(s) string(s.file), this.Series);
+            manyIds  = numel(unique(fileKeys)) > 1;   % overlaying > 1 dataset
             allNames = strings(1, numel(this.Series));
             for i = 1:numel(this.Series)
                 s = this.Series{i};
@@ -233,6 +236,7 @@ classdef AverageView < handle
         %   one per bin for a bin-aware average, otherwise a single series.
             labels = {eeg.chanlocs.labels};
             if isfield(eeg, "id") && ~isempty(eeg.id); id = char(string(eeg.id)); else; id = ""; end
+            file = char(string(eeg.File));   % unique per dataset; id is not
             series = {};
 
             isBinned = ndims(eeg.data) == 3 && isfield(eeg, "bindesc") ...
@@ -249,6 +253,7 @@ classdef AverageView < handle
                         name = sprintf('%s (n=%s)', name, string(eeg.bindesc(b).n));
                     end
                     s.id     = id;
+                    s.file   = file;
                     s.name   = name;
                     s.times  = eeg.times;
                     s.data   = eeg.data(:, :, b);
@@ -258,6 +263,7 @@ classdef AverageView < handle
                 end
             else
                 s.id    = id;
+                s.file  = file;
                 s.name  = id;
                 s.times = eeg.times;
                 s.data  = reshape(eeg.data, size(eeg.data, 1), size(eeg.data, 2));
