@@ -4,10 +4,9 @@
 % Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.
 % Combine with and / or / not (adjacent terms are and-ed).
 
-let related   = {"11" "22" "33" "44" "55"}
-let unrelated = ?? not related
+let Rare     = {"11" "22" "33" "44" "55"}
+let Frequent = "??" not Rare
 
-bin 1 "Related"   : related   and next("S201") within (200,1200] ms
-bin 2 "Unrelated" : unrelated and next("S201") within (200,1200] ms
-
+bin 1 "Rare Correct"     : Rare and next("201") within (200,1200) ms
+bin 2 "Frequent Correct" : Frequent and next("201") within (200,1200) ms
 bin 3 "N400 effect" = bin 2 - bin 1
