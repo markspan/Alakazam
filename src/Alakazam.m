@@ -25,9 +25,9 @@ classdef Alakazam < handle
 %     * Properties UpperCamelCase (RootDir, ToolGroup, Workspace)
 %     * Locals     descriptive lowerCamelCase
 %   Double quotes are used for string literals, except where a char array is
-%   required: literals that build command strings later indexed character by
-%   character (EEG.Call), element-wise char comparisons, path components, and
-%   arguments to the char-only jTree / ToolGroup APIs.
+%   required: transformation ids (EEG.Call, fed straight to feval), element-wise
+%   char comparisons, path components, and arguments to the char-only jTree /
+%   ToolGroup APIs.
 %
 %   Adapted from "matlab.ui.internal.desktop.showcaseMPCDesigner()" by
 %   R. Chen; original work (c) 2015 The MathWorks, Inc. Further developed by
@@ -259,11 +259,9 @@ classdef Alakazam < handle
 
                 % The gallery passes the entry file name (e.g. "Fourier.m"); its
                 % stem is the transformation id and the function to call. The
-                % '.' is a char so the element-wise comparison works, and the
-                % call expression stays char because it is later sliced by index.
+                % '.' is a char so the element-wise comparison works.
                 entryName   = char(entry);
                 transformId = entryName(1:find(entryName == '.', 1, "last") - 1);
-                callExpr    = ['EEG=' transformId '(x.EEG);'];
 
                 % Apply the transformation to the current dataset.
                 [result.EEG, usedParams] = feval(transformId, this.Workspace.EEG);
@@ -276,7 +274,12 @@ classdef Alakazam < handle
 
                 % Record how the result was produced, so it can be re-applied
                 % when this branch is later dragged onto another dataset.
-                result.EEG.Call = callExpr;
+                % Call is just the transformation id (a plain function name,
+                % fed straight to feval on replay -- see evaluateDroppedBranch);
+                % it used to be a fake "EEG=<id>(x.EEG);" command string that
+                % was then re-parsed with strfind, which added a redundant,
+                % error-prone round trip for no benefit.
+                result.EEG.Call = transformId;
                 if isstruct(usedParams)
                     result.EEG.params = usedParams;
                 else
@@ -315,12 +318,9 @@ classdef Alakazam < handle
                 targetStruct = load(targetFile, "EEG");
                 sourceStruct = load(sourceFile, "EEG");
 
-                % Recover the transformation id from the stored call expression
-                % "EEG=<id>(x.EEG);". Call is a char array, indexed by position.
-                callExpr    = sourceStruct.EEG.Call;
-                eqPos       = strfind(callExpr, "=");
-                parenPos    = strfind(callExpr, "(");
-                transformId = callExpr(eqPos + 1 : parenPos - 1);
+                % Call is just the transformation id (see onTransformation); no
+                % parsing needed.
+                transformId = char(sourceStruct.EEG.Call);
 
                 if this.isOverlayableAverage(targetStruct.EEG, sourceStruct.EEG)
                     % Overlay the dropped average on top of the target average.
@@ -329,6 +329,17 @@ classdef Alakazam < handle
                 else
                     % General case: re-apply the stored transformation to the
                     % target, carrying over the source's call and parameters.
+                    % The id is stored data (loaded from a .mat file that may
+                    % predate a Transformations-folder cleanup), not something
+                    % just derived from code on disk, so it's validated before
+                    % feval rather than failing with a cryptic "undefined
+                    % function" error.
+                    if exist(transformId, "file") ~= 2
+                        throw(MException('Alakazam:evaluateDroppedBranch', ...
+                            ['Stored transformation ''%s'' no longer exists ' ...
+                             '(its .m file is missing from the Transformations ' ...
+                             'folder). Cannot replay this branch.'], transformId));
+                    end
                     [result.EEG, ~] = feval(transformId, targetStruct.EEG, sourceStruct.EEG.params);
                     result.EEG.Call   = sourceStruct.EEG.Call;
                     result.EEG.params = sourceStruct.EEG.params;
