@@ -77,18 +77,29 @@ classdef Alakazam < handle
             desktop.setDocumentArrangement(this.ToolGroup.Name, desktop.TILED, java.awt.Dimension(1, 1));
         end
 
-        function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, displayBase, transformId, parentTreeNode)
+        function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~, transformId, parentTreeNode)
         %PERSISTRESULTNODE  Save a transformation result and add it to the tree.
         %   [RESULTEEG, NEWNODE] = PERSISTRESULTNODE(THIS, RESULTEEG, SOURCEFILE,
         %   DISPLAYBASE, TRANSFORMID, PARENTTREENODE) performs the persistence
-        %   step shared by onTransformation and evaluateDroppedBranch:
-        %     * derive a timestamped cache file next to SOURCEFILE (in a folder
-        %       named after the source dataset), creating that folder if needed;
-        %     * set RESULTEEG.File and RESULTEEG.id (DISPLAYBASE plus TRANSFORMID);
+        %   step shared by onTransformation and evaluateDroppedBranch. DISPLAYBASE
+        %   (the calling node's own label) is accepted but currently unused, since
+        %   the tree shows each node's own transform id rather than an
+        %   accumulated lineage string; kept as a parameter in case that changes:
+        %     * derive a timestamped cache file in a folder named after the
+        %       source dataset's own stem (sibling to SOURCEFILE), creating
+        %       that folder if needed;
+        %     * set RESULTEEG.File and RESULTEEG.id (just TRANSFORMID: the
+        %       tree shows each node's own transform, not its lineage);
         %     * add a tree node under PARENTTREENODE with the matching icon,
         %       expand its parent and select it;
         %     * save RESULTEEG to disk and make it the workspace's current EEG.
         %   Returns the updated dataset and the new tree node.
+        %
+        %   The child folder MUST be named after the source's own stem, not
+        %   the new node's key: treeTraverse (tree rebuild from disk) and
+        %   evaluateDroppedBranch (drag-drop recursion) both locate a node's
+        %   children this way, by re-deriving the same folder name from the
+        %   node's own file path rather than storing it anywhere.
 
             % Timestamped key, e.g. "Fourier051423". The DDhhMMss format is
             % kept for backwards compatibility with existing cache trees. The
@@ -104,7 +115,7 @@ classdef Alakazam < handle
             end
 
             resultEEG.File = fullfile(childDir, [nodeKey '.mat']);
-            resultEEG.id   = [char(displayBase) ' - ' transformId];
+            resultEEG.id   = transformId;
 
             % Add the node to the data browser and select it. The jTree
             % property names are char arrays, as that API expects.
