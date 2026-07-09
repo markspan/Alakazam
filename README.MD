@@ -75,7 +75,11 @@ overlays for interbeat intervals and events.
 
 Requirements: MATLAB (with the App Designer / toolstrip components) and the
 external toolkits listed in [`dependencies.md`](dependencies.md), most importantly
-EEGLAB.
+EEGLAB. Parallel Computing Toolbox is advised (not required) for the AutoGEDAI
+transformation: its GEDAI plugin dependency uses GPU acceleration when the
+toolbox is available, and falls back to CPU (via a small compatibility shim,
+`src/Compat/gpuDeviceCount.m`) without it, so a machine without the toolbox is
+just slower, not broken.
 
 ```matlab
 % From the repository root:
