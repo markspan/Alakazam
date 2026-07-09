@@ -228,7 +228,7 @@ function [script, epochWin] = promptForScript()
     template = [ ...
         '% Codes are markers; ? = any char; { } lists alternatives; | is or.'              newline ...
         '% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.'             newline ...
-        '% let names a code set; = makes a difference bin; rt / timelock refine a bin.'    newline ...
+        '% let names a reusable expression (codes or relations); = makes a difference bin.' newline ...
         'let related = {"s11" "s22" "s33" "s44" "s55"}'                                    newline ...
         'bin 1 "Related"    related           and next("S201") within (200,1200] ms'       newline ...
         'bin 2 "Unrelated"  "s??" not related and next("S201") within (200,1200] ms'       newline ...
@@ -690,7 +690,46 @@ function spec = parseSpec(script)
             bins(end + 1) = parseBinStatement(stmts{s}, script, aliases);
         end
     end
+    checkComboReferences(bins);
     spec.bins = bins;
+end
+
+function checkComboReferences(bins)
+%CHECKCOMBOREFERENCES  Catch two combination-bin mistakes right after
+%   parsing, rather than as an opaque error much later during Average: a
+%   combination referencing a bin number that does not exist in the script,
+%   and a circular reference (a bin that, directly or through others,
+%   combines itself) -- a combination bin may reference another
+%   combination bin (nested/interaction differences), so this is not just
+%   "must reference an ordinary bin".
+    byIndex = containers.Map('KeyType', 'double', 'ValueType', 'double');
+    for i = 1:numel(bins); byIndex(bins(i).index) = i; end
+
+    state = zeros(1, numel(bins));  % 0 unvisited, 1 visiting, 2 done
+    for i = 1:numel(bins)
+        visit(i, {});
+    end
+
+    function visit(i, path)
+        if state(i) == 2; return; end
+        if state(i) == 1
+            throw(MException('Alakazam:DefineBins', ...
+                'Circular combination bin reference: %s.', ...
+                strjoin([path, {bins(i).label}], ' -> ')));
+        end
+        if isempty(bins(i).combo); state(i) = 2; return; end
+        state(i) = 1;
+        for t = 1:numel(bins(i).combo)
+            refIdx = bins(i).combo(t).bin;
+            if ~isKey(byIndex, refIdx)
+                throw(MException('Alakazam:DefineBins', ...
+                    'bin %g "%s": combination references bin %g, which does not exist.', ...
+                    bins(i).index, bins(i).label, refIdx));
+            end
+            visit(byIndex(refIdx), [path, {bins(i).label}]);
+        end
+        state(i) = 2;
+    end
 end
 
 function bin = parseBinStatement(stmt, script, aliases)
@@ -740,9 +779,12 @@ function bin = parseBinStatement(stmt, script, aliases)
 end
 
 function [name, node] = parseLetStatement(stmt, aliases)
-    % let <ident> = <expr>   (codes combined with not/and/or/parens; may
-    % reference any alias defined earlier in the script, but not relations
-    % such as next(...)/prev(...), which belong in the bin's own expression).
+    % let <ident> = <expr>   (any bin expression: codes, relations,
+    % not/and/or/parens, and earlier aliases). Spliced in wherever the alias
+    % is referenced, so evalNode sees exactly the same tree it would if the
+    % alias's text had been written out inline -- a relation inside an alias
+    % is evaluated relative to whatever candidate event the reference site
+    % is evaluated at, same as if it had not been factored out.
     [~,     rest] = expectTok(stmt, "kw", "let", 'the keyword ''let''');
     [nameT, rest] = expectTok(rest, "ident", 'an alias name after ''let''');
     name = char(nameT.val);
@@ -753,29 +795,12 @@ function [name, node] = parseLetStatement(stmt, aliases)
     rest = rest(2:end);
     if isempty(rest)
         throw(MException('Alakazam:DefineBins', ...
-            'let %s: expected a code or code expression after ''=''.', name));
+            'let %s: expected an expression after ''=''.', name));
     end
     [node, k] = parseExprTokens(rest, aliases);
     if k <= numel(rest)
         throw(MException('Alakazam:DefineBins', ...
             'let %s: unexpected token near column %d.', name, rest(k).pos));
-    end
-    forbidRelations(node, name);
-end
-
-function forbidRelations(node, name)
-%FORBIDRELATIONS  A let's body may combine codes with not/and/or/parens, but
-%   not relations (next/prev/adjacent/any); those stay in the bin's own
-%   expression, where "which event's neighbour" is unambiguous.
-    switch node.op
-        case 'rel'
-            throw(MException('Alakazam:DefineBins', ...
-                'let %s: relations like next(...)/prev(...) are not allowed here; write them in the bin''s own expression.', ...
-                name));
-        case 'not'
-            forbidRelations(node.kid, name);
-        case {'and', 'or'}
-            for i = 1:numel(node.kids); forbidRelations(node.kids{i}, name); end
     end
 end
 
@@ -936,7 +961,7 @@ function [node, k] = parseExprTokens(T, aliases)
 
     function tf = startsTerm()
         t = cur();
-        tf = (t.kind == "num") || (t.kind == "str") ...
+        tf = (t.kind == "num") || (t.kind == "str") || (t.kind == "ident") ...
             || (t.kind == "kw" && any(t.val == ...
                     ["not","next","prev","adjacent","any"])) ...
             || (t.kind == "punc" && (t.val == "(" || t.val == "{"));

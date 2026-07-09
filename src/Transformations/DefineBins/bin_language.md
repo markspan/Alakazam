@@ -87,8 +87,9 @@ later per-bin average.
 
 ## Aliases (the `let` statement)
 
-A `let` statement names a set of codes so several bins can share it without
-repeating the list:
+A `let` statement names a reusable piece of a bin so several bins can share it
+without repeating it. The right-hand side is **any bin expression** — a code
+set, a relation, or a combination of terms with `not`/`and`/`or`/parentheses:
 
 ```
 let related   = {"s11" "s22" "s33" "s44" "s55"}
@@ -98,28 +99,43 @@ bin 1 "Related"   : related   and next("S201") within (200,1200] ms
 bin 2 "Unrelated" : unrelated and next("S201") within (200,1200] ms
 ```
 
-- The right-hand side is a [code set](#sets-of-codes) (pipe form or braced
-  list), optionally combined with `not` / `and` / `or` and parentheses — the
-  same combinators a `bin` expression uses, just without relations:
-
-  ```
-  let related   = {"s11" "s22" "s33" "s44" "s55"}
-  let unrelated = "s??" not related     % every two-char s-stimulus not in related
-  ```
-
 - An alias may reference any **other alias defined earlier** in the script
   (`let`s are read top to bottom, before the bins); referencing one not yet
   defined, or itself, is an "unknown name" error.
-- An alias may **not** contain a relation (`next(...)`, `prev(...)`,
-  `adjacent(...)`, `any(...)`) — those depend on which event is the current
-  candidate, so they belong in the bin's own expression, not in a reusable
-  alias.
-- An alias may be used anywhere a code set is allowed — as an anchor or inside
-  a relation, e.g. `next(related)`, `next(unrelated)` — including a compound
-  alias built with `not`/`and`/`or`. A relation's own parentheses still take a
-  single code set, though; to combine codes with `not`/`and`/`or` inside
-  `next(...)`, define an alias for the combination first and reference that.
+- An alias may be used anywhere a term or a code set is allowed — as a whole
+  anchor, combined with other terms (`112 and answered`, or just
+  `112 answered` — adjacent terms are and-ed the same way as any other pair,
+  see [Combining terms](#combining-terms)), or inside a relation's own
+  argument, e.g. `next(related)`.
 - Each alias name must be defined once.
+
+A code-only alias (`let related = {...}`) can be combined with `not`/`and`/`or`
+like any anchor:
+
+```
+let related   = {"s11" "s22" "s33" "s44" "s55"}
+let unrelated = "s??" not related     % every two-char s-stimulus not in related
+```
+
+An alias can also hold a **relation**, or a whole predicate that includes one —
+this is the main reason to use one, since it de-duplicates the part of a bin
+that's usually repeated verbatim across several bins:
+
+```
+let answered = next(118) within (200,1200] ms
+
+bin 1 "Related"   : 112 and answered
+bin 2 "Unrelated" : 122 and answered
+```
+
+- A relation inside an alias is evaluated exactly as if its text had been
+  written out inline at the reference site: relative to whatever candidate
+  event the reference itself is being evaluated at. `answered` above means
+  the same thing whether it is used directly in a `bin`, or as an argument to
+  `next(...)`/`prev(...)` (testing whether a *neighbour* satisfies it) — there
+  is no special-casing to worry about.
+- Reaction-time capture ([Reaction times](#reaction-times)) works the same way
+  through an alias as if the relation had been written directly in the bin.
 
 ---
 
@@ -136,17 +152,43 @@ bin 3 "N400 effect" = bin 2 - bin 1
 
 - The right-hand side is a sum/difference of `bin <n>` terms, e.g.
   `bin 2 - bin 1`, `bin 1 + bin 3`.
-- The referenced bins must be ordinary (event-matching) bins.
 - A combination bin has **no trials of its own**. It is computed **after
-  averaging**: `Average` first averages the ordinary bins, then forms the
-  combination from those averages. Its standard error propagates as the root of
-  the summed squared errors of the terms.
+  averaging**: `Average` first averages the ordinary (event-matching) bins,
+  then forms each combination from those averages. Its standard error
+  propagates as the root of the summed squared errors of the terms.
 - Because the terms are ordinary bins matched on different anchors, they
   typically comprise **different trials in different numbers** (e.g. 74
   Related trials vs 68 Unrelated ones) — there is no shared trial count to
   report for the combination itself. Rather than showing a misleading "0
   trials", its legend/label shows the constituent counts signed the same way
   as the combination, e.g. `N400 effect (n=68-74)`.
+
+### Nested combination bins (interaction effects)
+
+A combination bin's terms may reference **other combination bins**, not just
+ordinary ones — this is how you build a difference-of-differences, e.g. an
+interaction effect in a factorial design:
+
+```
+bin 1 "Related, expected"     : 112 and next(118) within (200,1200] ms
+bin 2 "Unrelated, expected"   : 122 and next(118) within (200,1200] ms
+bin 3 "Related, unexpected"   : 113 and next(118) within (200,1200] ms
+bin 4 "Unrelated, unexpected" : 123 and next(118) within (200,1200] ms
+
+bin 5 "Relatedness effect, expected"   = bin 2 - bin 1
+bin 6 "Relatedness effect, unexpected" = bin 4 - bin 3
+bin 7 "Relatedness x Expectancy"       = bin 6 - bin 5
+```
+
+- Order in the script does not matter — `Average` resolves combination bins in
+  dependency order regardless of which is written first, so `bin 7` above
+  could equally be declared before `bin 5`/`bin 6`.
+- A bin combining itself, directly or through a chain of others, is a
+  **circular reference** error, and a combination referencing a bin number
+  that does not exist is likewise an error — both are caught immediately when
+  the script is parsed, not later during `Average`.
+- Nesting is arbitrarily deep: bin 7 above could itself be combined into a
+  further bin.
 
 ---
 
@@ -395,11 +437,10 @@ bin 1 "Related" {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,120
 
 ```
 script      : ( <let> | <bin> )+                        % epoch set in the GUI fields
-let         : let <name> = <anchorExpr>                 % may use earlier let names
-anchorExpr  : anchorExpr or anchorExpr | anchorExpr [and] anchorExpr
-            | not anchorExpr | ( anchorExpr ) | <codeset>   % no relations here
+let         : let <name> = <expr>                       % may use earlier let names
 bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
             | bin <int> "<label>" = <combo>             % combination / difference bin
+                                                         % (may reference other combo bins)
 combo       : [ '+' | '-' ] bin <int> ( ( '+' | '-' ) bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
             | <anchor> | <relation>          % 'and' optional between terms
@@ -410,7 +451,7 @@ relation    : next( <codeset> ) [within <window>]
             | any( <codeset> ) within <window>          % window required
 codeset     : <code> ( '|' <code> )*                    % pipe form
             | '{' <code> [ , ] <code> … '}'             % braced list
-            | <name>                                    % a 'let' alias
+            | <name>                                    % a 'let' alias (any expr, incl. relations)
 code        : <integer> | "<text marker>"               % ? = any char, * = any run
 window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples ]
 comment     : % … end-of-line   |   # … end-of-line
