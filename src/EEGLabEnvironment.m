@@ -21,8 +21,10 @@ classdef EEGLabEnvironment
     properties (Constant, Access = private)
         % Plugin registry name and a function it provides, per EEGLAB plugin.
         Plugins = { ...
-            'bva-io',  'pop_loadbv';  ...  % BrainVision (.vhdr) import
-            'ICLabel', 'iclabel'}          % IC classification
+            'bva-io',  'pop_loadbv';   ...  % BrainVision (.vhdr) import
+            'ICLabel', 'iclabel';      ...  % IC classification
+            'dipfit',  'dipfitdefs'}        % head models + 10-20 electrode
+                                             % template (AutoEyeICA, AutoGEDAI)
 
         EEGLabUrl  = 'https://sccn.ucsd.edu/eeglab/currentversion/eeglab_current.zip'
         FastIcaUrl = 'https://research.ics.aalto.fi/ica/fastica/code/FastICA_2.5.zip'
@@ -35,15 +37,53 @@ classdef EEGLabEnvironment
             EEGLabEnvironment.ensurePlugins();
         end
 
+        function folder = findInstalled(targetName, probeFile)
+        %FINDINSTALLED  Locate a previous installFromZip install on disk.
+        %   FOLDER = FINDINSTALLED(TARGETNAME, PROBEFILE) looks for PROBEFILE
+        %   under <home>/Documents/MATLAB/<targetName> (where installFromZip
+        %   puts things) and returns its containing folder, or '' if not
+        %   found. Does NOT check or modify the MATLAB path.
+        %
+        %   addpath is session-only (installFromZip deliberately never calls
+        %   savepath), so a previously-downloaded plugin is not back on the
+        %   path in a fresh MATLAB session even though it is still on disk.
+        %   Callers use this to reattach an existing install (addpath the
+        %   returned folder) instead of re-downloading, and -- for installs
+        %   gated behind their own consent prompt, e.g. AutoGEDAI's -- to
+        %   skip re-asking every session for something already agreed to.
+            folder = '';
+            home = getenv('USERPROFILE');
+            if isempty(home)
+                home = char(java.lang.System.getProperty('user.home'));
+            end
+            target = fullfile(home, 'Documents', 'MATLAB', targetName);
+            if ~exist(target, 'dir')
+                return;
+            end
+            found = dir(fullfile(target, '**', probeFile));
+            if ~isempty(found)
+                folder = found(1).folder;
+            end
+        end
+
         function installFromZip(url, targetName, probeFile)
         %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
-        %   Downloads the archive at URL into a temporary file, unzips it under
+        %   If PROBEFILE is already present on disk from a previous install
+        %   (see findInstalled), reattaches that folder to the path and
+        %   returns without downloading anything. Otherwise downloads the
+        %   archive at URL into a temporary file, unzips it under
         %   <home>/Documents/MATLAB/<targetName>, locates PROBEFILE in the
-        %   unzipped tree and adds that folder to the MATLAB path. Errors if the
-        %   download, unzip or probe-file lookup fails. We do not call savepath.
-        %   Public (not just used at startup): individual transformations, e.g.
-        %   AutoGEDAI, call this directly to install an optional plugin on
-        %   first use, after their own consent prompt.
+        %   unzipped tree and adds that folder to the MATLAB path. Errors if
+        %   the download, unzip or probe-file lookup fails. We do not call
+        %   savepath. Public (not just used at startup): individual
+        %   transformations, e.g. AutoGEDAI, call this directly to install an
+        %   optional plugin on first use, after their own consent prompt.
+            existing = EEGLabEnvironment.findInstalled(targetName, probeFile);
+            if ~isempty(existing)
+                addpath(existing);
+                return;
+            end
+
             home = getenv('USERPROFILE');
             if isempty(home)
                 home = char(java.lang.System.getProperty('user.home'));
