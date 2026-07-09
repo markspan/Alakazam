@@ -50,13 +50,10 @@ else
     EEG = pop_runica(EEG);
 end
 
-%% ICLabel needs scalp locations; auto-fill from a standard montage template
-%  when none are set, rather than opening the interactive Channel Editor.
-hasLocs = isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) ...
-    && isfield(EEG.chanlocs, 'X') && ~all(cellfun(@isempty, {EEG.chanlocs.X}));
-if ~hasLocs
-    EEG = pop_chanedit(EEG, 'lookup', 'standard-10-5-cap385.elp');
-end
+%% ICLabel needs a real X/Y/Z scalp position for every electrode, from
+%  dipfit's standard 10-5 (343-electrode) template.
+EEG = TransTools.EnsureChanlocs(EEG, 'Alakazam:AutoEyeICA', ...
+    TransTools.Dipfit1005File('Alakazam:AutoEyeICA'));
 
 %% Classify
 EEG = iclabel(EEG, 'beta');

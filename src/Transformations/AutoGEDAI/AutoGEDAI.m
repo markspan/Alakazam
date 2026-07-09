@@ -32,6 +32,15 @@ function [EEG, opts] = AutoGEDAI(input, opts)
 %               per-channel ENOVA) are kept in EEG.etc.GEDAI.
 %       opts  - Struct with the settings used.
 %
+%   GEDAI's leadfield-based denoising only works on real scalp EEG channels.
+%   Eligibility is decided against GEDAI's own bundled 343-electrode 10-5
+%   system template (auxiliaries/standard_1005.elc) -- the same electrode
+%   set GEDAI's 'precomputed' mode itself matches channels against by label
+%   -- so AutoGEDAI has no dipfit dependency. A channel not in that set
+%   (e.g. EOG, ECG) is excluded from GEDAI and spliced back into its
+%   original slot, unmodified, once denoising is done. Throws if *no*
+%   channel matches.
+%
 %   See also: AutoEyeICA.
 
 %% Check for the EEG dataset input:
@@ -76,14 +85,37 @@ EEG = input;
 [~, name, ~] = fileparts(EEG.File);
 EEG.id = name;
 
-%% GEDAI needs scalp locations; auto-fill from a standard montage template
-%  when none are set, rather than opening the interactive Channel Editor.
-%  (Same fallback as AutoEyeICA uses for ICLabel.)
-hasLocs = isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) ...
-    && isfield(EEG.chanlocs, 'X') && ~all(cellfun(@isempty, {EEG.chanlocs.X}));
-if ~hasLocs
-    EEG = pop_chanedit(EEG, 'lookup', 'standard-10-5-cap385.elp');
+%% GEDAI's leadfield-based denoising only works on real scalp EEG channels.
+%  Eligibility is decided against GEDAI's OWN bundled 343-electrode 10-5
+%  template (auxiliaries/standard_1005.elc) -- the same electrode set its
+%  'precomputed' mode itself matches channels against by label -- rather
+%  than dipfit's, so AutoGEDAI has no dipfit dependency at all (GEDAI
+%  already ships everything it needs) and eligibility exactly matches what
+%  GEDAI itself will accept. A channel not in that list (EOG, ECG, ...) is
+%  excluded from GEDAI and spliced back into its original slot, unmodified,
+%  once denoising is done.
+gedaiElc = gedaiElcFile();
+templateLabels = lower(string({readlocs(gedaiElc).labels}));
+ownLabels = lower(string({EEG.chanlocs.labels}));
+hasPos = ismember(ownLabels, templateLabels);
+eegIdx = find(hasPos);
+otherIdx = find(~hasPos);
+
+if isempty(eegIdx)
+    throw(MException('Alakazam:AutoGEDAI', ...
+        ['None of this dataset''s channels match GEDAI''s standard 10-5 ' ...
+         'electrode set, so there is nothing for GEDAI to denoise. ' ...
+         'Rename channels to match 10-5 nomenclature first.']));
 end
+if ~isempty(otherIdx)
+    fprintf('AutoGEDAI: excluding %d channel(s) not in GEDAI''s standard electrode set (not denoised): %s\n', ...
+        numel(otherIdx), strjoin({EEG.chanlocs(otherIdx).labels}, ', '));
+end
+
+% 'interpolated' mode needs every channel to carry X/Y/Z ('precomputed'
+% matches by label alone and ignores position); fill from the same template
+% used for eligibility, so positions and matching stay consistent.
+EEG = TransTools.FillChanlocs(EEG, 'Alakazam:AutoGEDAI', gedaiElc);
 
 %% Map the exposed options onto GEDAI's positional arguments; everything not
 %  exposed here keeps GEDAI's own default (epoch size 12 cycles, no
@@ -98,15 +130,41 @@ if strcmpi(opts.RejectChannels, 'yes')
 end
 useParallel = strcmpi(opts.Parallel, 'yes');
 
-%% Denoise
+%% Denoise just the positioned channels.
+eegOnly = pop_select(EEG, 'channel', eegIdx);
 [EEGclean, ~, SENSAI_score, ~, ~, ~, ENOVA_per_epoch, ~, ~, ENOVA_per_channel] = GEDAI( ...
-    EEG, opts.Strength, 12, opts.LowCut, opts.Leadfield, useParallel, false, ...
+    eegOnly, opts.Strength, 12, opts.LowCut, opts.Leadfield, useParallel, false, ...
     epochThreshold, channelThreshold, 'eeg', Inf);
 
-EEG = EEGclean;
+%% Re-insert the excluded (non-EEG) channels at their original positions,
+%  unmodified, so the returned dataset still has every original channel.
+%  pop_select preserves the given channel order, so eegIdx (ascending)
+%  lines up 1:1 with EEGclean's channels. Only .data needs merging back:
+%  chanlocs for eegIdx were already fully populated by FillChanlocs before
+%  the split, and GEDAI does not rename or reposition channels, so the
+%  original (already-filled) chanlocs still describe them correctly --
+%  copying EEGclean's own chanlocs back in risks a struct field mismatch
+%  (pop_select/GEDAI may add or drop chanlocs fields) for no real benefit.
+%
+%  GEDAI's epoch rejection can shrink the sample/trial count; if it did, the
+%  excluded channels' original-length data no longer lines up with
+%  EEGclean's, and there is no way to know which epochs/samples GEDAI kept.
+if ~isequal(size(EEGclean.data, 2), size(EEG.data, 2)) ...
+        || ~isequal(size(EEGclean.data, 3), size(EEG.data, 3))
+    throw(MException('Alakazam:AutoGEDAI', ...
+        ['Cannot re-insert the excluded channels: GEDAI''s epoch rejection ' ...
+         'changed the number of samples or trials, so the excluded ' ...
+         'channels'' original data no longer lines up. Disable epoch ' ...
+         'rejection, or run AutoGEDAI on a dataset with only 10-5-' ...
+         'matched channels.']));
+end
+merged = EEG;
+merged.data(eegIdx, :, :) = EEGclean.data;
+EEG = merged;
 EEG.id = name;
 EEG.etc.GEDAI = struct('SENSAI_score', SENSAI_score, ...
     'ENOVA_per_epoch', ENOVA_per_epoch, 'ENOVA_per_channel', ENOVA_per_channel, ...
+    'channelIndices', eegIdx, 'excludedChannels', {{EEG.chanlocs(otherIdx).labels}}, ...
     'options', opts);
 
 fprintf('AutoGEDAI: SENSAI score %.3f.\n', SENSAI_score);
@@ -128,7 +186,18 @@ function ensureGEDAI()
 %   which EEGLabEnvironment installs quietly at startup -- it is installed
 %   lazily here, on first use, only after the user explicitly agrees.
     if ~isempty(which('GEDAI'))
-        return; % already available
+        return; % already available this session
+    end
+
+    % addpath (inside installFromZip) is deliberately session-only, so a
+    % previous install is not back on the path in a fresh MATLAB session
+    % even though it is still on disk. Reattach it quietly here instead of
+    % re-asking for consent (already given) and re-downloading (unnecessary)
+    % every single time Alakazam starts.
+    existing = EEGLabEnvironment.findInstalled('GEDAI', 'GEDAI.m');
+    if ~isempty(existing)
+        addpath(existing);
+        return;
     end
 
     gedaiUrl = 'https://github.com/neurotuning/GEDAI-master/archive/refs/tags/v1.7.zip';
@@ -154,4 +223,23 @@ function ensureGEDAI()
     end
 
     EEGLabEnvironment.installFromZip(gedaiUrl, 'GEDAI', 'GEDAI.m');
+end
+
+% ======================================================================= %
+function elc = gedaiElcFile()
+%GEDAIELCFILE  Absolute path to GEDAI's own bundled 10-5 electrode template.
+%   GEDAI ships its own copy of the 343-electrode 10-5 system template (an
+%   .elc file, ASA format, precomputed via OpenMEEG -- see
+%   auxiliaries/standard_1005.elc in the GEDAI plugin) and adds its
+%   containing 'auxiliaries' folder to the path itself
+%   (fileparts(which('GEDAI'))), so this is resolved the same way rather
+%   than depending on dipfit for something GEDAI already provides. Called
+%   after ensureGEDAI, so GEDAI (and hence this file) is guaranteed to be on
+%   the path already.
+    gedaiRoot = fileparts(which('GEDAI'));
+    elc = fullfile(gedaiRoot, 'auxiliaries', 'standard_1005.elc');
+    if exist(elc, 'file') ~= 2
+        throw(MException('Alakazam:AutoGEDAI', ...
+            'GEDAI''s bundled electrode template was not found at %s.', elc));
+    end
 end
