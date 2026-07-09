@@ -1,0 +1,1 @@
+{"Name":"Scalp Distribution","Description":"Plot scalp topographies of an averaged ERP over a time window","Entry":"ScalpDistribution.m","Icon":"ScalpDistribution.png","Section":"Plots","Category":"EEG"}
