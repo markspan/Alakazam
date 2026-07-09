@@ -7,21 +7,28 @@ function CreateTreeComponent(this)
     this.Panel = javaObjectEDT('javax.swing.JPanel',javaObjectEDT('java.awt.BorderLayout'));   
     this.TreeRoot = figure('Visible', 'off');
 %
-% Prepare the tree node context menu: rename, recalculate (not yet
-% implemented, greyed out) and delete. This has to be a raw Java
-% JPopupMenu, not an HG uicontextmenu: this.TreeRoot (the menu's would-be
-% HG parent) is a hidden backing figure (only its Java tree component is
-% ever actually shown, re-parented into the ToolGroup's data browser
-% panel below), and an HG context menu cannot render on a figure that is
-% never made visible. A raw Swing popup has no such dependency.
+% Prepare the tree node context menu: list events (read-only inspection,
+% continuous datasets only -- greyed out for epoched/averaged data, see
+% onMouseClicked), rename, recalculate (not yet implemented, greyed out)
+% and delete. This has to be a raw Java JPopupMenu, not an HG uicontextmenu:
+% this.TreeRoot (the menu's would-be HG parent) is a hidden backing figure
+% (only its Java tree component is ever actually shown, re-parented into
+% the ToolGroup's data browser panel below), and an HG context menu cannot
+% render on a figure that is never made visible. A raw Swing popup has no
+% such dependency.
+menuListEvents = javax.swing.JMenuItem('List events');
 menuRename = javax.swing.JMenuItem('Rename');
 menuRecalc = javax.swing.JMenuItem('Recalculate');
 menuDelete = javax.swing.JMenuItem('Delete');
+set(menuListEvents, 'ActionPerformedCallback', @(~,~) this.Parent.onListEvents());
 set(menuRename, 'ActionPerformedCallback', @(~,~) this.Parent.onRenameNode());
 set(menuRecalc, 'Enabled', false); % not implemented yet
 set(menuDelete, 'ActionPerformedCallback', @(~,~) this.Parent.onDeleteNode());
+this.jmenuListEvents = menuListEvents; % enabled state toggled per-node in onMouseClicked
 
 this.jmenu = javax.swing.JPopupMenu;
+this.jmenu.add(menuListEvents);
+this.jmenu.addSeparator;
 this.jmenu.add(menuRename);
 this.jmenu.add(menuRecalc);
 this.jmenu.addSeparator;

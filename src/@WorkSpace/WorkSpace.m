@@ -21,6 +21,7 @@ classdef WorkSpace < handle
         TreeRoot
         EEG
         jmenu
+        jmenuListEvents % the 'List events' context-menu item, toggled per-node
     end
     
     methods

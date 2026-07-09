@@ -371,6 +371,51 @@ classdef Alakazam < handle
             save(this.Workspace.EEG.File, "EEG");
         end
 
+        function onListEvents(this)
+        %ONLISTEVENTS  Context-menu callback: list unique event types and
+        %   their occurrence counts for the selected dataset in a message
+        %   box. The menu item is greyed out for epoched/averaged data (see
+        %   onMouseClicked), so this only ever runs for continuous data;
+        %   root nodes are allowed here (unlike Rename/Delete), since a root
+        %   node is normally the raw continuous import -- the most common
+        %   case for wanting to see what events it contains.
+            node = this.Workspace.Tree.SelectedNodes;
+            if isempty(node)
+                return; % nothing selected
+            end
+
+            file = node.UserData;
+            if isempty(file) || exist(file, "file") ~= 2
+                return;
+            end
+
+            loaded = load(file, "EEG");
+            EEG = loaded.EEG;
+            titleText = sprintf('Events in "%s"', node.Name);
+
+            if ~isfield(EEG, "event") || isempty(EEG.event)
+                msgbox("This dataset has no events.", titleText);
+                return;
+            end
+
+            % Event types may be numeric or char/string across loaders;
+            % string() normalises both so unique() groups them correctly.
+            types = strings(1, numel(EEG.event));
+            for i = 1:numel(EEG.event)
+                types(i) = string(EEG.event(i).type);
+            end
+            [uTypes, ~, ic] = unique(types);
+            counts = accumarray(ic, 1);
+            [counts, order] = sort(counts, "descend");
+            uTypes = uTypes(order);
+
+            lines = strings(numel(uTypes), 1);
+            for i = 1:numel(uTypes)
+                lines(i) = sprintf("%s: %d", uTypes(i), counts(i));
+            end
+            msgbox(char(strjoin(lines, newline)), titleText);
+        end
+
         function onRenameNode(this)
         %ONRENAMENODE  Context-menu callback: rename the selected node.
         %   Prompts for a new label and persists it both to the tree (its
@@ -520,6 +565,20 @@ classdef Alakazam < handle
                     if ~isempty(eventData.Nodes) && ~any(tree.SelectedNodes == eventData.Nodes)
                         tree.SelectedNodes = eventData.Nodes;
                     end
+
+                    % 'List events' only makes sense for continuous
+                    % (non-epoched) data; grey it out otherwise.
+                    canListEvents = false;
+                    if ~isempty(tree.SelectedNodes)
+                        selFile = tree.SelectedNodes.UserData;
+                        if exist(selFile, "file") == 2
+                            selLoaded = load(selFile, "EEG");
+                            canListEvents = isfield(selLoaded.EEG, "DataFormat") ...
+                                && strcmpi(selLoaded.EEG.DataFormat, "CONTINUOUS");
+                        end
+                    end
+                    set(this.Workspace.jmenuListEvents, "Enabled", canListEvents);
+
                     javaObjs = tree.getJavaObjects();
                     this.Workspace.jmenu.show(javaObjs.jTree, ...
                         eventData.Position(1), eventData.Position(2));
