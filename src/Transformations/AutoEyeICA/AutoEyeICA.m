@@ -41,7 +41,14 @@ EEG = input;
 EEG.id = name;
 
 %% Decompose
-EEG = pop_runica(EEG);
+%  Use FastICA automatically when it is installed, so the ICA-algorithm
+%  dialog is skipped; otherwise fall back to pop_runica's own default
+%  (and its dialog), unchanged from before.
+if ~isempty(which('fastica'))
+    EEG = pop_runica(EEG, 'icatype', 'fastica');
+else
+    EEG = pop_runica(EEG);
+end
 
 %% ICLabel needs scalp locations; auto-fill from a standard montage template
 %  when none are set, rather than opening the interactive Channel Editor.
