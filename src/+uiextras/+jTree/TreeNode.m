@@ -264,7 +264,12 @@ classdef TreeNode < hgsetget & matlab.mixin.Heterogeneous
             
             tf = false(size(nObj1));
             for idx = 1:numel(nObj1)
-                while ~tf(idx) && ~isempty(nObj1(idx).Parent)
+                % isvalid guards against a node deleted mid-drag (e.g. a Java
+                % drag-and-drop event resolving to a TreeNode whose MATLAB
+                % object no longer exists): without it, nObj1(idx).Parent
+                % throws "Invalid or deleted object" instead of just treating
+                % the node as having no further ancestors.
+                while isvalid(nObj1(idx)) && ~tf(idx) && ~isempty(nObj1(idx).Parent)
                     tf(idx) = any(nObj1(idx).Parent == nObj2);
                     nObj1(idx) = nObj1(idx).Parent;
                 end
