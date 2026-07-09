@@ -49,4 +49,6 @@ function open(this,~,~)
         disp(fileList(file).name);
         this.loadSETFile(this, fileList(file).name)
     end
+
+    this.loadGrandAverages();
 end

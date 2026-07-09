@@ -171,6 +171,63 @@ classdef Alakazam < handle
                 view.addDataset(sourceEEG);
             end
         end
+
+        function [files, labels] = findGrandAverageCandidates(this)
+        %FINDGRANDAVERAGECANDIDATES  Every Averaged dataset in the cache
+        %   directory that is not itself a grand average -- the pool of
+        %   subjects a grand average can be built from.
+            files  = {};
+            labels = {};
+            found = dir(fullfile(this.Workspace.CacheDirectory, '**', '*.mat'));
+            for i = 1:numel(found)
+                file = fullfile(found(i).folder, found(i).name);
+                loaded = load(file, "EEG");
+                candidate = loaded.EEG;
+                if ~isfield(candidate, "DataFormat") || ~strcmpi(candidate.DataFormat, "Averaged")
+                    continue;
+                end
+                if isfield(candidate, "etc") && isfield(candidate.etc, "GrandAverage")
+                    continue; % do not grand-average a grand average
+                end
+                files{end + 1}  = file; %#ok<AGROW>
+                labels{end + 1} = sprintf('%s (%s)', candidate.id, ...
+                    strjoin({candidate.bindesc.label}, ', ')); %#ok<AGROW>
+            end
+        end
+
+        function saveGrandAverage(this, spec, existingNode)
+        %SAVEGRANDAVERAGE  Compute a grand average from SPEC (see
+        %   GrandAverageDialog) and save it, creating a new tree node under
+        %   the "Grand Averages" root (EXISTINGNODE empty) or refreshing an
+        %   existing one in place (EXISTINGNODE the node being recalculated).
+            EEG = GrandAverage(spec.sources, spec.weighted);   % may throw a
+                                                                % friendly
+                                                                % compatibility
+                                                                % error
+            EEG.id = spec.name;
+
+            gaDir = fullfile(this.Workspace.CacheDirectory, 'GrandAverages');
+            if ~exist(gaDir, "dir")
+                mkdir(gaDir);
+            end
+            safeName = matlab.lang.makeValidName(spec.name);
+            EEG.File = fullfile(gaDir, [safeName '.mat']);
+            save(EEG.File, "EEG");
+
+            if isempty(existingNode)
+                newNode = uiextras.jTree.TreeNode('Name', EEG.id, ...
+                    'Parent', this.Workspace.GrandAveragesNode, 'UserData', EEG.File);
+                this.setNodeIcon(newNode, EEG.DataType);
+                this.Workspace.GrandAveragesNode.expand();
+                this.Workspace.Tree.SelectedNodes = newNode;
+            else
+                existingNode.Name     = EEG.id;
+                existingNode.UserData = EEG.File;
+            end
+
+            this.Workspace.EEG = EEG;
+            this.Plotter.plotCurrent();
+        end
     end
 
     methods
@@ -501,6 +558,69 @@ classdef Alakazam < handle
             delete(node);
         end
 
+        function onDefineGrandAverage(this)
+        %ONDEFINEGRANDAVERAGE  Toolstrip callback (Grand Average tab): define
+        %   a brand new grand average. Lets the analyst pick which Averaged
+        %   subject datasets to combine, name it, and choose weighted/
+        %   unweighted combining (GrandAverageDialog), then computes and
+        %   saves it as a new node under the "Grand Averages" tree root.
+            [candidateFiles, candidateLabels] = this.findGrandAverageCandidates();
+            if numel(candidateFiles) < 2
+                msgbox(['A grand average needs at least two Averaged datasets ' ...
+                        'to combine, and fewer than two were found in this ' ...
+                        'workspace. Run the Average transformation on more ' ...
+                        'subjects first.'], 'Not enough subjects');
+                return;
+            end
+
+            spec = GrandAverageDialog(candidateFiles, candidateLabels, []);
+            if isempty(spec)
+                return; % cancelled
+            end
+
+            try
+                this.saveGrandAverage(spec, []);
+            catch err
+                warndlg(err.message, 'Could not compute grand average');
+            end
+        end
+
+        function onRecalculateNode(this)
+        %ONRECALCULATENODE  Context-menu callback: revisit an existing grand
+        %   average's membership. Reopens GrandAverageDialog pre-filled with
+        %   its current sources/weighting (its name is fixed), lets the
+        %   analyst add/remove subjects or change the weighting, then
+        %   recomputes and re-saves it in place. Only ever reachable for a
+        %   Grand Average node -- the menu item is greyed out otherwise, see
+        %   onMouseClicked.
+            node = this.Workspace.Tree.SelectedNodes;
+            if isempty(node)
+                return;
+            end
+
+            file = node.UserData;
+            loaded = load(file, "EEG");
+            if ~isfield(loaded.EEG, "etc") || ~isfield(loaded.EEG.etc, "GrandAverage")
+                return; % not a grand average; nothing to recalculate
+            end
+
+            existingSpec = struct('name', loaded.EEG.id, ...
+                'sources', {loaded.EEG.etc.GrandAverage.sources}, ...
+                'weighted', loaded.EEG.etc.GrandAverage.weighted);
+
+            [candidateFiles, candidateLabels] = this.findGrandAverageCandidates();
+            spec = GrandAverageDialog(candidateFiles, candidateLabels, existingSpec);
+            if isempty(spec)
+                return; % cancelled
+            end
+
+            try
+                this.saveGrandAverage(spec, node);
+            catch err
+                warndlg(err.message, 'Could not compute grand average');
+            end
+        end
+
         function onNodeDropped(this, ~, eventData)
         %ONNODEDROPPED  Tree callback: handle a node dropped onto another node.
         %   A "copy" drop (no modifier key) moves the node within the tree; a
@@ -567,17 +687,22 @@ classdef Alakazam < handle
                     end
 
                     % 'List events' only makes sense for continuous
-                    % (non-epoched) data; grey it out otherwise.
+                    % (non-epoched) data; 'Recalculate' only for a Grand
+                    % Average node. Grey both out otherwise.
                     canListEvents = false;
+                    canRecalculate = false;
                     if ~isempty(tree.SelectedNodes)
                         selFile = tree.SelectedNodes.UserData;
                         if exist(selFile, "file") == 2
                             selLoaded = load(selFile, "EEG");
                             canListEvents = isfield(selLoaded.EEG, "DataFormat") ...
                                 && strcmpi(selLoaded.EEG.DataFormat, "CONTINUOUS");
+                            canRecalculate = isfield(selLoaded.EEG, "etc") ...
+                                && isfield(selLoaded.EEG.etc, "GrandAverage");
                         end
                     end
                     set(this.Workspace.jmenuListEvents, "Enabled", canListEvents);
+                    set(this.Workspace.jmenuRecalc, "Enabled", canRecalculate);
 
                     javaObjs = tree.getJavaObjects();
                     this.Workspace.jmenu.show(javaObjs.jTree, ...

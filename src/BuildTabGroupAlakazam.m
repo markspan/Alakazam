@@ -31,9 +31,49 @@ function tabgroup = BuildTabGroupAlakazam(app)
     tabTool.Tag = 'tabTool';
     createTransformation(tabTool, app); % Populate the 'Tools' tab with transformation components
 
+    % Create the 'Grand Average' tab. This is separate from 'Tools' on
+    % purpose: every gallery item there runs a transformation on the single
+    % currently selected dataset (app.onTransformation), but a grand average
+    % combines several subjects' datasets and ignores the current selection
+    % entirely -- it does not fit that one-input-one-child contract.
+    tabGrandAverage = Tab('Grand Average');
+    tabGrandAverage.Tag = 'tabGrandAverage';
+    createGrandAverage(tabGrandAverage, app);
+
     % Add the tabs to the TabGroup
     tabgroup.add(tabHome);
     tabgroup.add(tabTool);
+    tabgroup.add(tabGrandAverage);
+end
+
+function createGrandAverage(tab, app)
+    % Create and populate the Grand Average section: a single button that
+    % opens the membership-picking dialog and computes a new grand average.
+    % Revisiting an existing one (adding/removing subjects, re-weighting) is
+    % done from the tree's own right-click "Recalculate", not from here --
+    % this tab is for starting a new one.
+    %
+    % Args:
+    %     tab: The tab in which to create the Grand Average section.
+    %     app: The main application object.
+
+    import matlab.ui.internal.toolstrip.*
+
+    iconpath = fullfile(matlabroot, 'toolbox', 'matlab', 'toolstrip', 'web', 'mpcdesigner_icons', filesep);
+
+    section = Section('Group Averages');
+    section.Tag = 'GrandAverageSection';
+    column = Column();
+
+    DefineIcon = Icon([iconpath, '..', filesep, 'image', filesep, 'control_app_24.png']);
+    DefineButton = Button('Define Grand Average...', DefineIcon);
+    DefineButton.Tag = 'DefineGrandAverageButton';
+    DefineButton.Description = 'Combine several subjects'' Average results into one grand average';
+    DefineButton.ButtonPushedFcn = @(x, y) app.onDefineGrandAverage();
+
+    add(tab, section);
+    add(section, column);
+    add(column, DefineButton);
 end
 
 function createWorkSpace(tab, app)

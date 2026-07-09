@@ -9,8 +9,9 @@ function CreateTreeComponent(this)
 %
 % Prepare the tree node context menu: list events (read-only inspection,
 % continuous datasets only -- greyed out for epoched/averaged data, see
-% onMouseClicked), rename, recalculate (not yet implemented, greyed out)
-% and delete. This has to be a raw Java JPopupMenu, not an HG uicontextmenu:
+% onMouseClicked), rename, recalculate (Grand Average nodes only -- greyed
+% out otherwise, see onMouseClicked) and delete. This has to be a raw Java
+% JPopupMenu, not an HG uicontextmenu:
 % this.TreeRoot (the menu's would-be HG parent) is a hidden backing figure
 % (only its Java tree component is ever actually shown, re-parented into
 % the ToolGroup's data browser panel below), and an HG context menu cannot
@@ -22,9 +23,10 @@ menuRecalc = javax.swing.JMenuItem('Recalculate');
 menuDelete = javax.swing.JMenuItem('Delete');
 set(menuListEvents, 'ActionPerformedCallback', @(~,~) this.Parent.onListEvents());
 set(menuRename, 'ActionPerformedCallback', @(~,~) this.Parent.onRenameNode());
-set(menuRecalc, 'Enabled', false); % not implemented yet
+set(menuRecalc, 'ActionPerformedCallback', @(~,~) this.Parent.onRecalculateNode());
 set(menuDelete, 'ActionPerformedCallback', @(~,~) this.Parent.onDeleteNode());
 this.jmenuListEvents = menuListEvents; % enabled state toggled per-node in onMouseClicked
+this.jmenuRecalc     = menuRecalc;     % likewise -- only enabled for Grand Average nodes
 
 this.jmenu = javax.swing.JPopupMenu;
 this.jmenu.add(menuListEvents);

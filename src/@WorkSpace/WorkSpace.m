@@ -22,6 +22,8 @@ classdef WorkSpace < handle
         EEG
         jmenu
         jmenuListEvents % the 'List events' context-menu item, toggled per-node
+        jmenuRecalc     % the 'Recalculate' context-menu item, toggled per-node
+        GrandAveragesNode % the always-present 'Grand Averages' tree node
     end
     
     methods
