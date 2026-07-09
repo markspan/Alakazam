@@ -14,6 +14,11 @@ function [pfigure, ropts] = ScalpDistribution(input, ~)
 %   channels x time x bins with DataFormat = "Averaged", so nothing here
 %   needs to tell them apart.
 %
+%   Only draws the bins currently ticked on in this dataset's own Average
+%   plot (its AverageView tickboxes), if that plot happens to be open --
+%   the parent node this is drawn from. Falls back to every bin if that
+%   plot is not open.
+%
 %   topoplot draws with legacy low-level graphics (gca/gcf, direct patch
 %   calls), so this uses a classic figure with a classic uicontrol slider,
 %   rather than a uifigure/uislider -- deliberately different from
@@ -92,11 +97,37 @@ else
     labels = {char(string(EEG.id))};
 end
 
+% Only draw the bins currently ticked on in this dataset's own AverageView
+% (see AverageView.m's tickboxes), if that plot happens to be open right
+% now -- the parent node this is drawn from. Falls back to every bin if no
+% such plot is open, or its bin count no longer matches this dataset (e.g.
+% it was recomputed since the plot was last drawn).
+selected = true(1, nBins);
+parentFig = findobj("Type", "Figure", "Tag", EEG.File);
+if ~isempty(parentFig)
+    parentView = getappdata(parentFig, "AverageView");
+    if ~isempty(parentView) && isvalid(parentView)
+        ownSeries = cellfun(@(s) strcmp(s.file, EEG.File), parentView.Series);
+        if sum(ownSeries) == nBins
+            selected = parentView.Visible(ownSeries);
+        end
+    end
+end
+if ~any(selected)
+    throw(MException('Alakazam:ScalpDistribution', ...
+        ['Every bin in this dataset''s Average plot is currently unticked, so ' ...
+         'there is nothing to draw a scalp map for. Tick at least one bin ' ...
+         'there first.']));
+end
+binIndices = find(selected); % original EEG.data bin index for each kept slot
+nBins  = numel(binIndices);
+labels = labels(binIndices);
+
 % One shared, symmetric colour scale for the whole scrubbing session (every
-% bin, every moment in time), so a low-amplitude instant does not look just
-% as saturated as a high-amplitude one -- topoplot otherwise auto-scales
-% each call to its own min/max.
-mapLimit = max(abs(EEG.data(hasPos, :, :)), [], 'all');
+% selected bin, every moment in time), so a low-amplitude instant does not
+% look just as saturated as a high-amplitude one -- topoplot otherwise
+% auto-scales each call to its own min/max.
+mapLimit = max(abs(EEG.data(hasPos, :, binIndices)), [], 'all');
 if mapLimit == 0
     mapLimit = 1; % an all-zero dataset would otherwise give topoplot [0 0]
 end
@@ -158,7 +189,7 @@ pfigure.Visible = 'on';
         for bb = 1:nBins
             axes(ax(bb)); %#ok<LAXES>
             cla(ax(bb)); % topoplot draws on top of whatever is already there otherwise
-            topoplot(EEG.data(hasPos, idx, bb), posChanlocs, 'electrodes', 'on', ...
+            topoplot(EEG.data(hasPos, idx, binIndices(bb)), posChanlocs, 'electrodes', 'on', ...
                 'maplimits', [-mapLimit, mapLimit]);
             title(ax(bb), labels{bb}, 'Interpreter', 'none');
         end
