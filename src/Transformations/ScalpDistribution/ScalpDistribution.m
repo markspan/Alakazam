@@ -51,13 +51,41 @@ if opts.Stop <= opts.Start
 end
 
 % A scalp map only makes sense for channels with a real scalp position:
-% fill in what a standard template recognises (most datasets carry a few
-% non-scalp channels too, e.g. EOG/ECG, which a template has no position
-% for) and plot only those, rather than requiring every channel to
-% resolve (see FillChanlocs vs. the stricter EnsureChanlocs).
-EEG = TransTools.FillChanlocs(input, 'Alakazam:ScalpDistribution', ...
-    TransTools.Dipfit1005File('Alakazam:ScalpDistribution'));
-hasPos = arrayfun(@(c) ~isempty(c.X) && ~isnan(c.X), EEG.chanlocs);
+% look each one up, by label, directly in a standard template (most
+% datasets also carry a few non-scalp channels, e.g. EOG/ECG, which a
+% template has no position for -- plot only the ones that resolve).
+%
+% This deliberately does not use TransTools.FillChanlocs (which resolves
+% positions via pop_chanedit): pop_chanedit runs eeg_checkset on the whole
+% EEG struct, which expects native per-trial EEG.event(i).epoch bookkeeping
+% that our bin-based Session model never populates (DefineBins/Average tag
+% events with .bini, not EEGLAB's own .epoch) -- on a real Averaged dataset
+% (as opposed to a fresh eeg_emptyset(), which papers over this) that
+% mismatch makes eeg_checkset abort outright ("the event info structure
+% does not contain an 'epoch' field"). A direct template lookup by label
+% only ever touches a plain chanlocs array, never eeg_checkset, and is the
+% same approach AutoGEDAI already uses for its own template matching.
+EEG = input;
+elcFile  = TransTools.Dipfit1005File('Alakazam:ScalpDistribution');
+template = readlocs(elcFile);
+templateLabels = lower(string({template.labels}));
+
+chanlocs = EEG.chanlocs;
+hasPos = false(1, numel(chanlocs));
+for c = 1:numel(chanlocs)
+    match = find(templateLabels == lower(string(chanlocs(c).labels)), 1);
+    if isempty(match)
+        continue;
+    end
+    chanlocs(c).X      = template(match).X;
+    chanlocs(c).Y      = template(match).Y;
+    chanlocs(c).Z      = template(match).Z;
+    chanlocs(c).theta  = template(match).theta;
+    chanlocs(c).radius = template(match).radius;
+    hasPos(c) = true;
+end
+EEG.chanlocs = chanlocs;
+
 if ~any(hasPos)
     throw(MException('Alakazam:ScalpDistribution', ...
         ['None of this dataset''s channels match a standard scalp position, ' ...
