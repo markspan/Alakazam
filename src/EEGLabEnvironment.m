@@ -34,6 +34,46 @@ classdef EEGLabEnvironment
             EEGLabEnvironment.ensureEEGLab();
             EEGLabEnvironment.ensurePlugins();
         end
+
+        function installFromZip(url, targetName, probeFile)
+        %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
+        %   Downloads the archive at URL into a temporary file, unzips it under
+        %   <home>/Documents/MATLAB/<targetName>, locates PROBEFILE in the
+        %   unzipped tree and adds that folder to the MATLAB path. Errors if the
+        %   download, unzip or probe-file lookup fails. We do not call savepath.
+        %   Public (not just used at startup): individual transformations, e.g.
+        %   AutoGEDAI, call this directly to install an optional plugin on
+        %   first use, after their own consent prompt.
+            home = getenv('USERPROFILE');
+            if isempty(home)
+                home = char(java.lang.System.getProperty('user.home'));
+            end
+            target = fullfile(home, 'Documents', 'MATLAB', targetName);
+            if ~exist(target, 'dir')
+                mkdir(target);
+            end
+
+            zipPath = fullfile(tempdir, [targetName '.zip']);
+            try
+                fprintf('Downloading %s ...\n', url);
+                websave(zipPath, url, weboptions('Timeout', 600));
+                fprintf('Unzipping into %s ...\n', target);
+                unzip(zipPath, target);
+            catch downloadError
+                error('Alakazam:download', ...
+                    'Could not download or unzip %s: %s', url, downloadError.message);
+            end
+
+            % The archive usually unzips into a versioned subfolder; locate the
+            % probe file within it and add that folder to the path.
+            found = dir(fullfile(target, '**', probeFile));
+            if isempty(found)
+                error('Alakazam:installMissing', ...
+                    '%s was not found under %s after unzipping %s.', ...
+                    probeFile, target, url);
+            end
+            addpath(found(1).folder);
+        end
     end
 
     methods (Static, Access = private)
@@ -91,43 +131,6 @@ classdef EEGLabEnvironment
                         'Could not install FastICA: %s', installError.message);
                 end
             end
-        end
-
-        function installFromZip(url, targetName, probeFile)
-        %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
-        %   Downloads the archive at URL into a temporary file, unzips it under
-        %   <home>/Documents/MATLAB/<targetName>, locates PROBEFILE in the
-        %   unzipped tree and adds that folder to the MATLAB path. Errors if the
-        %   download, unzip or probe-file lookup fails. We do not call savepath.
-            home = getenv('USERPROFILE');
-            if isempty(home)
-                home = char(java.lang.System.getProperty('user.home'));
-            end
-            target = fullfile(home, 'Documents', 'MATLAB', targetName);
-            if ~exist(target, 'dir')
-                mkdir(target);
-            end
-
-            zipPath = fullfile(tempdir, [targetName '.zip']);
-            try
-                fprintf('Downloading %s ...\n', url);
-                websave(zipPath, url, weboptions('Timeout', 600));
-                fprintf('Unzipping into %s ...\n', target);
-                unzip(zipPath, target);
-            catch downloadError
-                error('Alakazam:download', ...
-                    'Could not download or unzip %s: %s', url, downloadError.message);
-            end
-
-            % The archive usually unzips into a versioned subfolder; locate the
-            % probe file within it and add that folder to the path.
-            found = dir(fullfile(target, '**', probeFile));
-            if isempty(found)
-                error('Alakazam:installMissing', ...
-                    '%s was not found under %s after unzipping %s.', ...
-                    probeFile, target, url);
-            end
-            addpath(found(1).folder);
         end
     end
 end
