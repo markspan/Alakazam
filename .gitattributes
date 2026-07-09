@@ -1,2 +1,20 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Binary assets: never let autocrlf touch these, regardless of how well
+# git's own content-based auto-detection guesses. Without this, a
+# mis-detected binary file can be silently mangled on checkout on some
+# platform/git-version combination -- worth ruling out categorically for
+# the gallery icons and other binary assets here, even though it turned
+# out not to be the cause of a specific icon-loading bug it was first
+# added while chasing.
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.jar binary
+*.mlapp binary
+*.fig binary
+*.mat binary
+*.wksp binary
