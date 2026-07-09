@@ -55,6 +55,7 @@ end
 %% GEDAI is an optional, noncommercially-licensed plugin: make sure it is
 %  installed (with consent) before configuring or running anything.
 ensureGEDAI();
+ensureGpuDeviceCountShim();
 
 if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
     hasParallelToolbox = license('test', 'Distrib_Computing_Toolbox') && ~isempty(ver('parallel'));
@@ -223,6 +224,29 @@ function ensureGEDAI()
     end
 
     EEGLabEnvironment.installFromZip(gedaiUrl, 'GEDAI', 'GEDAI.m');
+end
+
+% ======================================================================= %
+function ensureGpuDeviceCountShim()
+%ENSUREGPUDEVICECOUNTSHIM  Work around a GEDAI bug: it calls the real
+%   gpuDeviceCount() (Parallel Computing Toolbox) directly to auto-detect
+%   GPU acceleration, with no check that the toolbox providing it is even
+%   installed and no try/catch around that specific call, so it throws
+%   "Unrecognized function or variable" outright on a machine without it,
+%   instead of falling back to its own CPU path.
+%
+%   Adds src/Compat (a fixed shim reporting zero GPUs) to the path, but
+%   only when the real gpuDeviceCount is missing, so a machine that
+%   genuinely has Parallel Computing Toolbox (and hence real GPU
+%   detection) is never shadowed.
+    if ~isempty(which('gpuDeviceCount'))
+        return; % the real one (Parallel Computing Toolbox) is available
+    end
+    srcRoot   = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+    compatDir = fullfile(srcRoot, 'Compat');
+    if exist(fullfile(compatDir, 'gpuDeviceCount.m'), 'file') == 2
+        addpath(compatDir);
+    end
 end
 
 % ======================================================================= %
