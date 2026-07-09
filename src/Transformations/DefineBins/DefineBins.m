@@ -89,7 +89,9 @@ function [EEG, options] = DefineBins(input, opts)
     %% Guard input
     if nargin < 1
         throw(MException('Alakazam:DefineBins', ...
-            'Problem in DefineBins: No Data Supplied'));
+            ['DefineBins needs a dataset to work on, and none was given. ' ...
+             'This usually means it was called directly instead of being run ' ...
+             'from the Alakazam gallery (or dragged onto a dataset) -- try that instead.']));
     end
 
     EEG = input;
@@ -119,7 +121,13 @@ function [EEG, options] = DefineBins(input, opts)
     else
         if ~isstruct(options) || ~isfield(options, 'bins')
             throw(MException('Alakazam:DefineBins', ...
-                'Problem in DefineBins: invalid stored options'));
+                ['DefineBins was asked to replay a previous run, but the stored ' ...
+                 'settings it was given do not look like ones DefineBins itself ' ...
+                 'produced (no .bins field). This normally cannot happen from ' ...
+                 'the gallery or drag-and-drop; if you are calling DefineBins ' ...
+                 'programmatically, pass either the char/string it should parse ' ...
+                 'as a script (struct(''script'', ...)), or the exact options ' ...
+                 'struct DefineBins previously returned.']));
         end
         spec.bins = options.bins;
         if isfield(options, 'epoch'); epochWin = options.epoch; else; epochWin = []; end
@@ -128,14 +136,20 @@ function [EEG, options] = DefineBins(input, opts)
 
     if isempty(bins)
         throw(MException('Alakazam:DefineBins', ...
-            'Problem in DefineBins: no bins defined'));
+            ['Your script does not define any bins, so there is nothing for ' ...
+             'DefineBins to do. Add at least one line like:' newline newline ...
+             '    bin 1 "My first bin" 112' newline newline ...
+             '(bin number, a quoted label, then which events belong to it).']));
     end
 
     %% Validate events
     if ~isfield(EEG, 'event') || isempty(EEG.event) ...
             || ~isfield(EEG.event, 'type') || ~isfield(EEG.event, 'latency')
         throw(MException('Alakazam:DefineBins', ...
-            'Problem in DefineBins: dataset has no usable events'));
+            ['This dataset has no usable events for DefineBins to match against ' ...
+             '(EEG.event is empty, or missing the .type/.latency fields every ' ...
+             'event needs). Check that the recording was imported with its event ' ...
+             'markers intact, and that no earlier step removed them.']));
     end
 
     %% Latency-ordered view of the events
@@ -244,7 +258,8 @@ function [script, epochWin] = promptForScript()
     % both blank to keep the data continuous (tag events only).
     result = showDefineBinsDialog(default, prevEpoch);
     if isempty(result)
-        throw(MException('Alakazam:DefineBins', 'DefineBins cancelled.'));
+        throw(MException('Alakazam:DefineBins', ...
+            'No problem -- you cancelled the DefineBins dialog, so nothing was changed.'));
     end
 
     script   = result.script;
@@ -335,7 +350,10 @@ function writeScriptFile(filePath, startStr, stopStr, script)
 %WRITESCRIPTFILE  Save epoch bounds + script text as a small header + body.
     fid = fopen(filePath, 'w');
     if fid < 0
-        throw(MException('Alakazam:DefineBins', 'Could not write %s.', filePath));
+        throw(MException('Alakazam:DefineBins', ...
+            ['Could not save to %s -- the folder might be read-only, the disk ' ...
+             'might be full, or another program might have the file open. ' ...
+             'Try a different location or filename.'], filePath));
     end
     cleanup = onCleanup(@() fclose(fid));
     fprintf(fid, '%% epoch_start_ms: %s\n', startStr);
@@ -372,7 +390,10 @@ function win = parseEpochBounds(startStr, stopStr)
     hi = epochNum(stopStr,  'stop');
     if hi <= lo
         throw(MException('Alakazam:DefineBins', ...
-            'Epoch stop (%g ms) must be after the start (%g ms).', hi, lo));
+            ['The Epoch stop field (%g ms) needs to come after Epoch start (%g ms), ' ...
+             'so there is a positive stretch of time to cut around each event. ' ...
+             'A window like -200 to 800 covers 200 ms before the event to 800 ms after it.'], ...
+            hi, lo));
     end
     win = struct('lo', lo, 'hi', hi, 'unit', 'ms');
 end
@@ -380,13 +401,21 @@ end
 function v = epochNum(str, which)
     if isempty(str)
         throw(MException('Alakazam:DefineBins', ...
-            'Give both an epoch start and stop, or leave both blank (the %s is missing).', which));
+            ['The Epoch %s field is empty, but Epoch %s has a value. Fill in ' ...
+             'both fields to segment the data (for example, -200 and 800), or ' ...
+             'clear both to leave the data continuous and just tag the bins.'], ...
+            which, otherEpochField(which)));
     end
     v = str2double(str);
     if isnan(v)
         throw(MException('Alakazam:DefineBins', ...
-            'Epoch %s "%s" is not a number of milliseconds.', which, str));
+            ['Epoch %s is set to "%s", which is not a plain number of milliseconds ' ...
+             '(no units, just a number -- e.g. -200, not "-200ms").'], which, str));
     end
+end
+
+function other = otherEpochField(which)
+    if strcmp(which, 'start'); other = 'stop'; else; other = 'start'; end
 end
 
 function reportBins(bindesc, EEG)
@@ -494,7 +523,11 @@ function [tf, cap] = evalNode(node, p, ctx)
             end
         otherwise
             throw(MException('Alakazam:DefineBins', ...
-                'Internal error: unknown node ''%s''', node.op));
+                ['Internal error: the compiled expression tree contains a node type ' ...
+                 '(''%s'') the evaluator does not know how to handle. This should be ' ...
+                 'impossible from any script the parser accepts, so it likely means a ' ...
+                 'saved/replayed .bins struct was hand-edited or came from an ' ...
+                 'incompatible version -- please report this as a bug.'], node.op));
     end
 end
 
@@ -559,12 +592,18 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
 %   dataset that plots with EpochView and can later be averaged per bin.
     if ~isfield(EEG, 'data') || isempty(EEG.data)
         throw(MException('Alakazam:DefineBins', ...
-            'epoch requested but the dataset has no continuous data.'));
+            ['You gave an Epoch start/stop, so DefineBins tried to cut the data into ' ...
+             'trials, but this dataset has no continuous EEG.data to cut from. ' ...
+             'This normally means it was already segmented (or is missing data ' ...
+             'entirely) before it reached DefineBins.']));
     end
     if ~ismatrix(EEG.data) || (isfield(EEG, 'DataFormat') && ...
             strcmpi(EEG.DataFormat, 'EPOCHED'))
         throw(MException('Alakazam:DefineBins', ...
-            'epoch requested but the data is already epoched.'));
+            ['You gave an Epoch start/stop, but this dataset is already epoched ' ...
+             '(channels x time x trials), and DefineBins only knows how to cut trials ' ...
+             'out of continuous data. If you want to re-tag bins on data you have ' ...
+             'already segmented, leave both Epoch fields blank.']));
     end
 
     srate = EEG.srate;
@@ -577,13 +616,20 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
     pnts = hiS - loS;
     if pnts <= 0
         throw(MException('Alakazam:DefineBins', ...
-            'epoch window is empty (%g to %g %s).', win.lo, win.hi, win.unit));
+            ['The epoch window (%g to %g %s) rounds to zero or a negative number ' ...
+             'of samples at this dataset''s sampling rate (%g Hz), so there is ' ...
+             'nothing to cut. Widen the window, or double-check the sampling rate ' ...
+             'is what you expect.'], win.lo, win.hi, win.unit, srate));
     end
 
     allEvents = unique([bindesc.events]);
     if isempty(allEvents)
         throw(MException('Alakazam:DefineBins', ...
-            'no events matched any bin, so there is nothing to epoch.'));
+            ['None of your bins matched a single event in this dataset, so there is ' ...
+             'nothing to epoch. Double-check the marker codes in your script against ' ...
+             'the ones actually present in this recording (EEG.event(i).type), and ' ...
+             'that any next(...)/prev(...)/within windows are wide enough to catch ' ...
+             'the responses you expect.']));
     end
 
     nchan = size(EEG.data, 1);
@@ -636,10 +682,83 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
 end
 
 % ======================================================================= %
+%  Friendly error reporting
+% ======================================================================= %
+%  Every low-level parsing/tokenizing function below raises its errors with
+%  throwParseError(col, what): col is the character offset into the script
+%  where the trouble is (or -1 when nothing more specific than "somewhere in
+%  this bin" applies), and what is a short, plain-English description, e.g.
+%  'a closing '')'' to finish this window'. throwParseError never formats the
+%  final message itself -- it just stashes col in the exception identifier
+%  (a plain, un-escaped integer is safe there, unlike in the message text)
+%  and lets whichever call wrapped the parse in a try/catch (parseSpec, or a
+%  standalone caller replaying a script) turn it into the friendly,
+%  in-context report below, once, in one place, for every one of these sites
+%  at once. This is why the individual throwParseError call sites can stay
+%  short: they describe the *specific* mistake, and the shared wrapper
+%  supplies the warmth, the source snippet, and the caret.
+function throwParseError(col, what)
+    if isempty(col) || isnan(col); col = -1; end
+    id = sprintf('Alakazam:DefineBins:ParseAtCol%d', max(round(col), 0));
+    throw(MException(id, '%s', what));
+end
+
+function ME = wrapParseError(script, err)
+%WRAPPARSEERROR  Turn a throwParseError (or any other) exception into a
+%   warm, specific, example-rich one that shows exactly where the trouble is
+%   in the analyst's own script -- or, if it is not one of ours (an
+%   unexpected internal error), passes it through untouched.
+    tok = regexp(err.identifier, '^Alakazam:DefineBins:ParseAtCol(\d+)$', 'tokens', 'once');
+    if isempty(tok)
+        ME = err;
+        return;
+    end
+    col = str2double(tok{1});
+
+    opener = "I got a little stuck reading your DefineBins script -- let's sort it out together.";
+    if col > 0 && col <= numel(script)
+        [lineTxt, lineNo, colInLine] = locateInScript(script, col);
+        pointer = [repmat(' ', 1, colInLine - 1) '^-- right about here'];
+        body = sprintf('%s\n\nLine %d:\n    %s\n    %s\n\n%s', ...
+            opener, lineNo, lineTxt, pointer, char(err.message));
+    else
+        % No single column pinpoints this one (e.g. a mistake that spans
+        % several statements); still explain what and why, just without a
+        % snippet to point at.
+        body = sprintf('%s\n\n%s', opener, char(err.message));
+    end
+    ME = MException('Alakazam:DefineBins', '%s', body);
+end
+
+function [lineTxt, lineNo, colInLine] = locateInScript(script, col)
+%LOCATEINSCRIPT  The 1-based line number and in-line column for a character
+%   offset into SCRIPT, plus that line's own text (so the caller can print a
+%   caret directly under the mistake).
+    col = min(max(round(col), 1), numel(script));
+    upToHere  = script(1:col);
+    lineNo    = 1 + numel(strfind(upToHere, newline));
+    lastNL    = find(upToHere == newline, 1, 'last');
+    if isempty(lastNL); lineStart = 1; else; lineStart = lastNL + 1; end
+    afterHere = script(col:end);
+    nextNL    = find(afterHere == newline, 1, 'first');
+    if isempty(nextNL); lineEnd = numel(script); else; lineEnd = col + nextNL - 2; end
+    lineTxt   = script(lineStart:lineEnd);
+    colInLine = col - lineStart + 1;
+end
+
+% ======================================================================= %
 %  Parser: script -> spec with .bins {index,label,text,expr} and .epoch window
 % ======================================================================= %
 function spec = parseSpec(script)
     script = char(script);
+    try
+        spec = parseSpecInner(script);
+    catch err
+        throw(wrapParseError(script, err));
+    end
+end
+
+function spec = parseSpecInner(script)
     toks   = tokenize(script);
 
     % Statements start at a 'let', or at a 'bin <num> "<label>"' (a bare
@@ -656,8 +775,13 @@ function spec = parseSpec(script)
     end
     starts = find(isStart);
     if isempty(starts)
-        throw(MException('Alakazam:DefineBins', ...
-            'No bin definitions found. Each line is:  bin <n> "label" : <expr>'));
+        throwParseError(-1, [ ...
+            'I could not find a single bin definition in this script (only ' ...
+            'comments and/or let aliases, if anything). Every script needs at ' ...
+            'least one line shaped like:' newline newline ...
+            '    bin <number> "<label>" <expression>' newline newline ...
+            'for example:' newline newline ...
+            '    bin 1 "Targets" 112']);
     end
 
     stmts = cell(1, numel(starts));
@@ -675,8 +799,10 @@ function spec = parseSpec(script)
         if stmts{s}(1).val == "let"
             [name, node] = parseLetStatement(stmts{s}, aliases);
             if isfield(aliases, name)
-                throw(MException('Alakazam:DefineBins', ...
-                    'Alias ''%s'' is defined more than once.', name));
+                throwParseError(stmts{s}(1).pos, sprintf([ ...
+                    '''%s'' is already defined earlier in this script as a let alias -- ' ...
+                    'each alias name can only be defined once. Pick a different name for ' ...
+                    'this one, or remove the earlier definition if it was a leftover.'], name));
             end
             aliases.(name) = node;
         end
@@ -706,29 +832,35 @@ function checkComboReferences(bins)
     for i = 1:numel(bins); byIndex(bins(i).index) = i; end
 
     state = zeros(1, numel(bins));  % 0 unvisited, 1 visiting, 2 done
-    for i = 1:numel(bins)
-        visit(i, {});
-    end
 
-    function visit(i, path)
+    function visit(i, path, atPos)
         if state(i) == 2; return; end
         if state(i) == 1
-            throw(MException('Alakazam:DefineBins', ...
-                'Circular combination bin reference: %s.', ...
-                strjoin([path, {bins(i).label}], ' -> ')));
+            throwParseError(atPos, sprintf([ ...
+                'This combination forms a loop, so it can never be computed: %s. ' ...
+                'Every combination bin needs to bottom out, eventually, in bins that ' ...
+                'match events directly -- untangle that chain of references.'], ...
+                strjoin([path, {sprintf('bin %g "%s"', bins(i).index, bins(i).label)}], ' -> ')));
         end
         if isempty(bins(i).combo); state(i) = 2; return; end
         state(i) = 1;
         for t = 1:numel(bins(i).combo)
             refIdx = bins(i).combo(t).bin;
+            termPos = bins(i).combo(t).pos;
             if ~isKey(byIndex, refIdx)
-                throw(MException('Alakazam:DefineBins', ...
-                    'bin %g "%s": combination references bin %g, which does not exist.', ...
-                    bins(i).index, bins(i).label, refIdx));
+                throwParseError(termPos, sprintf([ ...
+                    'bin %g "%s" combines bin %g, but there is no bin %g in this script. ' ...
+                    'Check for a typo in the bin number, or that bin %g is actually ' ...
+                    'defined somewhere (combination bins may reference ordinary bins, ' ...
+                    'or even other combination bins, declared anywhere in the script).'], ...
+                    bins(i).index, bins(i).label, refIdx, refIdx, refIdx));
             end
-            visit(byIndex(refIdx), [path, {bins(i).label}]);
+            visit(byIndex(refIdx), [path, {sprintf('bin %g "%s"', bins(i).index, bins(i).label)}], termPos);
         end
         state(i) = 2;
+    end
+    for i = 1:numel(bins)
+        visit(i, {}, -1);
     end
 end
 
@@ -759,8 +891,11 @@ function bin = parseBinStatement(stmt, script, aliases)
         rest = rest(2:end);
     end
     if isempty(rest)
-        throw(MException('Alakazam:DefineBins', ...
-            'bin %g "%s": expression is empty.', idx.val, label.val));
+        throwParseError(label.pos + label.len, sprintf([ ...
+            'bin %g "%s" has a label but nothing after it -- I need an expression ' ...
+            'saying which events belong to this bin, e.g. bin %g "%s" 112, or ' ...
+            'bin %g "%s" 112 and next(118) within (200,1200] ms.'], ...
+            idx.val, label.val, idx.val, label.val, idx.val, label.val));
     end
     [bin.expr, k] = parseExprTokens(rest, aliases);
 
@@ -772,8 +907,12 @@ function bin = parseBinStatement(stmt, script, aliases)
         elseif t.kind == "kw" && t.val == "timelock"
             [bin.timelock, k] = parseTimelock(rest, k + 1, aliases, bin.index);
         else
-            throw(MException('Alakazam:DefineBins', ...
-                'Parse error near column %d: unexpected token after the expression.', t.pos));
+            throwParseError(t.pos, sprintf([ ...
+                'bin %g "%s": I finished reading the expression, but there is ' ...
+                'more text after it that I do not recognise as ''rt within ...'' or ' ...
+                '''timelock ...''. Did you mean to combine two conditions? Adjacent ' ...
+                'terms are automatically and-ed (e.g. 112 next(118)), or join them ' ...
+                'explicitly with and/or.'], idx.val, label.val));
         end
     end
 end
@@ -786,40 +925,49 @@ function [name, node] = parseLetStatement(stmt, aliases)
     % is evaluated relative to whatever candidate event the reference site
     % is evaluated at, same as if it had not been factored out.
     [~,     rest] = expectTok(stmt, "kw", "let", 'the keyword ''let''');
-    [nameT, rest] = expectTok(rest, "ident", 'an alias name after ''let''');
+    [nameT, rest] = expectTok(rest, "ident", 'a name for this alias, right after ''let''');
     name = char(nameT.val);
     if isempty(rest) || ~(rest(1).kind == "punc" && rest(1).val == "=")
-        throw(MException('Alakazam:DefineBins', ...
-            'let %s: expected ''='' after the alias name.', name));
+        throwParseError(nameT.pos + nameT.len, sprintf([ ...
+            'let %s needs an ''='' next, followed by what %s should stand for -- ' ...
+            'e.g. let %s = 112, or let %s = next(118) within (200,1200] ms.'], ...
+            name, name, name, name));
     end
     rest = rest(2:end);
     if isempty(rest)
-        throw(MException('Alakazam:DefineBins', ...
-            'let %s: expected an expression after ''=''.', name));
+        throwParseError(-1, sprintf([ ...
+            'let %s = ... needs something after the ''='' -- a code, a code set, a ' ...
+            'relation, or any combination of these with not/and/or, e.g. ' ...
+            'let %s = {112 122} or let %s = next(118) within (200,1200] ms.'], ...
+            name, name, name));
     end
     [node, k] = parseExprTokens(rest, aliases);
     if k <= numel(rest)
-        throw(MException('Alakazam:DefineBins', ...
-            'let %s: unexpected token near column %d.', name, rest(k).pos));
+        throwParseError(rest(k).pos, sprintf([ ...
+            'let %s: I understood everything up to here as one expression, but there ' ...
+            'is more text after it that I could not fit in -- perhaps a stray ' ...
+            'character, or two expressions that need ''and''/''or'' between them.'], name));
     end
 end
 
 function combo = parseCombo(T, binIndex, label)
-    % <coeff>? bin <n> ( ('+'|'-') <coeff>? bin <n> )*  -> struct(coeff, bin)
-    combo = struct('coeff', {}, 'bin', {});
+    % <coeff>? bin <n> ( ('+'|'-') <coeff>? bin <n> )*  -> struct(coeff, bin, pos)
+    combo = struct('coeff', {}, 'bin', {}, 'pos', {});
     k = 1; sgn = 1;
     while true
         coeff = sgn;
         t = tokAt(T, k);
         if t.kind == "num"; coeff = sgn * t.val; k = k + 1; t = tokAt(T, k); end
         if ~(t.kind == "kw" && t.val == "bin")
-            throw(MException('Alakazam:DefineBins', ...
-                'bin %g "%s": expected ''bin <n>'' in the combination near column %d.', ...
-                binIndex, label, t.pos));
+            throwParseError(t.pos, sprintf([ ...
+                'bin %g "%s" is defined as a combination of other bins (it has an ' ...
+                '''='' after its label), so I was expecting ''bin <number>'' here -- ' ...
+                'e.g. bin 2 - bin 1 -- but found something else.'], binIndex, label));
         end
+        termPos = t.pos;
         k = k + 1;
         [num, k] = scanNum(T, k);
-        combo(end+1) = struct('coeff', coeff, 'bin', round(num));
+        combo(end+1) = struct('coeff', coeff, 'bin', round(num), 'pos', termPos);
         op = tokAt(T, k);
         if op.kind == "eof"
             break;
@@ -828,9 +976,10 @@ function combo = parseCombo(T, binIndex, label)
         elseif op.kind == "punc" && op.val == "-"
             sgn = -1; k = k + 1;
         else
-            throw(MException('Alakazam:DefineBins', ...
-                'bin %g "%s": expected ''+'' or ''-'' in the combination near column %d.', ...
-                binIndex, label, op.pos));
+            throwParseError(op.pos, sprintf([ ...
+                'bin %g "%s": after a ''bin <n>'' term in a combination, I need a ''+'' ' ...
+                'or ''-'' to know how to combine the next one (or nothing, to end the ' ...
+                'combination) -- e.g. bin 2 - bin 1 + bin 3.'], binIndex, label));
         end
     end
 end
@@ -838,8 +987,10 @@ end
 function [iv, k] = scanRtWindow(T, k, binIndex)
     t = tokAt(T, k);
     if ~(t.kind == "kw" && t.val == "within")
-        throw(MException('Alakazam:DefineBins', ...
-            'bin %g: ''rt'' must be followed by ''within (lo,hi] ms''.', binIndex));
+        throwParseError(t.pos, sprintf([ ...
+            'bin %g: ''rt'' on its own is not enough -- it needs ''within (lo,hi] ms'' ' ...
+            'right after it to say what reaction-time range to keep, e.g. ' ...
+            'rt within (200,500] ms.'], binIndex));
     end
     [iv, k] = scanInterval(T, k + 1);
 end
@@ -848,8 +999,11 @@ function [rel, k] = parseTimelock(T, kStart, aliases, binIndex)
     % timelock <relation>  -- reuse the expression parser, require one relation.
     [node, kLocal] = parseExprTokens(T(kStart:end), aliases);
     if ~isstruct(node) || ~strcmp(node.op, 'rel')
-        throw(MException('Alakazam:DefineBins', ...
-            'bin %g: ''timelock'' must be a single relation, e.g. timelock next(118).', binIndex));
+        throwParseError(tokAt(T, kStart).pos, sprintf([ ...
+            'bin %g: ''timelock'' needs exactly one relation after it, to say which ' ...
+            'neighbouring event to centre the epoch on -- e.g. timelock next(118). ' ...
+            'A bare code, or a combination of terms, is not a relation on its own.'], ...
+            binIndex));
     end
     rel = node;
     k   = kStart + kLocal - 1;
@@ -860,24 +1014,27 @@ end
 function [iv, k] = scanInterval(T, k)
     o = tokAt(T, k);
     if ~(o.kind == "punc" && (o.val == "(" || o.val == "["))
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected ''('' or ''['' to open a window.', ...
-            o.pos));
+        throwParseError(o.pos, [ ...
+            'A window needs to start with ''('' (exclusive bound) or ''['' ' ...
+            '(inclusive bound), like within (200,1200] ms -- I could not find ' ...
+            'either one here.']);
     end
     loOpen = (o.val == "("); k = k + 1;
     [lo, k] = scanNum(T, k);
     cComma = tokAt(T, k);
     if ~(cComma.kind == "punc" && cComma.val == ",")
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected '','' in the window.', cComma.pos));
+        throwParseError(cComma.pos, [ ...
+            'A window needs a comma between its low and high bound, e.g. ' ...
+            'within (200,1200] ms -- I found the low bound, but no comma after it.']);
     end
     k = k + 1;
     [hi, k] = scanNum(T, k);
     c = tokAt(T, k);
     if ~(c.kind == "punc" && (c.val == ")" || c.val == "]"))
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected '')'' or '']'' to close a window.', ...
-            c.pos));
+        throwParseError(c.pos, [ ...
+            'A window needs to end with '')'' (exclusive bound) or '']'' ' ...
+            '(inclusive bound), like within (200,1200] ms -- I could not find ' ...
+            'either one here.']);
     end
     hiOpen = (c.val == ")"); k = k + 1;
     unit = 'ms';
@@ -886,8 +1043,11 @@ function [iv, k] = scanInterval(T, k)
         unit = char(u.val); k = k + 1;
     end
     if lo > hi
-        throw(MException('Alakazam:DefineBins', ...
-            'Window low bound (%g) exceeds high bound (%g).', lo, hi));
+        throwParseError(o.pos, sprintf([ ...
+            'This window''s low bound (%g) is greater than its high bound (%g), ' ...
+            'so nothing could ever fall inside it. Windows are signed and measured ' ...
+            'from the anchor (+ = later, - = earlier); did you mean %s?'], ...
+            lo, hi, sprintf('(%g,%g]', min(lo,hi), max(lo,hi))));
     end
     iv = struct('lo', lo, 'hi', hi, 'loOpen', loOpen, 'hiOpen', hiOpen, 'unit', unit);
 end
@@ -895,8 +1055,7 @@ end
 function [v, k] = scanNum(T, k)
     t = tokAt(T, k);
     if t.kind ~= "num"
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected a number.', t.pos));
+        throwParseError(t.pos, 'I was expecting a plain number here (e.g. 200 or -1200), but did not find one.');
     end
     v = t.val; k = k + 1;
 end
@@ -915,8 +1074,7 @@ function [tok, rest] = expectTok(toks, kind, varargin)
     end
     if isempty(toks) || toks(1).kind ~= kind ...
             || (wantVal ~= "" && toks(1).val ~= wantVal)
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected %s.', tokCol(toks), what));
+        throwParseError(tokCol(toks), sprintf('I was expecting %s here.', what));
     end
     tok  = toks(1);
     rest = toks(2:end);
@@ -994,9 +1152,11 @@ function [node, k] = parseExprTokens(T, aliases)
         iv = [];
         if isKw('within'); advance(); iv = pInterval(); end
         if strcmp(quant, 'any') && isempty(iv)
-            throw(MException('Alakazam:DefineBins', ...
-                'any(...) requires a ''within'' window (near column %d).', ...
-                curCol()));
+            throwParseError(curCol(), [ ...
+                'any(code) always needs a ''within (lo,hi] ms'' window right after it ' ...
+                '-- unlike next/prev/adjacent, "any" has no natural neighbour to fall ' ...
+                'back on, so there is no sensible default window to search. ' ...
+                'For example: any(200) within (-500,500] ms.']);
         end
         nd.op = 'rel'; nd.quant = quant; nd.matcher = matcher; nd.interval = iv;
     end
@@ -1020,8 +1180,7 @@ function [node, k] = parseExprTokens(T, aliases)
     function tf = isPunc(w); t = cur(); tf = t.kind == "punc" && t.val == w; end
     function expectPunc(w)
         if ~isPunc(w)
-            throw(MException('Alakazam:DefineBins', ...
-                'Parse error near column %d: expected ''%s''.', curCol(), w));
+            throwParseError(curCol(), sprintf('I was expecting a ''%s'' right here.', w));
         end
         advance();
     end
@@ -1035,11 +1194,15 @@ end
 function [node, k] = scanCodeset(T, k, aliases)
     o = tokAt(T, k);
     if o.kind == "punc" && o.val == "{"
+        openPos = o.pos;
         k = k + 1;
         kids = {};
         while ~(tokAt(T, k).kind == "punc" && tokAt(T, k).val == "}")
             if tokAt(T, k).kind == "eof"
-                throw(MException('Alakazam:DefineBins', 'Unterminated ''{'' code list.'));
+                throwParseError(openPos, [ ...
+                    'This ''{'' code list never closes -- I read all the way to the ' ...
+                    'end of the script looking for its matching ''}''. Check for a ' ...
+                    'missing closing brace, e.g. {"s11" "s22" "s33"}.']);
             end
             if tokAt(T, k).kind == "punc" && tokAt(T, k).val == ","
                 k = k + 1; continue;                       % optional separators
@@ -1049,8 +1212,10 @@ function [node, k] = scanCodeset(T, k, aliases)
         end
         k = k + 1;                                          % consume '}'
         if isempty(kids)
-            throw(MException('Alakazam:DefineBins', ...
-                'Empty ''{}'' code list near column %d.', tokAt(T, k).pos));
+            throwParseError(openPos, [ ...
+                'This ''{}'' code list is empty -- it needs at least one code inside, ' ...
+                'e.g. {112 122} or {"s11" "s22"}. Remove it entirely if you meant to ' ...
+                'leave this out.']);
         end
         node = combineOr(kids);
     else
@@ -1106,14 +1271,18 @@ function [node, k] = scanCodeElem(T, k, aliases)
     elseif t.kind == "ident"
         name = char(t.val);
         if ~isfield(aliases, name)
-            throw(MException('Alakazam:DefineBins', ...
-                'Unknown name ''%s'' near column %d. Define it with ''let %s = ...'', or quote a text marker as "%s".', ...
-                name, t.pos, name, name));
+            throwParseError(t.pos, sprintf([ ...
+                'I don''t know what ''%s'' means -- there is no let alias by that name ' ...
+                '(at least, not one defined earlier in the script). If you meant a text ' ...
+                'marker, it needs quotes: "%s". If you meant an alias, define it first: ' ...
+                'let %s = ...'], name, name, name));
         end
         node = aliases.(name); k = k + 1;                   % splice in the alias's expression
     else
-        throw(MException('Alakazam:DefineBins', ...
-            'Parse error near column %d: expected a marker code.', t.pos));
+        throwParseError(t.pos, [ ...
+            'I was expecting a marker code here -- a number (112), a quoted text ' ...
+            'marker ("S112"), a {...} or |-separated set of these, or the name of a ' ...
+            'let alias.']);
     end
 end
 
@@ -1135,8 +1304,10 @@ function toks = tokenize(s)
             j = i + 1;
             while j <= n && s(j) ~= '"'; j = j + 1; end
             if j > n
-                throw(MException('Alakazam:DefineBins', ...
-                    'Unterminated string starting at column %d.', i));
+                throwParseError(i, [ ...
+                    'This quoted text marker never closes -- I read all the way to the ' ...
+                    'end of the script looking for its matching ''"''. Check for a ' ...
+                    'missing closing quote.']);
             end
             toks(end+1) = mkTok("str", string(s(i+1:j-1)), i, j-i+1);
             i = j + 1;
@@ -1164,8 +1335,11 @@ function toks = tokenize(s)
             toks(end+1) = mkTok("punc", string(c), i, 1);
             i = i + 1;
         else
-            throw(MException('Alakazam:DefineBins', ...
-                'Unexpected character ''%s'' at column %d.', c, i));
+            throwParseError(i, sprintf([ ...
+                'I don''t know what to do with the character ''%s'' here -- it is not ' ...
+                'part of any code, keyword, or punctuation this language uses. If you ' ...
+                'meant it as part of a text marker, wrap it in quotes, e.g. "%s".'], ...
+                c, c));
         end
     end
 end

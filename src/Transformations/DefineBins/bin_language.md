@@ -1,434 +1,298 @@
 # The bin-definition language
 
-`DefineBins` assigns events to **bins** using a small, readable
-event-selection language. It replaces the ERPLAB EVENTLIST + BINLISTER step:
-instead of a bin-descriptor file, you write one short statement per bin.
+`DefineBins` assigns events to **bins** using a small, readable language, in
+place of the ERPLAB EVENTLIST + BINLISTER step. Each bin is one statement:
+a predicate over the events in the recording. Every event that satisfies it
+becomes a time-locked point (t = 0) for that bin.
 
-A script is a list of statements:
-
-- **`bin` statements** — one per bin. Each is a **predicate over the events**
-  in the recording; every event for which the predicate is true becomes a
-  time-locked point (t = 0) for that bin.
-- **`let` statements** (optional) — name a reusable set of codes, so several
-  bins can share one list without repeating it (see [Aliases](#aliases-the-let-statement)).
-
-The **epoch window** (the time to cut around each matched event) is **not** a
-statement in the script: it is set in the two **Epoch start / stop (ms)** fields
-above the editor, and applies to every bin (see [Epoching](#epoching-the-epoch-fields)).
-
-- An event may belong to **several bins** at once.
-- Events are considered in **latency order**.
-- The result is written to `EEG.event(i).bini` (the bins each event is in) and
-  `EEG.bindesc` (one record per bin: label, the compiled plan, matched event
-  indices, per-event reaction times, counts, and — once epoched — the trial
-  indices in the stack).
+This document builds the language up from the simplest possible bin to a
+full multi-bin script, one idea at a time. For the formal grammar, jump to
+the [quick reference](#quick-reference) at the end.
 
 ---
 
-## Statement shape
+## 1. Your first bin
 
 ```
-bin <number> "<label>" [:] <expression>
-bin <number> "<label>" = <bin-combination>
+bin 1 "Targets" 112
 ```
 
-- `<number>` — the bin index, an integer (`1`, `2`, …).
-- `"<label>"` — a quoted description of the bin.
-- `:` — **optional** separator between the label and the expression.
-- `<expression>` — the predicate (see below).
-- `= <bin-combination>` — an alternative body that builds this bin by
-  **combining other bins** rather than matching events
-  (see [Difference bins](#difference-and-combination-bins)).
+That's it: a bin number, a quoted label, and a **code** — the marker that
+identifies an event. Every event marked `112` (or `"112"`; numeric codes
+match either form) now belongs to bin 1.
 
-Write one statement per line. An expression may also spill across several
-lines; a new statement simply begins at the next `bin` or `let` keyword. (A
-`bin` inside a combination, `= bin 1 - bin 2`, is not a new statement: a `bin`
-starts a statement only when it is followed by a number and a quoted label.)
-
-Comments run from `%` or `#` to the end of the line, and may sit on their own
-line or after an expression:
+## 2. Several codes
 
 ```
-% N400: prime-target pairs with a plausible response
-bin 1 "Related"   : 112 and next(118) within (200,1200] ms   # in RT window
+bin 1 "Targets or probes" 112|122
+bin 2 "Any of five stimuli" {"s11" "s22" "s33" "s44" "s55"}
 ```
 
----
+Pipe-separated (`|`) is compact for a few codes; a braced list reads better
+for many. They're interchangeable — use whichever is more readable. A code
+may also be a quoted marker with wildcards: `?` (exactly one character) or
+`*` (any run), e.g. `"s??"` matches `s11`, `s77`, ... but not `s1` or `s123`.
+Matching is always case-insensitive.
 
-## Epoching (the Epoch fields)
-
-To segment the data, fill in the two **Epoch start (ms)** and **Epoch stop
-(ms)** fields above the editor, for example `-200` and `800`. This cuts a
-window from 200 ms before to 800 ms after each time-locking event, with
-t = 0 at the event. The same window applies to **every** bin.
-
-- Both fields blank → the data stays **continuous** and `DefineBins` only
-  writes the bin tags. Useful if you want to inspect or edit the tagging before
-  committing to a window.
-- Both filled → the result is a segmented dataset
-  (`channels × time × trials`, `DataFormat = "EPOCHED"`) that plots
-  trial-by-trial in EpochView.
-- Filling only one of the two is an error.
-- The values are remembered between runs.
-
-**Save.../Load...** in the dialog write/read the epoch bounds and the bin
-definitions together as a single `.binscript` file, so a saved script restores
-the dialog exactly as it was: a `% epoch_start_ms: …` / `% epoch_stop_ms: …`
-header followed by the script text. Loading a plain script file with no header
-is also fine (the epoch fields are just left as they were).
-
-Every matched event becomes one trial; an event that satisfies several bins is
-a **single** trial carrying all those bin tags (no data is duplicated). Windows
-that run past the start or end of the recording are padded with `NaN`. Each bin
-also records the trial indices it owns in `EEG.bindesc(b).trials`, ready for a
-later per-bin average.
-
----
-
-## Aliases (the `let` statement)
-
-A `let` statement names a reusable piece of a bin so several bins can share it
-without repeating it. The right-hand side is **any bin expression** — a code
-set, a relation, or a combination of terms with `not`/`and`/`or`/parentheses:
+## 3. A relation to a neighbouring event
 
 ```
-let related   = {"s11" "s22" "s33" "s44" "s55"}
-let unrelated = {"s21" "s22" "s23"}
-
-bin 1 "Related"   : related   and next("S201") within (200,1200] ms
-bin 2 "Unrelated" : unrelated and next("S201") within (200,1200] ms
+bin 1 "Target then response" 112 and next(118)
 ```
 
-- An alias may reference any **other alias defined earlier** in the script
-  (`let`s are read top to bottom, before the bins); referencing one not yet
-  defined, or itself, is an "unknown name" error.
-- An alias may be used anywhere a term or a code set is allowed — as a whole
-  anchor, combined with other terms (`112 and answered`, or just
-  `112 answered` — adjacent terms are and-ed the same way as any other pair,
-  see [Combining terms](#combining-terms)), or inside a relation's own
-  argument, e.g. `next(related)`.
-- Each alias name must be defined once.
+An **anchor** (like `112`) constrains the event itself; a **relation** looks
+at its neighbours. `next(118)` is true when *some* `118` follows, however far
+away. The other relations:
 
-A code-only alias (`let related = {...}`) can be combined with `not`/`and`/`or`
-like any anchor:
+| Relation | True when |
+|---|---|
+| `next(code)` | the nearest **following** event of that code exists |
+| `prev(code)` | the nearest **preceding** event of that code exists |
+| `adjacent(code)` | the very next event (whatever it is) is that code |
+| `any(code) within W` | some event of that code exists inside window `W` |
+
+## 4. Constraining the relation to a window
 
 ```
-let related   = {"s11" "s22" "s33" "s44" "s55"}
-let unrelated = "s??" not related     % every two-char s-stimulus not in related
+bin 1 "Answered in time" 112 and next(118) within (200,1200] ms
 ```
 
-An alias can also hold a **relation**, or a whole predicate that includes one —
-this is the main reason to use one, since it de-duplicates the part of a bin
-that's usually repeated verbatim across several bins:
+Now it's only true if that following `118` lands strictly after 200 ms and
+up to and including 1200 ms later. Windows are **signed** (+ = after the
+anchor, − = before) and explicit about open/closed bounds:
+
+```
+within (200,1200] ms     % > 200 and <= 1200
+within [-1200,-200) ms   % before the anchor: >= -1200 and < -200
+within (0,300] samples   % sample counts instead of ms
+```
+
+`any(...)` *requires* a window (there's no natural neighbour to default to);
+`next`/`prev`/`adjacent` treat it as optional.
+
+## 5. Combining terms: `and` / `or` / `not`
+
+```
+bin 1 "Related, answered"     112 and next(118) within (200,1200] ms
+bin 2 "Related, no answer"    112 and not next(118) within (0,2000] ms
+bin 3 "Either stimulus"       (112 or 122) and next(118) within (200,1200] ms
+```
+
+Precedence is the usual one (`not` tightest, then `and`, then `or`); group
+with `( )` to override. **Adjacent terms are `and`-ed even without the
+keyword** — `112 next(118)` means exactly `112 and next(118)` — which reads
+nicely for "everything except":
+
+```
+bin 4 "Unrelated" "s??" not {"s11" "s22" "s33"} and next("S201") within (200,1200] ms
+```
+
+(`"s??" not {...}` = "a two-character s-stimulus that is *not* one of
+these".)
+
+## 6. Reaction time, for free
+
+Whenever a bin matches via a relation, `DefineBins` records the signed delay
+to that neighbour as the reaction time, in `EEG.bindesc(b).rt` — no extra
+syntax needed. Filter on it with `rt within`:
+
+```
+bin 1 "Fast responses" 112 and next(118) rt within (200,500] ms
+bin 2 "Slow responses" 112 and next(118) rt within (500,1200] ms
+```
+
+This is a **post-filter** on the already-computed RT, not another relation —
+a match with no RT (a pure anchor bin, or one reached through `not`) is
+dropped by an `rt within` filter.
+
+## 7. Cutting epochs (the GUI fields, not the language)
+
+The time window to cut around each matched event is **not** written in the
+script — it's the two **Epoch start (ms)** / **Epoch stop (ms)** fields
+above the editor, shared by every bin, e.g. `-200` and `800`. Leave both
+blank to keep the data continuous (tag bins only, no segmenting); fill both
+to get a segmented (`channels × time × trials`) dataset. The values, and the
+script, are remembered between runs; **Save.../Load...** write/read both
+together as a `.binscript` file.
+
+## 8. Response-locking with `timelock`
+
+By default a bin's epoch centres on the anchor. `timelock <relation>`
+re-centres it on a neighbour instead:
+
+```
+bin 1 "Response-locked" 112 and next(118) timelock next(118)
+```
+
+Membership is still decided by the expression; `timelock` only moves where
+t = 0 falls. A match with no neighbour to lock onto is dropped.
+
+## 9. Naming things with `let`
+
+```
+let related = {"s11" "s22" "s33" "s44" "s55"}
+
+bin 1 "Related"   related   and next("S201") within (200,1200] ms
+bin 2 "Unrelated" "s??" not related and next("S201") within (200,1200] ms
+```
+
+`let <name> = <anything a bin could contain>` names a reusable piece of
+script. It may be a code set, combined with `not`/`and`/`or` like `unrelated`
+above, and it may reference **any alias defined earlier** in the script.
+
+## 10. An alias can hold a relation, too
 
 ```
 let answered = next(118) within (200,1200] ms
 
-bin 1 "Related"   : 112 and answered
-bin 2 "Unrelated" : 122 and answered
+bin 1 "Related"   112 and answered
+bin 2 "Unrelated" 122 and answered
 ```
 
-- A relation inside an alias is evaluated exactly as if its text had been
-  written out inline at the reference site: relative to whatever candidate
-  event the reference itself is being evaluated at. `answered` above means
-  the same thing whether it is used directly in a `bin`, or as an argument to
-  `next(...)`/`prev(...)` (testing whether a *neighbour* satisfies it) — there
-  is no special-casing to worry about.
-- Reaction-time capture ([Reaction times](#reaction-times)) works the same way
-  through an alias as if the relation had been written directly in the bin.
+This is the main reason to reach for `let`: it de-duplicates the part that's
+usually repeated verbatim across several bins. A relation inside an alias
+means exactly what it would mean written out inline at the reference site —
+including RT capture — whether that's directly in a bin, or as the argument
+to another relation (`next(answered)`, testing whether a *neighbour*
+satisfies it).
 
----
-
-## Difference and combination bins
-
-A bin may be defined as a **signed combination of other bins** instead of an
-event predicate. This is how you build difference waves:
+## 11. Difference bins
 
 ```
-bin 1 "Related"   : 112 and next(118) within (200,1200] ms
-bin 2 "Unrelated" : 122 and next(118) within (200,1200] ms
+bin 1 "Related"   112 and next(118) within (200,1200] ms
+bin 2 "Unrelated" 122 and next(118) within (200,1200] ms
 bin 3 "N400 effect" = bin 2 - bin 1
 ```
 
-- The right-hand side is a sum/difference of `bin <n>` terms, e.g.
-  `bin 2 - bin 1`, `bin 1 + bin 3`.
-- A combination bin has **no trials of its own**. It is computed **after
-  averaging**: `Average` first averages the ordinary (event-matching) bins,
-  then forms each combination from those averages. Its standard error
-  propagates as the root of the summed squared errors of the terms.
-- Because the terms are ordinary bins matched on different anchors, they
-  typically comprise **different trials in different numbers** (e.g. 74
-  Related trials vs 68 Unrelated ones) — there is no shared trial count to
-  report for the combination itself. Rather than showing a misleading "0
-  trials", its legend/label shows the constituent counts signed the same way
-  as the combination, e.g. `N400 effect (n=68-74)`.
+`= <sum/difference of bin numbers>` builds a bin from **other bins'
+averages** instead of an event predicate — there's no `:`/expression at all.
+It has no trials of its own: `Average` averages the ordinary bins first,
+then forms the combination, propagating the standard error as the root of
+the summed squared errors. Since the terms are matched on different anchors,
+they typically carry different trial counts (74 vs 68, say) — the legend
+shows this as `N400 effect (n=68-74)` rather than a misleading "0 trials".
 
-### Nested combination bins (interaction effects)
-
-A combination bin's terms may reference **other combination bins**, not just
-ordinary ones — this is how you build a difference-of-differences, e.g. an
-interaction effect in a factorial design:
+## 12. Interaction effects: combination bins referencing combination bins
 
 ```
-bin 1 "Related, expected"     : 112 and next(118) within (200,1200] ms
-bin 2 "Unrelated, expected"   : 122 and next(118) within (200,1200] ms
-bin 3 "Related, unexpected"   : 113 and next(118) within (200,1200] ms
-bin 4 "Unrelated, unexpected" : 123 and next(118) within (200,1200] ms
+bin 1 "Related, expected"     112 and next(118) within (200,1200] ms
+bin 2 "Unrelated, expected"   122 and next(118) within (200,1200] ms
+bin 3 "Related, unexpected"   113 and next(118) within (200,1200] ms
+bin 4 "Unrelated, unexpected" 123 and next(118) within (200,1200] ms
 
-bin 5 "Relatedness effect, expected"   = bin 2 - bin 1
-bin 6 "Relatedness effect, unexpected" = bin 4 - bin 3
-bin 7 "Relatedness x Expectancy"       = bin 6 - bin 5
+bin 5 "Relatedness, expected"   = bin 2 - bin 1
+bin 6 "Relatedness, unexpected" = bin 4 - bin 3
+bin 7 "Relatedness x Expectancy" = bin 6 - bin 5
 ```
 
-- Order in the script does not matter — `Average` resolves combination bins in
-  dependency order regardless of which is written first, so `bin 7` above
-  could equally be declared before `bin 5`/`bin 6`.
-- A bin combining itself, directly or through a chain of others, is a
-  **circular reference** error, and a combination referencing a bin number
-  that does not exist is likewise an error — both are caught immediately when
-  the script is parsed, not later during `Average`.
-- Nesting is arbitrarily deep: bin 7 above could itself be combined into a
-  further bin.
+A combination bin may reference **another** combination bin — a
+difference-of-differences, e.g. an interaction effect in a factorial design.
+Declaration order doesn't matter (bin 7 could equally be written before bin
+5/6); nesting is arbitrarily deep. A combination bin referencing itself,
+directly or through a chain of others, or a bin number that doesn't exist,
+is caught immediately when the script is parsed.
 
 ---
 
-## Codes (markers)
+## Reference
 
-A **code** identifies an event marker. Two kinds:
+### Codes and matching
 
 | Kind | Written as | Matches |
-|------|-----------|---------|
-| Numeric | `112` (bare, no quotes) | event marker `112` or `"112"` |
-| Text | `"S201"` (quoted) | event marker `S201` |
+|---|---|---|
+| Numeric | `112` | marker `112` or `"112"` |
+| Text | `"S201"` | marker `S201` (must be quoted — a bare word is an identifier/alias name) |
 
-Matching is **case-insensitive**, and surrounding/internal whitespace in a
-marker is ignored (so the code `"S 12"` matches an event marked `S12` or
-`S 12`). Numeric codes also match by value, so `112` matches whether the
-dataset stores the marker as the number `112` or the text `"112"`.
+Wildcards (`?` one char, `*` any run) only work inside quotes, so a numeric
+pattern like `"1??"` needs quoting too. Whitespace inside a marker is
+ignored, so `"S 12"` matches `S12` or `S 12`.
 
-> Text markers **must be quoted**. Bare words are reserved for numbers and for
-> the language's own keywords (`and`, `or`, `not`, `next`, …). If you write a
-> text marker without quotes you get a clear error telling you to quote it.
-
-### Wildcards
-
-A quoted marker may contain wildcards:
-
-| Wildcard | Matches |
-|----------|---------|
-| `?` | exactly one character |
-| `*` | any run of characters (including none) |
-
-So `"s??"` matches every marker that is `s` followed by **exactly two**
-characters (e.g. `s11`, `s77`) but not `s1` or `s123`; `"s*"` matches any
-marker beginning with `s`. Wildcards must be inside quotes (a numeric pattern
-like `"1??"` therefore needs quoting too), and, like all matching, are
-case-insensitive.
-
-### Sets of codes
-
-Anywhere a single code is allowed, you may give a **set** of alternatives,
-matched if the event is any one of them. Two equivalent notations:
+### Sets
 
 ```
-% pipe form — compact for a few codes
-111|112|121|122
-
-% braced list — reads well for many codes; spaces and/or commas separate
-{"s11" "s22" "s33" "s44" "s55"}
-{111, 112, 121, 122}
+111|112|121|122                          % pipe form
+{"s11" "s22" "s33" "s44"}                % braced list, spaces or commas
 ```
 
-Sets work for anchors **and** inside relations, e.g. `next({"S201" "S202"})`.
+Work anywhere a code is allowed, including inside a relation:
+`next({"S201" "S202"})`.
+
+### Aliases (`let`)
+
+- The right-hand side is any bin expression: codes, `not`/`and`/`or`,
+  relations, or a mix.
+- May reference any **other alias already defined earlier** in the script;
+  referencing an undefined name, or itself, is an "unknown name" error.
+- May be used anywhere a term or a code set is allowed: as a whole anchor,
+  combined with other terms (`112 and answered`, or just `112 answered`),
+  or as a relation's own argument (`next(related)`).
+- Each name must be defined once.
+
+### Combination bins
+
+```
+bin <n> "<label>" = [+|-] bin <n2> ( [+|-] bin <n3> )*
+```
+
+A signed sum of bin numbers (integer coefficients allowed: `2*bin 1 - bin
+2`), each of which may itself be an ordinary or a combination bin. See
+[§11](#11-difference-bins) and [§12](#12-interaction-effects-combination-bins-referencing-combination-bins).
+
+### Reaction time and `rt within`
+
+`EEG.bindesc(b).rt` holds the delay to the neighbour picked out by the first
+(left-to-right) relation that contributed to the match (from a true branch,
+if it went through `or`); `NaN` for a pure-anchor match or one from a `not`.
+`rt within (lo,hi] ms` keeps only matches whose RT falls in that window
+(`ms` only; a `NaN` RT is always dropped).
+
+### Comments
+
+`%` or `#` to end of line, on their own line or after an expression.
+
+### Save.../Load...
+
+Writes/reads the epoch bounds and the script together as one `.binscript`
+file: a `% epoch_start_ms: …` / `% epoch_stop_ms: …` header, then the script
+text. A plain script file with no header loads fine too — the epoch fields
+are just left as they were.
+
+### Errors
+
+Every parse error shows the exact line, a caret under the mistake, and a
+plain-language explanation of what went wrong and how to fix it (usually
+with an example) — not just a bare "column 32" reference. A handful of
+higher-level checks (a script with no bins, a combination bin cycle, a
+dataset with no epoch-able data) are reported the same way even without a
+single column to point at.
 
 ---
 
-## Terms
+## Full worked example (N400-style)
 
-An expression is built from two kinds of terms.
-
-### 1. Anchor — "this event is one of these codes"
-
-A bare code or code-set. It constrains which events can time-lock the bin.
+Prime–target pairs with a button-press response; `112`/`113` = related
+(expected/unexpected block), `122`/`123` = unrelated, `118` = response.
+Epoch fields: `-200` / `800`.
 
 ```
-bin 1 "All targets"        : 112
-bin 2 "Targets or probes"  : 112|122
-bin 3 "Any of five stimuli": {"s11" "s22" "s33" "s44" "s55"}
-```
+% --- N400 bins, expected vs. unexpected block -----------------------------
+let answered = next(118) within (200,1200] ms
 
-### 2. Relation — "a neighbouring event stands in some relation to this one"
+bin 1 "Related, expected"     112 and answered
+bin 2 "Unrelated, expected"   122 and answered
+bin 3 "Related, unexpected"   113 and answered
+bin 4 "Unrelated, unexpected" 123 and answered
 
-Relations look at events **around** the anchor. All delays are **signed and
-measured from the anchor**: positive = later, negative = earlier.
+% Trials with no (timely) response, for exclusion or a separate ERP
+bin 5 "Related, no response" (112|113) and not next(118) within (0,2000] ms
 
-| Relation | Meaning |
-|----------|---------|
-| `next(code)` | the nearest **following** event of that code (skipping any events in between) |
-| `prev(code)` | the nearest **preceding** event of that code |
-| `adjacent(code)` | the **immediately next** event (whatever it is) must be that code |
-| `any(code) within (…)` | **some** event of that code exists inside the window |
+% The relatedness effect, per block, and their interaction
+bin 6 "Relatedness, expected"    = bin 2 - bin 1
+bin 7 "Relatedness, unexpected"  = bin 4 - bin 3
+bin 8 "Relatedness x Expectancy" = bin 7 - bin 6
 
-`next` / `prev` / `adjacent` may optionally take a window; `any` **requires**
-one.
-
-```
-bin 1 "Target then response"     : 112 and next(118)
-bin 2 "Response then target"     : 112 and prev(118)
-bin 3 "Target immediately gated" : 112 and adjacent(118)
-bin 4 "Probe near a cue"         : 122 and any(200) within (-500,500] ms
-```
-
----
-
-## Windows
-
-A window restricts a relation's signed delay.
-
-```
-within (200,1200] ms
-within [-1200,-200) ms
-within (0,300] samples
-```
-
-- **Bounds** — `(` and `)` are **exclusive**, `[` and `]` are **inclusive**.
-  So `(200,1200]` means *strictly greater than 200 and up to and including
-  1200*.
-- **Unit** — `ms` (default if omitted) or `samples`.
-- **Sign** — positive = after the anchor, negative = before. A window like
-  `[-1200,-200)` therefore describes a neighbour *before* the anchor.
-- The low bound may not exceed the high bound.
-
-**How the window interacts with each relation:**
-
-- `next(code) within W` — find the nearest following event of `code`; the
-  relation is true only if **that** neighbour falls in `W`. It does **not**
-  skip past a too-early/too-late neighbour to find a later match.
-- `prev`/`adjacent` behave the same way with their identified neighbour.
-- `any(code) within W` — true if **any** event of `code` lies in `W`.
-
-Numbers may be decimals (`within (0.5,2.5] ms`) as well as integers.
-
----
-
-## Combining terms
-
-Use `and`, `or`, `not`, and parentheses. Precedence is the usual one:
-`not` binds tightest, then `and`, then `or`. Group with `( )` to override.
-
-```
-bin 1 "Related, answered"    : 112 and next(118) within (200,1200] ms
-bin 2 "Related, no answer"   : 112 and not next(118) within (0,2000] ms
-bin 3 "Either stimulus, answered":
-        (112 or 122) and next(118) within (200,1200] ms
-bin 4 "Answered but not too fast":
-        112 and next(118) within (200,1200] ms and not next(118) within (0,200] ms
-```
-
-`not R` inverts a relation: `not next(118) within (0,2000] ms` is true for an
-anchor that has **no** following 118 within two seconds. It applies to a code
-set just as well: `not {"s11" "s22" "s33" "s44" "s55"}` is true for any event
-**not** in that set.
-
-**Adjacent terms are `and`-ed.** Writing `and` between two terms is optional —
-placing them next to each other means the same thing. This lets an
-"everything except" bin read naturally:
-
-```
-% every two-character s-stimulus that is NOT in the related set, answered
-bin 2 "Unrelated" "s??" not {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms
-```
-
-Here `"s??" not {…}` is `"s??" and not {…}`: the `"s??"` wildcard selects the
-two-character stimuli, and `not {…}` removes the related ones.
-
----
-
-## Reaction times
-
-When a bin matches an event, `DefineBins` records the **delay to the
-neighbour** picked out by the first relation in the expression, in
-milliseconds, in `EEG.bindesc(b).rt` (aligned with `.events`). This gives you
-response times for free — useful for later RT splits or median-split bins.
-
-- The delay comes from the first (left-to-right) relation that contributed to
-  the match. With `or`, it is taken from a branch that was actually true.
-- If a matched bin has no relation (a pure anchor bin) or the contributing
-  term was a `not`, the recorded RT is `NaN`.
-
-Example — the interactive summary reports, per bin, the count and mean delay:
-
-```
-bin 1 "Related": 148 events  (mean delay 623 ms)
-```
-
-### Filtering on reaction time (`rt within`)
-
-Append `rt within <window>` to a bin to **keep only** the matches whose recorded
-RT falls in a window. It is a post-filter on the bin's own reaction time (the
-same value stored in `.rt`), not a relation:
-
-```
-bin 1 "Fast responses" : 112 and next(118) rt within (200,500] ms
-bin 2 "Slow responses" : 112 and next(118) rt within (500,1200] ms
-```
-
-- Uses the same interval syntax as relation windows (`ms` is the only unit).
-- A match with no RT (a pure anchor bin, or `NaN` RT) is dropped by an
-  `rt within` filter.
-- `rt within` is written **after** the expression, and after any `timelock`.
-
----
-
-## Response-locking (`timelock`)
-
-By default a bin time-locks (t = 0) to the anchor event. `timelock <relation>`
-re-centres each epoch on a **neighbour** instead — typically the response — so
-you can build a response-locked average:
-
-```
-bin 1 "Response-locked" : 112 and next(118) timelock next(118)
-```
-
-- The `timelock` relation is one of `next` / `prev` / `adjacent` over a code
-  set (the same relations used in expressions), optionally with a window.
-- For each matched anchor, the epoch is cut around the event that relation picks
-  out. If the relation finds no neighbour for a given match, that match is
-  dropped.
-- `timelock` only affects **where the window is centred**; bin membership is
-  still decided by the expression.
-
----
-
-## Worked example (N400-style)
-
-Prime–target pairs with a button-press response; stimulus markers `112`
-(related) and `122` (unrelated), response marker `118`:
-
-Set the Epoch fields to `-200` and `800`; the bins are:
-
-```
-% --- N400 bins -------------------------------------------------------------
-let target = 112|122
-
-bin 1 "Related, in-window response"   : 112 and next(118) within (200,1200] ms
-bin 2 "Unrelated, in-window response" : 122 and next(118) within (200,1200] ms
-
-% Trials with no (timely) response — for exclusion or a separate ERP
-bin 3 "Related, no response"   : 112 and not next(118) within (0,2000] ms
-bin 4 "Unrelated, no response" : 122 and not next(118) within (0,2000] ms
-
-% Collapsed across relatedness, answered only
-bin 5 "All targets, answered" : target and next(118) within (200,1200] ms
-
-% The relatedness effect as a difference wave (built after averaging)
-bin 6 "N400 effect (Unrel - Rel)" = bin 2 - bin 1
-```
-
-The braced-list form is handy when a condition spans many stimulus codes:
-
-```
-bin 1 "Related" {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,1200] ms
+% Response-locked view of the answered related trials
+bin 9 "Related, response-locked" 112 and answered timelock next(118)
 ```
 
 ---
@@ -439,9 +303,8 @@ bin 1 "Related" {"s11" "s22" "s33" "s44" "s55"} and next("S201") within (200,120
 script      : ( <let> | <bin> )+                        % epoch set in the GUI fields
 let         : let <name> = <expr>                       % may use earlier let names
 bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
-            | bin <int> "<label>" = <combo>             % combination / difference bin
-                                                         % (may reference other combo bins)
-combo       : [ '+' | '-' ] bin <int> ( ( '+' | '-' ) bin <int> )*
+            | bin <int> "<label>" = <combo>              % combination bin (may nest)
+combo       : [ coeff ] bin <int> ( ('+'|'-') [ coeff ] bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
             | <anchor> | <relation>          % 'and' optional between terms
 anchor      : <codeset>
@@ -458,4 +321,3 @@ comment     : % … end-of-line   |   # … end-of-line
 ```
 
 Delays in windows are signed and measured from the anchor (+ = later).
-Parse errors report the column, e.g. `Parse error near column 32: expected ')'.`
