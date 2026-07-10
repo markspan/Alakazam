@@ -9,21 +9,10 @@ classdef WorkSpace < handle
         RawDirectory
         CacheDirectory
         ExportsDirectory
-        Panel
-        Tree
-        ToolBox
-        ToolBoxGroup
-        RawFileIcon
-        TimeSeriesIcon
-        FrequenciesIcon
-        javaObjects
-        RootNode
-        TreeRoot
+        DataPanel         % matlab.ui.internal.FigurePanel hosting Tree, docked into the AppContainer shell
+        Tree              % WorkSpaceTree, the data-browser tree
         EEG
-        jmenu
-        jmenuListEvents % the 'List events' context-menu item, toggled per-node
-        jmenuRecalc     % the 'Recalculate' context-menu item, toggled per-node
-        GrandAveragesNode % the always-present 'Grand Averages' tree node
+        GrandAveragesNode % the always-present 'Grand Averages' tree node (a WorkSpaceTree node struct)
     end
     
     methods

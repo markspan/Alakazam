@@ -17,7 +17,9 @@ classdef AverageView < handle
 
     properties (SetAccess = private)
         Figure          % owning figure
+        Grid            % 1x2 uigridlayout: axes | checkbox strip
         Axes            % axes the averages are drawn in
+        CheckboxGrid    % uigridlayout the tickboxes stack into (right strip)
         Series          % flat cell array of per-line series structs
         Channel = 1     % channel shown for every line
         Visible         % logical row vector, one per series: line shown?
@@ -39,8 +41,13 @@ classdef AverageView < handle
     methods
         function this = AverageView(fig, eeg)
         %AVERAGEVIEW  Build the view for an averaged dataset in FIG.
-            this.Figure  = fig;
-            this.Axes    = axes("Parent", fig);
+            this.Figure = fig;
+            this.Grid   = uigridlayout(fig, [1 2], "ColumnWidth", {'7x', '3x'}, ...
+                "Padding", [4 4 4 4]);
+            this.Axes   = uiaxes(this.Grid);
+            this.Axes.Layout.Column = 1;
+            this.CheckboxGrid = uigridlayout(this.Grid, [1 1], "Padding", [0 0 0 0]);
+            this.CheckboxGrid.Layout.Column = 2;
             this.Series  = this.prepare(eeg);
             this.Visible = true(1, numel(this.Series));
             set(fig, "KeyPressFcn", @(~, e) this.onKey(e));
@@ -75,14 +82,10 @@ classdef AverageView < handle
             % Remove ALL prior axes objects, including ones with hidden
             % handles (bands, patches, reference lines). cla only deletes
             % visible-handle children on older MATLAB, which otherwise pile up
-            % on each redraw. The tickboxes are separate figure children,
-            % found and cleared by tag.
+            % on each redraw. The tickboxes live in their own grid cell (see
+            % the constructor / buildCheckboxes), cleared there.
             delete(allchild(ax));
-            delete(findobj(this.Figure, "Tag", "AverageViewCheckbox"));
             hold(ax, "on");
-
-            % Reserve a strip on the right of the figure for the tickboxes.
-            set(ax, "Units", "normalized", "Position", [0.08 0.11 0.62 0.815]);
 
             fileKeys = cellfun(@(s) string(s.file), this.Series);
             manyIds  = numel(unique(fileKeys)) > 1;   % overlaying > 1 dataset
@@ -191,23 +194,21 @@ classdef AverageView < handle
 
         function buildCheckboxes(this, names)
         %BUILDCHECKBOXES  One tickbox per series, stacked down the right-hand
-        %   strip reserved in redraw, reflecting (and toggling) this.Visible.
+        %   grid strip (this.CheckboxGrid), reflecting (and toggling)
+        %   this.Visible.
+            delete(this.CheckboxGrid.Children);
             n = numel(this.Series);
             if n == 0
+                this.CheckboxGrid.RowHeight = {'1x'};
                 return;
             end
-            top  = 0.90;
-            step = min(0.05, 0.85 / n);
-            rowH = min(0.04, step * 0.8);
+            this.CheckboxGrid.RowHeight = [repmat({22}, 1, n), {'1x'}];
             for i = 1:n
-                uicontrol(this.Figure, "Style", "checkbox", ...
-                    "Units", "normalized", ...
-                    "Position", [0.72, top - (i - 1) * step, 0.26, rowH], ...
-                    "String", char(names(i)), ...
+                cb = uicheckbox(this.CheckboxGrid, ...
+                    "Text", char(names(i)), ...
                     "Value", this.Visible(i), ...
-                    "BackgroundColor", get(this.Figure, "Color"), ...
-                    "Tag", "AverageViewCheckbox", ...
-                    "Callback", @(src, ~) this.onToggle(i, src.Value));
+                    "ValueChangedFcn", @(src, ~) this.onToggle(i, src.Value));
+                cb.Layout.Row = i;
             end
         end
 

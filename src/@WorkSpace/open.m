@@ -1,6 +1,5 @@
 function open(this,~,~)
-    allChildren = this.Tree.Root.Children;
-    allChildren.delete;    
+    this.Tree.clear();
     %% Read the ROOT directory for datafiles;
     % We opted to let each of the typeloaders traverse into the tree.
     % Make sure the workspace directories exist. A workspace copied from

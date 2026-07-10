@@ -52,7 +52,10 @@ classdef cursor
         end
         
         function buttonmotion(obj, h, events)
-            np = get (gca, 'CurrentPoint');
+            % Uses the stored axes (obj.pAxes), not gca: gca never tracks a
+            % uiaxes, so this would silently target the wrong axes (or none)
+            % once the axes this cursor lives on became a uiaxes.
+            np = get (obj.pAxes, 'CurrentPoint');
             set(obj.vline,'Value',np(1));
             drawnow;
             if ~isempty(obj.motionCallback)

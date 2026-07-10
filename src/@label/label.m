@@ -4,18 +4,23 @@ classdef label
         vpatch
         motionCallback
         upCallback
+        pAxes
         pfigure
     end
-    
+
     methods
         function obj = label( hAxes, pos, dur, lab, col, mcallback, ucallback, varargin)
             % cursor Construct an instance of this class
-            
-            obj.motionCallback  = mcallback;    
+
+            obj.motionCallback  = mcallback;
             obj.upCallback      = ucallback;
-            
-            obj.pfigure = gcf;
-            h = ylim(gca);
+
+            % Derived from the passed-in hAxes, not gcf/gca: those never
+            % track a uiaxes, so on a uiaxes-hosted view this would silently
+            % resolve to the wrong figure/axes (or none).
+            obj.pAxes   = hAxes;
+            obj.pfigure = get(get(hAxes, 'Parent'), 'Parent');
+            h = ylim(hAxes);
             
             if isempty(mcallback) && isempty(ucallback)
                 obj.vpatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
@@ -55,7 +60,7 @@ classdef label
         
         function buttonmotion(obj, h, events)
             ud = get(h,'UserData');
-            np = get (gca, 'CurrentPoint');
+            np = get (obj.pAxes, 'CurrentPoint');
             
             set(ud.varea,'Value',np(1));
             

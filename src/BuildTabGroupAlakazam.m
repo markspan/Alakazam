@@ -17,9 +17,12 @@ function tabgroup = BuildTabGroupAlakazam(app)
     % Import necessary MATLAB UI toolstrip components
     import matlab.ui.internal.toolstrip.*
     
-    % Create the main TabGroup object
+    % Create the main TabGroup object. AppContainer.addTabGroup (unlike the
+    % old ToolGroup.addTabGroup) requires the TabGroup itself -- not just its
+    % individual Tabs -- to have a non-empty Tag.
     tabgroup = TabGroup();
-    
+    tabgroup.Tag = 'tabgroupAlakazam';
+
     % Create the 'Alakazam' tab
     tabHome = Tab('Alakazam');
     tabHome.Tag = 'tabHome';
@@ -40,10 +43,13 @@ function tabgroup = BuildTabGroupAlakazam(app)
     tabGrandAverage.Tag = 'tabGrandAverage';
     createGrandAverage(tabGrandAverage, app);
 
-    % Add the tabs to the TabGroup
+    % Add the tabs to the TabGroup and select the Home tab by default.
+    % AppContainer (unlike the old ToolGroup) has no SelectedTab property of
+    % its own; TabGroup carries it instead.
     tabgroup.add(tabHome);
     tabgroup.add(tabTool);
     tabgroup.add(tabGrandAverage);
+    tabgroup.SelectedTab = tabHome;
 end
 
 function createGrandAverage(tab, app)

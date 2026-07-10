@@ -42,17 +42,12 @@ function treeTraverse(this, id, branchDir, currentParentNode)
             % Load the EEG structure from the .mat file.
             data = load(fullfile(file.folder, file.name), 'EEG');
 
-            % Create a new tree node with the EEG id and file data.
-            newNode = uiextras.jTree.TreeNode('Name', data.EEG.id, ...
-                                              'Parent', currentParentNode, ...
-                                              'UserData', data.EEG.File);
-
-            % Set the icon for the new node based on the data type.
-            if strcmpi(data.EEG.DataType, 'TIMEDOMAIN')
-                setIcon(newNode, this.TimeSeriesIcon);
-            elseif strcmpi(data.EEG.DataType, 'FREQUENCYDOMAIN')
-                setIcon(newNode, this.FrequenciesIcon);
-            end
+            % Create a new tree node with the EEG id and file data, iconned
+            % by data type and with List events/Recalculate eligibility
+            % baked in from the loaded EEG (see WorkSpaceTree.optsFor).
+            newNode = this.Tree.addNode(data.EEG.id, currentParentNode.Id, ...
+                WorkSpaceTree.iconFor(data.EEG.DataType), data.EEG.File, ...
+                WorkSpaceTree.optsFor(data.EEG));
 
             % Extract the file name without the extension for recursion.
             [~, name, ~] = fileparts(file.name);

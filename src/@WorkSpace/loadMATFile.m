@@ -35,9 +35,10 @@ rawfilename = strcat(WS.RawDirectory, name);
     this.EEG.id = id;
 
 
-%% Adds the loaded 'EEG' to the tree.
-tn = uiextras.jTree.TreeNode('Name',id, 'UserData', matfilename, 'Parent', this.Tree.Root);
-setIcon(tn,this.RawFileIcon);
+%% Adds the loaded 'EEG' to the tree as a root (raw import) node.
+opts = WorkSpaceTree.optsFor(EEG);
+opts.isRoot = true;
+tn = this.Tree.addNode(id, '', 'raw', matfilename, opts);
 
 %% Now recursively check for children of this file, and read them if they are there there.
 this.treeTraverse(id, WS.CacheDirectory, tn);

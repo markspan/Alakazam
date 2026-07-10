@@ -7,9 +7,11 @@ classdef FourierView < handle
 %   single-channel detail view. It replaces the old Tools.plotFourier function
 %   with a clean stateful class.
 %
-%   Differences from the original: the super-title over the grid uses the
-%   built-in sgtitle instead of the third-party mtit (which was never bundled),
-%   and the detail view is drawn in its own axes rather than over a subplot.
+%   Differences from the original: the super-title over the grid is a plain
+%   uilabel rather than the third-party mtit (which was never bundled) or
+%   sgtitle (incompatible with a uigridlayout-managed figure -- see
+%   buildOuterGrid), and the detail view is drawn in its own axes rather than
+%   over a subplot.
 %
 %   Style follows the project standard.
 %
@@ -19,6 +21,8 @@ classdef FourierView < handle
         Figure          % owning figure
         EEG             % frequency-domain dataset (channels x freqs x trials)
         CurrentTrial = 1
+        Grid            % 3x1 uigridlayout: title label | axes (grid/detail) | buttons
+        TitleLabel      % uilabel replacing sgtitle (see drawGrid)
         Axes            % array of grid axes, or the single detail axes
         Mode = "grid"   % "grid" or "detail"
     end
@@ -45,7 +49,7 @@ classdef FourierView < handle
 
     methods (Access = private)
         function drawGrid(this)
-        %DRAWGRID  One shaded spectrum per channel in a tight subplot grid.
+        %DRAWGRID  One shaded spectrum per channel in a uigridlayout of uiaxes.
             clf(this.Figure);
             data  = this.EEG.data;
             freqs = this.EEG.freqs;
@@ -54,10 +58,21 @@ classdef FourierView < handle
 
             rows = max(1, floor(sqrt(nchan)));
             cols = ceil(nchan / rows);
+
+            this.buildOuterGrid();
+            if nseg > 1
+                this.TitleLabel.Text = sprintf("Trial: %i", this.CurrentTrial);
+            else
+                this.TitleLabel.Text = '';
+            end
+
+            contentGrid = uigridlayout(this.Grid, [rows cols], "Padding", [0 0 0 0]);
+            contentGrid.Layout.Row = 2;
             grid = gobjects(1, nchan);
             for p = 1:nchan
-                grid(p) = uiextras.subplot_tight(cols, rows, p, [0.035, 0.03]);
-                cla(grid(p));
+                grid(p) = uiaxes(contentGrid);
+                grid(p).Layout.Row    = ceil(p / cols);
+                grid(p).Layout.Column = mod(p - 1, cols) + 1;
                 hold(grid(p), "on");
                 this.drawBands(grid(p), freqs, data(p, :, this.CurrentTrial));
                 hold(grid(p), "off");
@@ -70,9 +85,6 @@ classdef FourierView < handle
             this.Axes = grid;
             this.Mode = "grid";
             this.addButtons(nseg > 1);
-            if nseg > 1
-                sgtitle(this.Figure, sprintf("Trial: %i", this.CurrentTrial));
-            end
         end
 
         function showDetail(this, channel)
@@ -80,7 +92,12 @@ classdef FourierView < handle
             clf(this.Figure);
             freqs = this.EEG.freqs;
             data1d = reshape(this.EEG.data(channel, :, this.CurrentTrial), 1, []);
-            ax = axes("Parent", this.Figure);
+
+            this.buildOuterGrid();
+            this.TitleLabel.Text = '';
+
+            ax = uiaxes(this.Grid);
+            ax.Layout.Row = 2;
             hold(ax, "on");
             this.drawBands(ax, freqs, data1d);
             plot(ax, freqs, data1d);
@@ -91,6 +108,19 @@ classdef FourierView < handle
             this.Axes = ax;
             this.Mode = "detail";
             this.addButtons(false);
+        end
+
+        function buildOuterGrid(this)
+        %BUILDOUTERGRID  The 3-row shell (title | content | buttons) shared by
+        %   drawGrid and showDetail. sgtitle is not used for the title row: it
+        %   explicitly refuses to work on a container with AutoResizeChildren
+        %   'on' (the default this.Figure needs for the grid to fill/track it),
+        %   so a plain uilabel stands in for it instead.
+            this.Grid = uigridlayout(this.Figure, [3 1], ...
+                "RowHeight", {22, '1x', 32}, "Padding", [2 2 2 2], "RowSpacing", 2);
+            this.TitleLabel = uilabel(this.Grid, ...
+                "HorizontalAlignment", "center", "FontWeight", "bold");
+            this.TitleLabel.Layout.Row = 1;
         end
 
         function drawBands(this, ax, freqs, spectrum)
@@ -113,18 +143,23 @@ classdef FourierView < handle
         end
 
         function addButtons(this, includeTrial)
-        %ADDBUTTONS  Zoom / pan (and optionally trial) push-buttons.
-            make = @(str, x, cb) uicontrol("Parent", this.Figure, "Style", "pushbutton", ...
-                "String", str, "Position", [x, 5, 20, 20], "Callback", cb);
-            make("+", 20,  @(~, ~) this.zoomX(0.5));   % zoom in (x)
-            make("-", 50,  @(~, ~) this.zoomX(2));     % zoom out (x)
-            make("^", 80,  @(~, ~) this.zoomY(0.5));   % magnify (y)
-            make("v", 110, @(~, ~) this.zoomY(2));     % shrink (y)
-            make("<", 140, @(~, ~) this.panX(-1));     % pan left
-            make(">", 170, @(~, ~) this.panX(1));      % pan right
+        %ADDBUTTONS  Zoom / pan (and optionally trial) push-buttons, in the
+        %   bottom row (row 3) of this.Grid (see buildOuterGrid).
+            labels    = {"+", "-", "^", "v", "<", ">"};
+            callbacks = {@() this.zoomX(0.5), @() this.zoomX(2), @() this.zoomY(0.5), ...
+                         @() this.zoomY(2), @() this.panX(-1), @() this.panX(1)};
             if includeTrial
-                make("<<", 230, @(~, ~) this.trialStep(-1));
-                make(">>", 260, @(~, ~) this.trialStep(1));
+                labels    = [labels, {"<<", ">>"}];
+                callbacks = [callbacks, {@() this.trialStep(-1), @() this.trialStep(1)}];
+            end
+            n = numel(labels);
+            btnGrid = uigridlayout(this.Grid, [1, n + 1], "Padding", [0 0 0 0], ...
+                "ColumnWidth", [repmat({30}, 1, n), {'1x'}], "ColumnSpacing", 4);
+            btnGrid.Layout.Row = 3;
+            for i = 1:n
+                b = uibutton(btnGrid, "Text", labels{i}, ...
+                    "ButtonPushedFcn", @(~, ~) callbacks{i}());
+                b.Layout.Column = i;
             end
         end
 

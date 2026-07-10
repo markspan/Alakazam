@@ -26,15 +26,20 @@ classdef SignalView < handle
 
     properties (SetAccess = private)
         Parent          % figure or container the view is drawn into
-        Panel           % uipanel holding the axes and sliders
+        Grid            % 4x1 uigridlayout: axes | zoom row | pan row | mag row
         Axes            % axes the signal is drawn in
         Lines           % 1 x nchan array of line handles (one per channel)
-        ScrollSlider    % uicontrol slider, horizontal position (pan)
-        ZoomSlider      % uicontrol slider, time span shown (zoom)
-        ScaleSlider     % uicontrol slider, amplitude gain (magnify y)
-        PanLabel        % uicontrol text, "pan" label left of the scroll slider
-        ZoomLabel       % uicontrol text, "zoom" label left of the zoom slider
-        MagLabel        % uicontrol text, "mag" label left of the scale slider
+        ScrollSlider    % uislider, horizontal position (pan)
+        ZoomSlider      % uislider, time span shown (zoom)
+        ScaleSlider     % uislider, amplitude gain (magnify y)
+        PanLabel        % uilabel, "pan" label left of the scroll slider
+        ZoomLabel       % uilabel, "zoom" label left of the zoom slider
+        MagLabel        % uilabel, "mag" label left of the scale slider
+        ScrollStep = 0.01 % wheel-scroll step, as a fraction of the slider's
+                          % range (uislider has no SliderStep/major-step
+                          % concept the way a classic uicontrol slider did;
+                          % updateScrollStep keeps this sized to the visible
+                          % window fraction instead)
 
         Pyramid         % MinMaxPyramid over the signal, the decimation engine
         Time            % NumSamples x 1 double, sample times
@@ -48,15 +53,15 @@ classdef SignalView < handle
         FixedYLim       % 1 x 2, y-limits used in "fixed" mode
         Overlay         % struct of parsed IBI / event / area overlay data
 
-        AxWidthPx = 100 % axes width in pixels, refreshed on resize
-        AxWidthCm = 100 % axes width in centimetres, refreshed on resize
+        AxWidthPx = 100 % axes width in pixels, refreshed every redraw
+        AxWidthCm = 100 % axes width in centimetres, refreshed every redraw
         ZoomDecay       % double, maps the zoom slider to a visible sample count
         MmPerSecDone = false % whether the initial mmPerSec zoom has been applied
     end
 
     properties (Constant, Access = private)
-        Space = 0.05         % layout gap, centimetres
-        SliderHeight = 0.35  % slider height, centimetres
+        LabelWidthPx = 40  % slider row's label column width, pixels
+        SliderRowPx  = 24  % each slider row's height, pixels
         IbiColors = dictionary( ...
             ["N" "L" "S" "T" "1" "2" "i"], ...
             ["blue" "red" "red" "yellow" "green" "green" "magenta"])
@@ -100,7 +105,13 @@ classdef SignalView < handle
             this.buildGraphics(opts.LineSpec, eeg);
             this.computeStacking();
             this.redraw();
-            this.resize();
+            % A first redraw happens before the grid has laid out the axes
+            % to its real size (AxWidthPx/AxWidthCm read a placeholder), so
+            % the initial mmPerSec zoom (applied inside redraw once a real
+            % width is seen) is deferred to this second pass, after drawnow
+            % lets layout settle.
+            drawnow;
+            this.redraw();
         end
 
         function redraw(this)
@@ -111,6 +122,28 @@ classdef SignalView < handle
             if isempty(this.Lines) || ~all(isgraphics(this.Lines))
                 return;
             end
+
+            % uiaxes.Position is always in pixels (no Units toggling needed,
+            % unlike the classic axes/uipanel this replaced). Refreshed here
+            % rather than from a SizeChangedFcn: a uigridlayout manages the
+            % axes' size on its own, and this is cheap enough to redo on
+            % every redraw (already called on every slider interaction).
+            axPos = this.Axes.Position;
+            this.AxWidthPx = max(1, round(axPos(3)));
+            pxPerInch = get(0, "ScreenPixelsPerInch");
+            this.AxWidthCm = this.AxWidthPx / pxPerInch * 2.54;
+
+            % Apply the requested mmPerSec once, by converting it to a zoom
+            % value -- but only once the grid has actually laid the axes out
+            % to a real size (a first call, right after construction, still
+            % sees the figure's placeholder pre-layout size).
+            if ~this.MmPerSecDone && this.Options.MmPerSec > 0 && this.AxWidthPx > 1
+                numPoints = this.AxWidthCm * 10 / (this.Options.MmPerSec * this.Period);
+                zoomValue = log(numPoints / this.NumSamples) / this.ZoomDecay;
+                this.ZoomSlider.Value = min(1, max(0, zoomValue));
+                this.MmPerSecDone = true;
+            end
+
             scrollValue = this.ScrollSlider.Value;
             zoomValue   = this.ZoomSlider.Value;
             scaleValue  = this.ScaleSlider.Value;
@@ -161,18 +194,22 @@ classdef SignalView < handle
 
     methods (Access = private)
         function buildGraphics(this, lineSpec, eeg)
-        %BUILDGRAPHICS  Create the panel, axes, per-channel lines and sliders.
+        %BUILDGRAPHICS  Create the grid, axes, per-channel lines and sliders.
             fig = ancestor(this.Parent, "figure");
-            % Custom wheel scrolling needs the interactive modes disabled.
-            rotate3d(fig, "off");
-            zoom(fig, "off");
-            pan(fig, "off");
             fig.WindowScrollWheelFcn = @(~, e) this.onWheel(e);
 
-            this.Panel = uipanel("Parent", this.Parent, "BorderWidth", 0, ...
-                "Units", "normalized", "Position", [0 0 1 1], ...
-                "SizeChangedFcn", @(~, ~) this.resize());
-            this.Axes = axes("Parent", this.Panel, "TickLabelInterpreter", "none");
+            % Row 1 (the axes) gets the remaining space; rows 2-4 are the
+            % zoom/pan/mag slider rows, matching the old bottom-up ordering
+            % (uipanel's own Position, normalized with y growing upward, put
+            % zoom first, then pan, then mag, with the axes above them all).
+            this.Grid = uigridlayout(this.Parent, [4 1], ...
+                "RowHeight", {'1x', this.SliderRowPx, this.SliderRowPx, this.SliderRowPx}, ...
+                "Padding", [2 2 2 2], "RowSpacing", 2);
+            this.Axes = uiaxes(this.Grid, "TickLabelInterpreter", "none");
+            this.Axes.Layout.Row = 1;
+            % Custom wheel scrolling needs uiaxes' own built-in scroll/drag
+            % interactions disabled so they do not fight it.
+            disableDefaultInteractivity(this.Axes);
 
             nchan = size(this.Y, 2);
             this.Lines = gobjects(1, nchan);
@@ -184,30 +221,38 @@ classdef SignalView < handle
             this.Axes.XAxis.Exponent = 0;
             this.Axes.YAxis.Exponent = 0;
 
-            this.ScrollSlider = this.makeSlider(0, 1, 0,   "Pan the signal in time");
-            this.ZoomSlider   = this.makeSlider(0, 1, 0.5, "Zoom the time axis");
-            this.ScaleSlider  = this.makeSlider(0.001, 100, 1, "Magnify the y-axis");
-            this.PanLabel  = this.makeLabel("pan");
-            this.ZoomLabel = this.makeLabel("zoom");
-            this.MagLabel  = this.makeLabel("mag");
+            [this.ZoomLabel, this.ZoomSlider]   = this.makeSliderRow(2, 0, 1, 0.5, "Zoom the time axis");
+            [this.PanLabel, this.ScrollSlider]  = this.makeSliderRow(3, 0, 1, 0,   "Pan the signal in time");
+            [this.MagLabel, this.ScaleSlider]   = this.makeSliderRow(4, 0.001, 100, 1, "Magnify the y-axis");
+            this.ZoomLabel.Text = "zoom";
+            this.PanLabel.Text  = "pan";
+            this.MagLabel.Text  = "mag";
 
             this.applyAxisLabels(eeg);
         end
 
-        function s = makeSlider(this, lo, hi, val, tip)
-        %MAKESLIDER  Create one slider that triggers a redraw while dragging.
-            s = uicontrol("Parent", this.Panel, "Style", "slider", ...
-                "Min", lo, "Max", hi, "Value", val, ...
-                "SliderStep", [1e-4, 0.07], "TooltipString", tip, ...
-                "Interruptible", "on", "Callback", @(~, ~) this.redraw());
-            listener = addlistener(s, "ContinuousValueChange", @(~, ~) this.redraw());
-            setappdata(s, "sliderListener", listener);
+        function [lbl, s] = makeSliderRow(this, row, lo, hi, val, tip)
+        %MAKESLIDERROW  One grid row: a label plus a slider that redraws
+        %   while dragging (ValueChangingFcn) and on release (ValueChangedFcn).
+            row2 = uigridlayout(this.Grid, [1 2], ...
+                "ColumnWidth", {this.LabelWidthPx, '1x'}, "Padding", [0 0 0 0]);
+            row2.Layout.Row = row;
+            lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);
+            lbl.Layout.Column = 1;
+            s = uislider(row2, "Limits", [lo, hi], "Value", val, ...
+                "MajorTicks", [], "MinorTicks", [], "Tooltip", tip, ...
+                "ValueChangingFcn", @(src, e) this.onSliderChanging(src, e), ...
+                "ValueChangedFcn", @(~, ~) this.redraw());
+            s.Layout.Column = 2;
         end
 
-        function t = makeLabel(this, text)
-        %MAKELABEL  Create a static text label shown to the left of a slider.
-            t = uicontrol("Parent", this.Panel, "Style", "text", ...
-                "String", text, "HorizontalAlignment", "right", "FontSize", 8);
+        function onSliderChanging(this, src, event)
+        %ONSLIDERCHANGING  Live-drag redraw: sync the slider's own Value to
+        %   the in-progress value (uislider does not update it until the
+        %   drag ends) before reusing the same redraw() the rest of the view
+        %   already relies on.
+            src.Value = event.Value;
+            this.redraw();
         end
 
         function applyAxisLabels(this, eeg)
@@ -284,75 +329,22 @@ classdef SignalView < handle
         end
 
         function updateScrollStep(this, numPoints)
-        %UPDATESCROLLSTEP  Size the scroll thumb to the visible fraction.
+        %UPDATESCROLLSTEP  Size the wheel-scroll step to the visible fraction
+        %   (uislider has no SliderStep/major-step of its own -- see
+        %   ScrollStep).
             if this.NumSamples <= numPoints
-                step = [0.1, Inf];
+                this.ScrollStep = 0.1;
             else
-                major = max(1e-6, numPoints / (this.NumSamples - numPoints));
-                minor = max(1e-6, numPoints / (100 * this.NumSamples));
-                step = [minor, major];
+                this.ScrollStep = max(1e-6, numPoints / (this.NumSamples - numPoints));
             end
-            set(this.ScrollSlider, "SliderStep", step);
         end
 
         function onWheel(this, callbackData)
         %ONWHEEL  Scroll horizontally with the mouse wheel.
-            step = this.ScrollSlider.SliderStep(2);
-            val = this.ScrollSlider.Value + callbackData.VerticalScrollCount * step;
-            val = min(this.ScrollSlider.Max, max(this.ScrollSlider.Min, val));
+            limits = this.ScrollSlider.Limits;
+            val = this.ScrollSlider.Value + callbackData.VerticalScrollCount * this.ScrollStep;
+            val = min(limits(2), max(limits(1), val));
             this.ScrollSlider.Value = val;
-            this.redraw();
-        end
-
-        function resize(this)
-        %RESIZE  Lay out the axes and sliders and refresh the axis pixel width.
-            if isempty(this.Panel) || ~isgraphics(this.Panel)
-                return;
-            end
-            oldUnits = this.Panel.Units;
-            set([this.Panel, this.Axes, this.ScaleSlider, this.ScrollSlider, this.ZoomSlider, ...
-                 this.ZoomLabel, this.PanLabel, this.MagLabel], "Units", "centimeters");
-            width  = this.Panel.Position(3);
-            height = this.Panel.Position(4);
-            sp = this.Space;
-            hgt = this.SliderHeight;
-
-            % Each slider row is a small text label on the left plus the slider.
-            labelW  = 1.4;                                 % label column width (cm)
-            sliderX = sp + labelW;
-            sliderW = max(0, width - 2 * sp - labelW);
-
-            y = sp;
-            set(this.ZoomLabel,    "Position", [sp, y, labelW, hgt]);
-            set(this.ZoomSlider,   "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
-            set(this.PanLabel,     "Position", [sp, y, labelW, hgt]);
-            set(this.ScrollSlider, "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
-            set(this.MagLabel,     "Position", [sp, y, labelW, hgt]);
-            set(this.ScaleSlider,  "Position", [sliderX, y, sliderW, hgt]); y = y + hgt + sp;
-
-            if this.Options.ShowAxisTicks
-                insets = get(this.Axes, "TightInset");
-            else
-                insets = [0 0 0 0];
-            end
-            pos = [sp + insets(1), y + insets(2), ...
-                   max(1, width - 3 * sp) - insets(1) - insets(3), ...
-                   max(1, height - 1.6 * y) - insets(2) - insets(4)];
-            set(this.Axes, "Position", max(pos, [0 0 0 0]));
-
-            % Refresh cached axis width in centimetres and pixels.
-            w = get(this.Axes, "Position"); this.AxWidthCm = max(0, w(3));
-            set(this.Axes, "Units", "pixels");
-            w = get(this.Axes, "Position"); this.AxWidthPx = max(1, round(w(3)));
-            set(this.Panel, "Units", oldUnits);
-
-            % Apply the requested mmPerSec once, by converting it to a zoom value.
-            if ~this.MmPerSecDone && this.Options.MmPerSec > 0 && this.AxWidthCm > 0
-                numPoints = this.AxWidthCm * 10 / (this.Options.MmPerSec * this.Period);
-                zoomValue = log(numPoints / this.NumSamples) / this.ZoomDecay;
-                this.ZoomSlider.Value = min(1, max(0, zoomValue));
-                this.MmPerSecDone = true;
-            end
             this.redraw();
         end
 

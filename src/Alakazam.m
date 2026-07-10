@@ -22,7 +22,7 @@ classdef Alakazam < handle
 %   Naming conventions used throughout:
 %     * Classes    UpperCamelCase (Alakazam, WorkSpace, AlakazamPlotter)
 %     * Methods    lowerCamelCase, verb first (onTransformation, evaluateDroppedBranch)
-%     * Properties UpperCamelCase (RootDir, ToolGroup, Workspace)
+%     * Properties UpperCamelCase (RootDir, AppContainer, Workspace)
 %     * Locals     descriptive lowerCamelCase
 %   Double quotes are used for string literals, except where a char array is
 %   required: transformation ids (EEG.Call, fed straight to feval), element-wise
@@ -38,11 +38,11 @@ classdef Alakazam < handle
     properties (Transient = true)
         RootDir       % char, absolute path to the authored source tree (src/)
         RepoRoot      % char, absolute path to the repository root (vendored code)
-        ToolGroup     % matlab.ui.internal.desktop.ToolGroup, the app window
+        AppContainer  % matlab.ui.container.internal.AppContainer, the app window
         Figures       % array of figure handles opened as documents
         Workspace     % WorkSpace, the data-browser tree and session state
         Plotter       % AlakazamPlotter, renders datasets into figures
-        Debug = false % logical, when true expose the instance in the base workspace
+        Debug = true % logical, when true expose the instance in the base workspace
     end
 
     methods (Access = private)
@@ -59,22 +59,35 @@ classdef Alakazam < handle
             addpath(genpath(fullfile(this.RootDir, 'Transformations')));
         end
 
-        function setupToolGroup(this)
-        %SETUPTOOLGROUP  Create and open the toolstrip document window.
-        %   Builds the ToolGroup, wires its close listener, populates the tab
-        %   group from BuildTabGroupAlakazam, and tiles the document area. The
-        %   ToolGroup names and tags are char arrays, as that desktop API expects.
-            this.ToolGroup = matlab.ui.internal.desktop.ToolGroup('Alakazam', 'AlakazamApp');
-            addlistener(this.ToolGroup, 'GroupAction', @(src, event) this.onGroupAction(event));
+        function setupAppContainer(this)
+        %SETUPAPPCONTAINER  Create the toolstrip document window (not yet shown).
+        %   Builds the AppContainer -- the web/CEF-based successor to the old
+        %   Java-Swing ToolGroup (see migration.md): JavaFrame, the mechanism
+        %   ToolGroup.addFigure relied on to dock a figure's Swing peer, is
+        %   removed entirely from R2025b's figure family. Registers the
+        %   "plots" document group AlakazamPlotter docks figures into, wires
+        %   the close listener, and populates the tab group from
+        %   BuildTabGroupAlakazam.
+        %
+        %   Visible is deliberately NOT set here: the data-browser panel
+        %   (built by the Workspace, constructed after this method returns)
+        %   must be added first, and AppContainer -- like the old
+        %   ToolGroup.open() -- expects everything added before it is shown.
+        %   The constructor sets Visible last, once the panel is attached.
+            this.AppContainer = matlab.ui.container.internal.AppContainer( ...
+                'Tag', 'AlakazamApp', 'Title', 'Alakazam');
+            addlistener(this.AppContainer, 'WindowStateChanged', ...
+                @(src, ~) this.onGroupAction(src));
             this.Figures = gobjects(1, 0); % grown as documents are opened
 
+            plotGroup = matlab.ui.container.internal.appcontainer.DocumentGroup();
+            plotGroup.Tag   = 'plots';
+            plotGroup.Title = 'Plots';
+            this.AppContainer.registerDocumentGroup(plotGroup);
+
             tabgroup = BuildTabGroupAlakazam(this);
-            this.ToolGroup.addTabGroup(tabgroup);
-            this.ToolGroup.SelectedTab = 'tabHome';
-            this.ToolGroup.setPosition(100, 100, 1080, 720);
-            this.ToolGroup.open();
-            desktop = com.mathworks.mlservices.MatlabDesktopServices.getDesktop; %#ok<JAPIMATHWORKS>
-            desktop.setDocumentArrangement(this.ToolGroup.Name, desktop.TILED, java.awt.Dimension(1, 1));
+            this.AppContainer.addTabGroup(tabgroup);
+            this.AppContainer.WindowBounds = [100 100 1080 720];
         end
 
         function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~, transformId, parentTreeNode)
@@ -117,12 +130,12 @@ classdef Alakazam < handle
             resultEEG.File = fullfile(childDir, [nodeKey '.mat']);
             resultEEG.id   = transformId;
 
-            % Add the node to the data browser and select it. The jTree
-            % property names are char arrays, as that API expects.
-            newNode = uiextras.jTree.TreeNode('Name', resultEEG.id, ...
-                'Parent', parentTreeNode, 'UserData', resultEEG.File);
-            this.setNodeIcon(newNode, resultEEG.DataType);
-            newNode.Parent.expand();
+            % Add the node to the data browser and select it. WorkSpaceTree
+            % nodes are always shown expanded, so there is no separate
+            % "expand the parent" step to do here.
+            newNode = this.Workspace.Tree.addNode(resultEEG.id, parentTreeNode.Id, ...
+                WorkSpaceTree.iconFor(resultEEG.DataType), resultEEG.File, ...
+                WorkSpaceTree.optsFor(resultEEG));
             this.Workspace.Tree.SelectedNodes = newNode;
 
             % Persist to disk under the variable name "EEG" and adopt it as the
@@ -130,17 +143,6 @@ classdef Alakazam < handle
             EEG = resultEEG; % saved to disk under the variable name "EEG"
             save(resultEEG.File, "EEG");
             this.Workspace.EEG = resultEEG;
-        end
-
-        function setNodeIcon(this, node, dataType)
-        %SETNODEICON  Give a tree node the icon matching its data type.
-        %   Time-domain datasets get the time-series icon and frequency-domain
-        %   datasets the frequencies icon; other types are left unchanged.
-            if strcmpi(dataType, "TIMEDOMAIN")
-                setIcon(node, this.Workspace.TimeSeriesIcon);
-            elseif strcmpi(dataType, "FREQUENCYDOMAIN")
-                setIcon(node, this.Workspace.FrequenciesIcon);
-            end
         end
 
         function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
@@ -157,14 +159,17 @@ classdef Alakazam < handle
         %OVERLAYAVERAGE  Overlay a dropped average dataset on the target's plot.
         %   Ensures the target average is shown (reusing its figure if open),
         %   then adds the source average to that figure's AverageView.
-            existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
-            if isempty(existingFig)
+        %   Looked up via AppContainer.hasDocument/getDocument, not findobj:
+        %   AppContainer-hosted document figures have HandleVisibility=off
+        %   and are never parented under groot (see AlakazamPlotter.plotCurrent).
+            docTag = string(matlab.lang.makeValidName(targetEEG.File));
+            if ~this.AppContainer.hasDocument("plots", docTag)
                 this.Workspace.EEG = targetEEG;
                 this.Plotter.plotCurrent();
-                existingFig = findobj("Type", "Figure", "Tag", targetEEG.File);
             else
-                this.ToolGroup.showClient(get(existingFig, "Name"));
+                this.AppContainer.getDocument("plots", docTag).Selected = true;
             end
+            existingFig = this.AppContainer.getDocument("plots", docTag).Figure;
 
             view = getappdata(existingFig, "AverageView");
             if ~isempty(view) && isvalid(view)
@@ -215,14 +220,12 @@ classdef Alakazam < handle
             save(EEG.File, "EEG");
 
             if isempty(existingNode)
-                newNode = uiextras.jTree.TreeNode('Name', EEG.id, ...
-                    'Parent', this.Workspace.GrandAveragesNode, 'UserData', EEG.File);
-                this.setNodeIcon(newNode, EEG.DataType);
-                this.Workspace.GrandAveragesNode.expand();
+                newNode = this.Workspace.Tree.addNode(EEG.id, this.Workspace.GrandAveragesNode.Id, ...
+                    WorkSpaceTree.iconFor(EEG.DataType), EEG.File, WorkSpaceTree.optsFor(EEG));
                 this.Workspace.Tree.SelectedNodes = newNode;
             else
-                existingNode.Name     = EEG.id;
-                existingNode.UserData = EEG.File;
+                this.Workspace.Tree.renameNode(existingNode.Id, EEG.id);
+                this.Workspace.Tree.setUserData(existingNode.Id, EEG.File);
             end
 
             this.Workspace.EEG = EEG;
@@ -234,21 +237,25 @@ classdef Alakazam < handle
         function this = Alakazam(varargin)
         %ALAKAZAM  Construct and open the application.
         %   Resolves the application roots, makes sure EEGLAB and its plugins
-        %   are available, sets up the paths, opens the toolstrip window,
-        %   creates the plotter and the workspace, and loads the data tree.
+        %   are available, sets up the paths, builds the toolstrip window,
+        %   creates the plotter and the workspace, loads the data tree, docks
+        %   the data-browser panel, and only then shows the window --
+        %   AppContainer, like the old ToolGroup, expects everything added
+        %   before Visible is set.
             this.RootDir  = fileparts(mfilename('fullpath'));
             this.RepoRoot = fileparts(this.RootDir);
 
             EEGLabEnvironment.ensure();
             this.setupDirectories();
-            this.setupToolGroup();
+            this.setupAppContainer();
             this.Plotter = AlakazamPlotter(this);
 
-            % Create the workspace (this loads the data) and attach its tree to
-            % the document browser panel.
+            % Create the workspace (this loads the data) and dock its tree's
+            % panel into the app container.
             this.Workspace = WorkSpace(this);
             this.Workspace.open();
-            this.ToolGroup.setDataBrowser(this.Workspace.Panel);
+            this.AppContainer.addPanel(this.Workspace.DataPanel);
+            this.AppContainer.Visible = true;
 
             % Optional debug aid: expose this instance in the base workspace as
             % "AlakazamInst" (otherwise it is only reachable via "ans", which is
@@ -260,8 +267,8 @@ classdef Alakazam < handle
 
         function delete(this)
         %DELETE  Destructor: close the document window and figures.
-            if ~isempty(this.ToolGroup) && isvalid(this.ToolGroup)
-                delete(this.ToolGroup);
+            if ~isempty(this.AppContainer) && isvalid(this.AppContainer)
+                this.AppContainer.close('force', true);
             end
             delete(this.Figures);
         end
@@ -311,7 +318,12 @@ classdef Alakazam < handle
                 originalDir = cd(this.RepoRoot);
                 restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
 
-                figHandle = findobj("Type", "Figure", "Tag", this.Workspace.EEG.File);
+                % Looked up via AppContainer.hasDocument/getDocument, not
+                % findobj (see AlakazamPlotter.plotCurrent).
+                docTag = string(matlab.lang.makeValidName(this.Workspace.EEG.File));
+                if this.AppContainer.hasDocument("plots", docTag)
+                    figHandle = this.AppContainer.getDocument("plots", docTag).Figure;
+                end
                 set(figHandle, "Pointer", "watch");
 
                 % The gallery passes the entry file name (e.g. "Fourier.m"); its
@@ -420,20 +432,13 @@ classdef Alakazam < handle
             end
         end
 
-        function onNodeEdited(this, ~, eventData)
-        %ONNODEEDITED  Tree callback: persist a renamed node's new label.
-        %   Updates the current dataset's id to the node's new name and saves.
-            this.Workspace.EEG.id = eventData.Nodes.Name;
-            EEG = this.Workspace.EEG;
-            save(this.Workspace.EEG.File, "EEG");
-        end
-
         function onListEvents(this)
         %ONLISTEVENTS  Context-menu callback: list unique event types and
         %   their occurrence counts for the selected dataset in a message
-        %   box. The menu item is greyed out for epoched/averaged data (see
-        %   onMouseClicked), so this only ever runs for continuous data;
-        %   root nodes are allowed here (unlike Rename/Delete), since a root
+        %   box. The menu item is disabled for epoched/averaged data (its
+        %   eligibility is baked into the node at creation time -- see
+        %   WorkSpaceTree.optsFor), so this only ever runs for continuous
+        %   data; root nodes are allowed here (unlike Rename/Delete), since a root
         %   node is normally the raw continuous import -- the most common
         %   case for wanting to see what events it contains.
             node = this.Workspace.Tree.SelectedNodes;
@@ -481,7 +486,7 @@ classdef Alakazam < handle
         %   active dataset, since a right-click need not target it. Root
         %   nodes are not renamable here.
             node = this.Workspace.Tree.SelectedNodes;
-            if isempty(node) || isempty(node.Parent) || isempty(node.Parent.Parent)
+            if isempty(node) || node.IsRoot
                 return; % nothing selected, or a root node
             end
 
@@ -500,7 +505,7 @@ classdef Alakazam < handle
             EEG = loaded.EEG; % saved to disk under the variable name "EEG"
             save(file, "EEG");
 
-            node.Name = newName;
+            this.Workspace.Tree.renameNode(node.Id, newName);
 
             % Keep the in-memory active dataset in sync if it is this node.
             if isequal(this.Workspace.EEG.File, file)
@@ -515,7 +520,7 @@ classdef Alakazam < handle
         %   remove everything ever computed from the source recording, a
         %   much bigger action than pruning a single branch.
             node = this.Workspace.Tree.SelectedNodes;
-            if isempty(node) || isempty(node.Parent) || isempty(node.Parent.Parent)
+            if isempty(node) || node.IsRoot
                 return; % nothing selected, or a root node
             end
 
@@ -533,7 +538,9 @@ classdef Alakazam < handle
             childDir = fullfile(folder, stem);
 
             % Close any open figure for this node or one of its descendants
-            % before their cache files disappear out from under them.
+            % before their cache files disappear out from under them. Looked
+            % up via AppContainer.hasDocument/closeDocument, not findobj (see
+            % AlakazamPlotter.plotCurrent).
             descendantFiles = {file};
             if exist(childDir, "dir")
                 found = dir(fullfile(childDir, '**', '*.mat'));
@@ -542,9 +549,9 @@ classdef Alakazam < handle
                 end
             end
             for k = 1:numel(descendantFiles)
-                fig = findobj("Type", "Figure", "Tag", descendantFiles{k});
-                if ~isempty(fig)
-                    close(fig);
+                docTag = string(matlab.lang.makeValidName(descendantFiles{k}));
+                if this.AppContainer.hasDocument("plots", docTag)
+                    this.AppContainer.closeDocument("plots", docTag);
                 end
             end
 
@@ -555,7 +562,7 @@ classdef Alakazam < handle
                 rmdir(childDir, "s");
             end
 
-            delete(node);
+            this.Workspace.Tree.removeNode(node.Id);
         end
 
         function onDefineGrandAverage(this)
@@ -591,8 +598,9 @@ classdef Alakazam < handle
         %   its current sources/weighting (its name is fixed), lets the
         %   analyst add/remove subjects or change the weighting, then
         %   recomputes and re-saves it in place. Only ever reachable for a
-        %   Grand Average node -- the menu item is greyed out otherwise, see
-        %   onMouseClicked.
+        %   Grand Average node -- the menu item is disabled otherwise (its
+        %   eligibility is baked into the node at creation time, see
+        %   WorkSpaceTree.optsFor).
             node = this.Workspace.Tree.SelectedNodes;
             if isempty(node)
                 return;
@@ -621,105 +629,73 @@ classdef Alakazam < handle
             end
         end
 
-        function onNodeDropped(this, ~, eventData)
+        function onNodeDropped(this, eventData)
         %ONNODEDROPPED  Tree callback: handle a node dropped onto another node.
-        %   A "copy" drop (no modifier key) moves the node within the tree; a
-        %   "move" drop (Ctrl held) re-applies the dragged branch onto the
-        %   target via evaluateDroppedBranch. Root nodes are ignored. The
-        %   DropAction is a char array, so the case labels are char arrays too.
+        %   No modifier key (EVENTDATA.REPARENTED true) moves the node within
+        %   the tree -- WorkSpaceTree has already mirrored this in its own
+        %   bookkeeping, so there is nothing further to do here (it is never
+        %   persisted to disk; treeTraverse rebuilds the tree from the cache
+        %   folder structure on the next full reload, same as the old jTree
+        %   behaviour). Ctrl held (REPARENTED false) re-applies the dragged
+        %   branch onto the target via evaluateDroppedBranch instead. Root
+        %   nodes are ignored.
             % Run from the repository root (historic behaviour): the drop
             % triggers plugins that may resolve resources relative to it.
             % Restore the previous directory when this callback returns.
             originalDir = cd(this.RepoRoot);
             restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at callback exit
 
-            if isempty(eventData.Source.Parent.Parent)
+            if eventData.Source.IsRoot
                 return; % a root node was dropped; ignore
             end
 
-            switch eventData.DropAction
-                case 'copy' % no modifier key: move the node in the tree
-                    set(eventData.Source, 'Parent', eventData.Target);
-                    expand(eventData.Target);
-                    expand(eventData.Source);
-                case 'move' % Ctrl held: re-apply the dragged branch to the target
-                    this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+            if ~eventData.Reparented % Ctrl held: re-apply the dragged branch to the target
+                this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
             end
         end
 
-        function onMouseClicked(this, tree, eventData)
-        %ONMOUSECLICKED  Tree callback: load/plot on click, context menu on right-click.
-        %   A single left click loads and displays the clicked dataset; a
-        %   double left click redisplays it. A right click shows the tree's
-        %   context menu (this.Workspace.jmenu, a raw Java JPopupMenu) at the
-        %   click position.
-        %
-        %   jmenu.show(invoker, x, y) positions the popup relative to
-        %   INVOKER's own coordinate space, so INVOKER must be the exact
-        %   component the click coordinates came from -- Tree.m sets
-        %   MouseClickedCallback on tObj.jTree itself (createTreeCustomizations),
-        %   so eventData.Position ([e.getX, e.getY]) is already relative to
-        %   that same jTree; no further coordinate conversion is needed or
-        %   correct here.
-            switch eventData.Button
-                case 1 % left button
-                    if eventData.Clicks == 1
-                        % Single click: load the selected dataset and show it.
-                        try
-                            nodeName = tree.SelectedNodes.Name;
-                        catch
-                            return; % nothing selected
-                        end
-                        matFile = tree.SelectedNodes.UserData;
-                        if exist(matFile, "file") == 2
-                            loaded = load(matFile, "EEG");
-                            loaded.EEG.id = string(nodeName);
-                            this.Workspace.EEG = loaded.EEG;
-                        end
-                        this.Plotter.plotCurrent();
-                    elseif eventData.Clicks == 2
-                        this.Plotter.plotCurrent();
-                    end
-                case 3 % right button: select the clicked node, then show the
-                       % context menu at the click position
-                    if ~isempty(eventData.Nodes) && ~any(tree.SelectedNodes == eventData.Nodes)
-                        tree.SelectedNodes = eventData.Nodes;
-                    end
-
-                    % 'List events' only makes sense for continuous
-                    % (non-epoched) data; 'Recalculate' only for a Grand
-                    % Average node. Grey both out otherwise.
-                    canListEvents = false;
-                    canRecalculate = false;
-                    if ~isempty(tree.SelectedNodes)
-                        selFile = tree.SelectedNodes.UserData;
-                        if exist(selFile, "file") == 2
-                            selLoaded = load(selFile, "EEG");
-                            canListEvents = isfield(selLoaded.EEG, "DataFormat") ...
-                                && strcmpi(selLoaded.EEG.DataFormat, "CONTINUOUS");
-                            canRecalculate = isfield(selLoaded.EEG, "etc") ...
-                                && isfield(selLoaded.EEG.etc, "GrandAverage");
-                        end
-                    end
-                    set(this.Workspace.jmenuListEvents, "Enabled", canListEvents);
-                    set(this.Workspace.jmenuRecalc, "Enabled", canRecalculate);
-
-                    javaObjs = tree.getJavaObjects();
-                    this.Workspace.jmenu.show(javaObjs.jTree, ...
-                        eventData.Position(1), eventData.Position(2));
-            end
-        end
-
-        function onSelectionChanged(this, ~, eventData)
+        function onSelectionChanged(this, eventData)
         %ONSELECTIONCHANGED  Tree callback: load and plot the newly selected dataset.
-            loaded = load(eventData.Nodes.UserData, "EEG");
+            loaded = load(eventData.UserData, "EEG");
             this.Workspace.EEG = loaded.EEG;
             this.Plotter.plotCurrent();
         end
 
-        function onGroupAction(this, eventData)
-        %ONGROUPACTION  ToolGroup listener: destroy the app when its window closes.
-            if strcmp(eventData.EventData.EventType, "CLOSED")
+        function onNodeDoubleClicked(this, eventData)
+        %ONNODEDOUBLECLICKED  Tree callback: (re)load and plot the double-clicked
+        %   dataset. Loads it itself rather than relying on a preceding single
+        %   click's SelectionChangedFcn having already done so, since
+        %   WorkSpaceTree does not guarantee that ordering.
+            loaded = load(eventData.UserData, "EEG");
+            this.Workspace.EEG = loaded.EEG;
+            this.Plotter.plotCurrent();
+        end
+
+        function onContextMenuAction(this, eventData)
+        %ONCONTEXTMENUACTION  Tree callback: dispatch a right-click context
+        %   menu action (List events / Rename / Recalculate / Delete) --
+        %   WorkSpaceTree has already selected EVENTDATA.NODE before invoking
+        %   this, matching the old right-click-selects-first behaviour, so
+        %   each handler below can keep reading Workspace.Tree.SelectedNodes.
+            switch eventData.Action
+                case 'listEvents'
+                    this.onListEvents();
+                case 'rename'
+                    this.onRenameNode();
+                case 'recalculate'
+                    this.onRecalculateNode();
+                case 'delete'
+                    this.onDeleteNode();
+            end
+        end
+
+        function onGroupAction(this, container)
+        %ONGROUPACTION  AppContainer listener: destroy the app when its window
+        %   closes. WindowStateChanged carries no useful eventdata of its own
+        %   (unlike the old ToolGroup's GroupAction/EventType), so the live
+        %   WindowState on the container itself (the listener's source) is
+        %   checked instead.
+            if container.WindowState == matlab.ui.container.internal.appcontainer.AppWindowState.CLOSED
                 delete(this);
             end
         end

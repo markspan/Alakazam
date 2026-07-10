@@ -76,4 +76,60 @@ experiment tells us whether A is viable at all.
 
 ## Status
 
-Investigation paused here. No code changes made yet.
+Option A implemented. `Alakazam.m`'s `setupToolGroup`/`ToolGroup` became
+`setupAppContainer`/`AppContainer` (`matlab.ui.container.internal.AppContainer`
++ `matlab.ui.internal.FigureDocument`, registered under a `'plots'` document
+group); `AlakazamPlotter.plotCurrent` docks each dataset's figure the same
+way. The data-browser tree was ported to the same shell in the same pass (it
+turned out not to be independent -- see below) via a new `matlab.ui.internal.
+FigurePanel` hosting `WorkSpaceTree` (see `webtree/README.md`), replacing
+`ToolGroup.setDataBrowser`.
+
+Findings from real R2025b testing (`matlab -batch`, via smoke scripts kept
+outside the repo):
+
+- Confirmed via direct construction: `AppContainer`, `registerDocumentGroup`,
+  `addTabGroup` (accepts the existing toolstrip `TabGroup`/`Tab` classes
+  unchanged), `addDocument`, `addPanel`, `WindowBounds` (replaces
+  `setPosition`), `Visible = true` (must be set last, mirroring
+  `ToolGroup.open()`), `bringToFront`, `close('force', true)`.
+- `FigureDocument.Figure` and `FigurePanel.Figure` are both lazily created,
+  `SetAccess = private` (`matlab.ui.internal.divfigure()`) -- not a wrapper
+  around a figure you create yourself. Every classic-graphics/figure property
+  `AlakazamPlotter` was already setting (`NumberTitle`, `Color`,
+  `PaperOrientation`, `Units`, `MenuBar`, `Toolbar`, `DockControls`, ...) is
+  still settable on it, as are `axes`/`plot`/`uicontrol`/`patch`.
+- **`FigureDocument`/`FigurePanel` figures have `HandleVisibility = 'off'`
+  and are never parented under `groot`** -- `findobj(..., "Type", "Figure",
+  "Tag", ...)`, the old lookup-by-Tag idiom `plotCurrent`/`overlayAverage`/
+  `onTransformation`/`onDeleteNode` all relied on, silently finds nothing.
+  Fixed by keying every lookup off the `FigureDocument`'s own `Tag`
+  (deterministic: `matlab.lang.makeValidName(eeg.File)`) via
+  `AppContainer.hasDocument`/`getDocument`/`closeDocument` (all take
+  `(documentGroupTag, tagOrTitle)`, and both arguments must be `string`, not
+  `char` -- the internal implementation concatenates them with `+`).
+- AppContainer has no `SelectedTab`; that moved onto `TabGroup` itself
+  (`tabgroup.SelectedTab = tabHome`, set in `BuildTabGroupAlakazam`).
+- The close listener is `WindowStateChanged` (no useful eventdata of its own,
+  unlike the old `GroupAction`/`EventType`); check the live
+  `AppContainer.WindowState == ...AppWindowState.CLOSED` on the container
+  itself instead.
+- **Not fully confirmed**: `AppContainer.closeDocument(...)` (used by
+  `onDeleteNode` to close a deleted node's open figure) took long enough in a
+  headless `matlab -batch` smoke test that it could not be distinguished from
+  a hang within a reasonable wait -- everything else in the same test
+  (`hasDocument`/`getDocument`/`.Selected`) returned promptly. Plausibly a
+  headless/no-window-server limitation of `-batch` specifically (closing a
+  CEF-hosted tab may need a real message pump), not a real bug, but this one
+  call has not been confirmed working interactively. Worth deliberately
+  triggering (right-click a node with an open plot -> Delete) on first
+  interactive test.
+
+Everything else (tree add/rename/remove/select, drag-drop reparent vs.
+Ctrl-apply-transformation, context-menu dispatch, grand-average node
+create/update, figure creation and reuse) was exercised end to end against
+the real production code (not reimplemented logic) in a smoke test using a
+minimal fake `Alakazam`-like host, with all assertions passing.
+
+Not yet done: a full interactive launch of the real app (`Alakazam()` with
+real EEGLAB data) on R2025b -- this is task #7 in the migration tracking.

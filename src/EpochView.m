@@ -20,6 +20,7 @@ classdef EpochView < handle
 
     properties (SetAccess = private)
         Figure          % owning figure
+        Grid            % 1x1 uigridlayout the axes fills
         Axes            % axes the epochs are drawn in
         EEG             % the epoched dataset (channels x time x trials)
         Times           % 1 x time, sample times
@@ -54,7 +55,8 @@ classdef EpochView < handle
                 this.BinNamesKnown = true;
             end
 
-            this.Axes   = axes("Parent", fig);
+            this.Grid = uigridlayout(fig, [1 1], "Padding", [0 0 0 0]);
+            this.Axes = uiaxes(this.Grid);
             set(fig, "KeyPressFcn", @(~, e) this.onKey(e));
             this.redraw();
             axtoolbar(this.Axes, "default");

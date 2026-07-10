@@ -5,8 +5,7 @@ function loadGrandAverages(this)
 %   Alakazam.saveGrandAverage). Unlike a subject's own derived results,
 %   grand averages do not nest under any single subject's branch -- they
 %   combine several -- so they get their own place in the tree instead.
-    this.GrandAveragesNode = uiextras.jTree.TreeNode('Name', 'Grand Averages', ...
-        'Parent', this.Tree.Root);
+    this.GrandAveragesNode = this.Tree.addNode('Grand Averages', '', 'default', '', struct('isRoot', true));
 
     gaDir = fullfile(this.CacheDirectory, 'GrandAverages');
     if ~exist(gaDir, "dir")
@@ -17,12 +16,12 @@ function loadGrandAverages(this)
     for i = 1:numel(found)
         file = fullfile(found(i).folder, found(i).name);
         loaded = load(file, "EEG");
-        node = uiextras.jTree.TreeNode('Name', loaded.EEG.id, ...
-            'Parent', this.GrandAveragesNode, 'UserData', file);
         if isfield(loaded.EEG, "DataType") && strcmpi(loaded.EEG.DataType, "FREQUENCYDOMAIN")
-            setIcon(node, this.FrequenciesIcon);
+            iconKey = 'freq';
         else
-            setIcon(node, this.TimeSeriesIcon);
+            iconKey = 'time';
         end
+        this.Tree.addNode(loaded.EEG.id, this.GrandAveragesNode.Id, iconKey, file, ...
+            WorkSpaceTree.optsFor(loaded.EEG));
     end
 end
