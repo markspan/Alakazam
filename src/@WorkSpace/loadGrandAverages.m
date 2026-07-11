@@ -1,12 +1,12 @@
 function loadGrandAverages(this)
-%LOADGRANDAVERAGES  Create the "Grand Averages" tree node (always present,
-%   even when empty) and populate it from CacheDirectory/GrandAverages,
-%   the flat folder every grand-average dataset is saved into (see
-%   Alakazam.saveGrandAverage). Unlike a subject's own derived results,
-%   grand averages do not nest under any single subject's branch -- they
-%   combine several -- so they get their own place in the tree instead.
-    this.GrandAveragesNode = this.Tree.addNode('Grand Averages', '', 'default', '', struct('isRoot', true));
-
+%LOADGRANDAVERAGES  Populate the Grand Averages tree (this.GrandAveragesTree,
+%   its own WorkSpaceTree instance -- see WorkSpace.CreateTreeComponent)
+%   from CacheDirectory/GrandAverages, the flat folder every grand-average
+%   dataset is saved into (see Alakazam.saveGrandAverage). Grand averages
+%   are always top-level nodes here (parentId '') -- they never nest under
+%   any single subject's branch, since they combine several, and now have
+%   their own tree instead of a single always-present "Grand Averages" root
+%   node inside the data & analyses tree.
     gaDir = fullfile(this.CacheDirectory, 'GrandAverages');
     if ~exist(gaDir, "dir")
         return; % nothing saved yet
@@ -21,7 +21,7 @@ function loadGrandAverages(this)
         else
             iconKey = 'time';
         end
-        this.Tree.addNode(loaded.EEG.id, this.GrandAveragesNode.Id, iconKey, file, ...
+        this.GrandAveragesTree.addNode(loaded.EEG.id, '', iconKey, file, ...
             WorkSpaceTree.optsFor(loaded.EEG));
     end
 end

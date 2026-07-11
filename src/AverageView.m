@@ -15,6 +15,15 @@ classdef AverageView < handle
 %
 %   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW.
 
+    properties
+        % Called (no args) when the user clicks this view's axes or toggles
+        % a tickbox. Wired by AlakazamPlotter to Alakazam.registerTileClick,
+        % so keyboard shortcuts route to whichever tile was last clicked
+        % while several are visible at once in Grid/Stack mode -- see
+        % Alakazam.dispatchKey and migration.md.
+        ActivatedFcn = function_handle.empty
+    end
+
     properties (SetAccess = private)
         Figure          % owning figure
         Grid            % 1x2 uigridlayout: axes | checkbox strip
@@ -46,11 +55,17 @@ classdef AverageView < handle
                 "Padding", [4 4 4 4]);
             this.Axes   = uiaxes(this.Grid);
             this.Axes.Layout.Column = 1;
+            this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
             this.CheckboxGrid = uigridlayout(this.Grid, [1 1], "Padding", [0 0 0 0]);
             this.CheckboxGrid.Layout.Column = 2;
             this.Series  = this.prepare(eeg);
             this.Visible = true(1, numel(this.Series));
-            set(fig, "KeyPressFcn", @(~, e) this.onKey(e));
+            % Key handling is wired by the shared Alakazam-level dispatcher
+            % (Alakazam.dispatchKey), not a per-view fig.KeyPressFcn here:
+            % every open dataset is now a uitab on one shared uifigure, so a
+            % per-view KeyPressFcn would be overwritten by whichever view was
+            % constructed last, breaking key navigation on every other open
+            % tab.
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -165,6 +180,31 @@ classdef AverageView < handle
 
             this.buildCheckboxes(allNames);
         end
+
+        function onKey(this, event)
+        %ONKEY  Up / down arrows step the channel shown for all lines.
+        %   Public (not the private helper it used to be): dispatched by
+        %   Alakazam.dispatchKey for whichever tab is currently selected --
+        %   see the constructor comment.
+            switch lower(event.Key)
+                case "uparrow"
+                    this.Channel = max(1, this.Channel - 1);
+                case "downarrow"
+                    maxChan = min(cellfun(@(s) size(s.data, 1), this.Series));
+                    this.Channel = min(maxChan, this.Channel + 1);
+                otherwise
+                    return;
+            end
+            this.redraw();
+        end
+
+        function notifyActivated(this)
+        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
+        %   empty-function_handle case.
+            if ~isempty(this.ActivatedFcn)
+                this.ActivatedFcn();
+            end
+        end
     end
 
     methods (Access = private)
@@ -215,20 +255,7 @@ classdef AverageView < handle
         function onToggle(this, idx, value)
         %ONTOGGLE  A tickbox was (un)checked: show/hide that line and redraw.
             this.Visible(idx) = logical(value);
-            this.redraw();
-        end
-
-        function onKey(this, event)
-        %ONKEY  Up / down arrows step the channel shown for all lines.
-            switch lower(event.Key)
-                case "uparrow"
-                    this.Channel = max(1, this.Channel - 1);
-                case "downarrow"
-                    maxChan = min(cellfun(@(s) size(s.data, 1), this.Series));
-                    this.Channel = min(maxChan, this.Channel + 1);
-                otherwise
-                    return;
-            end
+            this.notifyActivated();
             this.redraw();
         end
 

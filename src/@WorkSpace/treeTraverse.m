@@ -43,10 +43,14 @@ function treeTraverse(this, id, branchDir, currentParentNode)
             data = load(fullfile(file.folder, file.name), 'EEG');
 
             % Create a new tree node with the EEG id and file data, iconned
-            % by data type and with List events/Recalculate eligibility
-            % baked in from the loaded EEG (see WorkSpaceTree.optsFor).
+            % by the transformation that produced it (falling back to data
+            % type if no matching transformation icon exists -- see
+            % WorkSpaceTree.iconForResult) and with List events/Recalculate
+            % eligibility baked in from the loaded EEG (see
+            % WorkSpaceTree.optsFor).
+            transRoot = fullfile(this.Parent.RootDir, 'Transformations');
             newNode = this.Tree.addNode(data.EEG.id, currentParentNode.Id, ...
-                WorkSpaceTree.iconFor(data.EEG.DataType), data.EEG.File, ...
+                WorkSpaceTree.iconForResult(data.EEG, transRoot), data.EEG.File, ...
                 WorkSpaceTree.optsFor(data.EEG));
 
             % Extract the file name without the extension for recursion.

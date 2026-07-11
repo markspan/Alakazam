@@ -1,9 +1,10 @@
 function loadMATFile(this, WS, name)
 %%
-% Wrapper for the eeglab function reading Brainvision files.
-% Reads only if no .mat file allready exists, and reads the .mat file
-% if it does. 
-% Looks for a subdir with the same name for 'tree' info on previously 
+% Loads a previously-saved Alakazam .mat session (a plain load('EEG'),
+% not an EEGLAB reader -- see loadBVAFile/loadSETFile for those).
+% Reads only if no cached .mat file already exists, and reads the .mat file
+% if it does.
+% Looks for a subdir with the same name for 'tree' info on previously
 % performed Transformations. Adds these too.
 %%
 

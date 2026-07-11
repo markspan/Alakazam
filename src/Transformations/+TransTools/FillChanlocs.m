@@ -6,23 +6,22 @@ function EEG = FillChanlocs(EEG, errorId, elcFile)
 %   name (see pop_chanedit.m), anything else -- including this file -- needs
 %   a full path, or its underlying readlocs() call cannot find it.
 %
-%   Unlike EnsureChanlocs, this does NOT require every channel to end up
-%   positioned: a channel whose label the template does not recognise (e.g.
-%   an EOG or ECG channel, which has no scalp position) is simply left with
-%   an empty/NaN X. ERRORID is only used for infrastructure failures (the
-%   given file missing), so it still reports as the calling transformation.
-%   Callers that need every channel positioned should follow this with their
-%   own completeness check (see EnsureChanlocs); callers that only need
-%   *some* channels positioned (e.g. AutoGEDAI, which processes just the
-%   channels with a recognised scalp position) can check EEG.chanlocs.X
-%   themselves afterward.
+%   This does NOT require every channel to end up positioned: a channel
+%   whose label the template does not recognise (e.g. an EOG or ECG
+%   channel, which has no scalp position) is simply left with an empty/NaN
+%   X. ERRORID is only used for infrastructure failures (the given file
+%   missing), so it still reports as the calling transformation. Callers
+%   that only need *some* channels positioned (AutoEyeICA and AutoGEDAI,
+%   which both process just the channels with a recognised scalp position
+%   and splice the rest back unmodified) check EEG.chanlocs.X themselves
+%   afterward to split channels into an eligible/ineligible set.
 %
 %   Callers pick their own template: AutoEyeICA uses dipfit's standard 10-5
 %   template (see Dipfit1005File); AutoGEDAI uses GEDAI's own bundled copy
 %   (see GedaiElcFile), so its electrode set exactly matches what GEDAI
 %   itself expects.
 %
-%   See also: EnsureChanlocs, Dipfit1005File, AutoEyeICA, AutoGEDAI.
+%   See also: Dipfit1005File, AutoEyeICA, AutoGEDAI.
 
     hasAllLocs = isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) ...
         && isfield(EEG.chanlocs, 'X') ...

@@ -24,6 +24,15 @@ classdef SignalView < handle
 %
 %   See also MINMAXPYRAMID, ALAKAZAMPLOTTER.
 
+    properties
+        % Called (no args) when the user clicks this view's axes. Wired by
+        % AlakazamPlotter to Alakazam.registerTileClick, so keyboard/wheel
+        % shortcuts route to whichever tile was last clicked while several
+        % are visible at once in Grid/Stack mode -- see
+        % Alakazam.dispatchWheel/dispatchKey and migration.md.
+        ActivatedFcn = function_handle.empty
+    end
+
     properties (SetAccess = private)
         Parent          % figure or container the view is drawn into
         Grid            % 4x1 uigridlayout: axes | zoom row | pan row | mag row
@@ -190,13 +199,41 @@ classdef SignalView < handle
             this.updateScrollStep(numPoints);
             this.drawOverlays(startTime, endTime);
         end
+
+        function onWheel(this, callbackData)
+        %ONWHEEL  Scroll horizontally with the mouse wheel.
+        %   Public (not the private helper it used to be): every open
+        %   dataset is now a uitab on one shared uifigure, so wheel events
+        %   are dispatched centrally by Alakazam.dispatchWheel, which looks
+        %   up the SignalView for the currently selected tab and calls this
+        %   directly, rather than each view wiring its own
+        %   fig.WindowScrollWheelFcn (see buildGraphics).
+            limits = this.ScrollSlider.Limits;
+            val = this.ScrollSlider.Value + callbackData.VerticalScrollCount * this.ScrollStep;
+            val = min(limits(2), max(limits(1), val));
+            this.ScrollSlider.Value = val;
+            this.redraw();
+            this.notifyActivated();
+        end
+
+        function notifyActivated(this)
+        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
+        %   empty-function_handle case.
+            if ~isempty(this.ActivatedFcn)
+                this.ActivatedFcn();
+            end
+        end
     end
 
     methods (Access = private)
         function buildGraphics(this, lineSpec, eeg)
         %BUILDGRAPHICS  Create the grid, axes, per-channel lines and sliders.
-            fig = ancestor(this.Parent, "figure");
-            fig.WindowScrollWheelFcn = @(~, e) this.onWheel(e);
+            % Wheel scrolling is wired by the shared Alakazam-level dispatcher
+            % (Alakazam.dispatchWheel), not here: every open dataset is now a
+            % uitab on one shared uifigure, so a per-view
+            % fig.WindowScrollWheelFcn would be overwritten by whichever
+            % SignalView was constructed last, breaking wheel-scroll on every
+            % other open tab.
 
             % Row 1 (the axes) gets the remaining space; rows 2-4 are the
             % zoom/pan/mag slider rows, matching the old bottom-up ordering
@@ -210,6 +247,7 @@ classdef SignalView < handle
             % Custom wheel scrolling needs uiaxes' own built-in scroll/drag
             % interactions disabled so they do not fight it.
             disableDefaultInteractivity(this.Axes);
+            this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
 
             nchan = size(this.Y, 2);
             this.Lines = gobjects(1, nchan);
@@ -253,6 +291,7 @@ classdef SignalView < handle
         %   already relies on.
             src.Value = event.Value;
             this.redraw();
+            this.notifyActivated();
         end
 
         function applyAxisLabels(this, eeg)
@@ -337,15 +376,6 @@ classdef SignalView < handle
             else
                 this.ScrollStep = max(1e-6, numPoints / (this.NumSamples - numPoints));
             end
-        end
-
-        function onWheel(this, callbackData)
-        %ONWHEEL  Scroll horizontally with the mouse wheel.
-            limits = this.ScrollSlider.Limits;
-            val = this.ScrollSlider.Value + callbackData.VerticalScrollCount * this.ScrollStep;
-            val = min(limits(2), max(limits(1), val));
-            this.ScrollSlider.Value = val;
-            this.redraw();
         end
 
         function overlay = parseOverlays(~, eeg)

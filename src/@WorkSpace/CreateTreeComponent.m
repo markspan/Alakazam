@@ -1,25 +1,41 @@
 function CreateTreeComponent(this)
-%CREATETREECOMPONENT  Build the data-browser panel and its WorkSpaceTree.
-%   WorkSpaceTree is a uihtml/CEF component (see WorkSpaceTree.m) and,
-%   unlike the old Java-Swing uiextras.jTree.Tree, cannot be embedded in a
-%   raw javax.swing.JPanel -- it needs a real uifigure-family host. A
-%   matlab.ui.internal.FigurePanel supplies that (its .Figure is a lazily
-%   created web-capable figure, the same mechanism FigureDocument uses for
-%   docked plots -- see AlakazamPlotter.m); Alakazam's constructor docks it
-%   into the AppContainer shell's left region via addPanel.
+%CREATETREECOMPONENT  Build the two WorkSpaceTree components: Tree (data &
+%   analyses) into Alakazam.DataTreePanel, GrandAveragesTree into
+%   Alakazam.GrandAveragesTreePanel (top/bottom halves of the reserved
+%   TreeGrid area -- see Alakazam.setupMainWindow). WorkSpaceTree is a
+%   uihtml/CEF component and, unlike the old Java-Swing uiextras.jTree.Tree,
+%   needs a real uifigure-family host; each is built directly into its own
+%   panel, no separate wrapper object needed.
+%
+%   Both trees wire back to the SAME Alakazam callback methods
+%   (onSelectionChanged, onNodeDoubleClicked, onNodeDropped,
+%   onContextMenuAction) -- those only ever need the node struct the event
+%   already carries, so nothing about their bodies is tree-specific. The
+%   source WorkSpaceTree instance is passed as each callback's second
+%   argument (captured as this.Tree / this.GrandAveragesTree at call time,
+%   not construction time, since these anonymous functions run long after
+%   both properties are assigned) so those handlers can update
+%   this.ActiveTree -- the tree a later action (rename/delete/recalculate/
+%   run a transformation) should act on, since only one of the two trees
+%   can have a real "selection" at a time in the underlying WorkSpaceTree/
+%   yy-tree model.
 %
 %   The context menu (List events / Rename / Recalculate / Delete) and its
 %   per-node icons now live in WorkSpaceTree.html itself; per-node enable
 %   state (canListEvents/canRecalculate) is computed once at addNode time
 %   (see WorkSpaceTree.optsFor), not reactively on right-click as the old
 %   raw Java JPopupMenu did.
-    this.DataPanel = matlab.ui.internal.FigurePanel('Tag', 'dataBrowser', 'Title', 'Workspace');
-    this.DataPanel.Region = 'left';
-    this.DataPanel.PreferredWidth = 260;
+    this.Tree = WorkSpaceTree(this.Parent.DataTreePanel, ...
+        'SelectionChangedFcn',  @(e) this.Parent.onSelectionChanged(e, this.Tree), ...
+        'NodeDoubleClickedFcn', @(e) this.Parent.onNodeDoubleClicked(e, this.Tree), ...
+        'NodeDroppedFcn',       @(e) this.Parent.onNodeDropped(e, this.Tree), ...
+        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.Tree));
 
-    this.Tree = WorkSpaceTree(this.DataPanel.Figure, ...
-        'SelectionChangedFcn',  @(e) this.Parent.onSelectionChanged(e), ...
-        'NodeDoubleClickedFcn', @(e) this.Parent.onNodeDoubleClicked(e), ...
-        'NodeDroppedFcn',       @(e) this.Parent.onNodeDropped(e), ...
-        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e));
+    this.GrandAveragesTree = WorkSpaceTree(this.Parent.GrandAveragesTreePanel, ...
+        'SelectionChangedFcn',  @(e) this.Parent.onSelectionChanged(e, this.GrandAveragesTree), ...
+        'NodeDoubleClickedFcn', @(e) this.Parent.onNodeDoubleClicked(e, this.GrandAveragesTree), ...
+        'NodeDroppedFcn',       @(e) this.Parent.onNodeDropped(e, this.GrandAveragesTree), ...
+        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.GrandAveragesTree));
+
+    this.ActiveTree = this.Tree;
 end

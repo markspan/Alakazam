@@ -1,12 +1,10 @@
 % epoch_start_ms: -200
 % epoch_stop_ms: 800
-% Codes are markers; ? matches any single character; { } lists alternatives.
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
 % Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.
-% Combine with and / or / not (adjacent terms are and-ed).
-
-let Rare     = {"11" "22" "33" "44" "55"}
-let Frequent = "??" not Rare
-
-bin 1 "Rare Correct"     : Rare and next("201") within (200,1200) ms
-bin 2 "Frequent Correct" : Frequent and next("201") within (200,1200) ms
-bin 3 "N400 effect" = bin 2 - bin 1
+% let names a reusable expression (codes or relations); = makes a difference bin.
+let infrequent = {"11" "22" "33" "44" "55"}
+let frequent = "??" not infrequent
+bin 1 "infrequent"  infrequent and next("201") within (200,1201] ms
+bin 2 "Unrelated"   frequent   and next("201") within (200,1201] ms
+bin 3 "Effect"     = bin 1 - bin 2

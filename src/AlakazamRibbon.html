@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: sans-serif; font-size: 12px; }
+#ribbon { width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+
+.alz-tabstrip { display: flex; border-bottom: 1px solid #999; background: #f0f0f0; flex: none; }
+.alz-tab {
+    padding: 9px 14px; cursor: pointer;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+/* Per-tab shades of blue; keyed off the tab's own id (see alzRender) --
+   .alz-active always wins regardless of shade, since it matches on two
+   classes (higher specificity) rather than one. */
+.alz-tab-home { background: #4a7fc9; }
+.alz-tab-tools { background: #2d5f99; }
+.alz-tab-grandAverage { background: #7aa7dd; }
+.alz-tab:hover { filter: brightness(1.12); }
+/* #f5f5f5 matches uifigure's default Color (the window background, see
+   Alakazam.setupMainWindow) so the selected tab blends into the window
+   instead of standing out white. */
+.alz-tab.alz-active { background: #f5f5f5; color: #333; font-weight: bold; border-bottom: 2px solid #4472c4; }
+
+.alz-content { flex: 1; overflow-x: auto; overflow-y: auto; display: flex; align-items: flex-start; padding: 3px; box-sizing: border-box; }
+.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 268px; }
+.alz-group-items { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
+.alz-group-title { text-align: center; font-size: 9px; color: #555; border-top: 1px solid #ddd; padding-top: 2px; margin-top: 2px; }
+
+.alz-item {
+    width: 62px; height: 50px; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    cursor: pointer; border: 1px solid transparent; border-radius: 3px; padding: 2px; text-align: center;
+}
+.alz-item:hover { background: #e0e0ff; border-color: #99a; }
+.alz-item img { width: 24px; height: 24px; margin-bottom: 1px; }
+.alz-item-label { font-size: 9px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="ribbon">
+    <div class="alz-tabstrip" id="alzTabStrip"></div>
+    <div class="alz-content" id="alzContent"></div>
+</div>
+<script>
+// AlakazamRibbon.html -- self-contained uihtml page for the Alakazam control
+// strip (Home / Tools / Grand Average). Hand-written directly (no build
+// step, unlike WorkSpaceTree.html/webtree/): a ribbon is plain HTML/CSS
+// flexbox and vanilla JS event handling, with no third-party JS library
+// needed the way yy-tree was for the tree's drag-and-drop.
+//
+// Data shape from MATLAB (htmlComponent.Data), see AlakazamRibbon.m:
+//   { tabs: [ { id, title, groups: [ { title, items: [
+//         {id, label, tooltip, icon: 'data:image/png;base64,...'}, ...
+//     ] }, ... ] }, ... ],
+//     activeTab: <id> }
+// Events sent to MATLAB (htmlComponent.sendEventToMATLAB(name, payload)):
+//   itemPushed  {id}
+//   tabChanged  {id}
+
+var alzData = null;
+var alzActiveTab = null;
+var alzComponent = null;
+
+function alzRender(data) {
+    alzData = data || { tabs: [] };
+    alzActiveTab = alzData.activeTab || (alzData.tabs[0] && alzData.tabs[0].id);
+
+    var tabStrip = document.getElementById('alzTabStrip');
+    tabStrip.innerHTML = '';
+    alzData.tabs.forEach(function (tab) {
+        var el = document.createElement('div');
+        el.className = 'alz-tab alz-tab-' + tab.id + (tab.id === alzActiveTab ? ' alz-active' : '');
+        el.textContent = tab.title;
+        el.addEventListener('click', function () {
+            // Mutate alzData.activeTab (not just the alzActiveTab local),
+            // since alzRender() re-derives alzActiveTab from
+            // alzData.activeTab on every call -- setting only the local
+            // here got immediately clobbered back to the original tab by
+            // that re-derivation, so clicking Tools/Grand Average always
+            // snapped straight back to Home.
+            alzData.activeTab = tab.id;
+            alzRender(alzData);
+            alzSendEvent('tabChanged', { id: tab.id });
+        });
+        tabStrip.appendChild(el);
+    });
+
+    alzRenderContent();
+}
+
+function alzRenderContent() {
+    var content = document.getElementById('alzContent');
+    content.innerHTML = '';
+    var tab = (alzData.tabs || []).find(function (t) { return t.id === alzActiveTab; });
+    if (!tab) { return; }
+
+    (tab.groups || []).forEach(function (group) {
+        var groupEl = document.createElement('div');
+        groupEl.className = 'alz-group';
+
+        var itemsEl = document.createElement('div');
+        itemsEl.className = 'alz-group-items';
+        (group.items || []).forEach(function (item) {
+            itemsEl.appendChild(alzBuildItem(item));
+        });
+        groupEl.appendChild(itemsEl);
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'alz-group-title';
+        titleEl.textContent = group.title;
+        groupEl.appendChild(titleEl);
+
+        content.appendChild(groupEl);
+    });
+}
+
+function alzBuildItem(item) {
+    var itemEl = document.createElement('div');
+    itemEl.className = 'alz-item';
+    itemEl.title = item.tooltip || '';
+
+    if (item.icon) {
+        var img = document.createElement('img');
+        img.src = item.icon;
+        itemEl.appendChild(img);
+    }
+
+    var label = document.createElement('div');
+    label.className = 'alz-item-label';
+    label.textContent = item.label;
+    itemEl.appendChild(label);
+
+    itemEl.addEventListener('click', function () {
+        alzSendEvent('itemPushed', { id: item.id });
+    });
+    return itemEl;
+}
+
+function alzSendEvent(name, payload) {
+    if (alzComponent) {
+        alzComponent.sendEventToMATLAB(name, payload);
+    }
+}
+
+function setup(htmlComponent) {
+    alzComponent = htmlComponent;
+    alzRender(htmlComponent.Data);
+    htmlComponent.addEventListener('DataChanged', function () {
+        alzRender(htmlComponent.Data);
+    });
+}
+</script>
+</body>
+</html>

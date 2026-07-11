@@ -25,18 +25,30 @@ const events = []
 const container = window.document.getElementById('tree')
 const tree = window.AlakazamTree.create(container, { onEvent: (e) => events.push(e) })
 
+const FAKE_ICON_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
 tree.setNodes([
     { id: 'a', label: 'RawImport', icon: 'raw', parentId: null },
     { id: 'b', label: 'Fourier1', icon: 'freq', parentId: 'a' },
     { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false },
-    { id: 'd', label: 'RawImport2', icon: 'raw', parentId: null }
+    { id: 'd', label: 'RawImport2', icon: 'raw', parentId: null },
+    { id: 'e', label: 'FourierResult1', icon: FAKE_ICON_URI, parentId: 'a' }
 ])
 
 // --- 1. rendering + icons ---
 const icons = container.querySelectorAll('.alz-icon')
-console.log(`icons rendered: ${icons.length} (expect 4)`)
-assert.strictEqual(icons.length, 4, 'one icon per node')
-assert.ok(icons[0].innerHTML.includes('<svg'), 'icon contains inline svg')
+console.log(`icons rendered: ${icons.length} (expect 5)`)
+assert.strictEqual(icons.length, 5, 'one icon per node')
+assert.ok(icons[0].innerHTML.includes('<svg'), 'key-based icon contains inline svg')
+
+// A data:-URI icon (WorkSpaceTree.iconForResult, a per-transformation icon)
+// must render as a scaled <img>, not be looked up in the fixed ICONS map.
+const leafE = findLeafByLabel('FourierResult1')
+const imgEl = leafE.content.querySelector('.alz-icon img.alz-icon-img')
+assert.ok(imgEl, 'data-URI icon should render as an <img class="alz-icon-img">')
+assert.strictEqual(imgEl.src, FAKE_ICON_URI, 'img src should be the exact data URI passed in')
+assert.strictEqual(imgEl.width, 16, 'icon should be scaled down to 16px wide')
+assert.strictEqual(imgEl.height, 16, 'icon should be scaled down to 16px tall')
 
 // --- 2. single click ---
 function findLeafByLabel(label) {

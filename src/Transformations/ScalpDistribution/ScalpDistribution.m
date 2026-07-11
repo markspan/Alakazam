@@ -4,8 +4,6 @@ function [pfigure, ropts] = ScalpDistribution(input, ~)
 %   A pure-plot transformation (see Alakazam.onTransformation, around
 %   "if ishandle(result.EEG)"): returns a figure handle, not a modified
 %   dataset, so nothing is persisted to the tree -- only the plot is shown.
-%   Modelled on the same pattern as the (now removed from development, still
-%   on main) PoinCare transformation.
 %
 %   A slider spans the dataset's whole time range; moving it redraws one
 %   topographic map per bin -- the instantaneous amplitude per channel, at
@@ -136,23 +134,56 @@ end
 [~, name, ~] = fileparts(EEG.File);
 pfigure = figure('Name', ['Scalp distribution: ' name], 'Visible', 'off', ...
     'Color', [1 1 1]);
-nCols = ceil(sqrt(nBins));
+nCols = min(3, nBins); % up to 3 bins side by side, then wrap to a new row
 nRows = ceil(nBins / nCols);
 
 sliderStripHeight = 0.12;
 plotAreaBottom    = sliderStripHeight + 0.05;
 plotAreaHeight    = 1 - plotAreaBottom - 0.05;
-cellW = 1 / nCols;
+% A modest margin at the right -- not for anything we draw ourselves, but
+% so that if the user adds a colorbar to the rightmost head via MATLAB's
+% own axes toolbar (see the positionGuard timer below for why that needs
+% handling at all), there is somewhere for it to land without being
+% clipped at the figure edge.
+plotAreaWidth = 0.95;
+cellW = plotAreaWidth / nCols;
 cellH = plotAreaHeight / nRows;
 
 ax = gobjects(1, nBins);
+layoutPositions = cell(1, nBins);
 for b = 1:nBins
     row = ceil(b / nCols);
     col = mod(b - 1, nCols) + 1;
     left   = (col - 1) * cellW + 0.02;
     bottom = plotAreaBottom + (nRows - row) * cellH + 0.02;
     ax(b) = subplot('Position', [left, bottom, cellW - 0.04, cellH - 0.04]);
+    layoutPositions{b} = ax(b).Position;
 end
+
+% topoplot's own axes shrink their actual Position (not just an outer
+% margin) when a colorbar is added, to make room for it -- confirmed
+% directly: the head itself is not redrawn smaller (its data extent is
+% unchanged), its containing box just gets squeezed, which is what made a
+% head with a user-added colorbar (via MATLAB's own axes toolbar --
+% right-click > Insert Colorbar) look visibly smaller than its siblings.
+% Setting PositionConstraint to 'innerposition' does not prevent this for
+% a topoplot/subplot axes (confirmed; MATLAB's subplot-grid position
+% manager overrides it regardless). Nor does an addlistener(ax, 'Position',
+% 'PostSet', ...) catch it -- also confirmed directly: colorbar changes
+% Position through some internal path that does not fire a PostSet
+% notification at all. What does work (confirmed) is a plain restore
+% after the fact, and it sticks (colorbar does not fight back a second
+% time) -- so a lightweight timer periodically checks every head's
+% Position against its original layout slot and restores it if something
+% (typically a user-added colorbar) has changed it. This does not clip the
+% colorbar itself -- confirmed it lands in the small gap already left
+% between cells (or the reserved right margin above, for the rightmost
+% column) rather than overlapping a neighbour. Stopped and deleted via the
+% figure's DeleteFcn so it does not keep running after the plot is closed.
+positionGuard = timer('ExecutionMode', 'fixedRate', 'Period', 0.5, ...
+    'TimerFcn', @(~, ~) restoreHeadPositions());
+start(positionGuard);
+pfigure.DeleteFcn = @(~, ~) stopPositionGuard();
 
 timeLabel = uicontrol(pfigure, 'Style', 'text', 'Units', 'normalized', ...
     'Position', [0.35, 0.065, 0.3, 0.045], 'FontSize', 10, 'FontWeight', 'bold');
@@ -170,20 +201,30 @@ startTime = 0;
 if startTime < EEG.times(1) || startTime > EEG.times(end)
     startTime = EEG.times(1); % 0 is not inside this epoch's window
 end
-uicontrol(pfigure, 'Style', 'slider', 'Units', 'normalized', ...
+slider = uicontrol(pfigure, 'Style', 'slider', 'Units', 'normalized', ...
     'Position', [0.08, 0.02, 0.84, 0.04], ...
-    'Min', EEG.times(1), 'Max', EEG.times(end), 'Value', startTime, ...
-    'Callback', @(src, ~) redraw(src.Value));
+    'Min', EEG.times(1), 'Max', EEG.times(end), 'Value', startTime);
+% Classic uicontrol sliders only fire Callback on mouse-up; the underlying
+% Value property, however, does update continuously while being dragged
+% (confirmed directly), so a PostSet listener is the standard way to react
+% live during the drag itself, with no Java/findjobj involved. Wired to
+% the full redraw (label + every bin's topoplot), so the heads themselves
+% update while dragging, not just the label -- Callback is therefore
+% redundant (PostSet already fires for the final value on release too) and
+% not set. The listener handle must be kept alive for the life of the
+% figure; it is, via the same closure that already keeps ax/timeLabel/etc.
+% alive (this whole function's workspace stays alive as long as the
+% listener's callback, itself a nested-function handle, does).
+sliderListener = addlistener(slider, 'Value', 'PostSet', @(~, ~) redraw(slider.Value)); %#ok<NASGU>
 
 redraw(startTime);
-
-cb = colorbar(ax(1), 'Position', [0.93 0.25 0.02 0.65]);
-cb.Label.String = 'Amplitude (\muV)';
 
 pfigure.Visible = 'on';
 
     function redraw(t)
     %REDRAW  Show the scalp topography at the instant nearest T (ms).
+    %   Wired to the slider's Value (see the PostSet listener above), so
+    %   this runs continuously while dragging, not just on release.
         [~, idx] = min(abs(EEG.times - t));
         timeLabel.String = sprintf('t = %.0f ms', EEG.times(idx));
         for bb = 1:nBins
@@ -192,6 +233,27 @@ pfigure.Visible = 'on';
             topoplot(EEG.data(hasPos, idx, binIndices(bb)), posChanlocs, 'electrodes', 'on', ...
                 'maplimits', [-mapLimit, mapLimit]);
             title(ax(bb), labels{bb}, 'Interpreter', 'none');
+        end
+    end
+
+    function restoreHeadPositions()
+    %RESTOREHEADPOSITIONS  Undo any external resize of any head's axes
+    %   (see the positionGuard timer above -- typically MATLAB shrinking
+    %   one to make room for a user-added colorbar), so every head stays
+    %   the same size regardless.
+        for bb = 1:nBins
+            if isvalid(ax(bb)) && ~isequal(ax(bb).Position, layoutPositions{bb})
+                ax(bb).Position = layoutPositions{bb};
+            end
+        end
+    end
+
+    function stopPositionGuard()
+    %STOPPOSITIONGUARD  Figure DeleteFcn: stop and delete the positionGuard
+    %   timer so it does not keep firing after this plot is closed.
+        if isvalid(positionGuard)
+            stop(positionGuard);
+            delete(positionGuard);
         end
     end
 end

@@ -1,0 +1,26 @@
+.alz-icon { display: inline-flex; align-items: center; margin-right: 4px; vertical-align: middle; }
+.alz-icon-img { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; display: block; }
+
+/* Tree rows: modern flat look, replacing yy-tree's own boxy/grey defaults
+   (fixed-100px-width name boxes, barely-distinguishable selection shade --
+   see alakazam-tree.js's TREE_STYLES header comment). Selection
+   highlighting is our own alz-row-selected class on the whole row
+   (leaf.content), not yy-tree's own -select class (name span only, left
+   inert via TREE_STYLES.selectStyles) -- see _applySelectionHighlight. */
+.yy-tree-leaf { margin-top: 1px; }
+.yy-tree-content { transition: background-color 0.1s ease; }
+.yy-tree-content:hover:not(.alz-row-selected) { background: #eaf0fb; }
+.alz-row-selected { background: #4a7fc9; }
+.alz-row-selected .yy-tree-name { color: #fff; }
+.yy-tree-name { color: #222; }
+
+.alz-menu {
+    position: absolute; z-index: 1000; background: #fff; border: 1px solid #999;
+    border-radius: 4px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3); font: 12px sans-serif;
+    min-width: 140px; padding: 2px 0;
+}
+.alz-menu-item { padding: 4px 12px; cursor: pointer; white-space: nowrap; }
+.alz-menu-item:hover { background: #eaf0fb; }
+.alz-menu-item-disabled { color: #999; cursor: default; }
+.alz-menu-item-disabled:hover { background: none; }
+.alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }

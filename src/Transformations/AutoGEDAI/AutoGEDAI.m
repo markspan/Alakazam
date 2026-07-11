@@ -41,6 +41,20 @@ function [EEG, opts] = AutoGEDAI(input, opts)
 %   original slot, unmodified, once denoising is done. Throws if *no*
 %   channel matches.
 %
+%   opts.Parallel is only ever honoured when a GPU is actually present
+%   (gpuDeviceCount > 0): GEDAI's own parfor-based CPU band processing
+%   (GEDAI.m's wavelet-band denoising loop) accumulates band results into a
+%   reduction variable that is never reset before falling back to
+%   non-parallel processing after a parfor error -- and MATLAB documents a
+%   parfor reduction variable's value as undefined after a mid-loop error --
+%   so a single transient per-band failure (which parallel CPU workers hit
+%   far more often than a lone serial run) silently corrupts the output by
+%   accumulating the full band set on top of a stale partial sum, with no
+%   error surfaced. This reproduced as "sometimes great, sometimes unusable"
+%   results from identical settings/data on a GPU-less machine. On a machine
+%   with no GPU, this option is therefore forced to 'no' regardless of the
+%   dialog choice; reported upstream.
+%
 %   See also: AutoEyeICA.
 
 %% Check for the EEG dataset input:
@@ -65,21 +79,40 @@ if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
         parallelChoices = {'no', 'yes'};
     end
 
+    % Seed every field from the last time this ran in the current workspace
+    % (TransformSettings), falling back to the literal defaults below the
+    % first time. For popup fields (settingsdlg shows a cell array as a
+    % dropdown, defaulting to its first entry), the remembered choice is
+    % moved to the front of its own choice list rather than replacing it,
+    % so every option is still selectable.
+    stored = TransformSettings.get('AutoGEDAI');
+    if isempty(stored)
+        stored = struct('Strength', 'auto', 'Leadfield', 'precomputed', 'LowCut', 0.5, ...
+            'RejectEpochs', 'no', 'EpochENOVA', 0.9, ...
+            'RejectChannels', 'no', 'ChannelENOVA', 0.9, 'Parallel', parallelChoices{1});
+    end
+    strengthChoices       = putFirst({'auto', 'auto+', 'auto-'}, stored.Strength);
+    leadfieldChoices      = putFirst({'precomputed', 'interpolated'}, stored.Leadfield);
+    rejectEpochsChoices   = putFirst({'no', 'yes'}, stored.RejectEpochs);
+    rejectChannelsChoices = putFirst({'no', 'yes'}, stored.RejectChannels);
+    parallelChoices       = putFirst(parallelChoices, stored.Parallel);
+
     opts = uiextras.settingsdlg( ...
         'Description', 'Denoise EEG with GEDAI (generalized eigenvalue decomposition against a leadfield reference).', ...
         'title', 'AutoGEDAI options', ...
         'separator', 'Denoising:', ...
-        {'Denoising strength'; 'Strength'}, {'auto', 'auto+', 'auto-'}, ...
-        {'Leadfield matrix'; 'Leadfield'}, {'precomputed', 'interpolated'}, ...
-        {'Low-cut frequency (Hz)'; 'LowCut'}, 0.5, ...
+        {'Denoising strength'; 'Strength'}, strengthChoices, ...
+        {'Leadfield matrix'; 'Leadfield'}, leadfieldChoices, ...
+        {'Low-cut frequency (Hz)'; 'LowCut'}, stored.LowCut, ...
         'separator', 'Bad epoch rejection:', ...
-        {'Reject bad epochs'; 'RejectEpochs'}, {'no', 'yes'}, ...
-        {'Epoch ENOVA threshold (0-1)'; 'EpochENOVA'}, 0.9, ...
+        {'Reject bad epochs'; 'RejectEpochs'}, rejectEpochsChoices, ...
+        {'Epoch ENOVA threshold (0-1)'; 'EpochENOVA'}, stored.EpochENOVA, ...
         'separator', 'Bad channel rejection:', ...
-        {'Reject bad channels'; 'RejectChannels'}, {'no', 'yes'}, ...
-        {'Channel ENOVA threshold (0-1)'; 'ChannelENOVA'}, 0.9, ...
+        {'Reject bad channels'; 'RejectChannels'}, rejectChannelsChoices, ...
+        {'Channel ENOVA threshold (0-1)'; 'ChannelENOVA'}, stored.ChannelENOVA, ...
         'separator', 'Performance:', ...
         {'Use parallel processing'; 'Parallel'}, parallelChoices);
+    TransformSettings.set('AutoGEDAI', opts);
 end
 
 EEG = input;
@@ -129,7 +162,19 @@ channelThreshold = inf;
 if strcmpi(opts.RejectChannels, 'yes')
     channelThreshold = opts.ChannelENOVA;
 end
-useParallel = strcmpi(opts.Parallel, 'yes');
+% GEDAI's own parfor-based CPU band processing has a reliability bug (see
+% the top-of-file note): a transient per-band failure can silently corrupt
+% the result instead of erroring, and this is far likelier to actually
+% trigger when running many CPU workers with no GPU to offload onto. Honour
+% the user's Parallel choice only when a GPU is actually present; a
+% GPU-less machine always gets the safe non-parallel path regardless of the
+% dialog selection. ensureGpuDeviceCountShim (above) guarantees
+% gpuDeviceCount is callable here even without Parallel Computing Toolbox.
+useParallel = strcmpi(opts.Parallel, 'yes') && gpuDeviceCount > 0;
+if strcmpi(opts.Parallel, 'yes') && ~useParallel
+    fprintf(['AutoGEDAI: parallel processing was requested but no GPU was found; ' ...
+        'running non-parallel instead (see AutoGEDAI.m for why).\n']);
+end
 
 %% Denoise just the positioned channels.
 eegOnly = pop_select(EEG, 'channel', eegIdx);
@@ -177,6 +222,19 @@ if channelThreshold < inf
     fprintf('AutoGEDAI: %d channel(s) exceeded the ENOVA threshold (%.2f).\n', ...
         sum(ENOVA_per_channel > channelThreshold), channelThreshold);
 end
+end
+
+% ======================================================================= %
+function choices = putFirst(choices, value)
+%PUTFIRST  Move VALUE to the front of the cell array CHOICES, if present.
+%   settingsdlg shows a cell-array field as a popup defaulting to its first
+%   entry, so this is how a remembered choice becomes the dialog's default
+%   without dropping any of the other selectable choices. Leaves CHOICES
+%   unchanged if VALUE is not one of them.
+    idx = find(strcmpi(choices, value), 1);
+    if ~isempty(idx)
+        choices = [choices(idx), choices(1:idx - 1), choices(idx + 1:end)];
+    end
 end
 
 % ======================================================================= %

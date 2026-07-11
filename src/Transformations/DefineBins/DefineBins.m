@@ -108,8 +108,12 @@ function [EEG, options] = DefineBins(input, opts)
     if interactive
         [script, epochWin] = promptForScript();
         spec   = parseSpec(script);              % may throw parse errors
-        % Remember the last valid script so it prefills the editor next time.
-        setpref('Alakazam', 'DefineBinsScript', script);
+        % Remember the last valid script so it prefills the editor next time
+        % (in this workspace -- see TransformSettings).
+        stored = TransformSettings.get('DefineBins');
+        if isempty(stored); stored = struct(); end
+        stored.script = script;
+        TransformSettings.set('DefineBins', stored);
         options = struct('script', script, 'bins', spec.bins, 'epoch', epochWin);
     elseif isstruct(options) && isfield(options, 'script') && ~isfield(options, 'bins')
         % Script mode: parse a supplied script without a dialog (for scripting
@@ -248,10 +252,21 @@ function [script, epochWin] = promptForScript()
         'bin 2 "Unrelated"  "s??" not related and next("S201") within (200,1200] ms'       newline ...
         'bin 3 "Effect"     = bin 1 - bin 2' ];
 
-    % Prefill with the last script and epoch bounds the user ran (remembered
-    % across sessions), falling back to the built-in template on first use.
-    default   = getpref('Alakazam', 'DefineBinsScript', template);
-    prevEpoch = getpref('Alakazam', 'DefineBinsEpoch', {'-200', '800'});
+    % Prefill with the last script and epoch bounds the user ran in this
+    % workspace (see TransformSettings), falling back to the built-in
+    % template on first use (a fresh workspace, or one where DefineBins has
+    % never run interactively yet).
+    stored = TransformSettings.get('DefineBins');
+    if isempty(stored) || ~isfield(stored, 'script')
+        default = template;
+    else
+        default = stored.script;
+    end
+    if isempty(stored) || ~isfield(stored, 'epochStart')
+        prevEpoch = {'-200', '800'};
+    else
+        prevEpoch = {stored.epochStart, stored.epochStop};
+    end
 
     % The epoch window (ms, cut around each matched event) is a per-run choice,
     % so it is two small fields above the script rather than a keyword. Leave
@@ -264,7 +279,16 @@ function [script, epochWin] = promptForScript()
 
     script   = result.script;
     epochWin = parseEpochBounds(result.start, result.stop);
-    setpref('Alakazam', 'DefineBinsEpoch', {result.start, result.stop});
+
+    % Remember the epoch bounds regardless of whether the script itself
+    % turns out to be valid (see the caller, which separately remembers the
+    % script only once it parses) -- a typo elsewhere in the script is no
+    % reason to discard separately-fine epoch bounds.
+    stored = TransformSettings.get('DefineBins');
+    if isempty(stored); stored = struct(); end
+    stored.epochStart = result.start;
+    stored.epochStop  = result.stop;
+    TransformSettings.set('DefineBins', stored);
 end
 
 function result = showDefineBinsDialog(defaultScript, prevEpoch)

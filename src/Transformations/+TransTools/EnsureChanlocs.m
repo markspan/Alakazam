@@ -4,12 +4,16 @@ function EEG = EnsureChanlocs(EEG, errorId, elcFile)
 %   electrode position from ELCFILE (see FillChanlocs) and requires every
 %   channel to end up positioned: one whose label the template does not
 %   recognise is a hard error (ERRORID, e.g. 'Alakazam:AutoEyeICA'), naming
-%   the channel, rather than a silent gap. Used by AutoEyeICA, which runs
-%   ICA (and hence needs a position) on every channel it is given.
+%   the channel, rather than a silent gap.
 %
-%   AutoGEDAI processes only the channels that resolve to a position (e.g.
-%   excluding EOG) rather than requiring all of them, so it calls
-%   FillChanlocs directly instead of this stricter wrapper.
+%   Currently UNUSED: AutoEyeICA used to call this (requiring every
+%   channel, including EOG/ECG, to be positioned before running ICA), which
+%   meant a dataset with an unlocatable EOG channel -- the common case --
+%   threw outright instead of just excluding that channel. AutoEyeICA now
+%   follows AutoGEDAI's pattern instead: FillChanlocs, then process only
+%   the channels that resolve to a position and splice the rest back
+%   unmodified. Kept here in case a future caller genuinely needs the
+%   all-or-nothing behaviour; delete if it stays unused.
 %
 %   See also: FillChanlocs, Dipfit1005File, AutoEyeICA, AutoGEDAI.
 

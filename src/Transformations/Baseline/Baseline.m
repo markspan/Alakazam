@@ -21,24 +21,34 @@ if (nargin == 1)
 end
 
 if ~isfield(input, 'data')
-    throw(MException('Alakazam:Baseline','Problem in Baseline: No Correct Data Supplied'));
+    throw(MException('Alakazam:Baseline', ...
+        'Problem in Baseline: this dataset has no data at all, so there is nothing to baseline-correct.'));
 end
 
 if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
-    throw(MException('Alakazam:Baseline','Problem in Baseline: Data not Segmented'));
+    throw(MException('Alakazam:Baseline', ...
+        ['Problem in Baseline: this needs segmented (epoched) data, but the selected ' ...
+         'dataset is still continuous. Segment it first (e.g. with DefineBins), then ' ...
+         'run Baseline on the segmented result.']));
 end
 
 if ~isfield(input, 'trials')
-    throw(MException('Alakazam:Baseline','Problem in Baseline: Trials not specified'));
+    throw(MException('Alakazam:Baseline', ...
+        'Problem in Baseline: this dataset is missing its trial count, so it cannot be treated as segmented data.'));
 end
 
 if strcmp(opts, 'Init')
+    stored = TransformSettings.get('Baseline');
+    if isempty(stored)
+        stored = struct('Start', -100, 'Stop', 0);
+    end
     opts = uiextras.settingsdlg(...
         'Description', 'Set the parameters for Baseline',...
         'title' , 'Baseline options',...
         'separator' , 'Location:',...
-        {'Start'; 'Start'}, -100, ...
-        {'Stop'; 'Stop'}, 0);
+        {'Start'; 'Start'}, stored.Start, ...
+        {'Stop'; 'Stop'}, stored.Stop);
+    TransformSettings.set('Baseline', opts);
 end
 
 [~,zeropoint] = min(abs(input.times));

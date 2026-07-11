@@ -1,17 +1,93 @@
 // alakazam-tree.js
 // Thin wrapper around yy-tree adding: per-node icons, a custom context menu,
-// double-click detection, and Ctrl-aware drop semantics matching Alakazam's
+// double-click detection, Ctrl-aware drop semantics matching Alakazam's
 // existing tree (no-modifier drop = real reparent, left entirely to yy-tree;
 // Ctrl-held drop = "apply transformation to the node dropped onto" -- the
 // visual/data move yy-tree performs is reverted, and only a bridge event is
-// emitted, since MATLAB will build the actual new result node itself).
+// emitted, since MATLAB will build the actual new result node itself), and a
+// modernised look (see TREE_STYLES/icons override below and
+// alakazam-tree.css): yy-tree ships with its own default row styling
+// injected at runtime (Tree._addStyles, from its styleDefaults) unless a
+// custom `styles` argument is passed to `new Tree(...)` -- left at its
+// defaults, node names render as small fixed-100px-wide grey boxes with a
+// barely-distinguishable selection shade (200,200,200 selected vs 230,230,230
+// unselected), and expand/collapse uses a boxed +/- glyph. TREE_STYLES below
+// replaces all of that; actual row selection highlighting is handled by our
+// own alz-row-selected class on the *whole* row (leaf.content), not
+// yy-tree's own -select class (which only ever touches the name span) --
+// see _applySelectionHighlight.
 import { Tree } from 'yy-tree'
+import { icons } from 'yy-tree/src/icons.js'
 
+// yy-tree's own expand/collapse glyphs are a bordered box with a +/- sign
+// (see node_modules/yy-tree/src/icons.js) -- replaced here with simple flat
+// chevrons (closed = pointing right, open = pointing down), matching modern
+// tree UIs. `icons` is the same object instance yy-tree's own tree.js uses
+// internally (both import the same underlying module file, so mutating it
+// here propagates), not a public/documented override point, but this is
+// vendored, pinned, build-time-only code (see webtree/README.md), not a live
+// dependency -- an acceptable place to reach in.
+icons.closed = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M35 20 L70 50 L35 80" fill="none" stroke="#666" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+icons.open = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M20 35 L50 70 L80 35" fill="none" stroke="#666" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+
+// Passed as the `styles` argument to `new Tree(...)`: yy-tree merges this
+// shallowly, one whole sub-object at a time (see node_modules/yy-tree/src/
+// utils.js's options()), so providing e.g. `nameStyles` at all replaces the
+// *entire* default nameStyles object -- including its fixed `width: 100px`,
+// which is why that doesn't need to be explicitly overridden to something
+// else here.
+const TREE_STYLES = {
+    nameStyles: {
+        padding: '3px 6px',
+        margin: '0',
+        background: 'transparent',
+        'user-select': 'none',
+        cursor: 'pointer',
+        'white-space': 'nowrap',
+        'font-size': '12px'
+    },
+    contentStyles: {
+        display: 'flex',
+        'align-items': 'center',
+        padding: '2px 4px',
+        'border-radius': '4px',
+        cursor: 'pointer'
+    },
+    expandStyles: {
+        width: '13px',
+        height: '13px',
+        'margin-right': '2px',
+        flex: 'none'
+    },
+    indicatorStyles: {
+        background: '#4a7fc9',
+        height: '3px',
+        width: '100px',
+        padding: '0'
+    },
+    selectStyles: {
+        // Real selection highlighting is the alz-row-selected class on the
+        // whole row (leaf.content, applied by _applySelectionHighlight),
+        // not yy-tree's own -select (name-only) class -- left inert here.
+        background: 'transparent'
+    }
+}
+
+// Per-node-type icons: a coloured rounded-square "badge" holding a simple
+// white glyph, a common modern flat-icon pattern (distinguishable by both
+// colour and glyph shape, not colour alone) -- freq's blue matches the
+// accent colour used throughout the rest of the app (ribbon, tile
+// selection, tree row selection below). 'raw' doubles as the tree's root/
+// branch icon key (root imports AND the "Grand Averages" branch, see
+// WorkSpace.loadBVAFile/loadGrandAverages) -- a folder glyph, the same
+// closed-folder-tab silhouette AlakazamRibbon's own "Tabs" view-mode icon
+// uses (src/AlakazamRibbon.m's viewItems), recoloured white-on-badge to
+// match this set instead of that icon's outline style.
 const ICONS = {
-    raw:  '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="2" width="16" height="20" rx="1" fill="none" stroke="#5a4a2f" stroke-width="1.5"/><path d="M7 7h8M7 11h8M7 15h5" stroke="#5a4a2f" stroke-width="1.2" stroke-linecap="round"/></svg>',
-    time: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="2" y="4" width="20" height="16" rx="1" fill="none" stroke="#2f5a4a" stroke-width="1.5"/><path d="M4 14l3-4 3 5 3-7 3 4 4-3" fill="none" stroke="#2f5a4a" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    freq: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="2" y="4" width="20" height="16" rx="1" fill="none" stroke="#2f3f5a" stroke-width="1.5"/><path d="M5 17V13M9 17V9M13 17V15M17 17V7M20 17V11" stroke="#2f3f5a" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="#555" stroke-width="1.5"/></svg>'
+    raw:  '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#d9a441"/><path d="M5 8a1 1 0 0 1 1-1h4l1.6 1.8H18a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#fff"/></svg>',
+    time: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#2f9e6e"/><path d="M4 14l3-4 3 5 3-7 3 4 4-3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    freq: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#4a7fc9"/><path d="M6 17V13M10 17V9M14 17V15M18 17V7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#8a8a8a"/><rect x="6" y="5" width="12" height="14" rx="1" fill="none" stroke="#fff" stroke-width="1.4"/></svg>'
 }
 
 const ROOT_ID = '__root__'
@@ -36,6 +112,7 @@ class AlakazamTree {
         this._ctrlDown = false
         this._lastClick = { id: null, time: 0 }
         this._menuEl = null
+        this._highlightedLeaf = null // see _applySelectionHighlight
 
         this._root = { id: ROOT_ID, name: '', children: [], expanded: true }
 
@@ -44,7 +121,7 @@ class AlakazamTree {
             move: true,
             select: true,
             holdTime: 0 // we drive rename via the context menu, not press-and-hold
-        })
+        }, TREE_STYLES)
 
         this._tree.on('render', (leaf) => this._onRender(leaf))
         this._tree.on('clicked', (leaf) => this._onClicked(leaf))
@@ -93,11 +170,26 @@ class AlakazamTree {
     _selectById(id) {
         const leaf = this._findLeafByData(this._byId.get(id))
         if (leaf) {
-            if (this._tree._selection) {
-                this._tree._selection.name.classList.remove(`${this._tree.prefixClassName}-select`)
-            }
             this._tree._selection = leaf
-            leaf.name.classList.add(`${this._tree.prefixClassName}-select`)
+            this._applySelectionHighlight(leaf)
+        }
+    }
+
+    // Highlights the whole row (leaf.content), not just the name span --
+    // yy-tree's own -select class (toggled internally on native click, and
+    // by _selectById above for programmatic selection) only ever touches
+    // leaf.name, which read as barely-distinguishable-from-unselected once
+    // TREE_STYLES took over row styling (see the file header comment). This
+    // is called from both _onClicked (native click path) and _selectById
+    // (programmatic path, e.g. MATLAB pushing a new selectedId), so both
+    // stay visually in sync.
+    _applySelectionHighlight(leaf) {
+        if (this._highlightedLeaf) {
+            this._highlightedLeaf.content.classList.remove('alz-row-selected')
+        }
+        this._highlightedLeaf = leaf
+        if (leaf) {
+            leaf.content.classList.add('alz-row-selected')
         }
     }
 
@@ -117,10 +209,23 @@ class AlakazamTree {
 
     _onRender(leaf) {
         const data = leaf.data
-        const iconHtml = ICONS[data.icon] || ICONS.default
         const iconSpan = document.createElement('span')
         iconSpan.className = 'alz-icon'
-        iconSpan.innerHTML = iconHtml
+        if (typeof data.icon === 'string' && data.icon.startsWith('data:')) {
+            // A per-transformation icon (Transformations/<id>/<id>.png, see
+            // WorkSpaceTree.iconForResult), not one of the fixed ICONS
+            // badge keys -- rendered as a real <img>, scaled down to the
+            // same footprint the badge icons use, rather than a raw SVG
+            // innerHTML swap.
+            const img = document.createElement('img')
+            img.src = data.icon
+            img.width = 16
+            img.height = 16
+            img.className = 'alz-icon-img'
+            iconSpan.appendChild(img)
+        } else {
+            iconSpan.innerHTML = ICONS[data.icon] || ICONS.default
+        }
         leaf.content.insertBefore(iconSpan, leaf.name)
         leaf.content.addEventListener('contextmenu', (e) => {
             e.preventDefault()
@@ -135,6 +240,7 @@ class AlakazamTree {
         const now = Date.now()
         const isDouble = this._lastClick.id === data.id && (now - this._lastClick.time) < DOUBLE_CLICK_MS
         this._lastClick = { id: data.id, time: now }
+        this._applySelectionHighlight(leaf)
         this._onEvent({ type: isDouble ? 'nodeDoubleClicked' : 'nodeClicked', id: data.id })
     }
 

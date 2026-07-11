@@ -11,7 +11,7 @@ function elcFile = Dipfit1005File(errorId)
 %   Used by AutoEyeICA, which is independent of GEDAI and so uses dipfit's
 %   copy rather than reaching into GEDAI's plugin folder for one.
 %
-%   See also: FillChanlocs, EnsureChanlocs, AutoEyeICA.
+%   See also: FillChanlocs, AutoEyeICA.
 
     dipfitRoot = fileparts(which('dipfitdefs'));
     if isempty(dipfitRoot)

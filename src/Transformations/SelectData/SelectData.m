@@ -29,39 +29,26 @@ EEG = input;
 if (ischar(options))
     if (strcmpi(options, 'Init'))
         [EEG, options] = pop_select(input);
-        if isfield(EEG, 'Polarchannels')
-            ix1 = strfind(options, '[');
-            ix2 = strfind(options, ']');
-            if contains(options, 'time')
-                EEG.Polarchannels = pop_select(EEG.Polarchannels, 'time', eval(options(ix1:ix2)));
-            end
-            if contains(options, 'channel')
-                disp("No effect on polarchannels")
-            end
-
-        end
         % in EEGLAB, the second return value is the function call to recreate the
         % transformation.
     end
 else
-
-    eval(options.Param)
-    if (EEG.xmax / EEG.times(end) > 500)
-        EEG.times = EEG.times*1000;
-    end
+    % Normalize before eval, not after: options is always a struct by the
+    % time Alakazam.onTransformation stores it (it wraps a bare value in
+    % struct('Param', value) itself), but this function may be called
+    % directly with a bare (non-struct) captured value too, in which case
+    % options.Param would not exist yet if eval ran first.
     if ~isstruct(options)
         nOptions.Param = options;
         options = nOptions;
     end
-    if isfield(EEG, 'Polarchannels')
-        ix1 = strfind(options.Param, '[');
-        ix2 = strfind(options.Param, ']');
-            if contains(options.Param, 'time')
-                EEG.Polarchannels = pop_select(EEG.Polarchannels, 'time', eval(options.Param(ix1:ix2)));
-            end
-            if contains(options.Param, 'channel')
-                disp("No effect on polarchannels")
-            end
+    eval(options.Param)
+    % EEGLAB's own EEG.times is sometimes left in seconds rather than ms
+    % after pop_select; this ratio check (empirically, real recordings are
+    % well under 500x xmax/times(end) when both are already in the same
+    % unit) detects and corrects that rather than assuming a fixed unit.
+    if (EEG.xmax / EEG.times(end) > 500)
+        EEG.times = EEG.times*1000;
     end
 
     % so, when we evaluate this return value, it will recreate the

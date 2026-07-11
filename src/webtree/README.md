@@ -1,6 +1,6 @@
 # webtree
 
-Build tooling for [`src/WorkSpaceTree.html`](../src/WorkSpaceTree.html), the
+Build tooling for [`src/WorkSpaceTree.html`](../WorkSpaceTree.html), the
 self-contained `uihtml` page `WorkSpaceTree.m` loads for the data-browser
 tree. Built once and vendored; end users of Alakazam never need Node/npm.
 
@@ -27,10 +27,10 @@ drag-and-drop tree, MIT licensed) with:
 ## Rebuilding
 
 ```
-cd webtree
+cd src/webtree
 npm install
 npm run build          # -> dist/alakazam-tree.bundle.js, dist/alakazam-tree.html
-cp dist/alakazam-tree.html ../src/WorkSpaceTree.html
+cp dist/alakazam-tree.html ../WorkSpaceTree.html
 npm test                # jsdom-based tests: render/click/dblclick/menu/drag
 ```
 

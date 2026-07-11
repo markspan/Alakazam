@@ -1,20 +1,25 @@
 function [EEG, options] = ArtefactDetect(EEG,options)
-%% Rereference the EEG data
+%% Mark epochs exceeding an absolute amplitude limit as NaN
 %% Check for the EEG dataset input:
 if (nargin < 1)
-    ME = MException('Alakazam:ReRef','Problem in ReRef: No Data Supplied');
+    ME = MException('Alakazam:ArtefactDetect','Problem in ArtefactDetect: No Data Supplied');
     throw(ME);
 end
 if (nargin < 2)
     options = 'Init';
 end
 if strcmp(options, 'Init')
+    stored = TransformSettings.get('ArtefactDetect');
+    if isempty(stored)
+        stored = struct('Minimum', -100, 'Maximum', 100);
+    end
     options = uiextras.settingsdlg(...
         'Description', 'Set the parameters for Artefact Detection',...
-        'title' , 'Artefact Detaction Options',...
+        'title' , 'Artefact Detection Options',...
         'separator' , 'absolute limits: (mV)',...
-        {'Min'; 'Minimum'}, -100, ...
-        {'Max'; 'Maximum'}, 100);
+        {'Min'; 'Minimum'}, stored.Minimum, ...
+        {'Max'; 'Maximum'}, stored.Maximum);
+    TransformSettings.set('ArtefactDetect', options);
 end
 
 [chans, ~, trials] = size(EEG.data);

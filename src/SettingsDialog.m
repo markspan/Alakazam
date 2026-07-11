@@ -173,6 +173,22 @@ classdef SettingsDialog < handle
                     if ~isempty(item.limits)
                         handle.MajorTicks = item.limits(1):item.limits(2);
                     end
+                    if ~isempty(item.step)
+                        % uislider has no native step/SliderStep concept, so
+                        % discrete stepping is hand-rolled: snap to the
+                        % nearest multiple of item.step (relative to the
+                        % lower limit) both live while dragging
+                        % (ValueChangingFcn) and on release/click
+                        % (ValueChangedFcn, which fires even for a plain
+                        % click that never triggers ValueChangingFcn).
+                        lo = item.limits(1);
+                        hi = item.limits(2);
+                        step = item.step;
+                        snap = @(v) min(hi, max(lo, round((v - lo) / step) * step + lo));
+                        handle.MinorTicks = lo:step:hi;
+                        handle.ValueChangingFcn = @(src, event) set(src, 'Value', snap(event.Value));
+                        handle.ValueChangedFcn  = @(src, ~) set(src, 'Value', snap(src.Value));
+                    end
                 otherwise
                     error('AlakazamSettings:type', ...
                         'Unknown setting type ''%s''.', item.type);

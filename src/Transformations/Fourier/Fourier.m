@@ -26,22 +26,28 @@ function [ output, options ] = Fourier( varargin )
 %       Updated options struct after processing input arguments. Contains
 %       parameters for the Fourier transformation such as:
 %       - Resolution : Resolution mode ('Max' or 'Other').
-%       - Output : Output format ('Voltage', 'Power', 'VoltageDens', 'PowerDens').
-%       - Complex : Complex transform ('On' or 'Off').
-%       - FullSpectrum : Full spectrum calculation ('On' or 'Off').
-%       - Normalize : Normalization ('On' or 'Off').
+%       - Output : Output format ('Volt', 'Power', 'VoltDens', 'PowerDens') --
+%         these exact strings, taken from FourierGui.fig's OutPutRadio button
+%         group Tags (get(handles.OutPutRadio,'SelectedObject')'s Tag), not
+%         the longer on-screen labels ("Voltage [uV]" etc.) shown next to them.
 %       - Interval : Frequency interval for transformation.
 %       - Window : Windowing function used ('Hanning', 'Hamming', etc.).
 %       - Window_Length : Length of the windowing function in percentage.
-%       - Compression : Compression ('On' or 'Off').
-%       - CompRes : Compression resolution.
 %       - ResVal : Resolution value for custom mode.
+%       - Complex, FullSpectrum, Normalize, Compression, CompRes : captured
+%         from the dialog but currently only FullSpectrum is actually read by
+%         this function (fs = 2 below); the others are stored in the returned
+%         options (and hence replayed) but have no effect on the computed
+%         output -- their dialog controls are not yet wired to any behaviour.
 %
 %   Notes:
 %   ------
 %   - If 'opts' is not provided, default options are used for transformation.
 %   - Supports windowing functions like Hanning, Hamming, Bartlett, etc.
 %   - Computes the Fourier transform for each segment of the input data.
+%   - Per-segment normalization ('norm' below) always compares the windowed
+%     signal's variance against the unwindowed signal's, unconditionally --
+%     this is not what options.Normalize controls (see above).
 %
 %   Example:
 %   --------
@@ -54,8 +60,6 @@ function [ output, options ] = Fourier( varargin )
 %
 %   See also: fft, TransTools.progressbar
 %
-%   Reference: Alakazam Toolbox Documentation
-%
 %   Author: M.M.Span
 %
 %   Version: 1.0
@@ -67,7 +71,7 @@ if (nargin == 1)
     options = [];
     options.Name            = 'Fourier';
     options.Resolution      = 'Max';
-    options.Output          = 'Voltage';
+    options.Output          = 'Volt';
     options.Complex         = 'On';
     options.FullSpectrum    = 'On';
     options.Normalize       = 'On';
@@ -77,13 +81,24 @@ if (nargin == 1)
     options.Compression     = 'On';
     options.CompRes         = 10;
     options.ResVal          = .333;
+    % Seed from the last time Fourier ran in the current workspace
+    % (TransformSettings), field by field, so a schema field that a
+    % previously-stored value predates still falls back to the literal
+    % default above rather than being left missing.
+    stored = TransformSettings.get('Fourier');
+    if ~isempty(stored)
+        storedFields = fieldnames(stored);
+        for si = 1:numel(storedFields)
+            options.(storedFields{si}) = stored.(storedFields{si});
+        end
+    end
     options = FourierGui(options);
+    TransformSettings.set('Fourier', options);
 elseif (nargin == 2)
     options = varargin{2};
 end
 
 input = varargin{1};
-%input.data = gpuArray(double(input.data));
 output = input;
 
 output.DataType = 'FrequencyDomain';
@@ -106,48 +121,10 @@ end
 % the number of samples that are 'unchanged' by the window is 'the rest'
 additional = zeros(nsamp - sizeofwin,1)+1;
 
-if (strcmpi(options.Window, 'No'))
-    prev = zeros(sizeofwin,1)+1;
-end
-if (strcmpi(options.Window, 'Hanning'))
-    prev = hanning(sizeofwin);
-end
-if (strcmpi(options.Window, 'Hamming'))
-    prev = hamming(sizeofwin);
-end
-if (strcmpi(options.Window, 'Bartlett' ))
-    prev = bartlett(sizeofwin);
-end
-if (strcmpi(options.Window, 'BlackmanHarris' ))
-    prev = blackmanharris(sizeofwin);
-end
-if (strcmpi(options.Window, 'BohmanWin' ))
-    prev = bohmanwin(sizeofwin);
-end
-if (strcmpi(options.Window, 'NuttallWin' ))
-    prev = nuttallwin(sizeofwin);
-end
-if (strcmpi(options.Window, 'ParzenWin' ))
-    prev = parzenwin(sizeofwin);
-end
-if (strcmpi(options.Window, 'RectWin' ))
-    prev = rectwin(sizeofwin);
-end
-if (strcmpi(options.Window, 'Triang' ))
-    prev = triang(sizeofwin);
-end
+prev = TransTools.WindowByName(options.Window, sizeofwin);
 
 fullwin = [prev(1:floor(length(prev)/2)); additional; prev(floor(length(prev)/2+1):end)]';
 fullwin = fullwin(1:nsamp);
-
-%ERROR!
-norm=1;
-% the correct way is to define "norm" as the fraction of the *variance* of
-% the windowed signal compared to the unwindowed signal
-% SO I might need to do this in the loop???
-
-%fullwin = repmat(fullwin ./ norm, nchan,1); 
-
 
 %--------------------------------------------------------------------------
 if (strcmpi(options.Resolution, 'Max'))   
@@ -157,7 +134,6 @@ if (strcmpi(options.Resolution, 'Other'))
     NFFT = 2^nextpow2(floor(input.srate/options.ResVal)); 
 end
 
-%data = gpuArray(zeros(nchan, NFFT, nseg));
 data = zeros(nchan, NFFT, nseg);
 
 output.trials = nseg;
@@ -190,7 +166,6 @@ for seg = 1:nseg
         end
 end
 
-%output.data(chan,:,seg) = gather(output.data(chan,:,seg));
 output.data = gather(data(:,1:NFFT/2+1,:));
 output.pnts = NFFT/2+1;
 

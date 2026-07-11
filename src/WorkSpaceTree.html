@@ -6,13 +6,28 @@
 html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: sans-serif; font-size: 12px; }
 #tree { width: 100%; height: 100%; overflow: auto; box-sizing: border-box; }
 .alz-icon { display: inline-flex; align-items: center; margin-right: 4px; vertical-align: middle; }
+.alz-icon-img { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; display: block; }
+
+/* Tree rows: modern flat look, replacing yy-tree's own boxy/grey defaults
+   (fixed-100px-width name boxes, barely-distinguishable selection shade --
+   see alakazam-tree.js's TREE_STYLES header comment). Selection
+   highlighting is our own alz-row-selected class on the whole row
+   (leaf.content), not yy-tree's own -select class (name span only, left
+   inert via TREE_STYLES.selectStyles) -- see _applySelectionHighlight. */
+.yy-tree-leaf { margin-top: 1px; }
+.yy-tree-content { transition: background-color 0.1s ease; }
+.yy-tree-content:hover:not(.alz-row-selected) { background: #eaf0fb; }
+.alz-row-selected { background: #4a7fc9; }
+.alz-row-selected .yy-tree-name { color: #fff; }
+.yy-tree-name { color: #222; }
+
 .alz-menu {
     position: absolute; z-index: 1000; background: #fff; border: 1px solid #999;
-    box-shadow: 2px 2px 6px rgba(0,0,0,0.3); font: 12px sans-serif; min-width: 140px;
-    padding: 2px 0;
+    border-radius: 4px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3); font: 12px sans-serif;
+    min-width: 140px; padding: 2px 0;
 }
 .alz-menu-item { padding: 4px 12px; cursor: pointer; white-space: nowrap; }
-.alz-menu-item:hover { background: #e0e0ff; }
+.alz-menu-item:hover { background: #eaf0fb; }
 .alz-menu-item-disabled { color: #999; cursor: default; }
 .alz-menu-item-disabled:hover { background: none; }
 .alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }
@@ -1108,11 +1123,49 @@ var AlakazamTree = (() => {
   };
 
   // src/alakazam-tree.js
+  icons.closed = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M35 20 L70 50 L35 80" fill="none" stroke="#666" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  icons.open = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M20 35 L50 70 L80 35" fill="none" stroke="#666" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var TREE_STYLES = {
+    nameStyles: {
+      padding: "3px 6px",
+      margin: "0",
+      background: "transparent",
+      "user-select": "none",
+      cursor: "pointer",
+      "white-space": "nowrap",
+      "font-size": "12px"
+    },
+    contentStyles: {
+      display: "flex",
+      "align-items": "center",
+      padding: "2px 4px",
+      "border-radius": "4px",
+      cursor: "pointer"
+    },
+    expandStyles: {
+      width: "13px",
+      height: "13px",
+      "margin-right": "2px",
+      flex: "none"
+    },
+    indicatorStyles: {
+      background: "#4a7fc9",
+      height: "3px",
+      width: "100px",
+      padding: "0"
+    },
+    selectStyles: {
+      // Real selection highlighting is the alz-row-selected class on the
+      // whole row (leaf.content, applied by _applySelectionHighlight),
+      // not yy-tree's own -select (name-only) class -- left inert here.
+      background: "transparent"
+    }
+  };
   var ICONS = {
-    raw: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="2" width="16" height="20" rx="1" fill="none" stroke="#5a4a2f" stroke-width="1.5"/><path d="M7 7h8M7 11h8M7 15h5" stroke="#5a4a2f" stroke-width="1.2" stroke-linecap="round"/></svg>',
-    time: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="2" y="4" width="20" height="16" rx="1" fill="none" stroke="#2f5a4a" stroke-width="1.5"/><path d="M4 14l3-4 3 5 3-7 3 4 4-3" fill="none" stroke="#2f5a4a" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    freq: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="2" y="4" width="20" height="16" rx="1" fill="none" stroke="#2f3f5a" stroke-width="1.5"/><path d="M5 17V13M9 17V9M13 17V15M17 17V7M20 17V11" stroke="#2f3f5a" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="#555" stroke-width="1.5"/></svg>'
+    raw: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#d9a441"/><path d="M5 8a1 1 0 0 1 1-1h4l1.6 1.8H18a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#fff"/></svg>',
+    time: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#2f9e6e"/><path d="M4 14l3-4 3 5 3-7 3 4 4-3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    freq: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#4a7fc9"/><path d="M6 17V13M10 17V9M14 17V15M18 17V7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#8a8a8a"/><rect x="6" y="5" width="12" height="14" rx="1" fill="none" stroke="#fff" stroke-width="1.4"/></svg>'
   };
   var ROOT_ID = "__root__";
   var DOUBLE_CLICK_MS = 400;
@@ -1135,6 +1188,7 @@ var AlakazamTree = (() => {
       this._ctrlDown = false;
       this._lastClick = { id: null, time: 0 };
       this._menuEl = null;
+      this._highlightedLeaf = null;
       this._root = { id: ROOT_ID, name: "", children: [], expanded: true };
       this._tree = new Tree(this._root, {
         parent: container,
@@ -1142,7 +1196,7 @@ var AlakazamTree = (() => {
         select: true,
         holdTime: 0
         // we drive rename via the context menu, not press-and-hold
-      });
+      }, TREE_STYLES);
       this._tree.on("render", (leaf) => this._onRender(leaf));
       this._tree.on("clicked", (leaf) => this._onClicked(leaf));
       this._tree.on("move-pending", (leaf) => this._onMovePending(leaf));
@@ -1197,11 +1251,25 @@ var AlakazamTree = (() => {
     _selectById(id) {
       const leaf = this._findLeafByData(this._byId.get(id));
       if (leaf) {
-        if (this._tree._selection) {
-          this._tree._selection.name.classList.remove(`${this._tree.prefixClassName}-select`);
-        }
         this._tree._selection = leaf;
-        leaf.name.classList.add(`${this._tree.prefixClassName}-select`);
+        this._applySelectionHighlight(leaf);
+      }
+    }
+    // Highlights the whole row (leaf.content), not just the name span --
+    // yy-tree's own -select class (toggled internally on native click, and
+    // by _selectById above for programmatic selection) only ever touches
+    // leaf.name, which read as barely-distinguishable-from-unselected once
+    // TREE_STYLES took over row styling (see the file header comment). This
+    // is called from both _onClicked (native click path) and _selectById
+    // (programmatic path, e.g. MATLAB pushing a new selectedId), so both
+    // stay visually in sync.
+    _applySelectionHighlight(leaf) {
+      if (this._highlightedLeaf) {
+        this._highlightedLeaf.content.classList.remove("alz-row-selected");
+      }
+      this._highlightedLeaf = leaf;
+      if (leaf) {
+        leaf.content.classList.add("alz-row-selected");
       }
     }
     _findLeafByData(data) {
@@ -1219,10 +1287,18 @@ var AlakazamTree = (() => {
     }
     _onRender(leaf) {
       const data = leaf.data;
-      const iconHtml = ICONS[data.icon] || ICONS.default;
       const iconSpan = document.createElement("span");
       iconSpan.className = "alz-icon";
-      iconSpan.innerHTML = iconHtml;
+      if (typeof data.icon === "string" && data.icon.startsWith("data:")) {
+        const img = document.createElement("img");
+        img.src = data.icon;
+        img.width = 16;
+        img.height = 16;
+        img.className = "alz-icon-img";
+        iconSpan.appendChild(img);
+      } else {
+        iconSpan.innerHTML = ICONS[data.icon] || ICONS.default;
+      }
       leaf.content.insertBefore(iconSpan, leaf.name);
       leaf.content.addEventListener("contextmenu", (e) => {
         e.preventDefault();
@@ -1236,6 +1312,7 @@ var AlakazamTree = (() => {
       const now = Date.now();
       const isDouble = this._lastClick.id === data.id && now - this._lastClick.time < DOUBLE_CLICK_MS;
       this._lastClick = { id: data.id, time: now };
+      this._applySelectionHighlight(leaf);
       this._onEvent({ type: isDouble ? "nodeDoubleClicked" : "nodeClicked", id: data.id });
     }
     _onMovePending(leaf) {

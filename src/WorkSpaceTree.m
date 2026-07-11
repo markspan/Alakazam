@@ -1,10 +1,10 @@
 classdef WorkSpaceTree < handle
 %WORKSPACETREE  A uihtml-based data-browser tree, replacing uiextras.jTree.
 %   WorkSpaceTree wraps a self-contained uihtml page (WorkSpaceTree.html,
-%   built from webtree/ -- see webtree/README.md) that renders a
+%   built from src/webtree/ -- see src/webtree/README.md) that renders a
 %   drag-and-drop tree via yy-tree, with per-node icons, a context menu
 %   (List events / Rename / Recalculate / Delete), double-click detection
-%   and Ctrl-aware drop semantics (see webtree/README.md for exactly what
+%   and Ctrl-aware drop semantics (see src/webtree/README.md for exactly what
 %   "Ctrl-aware" means here). uiextras.jTree was Java-Swing-based and could
 %   be docked directly into the old Java ToolGroup desktop; the new
 %   AppContainer shell is web/CEF-based, so the data-browser tree needed a
@@ -164,13 +164,34 @@ classdef WorkSpaceTree < handle
     methods (Static)
         function key = iconFor(dataType)
         %ICONFOR  Map an EEG DataType to a WorkSpaceTree icon key ('time'/
-        %   'freq'/'default' -- see webtree/src/alakazam-tree.js's ICONS map).
+        %   'freq'/'default' -- see src/webtree/src/alakazam-tree.js's ICONS map).
             if strcmpi(dataType, 'TIMEDOMAIN')
                 key = 'time';
             elseif strcmpi(dataType, 'FREQUENCYDOMAIN')
                 key = 'freq';
             else
                 key = 'default';
+            end
+        end
+
+        function icon = iconForResult(EEG, transRoot)
+        %ICONFORRESULT  Icon for a dataset produced by a transformation: the
+        %   transformation's own icon (Transformations/<id>/<id>.json's
+        %   Icon field, the same PNG AlakazamRibbon's Tools tab buttons
+        %   show), scaled down to the tree row's icon footprint. EEG.id is
+        %   the transformation id (see Alakazam.persistResultNode/
+        %   onTransformation: transformId, stored on the result as both
+        %   EEG.id and EEG.Call). Falls back to iconFor(EEG.DataType) (the
+        %   'time'/'freq'/'default' badge keys) when TRANSROOT is omitted
+        %   or no matching Transformations/<id>/<id>.json exists -- e.g. a
+        %   Grand Average, whose id is a user-chosen name, not a
+        %   transformation id.
+            icon = '';
+            if nargin >= 2 && ~isempty(transRoot) && isfield(EEG, 'id') && ~isempty(EEG.id)
+                icon = WorkSpaceTree.encodeTransformIcon(char(string(EEG.id)), transRoot);
+            end
+            if isempty(icon)
+                icon = WorkSpaceTree.iconFor(EEG.DataType);
             end
         end
 
@@ -184,6 +205,39 @@ classdef WorkSpaceTree < handle
             opts = struct( ...
                 'canListEvents',  isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'CONTINUOUS'), ...
                 'canRecalculate', isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage'));
+        end
+    end
+
+    methods (Static, Access = private)
+        function uri = encodeTransformIcon(transformId, transRoot)
+        %ENCODETRANSFORMICON  TRANSFORMID's own icon (Transformations/
+        %   <transformId>/<transformId>.json's Icon field) as a base64 PNG
+        %   data URI, or '' if TRANSFORMID does not name a real
+        %   transformation folder (see iconForResult) -- mirrors
+        %   AlakazamRibbon's own getIndividualTransInfos/encodeIcon, kept
+        %   as a separate copy here rather than a shared dependency so
+        %   WorkSpaceTree does not need to know about AlakazamRibbon. The
+        %   JS side (alakazam-tree.js's _onRender) renders any 'data:'-
+        %   prefixed icon string as a scaled-down <img> instead of looking
+        %   it up in the fixed ICONS badge map.
+            uri = '';
+            jsonFile = fullfile(transRoot, transformId, [transformId '.json']);
+            if exist(jsonFile, 'file') ~= 2
+                return;
+            end
+            try
+                info = jsondecode(fileread(jsonFile));
+                iconPath = fullfile(transRoot, transformId, info.Icon);
+                fid = fopen(iconPath, 'r');
+                if fid < 0
+                    return;
+                end
+                bytes = fread(fid, inf, '*uint8')';
+                fclose(fid);
+                uri = ['data:image/png;base64,' char(matlab.net.base64encode(bytes))];
+            catch
+                uri = '';
+            end
         end
     end
 
@@ -222,7 +276,7 @@ classdef WorkSpaceTree < handle
 
         function onEvent(this, evt)
         %ONEVENT  Dispatch one bridge event from the JS side. See
-        %   webtree/README.md for the exact event/payload shapes.
+        %   src/webtree/README.md for the exact event/payload shapes.
             name = evt.HTMLEventName;
             d = evt.HTMLEventData;
             switch name

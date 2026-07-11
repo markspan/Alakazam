@@ -60,7 +60,7 @@ function FourierGui_OpeningFcn(hObject, eventdata, handles, varargin)
 handles.options.Name            = 'Fourier';
 handles.options.Resolution      = 'Max';
 handles.options.ResVal          = 1;
-handles.options.Output          = 'Voltage';
+handles.options.Output          = 'Volt';
 handles.options.Complex         = 'On';
 handles.options.FullSpectrum    = 'On';
 handles.options.Normalize       = 'On';
@@ -74,6 +74,13 @@ if ~isempty(varargin)
     handles.options = varargin{1};
 end
 
+% Reflect handles.options onto the visible controls: without this, a
+% caller-supplied options struct (e.g. remembered settings, see Fourier.m)
+% only silently carries through to the output for fields no callback ever
+% touches (Window/Window_Length/Compression/CompRes/Name) -- the dialog
+% itself would still show whatever the .fig's static design defaults to
+% for Resolution/Output/Complex/FullSpectrum/Normalize/Interval/ResVal.
+syncControlsFromOptions(handles);
 
 handles.output = handles.options;
 
@@ -294,6 +301,34 @@ function OtherWindowType_Callback(hObject, eventdata, handles)
 %        contents{get(hObject,'Value')} returns selected item from OtherWindowType
 handles = TransTools.SelectWindow(handles);
 guidata(handles.figure1,handles);
+
+
+function syncControlsFromOptions(handles)
+% Set the dialog's visible controls (radio groups, checkboxes, edit boxes)
+% from handles.options, the mirror image of what OK_Button_Callback reads
+% back out of them. Called once from the opening function so a
+% caller-supplied options struct is what the user actually sees.
+opts = handles.options;
+
+resKids = get(handles.ResolutionRadio, 'Children');
+resMatch = findobj(resKids, 'flat', 'Tag', opts.Resolution);
+if ~isempty(resMatch)
+    set(handles.ResolutionRadio, 'SelectedObject', resMatch(1));
+end
+
+outKids = get(handles.OutPutRadio, 'Children');
+outMatch = findobj(outKids, 'flat', 'Tag', opts.Output);
+if ~isempty(outMatch)
+    set(handles.OutPutRadio, 'SelectedObject', outMatch(1));
+end
+
+set(handles.ComplexBox, 'Value', strcmpi(opts.Complex, 'On'));
+set(handles.SpecBox,    'Value', strcmpi(opts.FullSpectrum, 'On'));
+set(handles.NormBox,    'Value', strcmpi(opts.Normalize, 'On'));
+
+set(handles.IntStart, 'String', num2str(opts.Interval(1)));
+set(handles.IntEnd,   'String', num2str(opts.Interval(2)));
+set(handles.OtherResolutionValue, 'String', num2str(opts.ResVal));
 
 
 % --- Executes during object creation, after setting all properties.

@@ -18,6 +18,15 @@ classdef EpochView < handle
 %
 %   See also ALAKAZAMPLOTTER, AVERAGEVIEW, FOURIERVIEW.
 
+    properties
+        % Called (no args) when the user clicks this view's axes. Wired by
+        % AlakazamPlotter to Alakazam.registerTileClick, so keyboard
+        % shortcuts route to whichever tile was last clicked while several
+        % are visible at once in Grid/Stack mode -- see
+        % Alakazam.dispatchKey and migration.md.
+        ActivatedFcn = function_handle.empty
+    end
+
     properties (SetAccess = private)
         Figure          % owning figure
         Grid            % 1x1 uigridlayout the axes fills
@@ -55,9 +64,15 @@ classdef EpochView < handle
                 this.BinNamesKnown = true;
             end
 
+            % Key handling is wired by the shared Alakazam-level dispatcher
+            % (Alakazam.dispatchKey), not a per-view fig.KeyPressFcn here:
+            % every open dataset is now a uitab on one shared uifigure, so a
+            % per-view KeyPressFcn would be overwritten by whichever view was
+            % constructed last, breaking key navigation on every other open
+            % tab.
             this.Grid = uigridlayout(fig, [1 1], "Padding", [0 0 0 0]);
             this.Axes = uiaxes(this.Grid);
-            set(fig, "KeyPressFcn", @(~, e) this.onKey(e));
+            this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -97,6 +112,40 @@ classdef EpochView < handle
                 set(legendHandle, "Visible", "off");
             end
         end
+
+        function onKey(this, event)
+        %ONKEY  Arrow keys step channel / trial; "l" toggles the legend.
+        %   Public (not the private helper it used to be): dispatched by
+        %   Alakazam.dispatchKey for whichever tab is currently selected --
+        %   see the constructor comment.
+            switch lower(event.Key)
+                case "uparrow"
+                    this.Channel = max(1, this.Channel - 1);
+                    this.Mode = "channel";
+                case "downarrow"
+                    this.Channel = min(size(this.EEG.data, 1), this.Channel + 1);
+                    this.Mode = "channel";
+                case "leftarrow"
+                    this.Trial = max(1, this.Trial - 1);
+                    this.Mode = "trial";
+                case "rightarrow"
+                    this.Trial = min(size(this.EEG.data, 3), this.Trial + 1);
+                    this.Mode = "trial";
+                case "l"
+                    this.ShowLegend = ~this.ShowLegend;
+                otherwise
+                    return;
+            end
+            this.redraw();
+        end
+
+        function notifyActivated(this)
+        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
+        %   empty-function_handle case.
+            if ~isempty(this.ActivatedFcn)
+                this.ActivatedFcn();
+            end
+        end
     end
 
     methods (Access = private)
@@ -124,29 +173,6 @@ classdef EpochView < handle
             end
             if verbose; sep = ', '; else; sep = ','; end
             s = char(strjoin(parts, sep));
-        end
-
-        function onKey(this, event)
-        %ONKEY  Arrow keys step channel / trial; "l" toggles the legend.
-            switch lower(event.Key)
-                case "uparrow"
-                    this.Channel = max(1, this.Channel - 1);
-                    this.Mode = "channel";
-                case "downarrow"
-                    this.Channel = min(size(this.EEG.data, 1), this.Channel + 1);
-                    this.Mode = "channel";
-                case "leftarrow"
-                    this.Trial = max(1, this.Trial - 1);
-                    this.Mode = "trial";
-                case "rightarrow"
-                    this.Trial = min(size(this.EEG.data, 3), this.Trial + 1);
-                    this.Mode = "trial";
-                case "l"
-                    this.ShowLegend = ~this.ShowLegend;
-                otherwise
-                    return;
-            end
-            this.redraw();
         end
     end
 end

@@ -33,9 +33,9 @@ ga.txt
 /dummy/
 +uiextras/+jTree/Tree2.m
 
-# ── webtree/ (WorkSpaceTree.m's JS build tooling) ─────────────────────
+# ── src/webtree/ (WorkSpaceTree.m's JS build tooling) ─────────────────
 # The build OUTPUT is vendored at src/WorkSpaceTree.html; node_modules and
 # the intermediate (pre-inlining) bundle are not committed. See
-# webtree/README.md to rebuild.
-webtree/node_modules/
-webtree/dist/
+# src/webtree/README.md to rebuild.
+src/webtree/node_modules/
+src/webtree/dist/
