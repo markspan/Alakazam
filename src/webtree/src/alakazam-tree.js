@@ -1,11 +1,12 @@
 // alakazam-tree.js
 // Thin wrapper around yy-tree adding: per-node icons, a custom context menu,
-// double-click detection, Ctrl-aware drop semantics matching Alakazam's
-// existing tree (no-modifier drop = real reparent, left entirely to yy-tree;
-// Ctrl-held drop = "apply transformation to the node dropped onto" -- the
-// visual/data move yy-tree performs is reverted, and only a bridge event is
-// emitted, since MATLAB will build the actual new result node itself), and a
-// modernised look (see TREE_STYLES/icons override below and
+// double-click detection, drop semantics matching Alakazam's existing tree
+// (dropping a node onto another never moves/reparents it -- the visual/data
+// move yy-tree performs internally is always reverted, and a nodeDropped
+// bridge event is emitted instead, so MATLAB can apply the dropped branch's
+// transformation chain to the target dataset itself, building the actual new
+// result node(s) -- see Alakazam.evaluateDroppedBranch), and a modernised
+// look (see TREE_STYLES/icons override below and
 // alakazam-tree.css): yy-tree ships with its own default row styling
 // injected at runtime (Tree._addStyles, from its styleDefaults) unless a
 // custom `styles` argument is passed to `new Tree(...)` -- left at its
@@ -38,7 +39,7 @@ icons.open = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><pat
 // else here.
 const TREE_STYLES = {
     nameStyles: {
-        padding: '3px 6px',
+        padding: '1px 6px',
         margin: '0',
         background: 'transparent',
         'user-select': 'none',
@@ -49,7 +50,7 @@ const TREE_STYLES = {
     contentStyles: {
         display: 'flex',
         'align-items': 'center',
-        padding: '2px 4px',
+        padding: '1px 4px',
         'border-radius': '4px',
         cursor: 'pointer'
     },
@@ -92,6 +93,13 @@ const ICONS = {
 
 const ROOT_ID = '__root__'
 const DOUBLE_CLICK_MS = 400
+// How long a drag survives the pointer leaving the tree's own rendering
+// area before it's treated as abandoned -- see the constructor's early
+// mouseleave/mouseenter listeners and _cancelDrag. Long enough to absorb
+// ordinary mouse imprecision grazing a narrow panel edge mid-drag, short
+// enough that genuinely dragging away and letting go still cancels
+// promptly.
+const LEAVE_GRACE_MS = 250
 const CONTEXT_ITEMS = [
     { action: 'listEvents', label: 'List events' },
     { separator: true },
@@ -109,12 +117,46 @@ class AlakazamTree {
     constructor(container, options) {
         this._onEvent = (options && options.onEvent) || function () {}
         this._byId = new Map()               // id -> data node
-        this._ctrlDown = false
         this._lastClick = { id: null, time: 0 }
         this._menuEl = null
         this._highlightedLeaf = null // see _applySelectionHighlight
+        this._dropTargetLeaf = null  // see _setDropTargetHighlight
+        this._leaveGraceTimer = null // see _cancelDrag
 
         this._root = { id: ROOT_ID, name: '', children: [], expanded: true }
+
+        // Registered BEFORE `new Tree(...)` below (whose Input constructor
+        // registers its OWN 'mouseleave' listener on document.body, which
+        // would otherwise instantly finalize/"drop" the drag exactly like a
+        // real mouseup -- yy-tree has no separate cancel concept, see
+        // node_modules/yy-tree/src/input.js's Input._up(), fired by
+        // mouseleave/mouseup/touchend alike). Listeners on the same element
+        // for the same event run in registration order, so registering ours
+        // first lets stopImmediatePropagation() below keep Input's own
+        // listener from ever seeing a mouseleave that happens mid-drag.
+        // uihtml renders in its own embedded document with no window/app-
+        // level "pointer left the app" signal of its own, and dropping one
+        // node onto another (overlay or apply-transformation alike -- see
+        // the file header comment) is a genuine tree-node-to-tree-node
+        // gesture that never needs to leave this tree's own bounds, so an
+        // instant cancel on every mouseleave (an earlier version of this
+        // fix) turned out to be too eager: ordinary mouse imprecision
+        // easily grazes a narrow panel's edge for an instant while
+        // dragging toward a row near the boundary. A short grace period
+        // instead: if the pointer comes back within LEAVE_GRACE_MS, the
+        // drag just continues untouched (Input's own mousemove listener
+        // picks up right where it left off, since it never saw the leave
+        // at all); if it doesn't, _cancelDrag manually restores everything.
+        document.body.addEventListener('mouseleave', (e) => {
+            if (!this._pending) return
+            e.stopImmediatePropagation()
+            clearTimeout(this._leaveGraceTimer)
+            this._leaveGraceTimer = setTimeout(() => this._cancelDrag(), LEAVE_GRACE_MS)
+        })
+        document.body.addEventListener('mouseenter', () => {
+            clearTimeout(this._leaveGraceTimer)
+            this._leaveGraceTimer = null
+        })
 
         this._tree = new Tree(this._root, {
             parent: container,
@@ -129,10 +171,13 @@ class AlakazamTree {
         this._tree.on('move', (leaf) => this._onMove(leaf))
         this._tree.on('name-change', (leaf, name) => this._onNameChange(leaf, name))
 
-        window.addEventListener('keydown', (e) => { if (e.key === 'Control') this._ctrlDown = true })
-        window.addEventListener('keyup', (e) => { if (e.key === 'Control') this._ctrlDown = false })
-        window.addEventListener('blur', () => { this._ctrlDown = false })
         document.addEventListener('mousedown', (e) => this._maybeCloseMenu(e))
+        // Registered on `document`, not `document.body` (where yy-tree's own
+        // Input registers its mousemove handler): bubble-phase dispatch
+        // always reaches document AFTER body, regardless of source order,
+        // so by the time this runs, Input._move() has already repositioned
+        // the drop indicator for this event -- see _onDragPointerMove.
+        document.addEventListener('mousemove', () => this._onDragPointerMove())
     }
 
     /**
@@ -193,6 +238,50 @@ class AlakazamTree {
         }
     }
 
+    // Highlights whichever node is the current prospective drop target while
+    // dragging -- distinct from _applySelectionHighlight (click selection),
+    // so a drag over a different node doesn't fight the tree's own
+    // selection colour. Mirrors _applySelectionHighlight's leaf.content/
+    // single-previous-highlight pattern.
+    _setDropTargetHighlight(leaf) {
+        if (this._dropTargetLeaf === leaf) return
+        if (this._dropTargetLeaf) {
+            this._dropTargetLeaf.content.classList.remove('alz-drop-target')
+        }
+        this._dropTargetLeaf = leaf
+        if (leaf) {
+            leaf.content.classList.add('alz-drop-target')
+        }
+    }
+
+    // Figures out which node the drag would drop onto *right now* and
+    // highlights it, so the user always has a clear answer to "what am I
+    // about to apply this branch to" while dragging (yy-tree's own
+    // indicator is just a thin insertion line, easy to lose track of once
+    // the row list has collapsed around it during the drag).
+    //
+    // There is no per-frame hook from yy-tree for this, so this reads its
+    // internal state directly (vendored, pinned, build-time-only code, same
+    // justification as the icons override above): Input._up() always does
+    // `indicator.parentNode.insertBefore(this._target, indicator)` then
+    // `_moveData()` reads `this._target.parentNode.data` as the new
+    // parent -- i.e. the indicator's CURRENT parentNode, at any moment
+    // during the drag, already tells us exactly what dropping right now
+    // would resolve to: either a rendered leaf element (a real node, whose
+    // own `.data` is the prospective target) or this._tree.element itself
+    // (the root container, i.e. a targetId:null/no-target drop -- nothing
+    // to highlight).
+    _onDragPointerMove() {
+        if (!this._pending) return
+        const indicatorEl = this._tree._input._indicator.get()
+        const parentEl = indicatorEl && indicatorEl.parentNode
+        if (parentEl && parentEl.isLeaf && parentEl.data !== this._pending.data) {
+            this._setDropTargetHighlight(parentEl)
+        } else {
+            this._setDropTargetHighlight(null)
+        }
+    }
+
     _findLeafByData(data) {
         // Walk the rendered DOM directly: yy-tree's own findInTree() searches
         // (and returns) the *data* tree, not the leaf elements we need here.
@@ -245,34 +334,79 @@ class AlakazamTree {
     }
 
     _onMovePending(leaf) {
-        // Remember the pre-drag position so a Ctrl-held drop can be reverted.
+        // Remember the pre-drag position so the drop can be reverted (see _onMove).
         this._pending = {
             data: leaf.data,
             oldParent: leaf.data.parent,
             oldIndex: leaf.data.parent.children.indexOf(leaf.data)
         }
+        // A drag is now in progress: swap the cursor to signal "apply", not
+        // "move" (see alakazam-tree.css). yy-tree's Input._up() always
+        // pairs a 'move-pending' with a later 'move' once the drag
+        // threshold is crossed (confirmed in node_modules/yy-tree/src/
+        // input.js), so _onMove is guaranteed to run and clear this --
+        // UNLESS the drag is cancelled instead via _cancelDrag (the
+        // pointer leaving the tree and not coming back within
+        // LEAVE_GRACE_MS -- see the constructor), which clears it itself.
+        document.documentElement.classList.add('alz-dragging')
     }
 
     _onMove(leaf) {
         const data = leaf.data
         const newParent = data.parent
         const targetId = newParent.id === ROOT_ID ? null : newParent.id
+        document.documentElement.classList.remove('alz-dragging')
+        this._setDropTargetHighlight(null)
 
-        if (this._ctrlDown && this._pending && this._pending.data === data) {
-            // "Apply transformation" gesture: undo the reparent yy-tree just
-            // performed, then tell MATLAB about source/target; MATLAB builds
-            // the actual new result node (if any) itself.
+        // Always undo the reparent yy-tree just performed: dropping a node
+        // onto another applies that node's transformation chain to the
+        // target dataset instead of moving it (see the file header comment)
+        // -- there is no plain "move a branch" gesture in this tree. MATLAB
+        // builds the actual new result node(s) itself.
+        if (this._pending && this._pending.data === data) {
             const { oldParent, oldIndex } = this._pending
             newParent.children.splice(newParent.children.indexOf(data), 1)
             oldParent.children.splice(oldIndex, 0, data)
             data.parent = oldParent
             this._tree.update()
-            this._onEvent({ type: 'nodeDropped', sourceId: data.id, targetId, reparented: false })
-        } else {
-            // Real reparent: yy-tree has already updated its own data/DOM.
-            this._onEvent({ type: 'nodeDropped', sourceId: data.id, targetId, reparented: true })
         }
         this._pending = null
+
+        // MATLAB now has to actually do something with this (run the
+        // dropped branch's transformations against the target -- see
+        // Alakazam.evaluateDroppedBranch), which can take a moment; show a
+        // busy cursor until it reports back. Cleared by bridge.js's
+        // applyData the moment a fresh Data push arrives -- guaranteed to
+        // happen for every drop, success/ignored/error alike, since
+        // Alakazam.onNodeDropped pushes via onCleanup (see alakazam-tree.css
+        // for why cursor:wait, not a custom image).
+        document.documentElement.classList.add('alz-busy')
+        this._onEvent({ type: 'nodeDropped', sourceId: data.id, targetId })
+    }
+
+    // Called after the pointer has been outside the tree for LEAVE_GRACE_MS
+    // during a drag (see the constructor's mouseleave listener, which
+    // intercepts the leave before yy-tree's own Input ever sees it -- so
+    // Input's internal state, e.g. Input._target/_moving, is exactly as it
+    // was mid-drag and needs manually unwinding here, mirroring what
+    // Input._up() itself does on a normal drop (node_modules/yy-tree/src/
+    // input.js) minus _moveData()/emit('move'): nothing was ever actually
+    // dropped, so the data graph was never touched and needs no revert --
+    // just discard the floating dragged row/indicator and rebuild the real
+    // tree fresh from the (unmutated) data.
+    _cancelDrag() {
+        this._leaveGraceTimer = null
+        const input = this._tree._input
+        const target = input._target
+        if (!target) return // already finished normally in the meantime
+        input._indicator.get().remove()
+        target.remove()
+        input._target = null
+        input._moving = null
+        this._pending = null
+        document.documentElement.classList.remove('alz-dragging')
+        this._setDropTargetHighlight(null)
+        this._tree.update()
     }
 
     _onNameChange(leaf, name) {

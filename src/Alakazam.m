@@ -973,15 +973,21 @@ classdef Alakazam < handle
         %   raised the event (see WorkSpace.CreateTreeComponent); recorded
         %   as Workspace.ActiveTree so evaluateDroppedBranch's
         %   persistResultNode call below adds the new node to the same
-        %   tree the drop happened in. No modifier key (EVENTDATA.REPARENTED
-        %   true) moves the node within the tree -- WorkSpaceTree has
-        %   already mirrored this in its own bookkeeping, so there is
-        %   nothing further to do here (it is never persisted to disk;
-        %   treeTraverse rebuilds the tree from the cache folder structure
-        %   on the next full reload, same as the old jTree behaviour). Ctrl
-        %   held (REPARENTED false) re-applies the dragged branch onto the
-        %   target via evaluateDroppedBranch instead. Root nodes are ignored.
+        %   tree the drop happened in. There is no move/reparent gesture in
+        %   this tree (WorkSpaceTree/src/webtree always revert the visual
+        %   move before this fires); every drop re-applies the dragged
+        %   branch onto the target via evaluateDroppedBranch. Root nodes
+        %   and drops onto empty space (no target dataset) are ignored.
             this.Workspace.ActiveTree = sourceTree;
+
+            % Guaranteed to run when this callback returns, by any path
+            % (a real transformation applied, an ignored root/empty-target
+            % drop, or an error unwinding out of evaluateDroppedBranch):
+            % the JS side sets a busy/wait cursor the instant it sends
+            % nodeDropped (see src/webtree/src/alakazam-tree.js's _onMove)
+            % and only clears it once it hears back -- without this, an
+            % ignored drop or a failed transformation would leave it stuck.
+            notifyDone = onCleanup(@() sourceTree.notifyDropHandled());
 
             % Run from the repository root (historic behaviour): the drop
             % triggers plugins that may resolve resources relative to it.
@@ -992,10 +998,11 @@ classdef Alakazam < handle
             if eventData.Source.IsRoot
                 return; % a root node was dropped; ignore
             end
-
-            if ~eventData.Reparented % Ctrl held: re-apply the dragged branch to the target
-                this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+            if isempty(eventData.Target)
+                return; % dropped onto empty space/root; no target dataset
             end
+
+            this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
         end
 
         function onSelectionChanged(this, eventData, sourceTree)

@@ -168,7 +168,7 @@ classdef AlakazamPlotter < handle
         function plotContinuous(this, eeg, tab)
         %PLOTCONTINUOUS  Render a continuous dataset into TAB.
         %   Time-domain data is drawn with the fast SignalView (min/max pyramid
-        %   decimation, channel stacking, IBI/event overlays); frequency-domain
+        %   decimation, channel stacking, event overlays); frequency-domain
         %   data is drawn as a Fourier plot. The view handle is stored on the
         %   tab so it lives as long as the tab does; ActivatedFcn is wired the
         %   same way as in plotEpoched (see its comment).

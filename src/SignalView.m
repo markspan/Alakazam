@@ -2,13 +2,11 @@ classdef SignalView < handle
 %SIGNALVIEW  Fast scrolling view of a continuous multichannel signal.
 %
 %   SignalView draws a continuous EEGLAB dataset into a scrollable, zoomable
-%   axes with scroll / zoom / scale sliders and mouse-wheel scrolling. It is
-%   the clean replacement for the old Tools.plotECG, keeping the same on-screen
-%   behaviour (channel stacking, fixed or dynamic y-limits, and the interbeat
-%   interval / event / area overlays taken from the EEG structure) but driving
-%   the decimation from a precomputed MinMaxPyramid, so each redraw costs
-%   O(pixels) instead of O(visible samples). This is what lets long recordings
-%   scroll and zoom without lag.
+%   axes with scroll / zoom / scale sliders and mouse-wheel scrolling
+%   (channel stacking, fixed or dynamic y-limits, and event / area overlays
+%   taken from the EEG structure), driving the decimation from a precomputed
+%   MinMaxPyramid, so each redraw costs O(pixels) instead of O(visible
+%   samples). This is what lets long recordings scroll and zoom without lag.
 %
 %   Construction (name-value options via an arguments block):
 %     SignalView(parent, times, eeg)
@@ -16,7 +14,7 @@ classdef SignalView < handle
 %
 %   The dataset is EEGLAB-oriented (channels x samples); times is the sample
 %   time vector. Sampling is assumed uniform (as it is for EEGLAB continuous
-%   data). Overlays are read from eeg.IBIevent and eeg.event when present.
+%   data). Overlays are read from eeg.event when present.
 %
 %   Style follows the project standard: UpperCamelCase class and properties,
 %   lowerCamelCase methods, double quotes except where a char array is required
@@ -60,7 +58,7 @@ classdef SignalView < handle
         StackOffset     % 1 x nchan, vertical offset per channel (stacking)
         StackTick       % 1 x nchan, y-tick position per channel
         FixedYLim       % 1 x 2, y-limits used in "fixed" mode
-        Overlay         % struct of parsed IBI / event / area overlay data
+        Overlay         % struct of parsed event / area overlay data
 
         AxWidthPx = 100 % axes width in pixels, refreshed every redraw
         AxWidthCm = 100 % axes width in centimetres, refreshed every redraw
@@ -71,9 +69,6 @@ classdef SignalView < handle
     properties (Constant, Access = private)
         LabelWidthPx = 40  % slider row's label column width, pixels
         SliderRowPx  = 24  % each slider row's height, pixels
-        IbiColors = dictionary( ...
-            ["N" "L" "S" "T" "1" "2" "i"], ...
-            ["blue" "red" "red" "yellow" "green" "green" "magenta"])
     end
 
     methods
@@ -88,8 +83,7 @@ classdef SignalView < handle
                 opts.YLimMode (1,1) string = "fixed"
                 opts.MmPerSec (1,1) double = 25
                 opts.AutoStackSignals string = string.empty
-                opts.MaxIBIs (1,1) double = 175
-                opts.MaxEvents (1,1) double = 30
+                opts.MaxEvents (1,1) double = 100
                 opts.MaxAreas (1,1) double = 20
             end
             this.Parent  = parent;
@@ -157,8 +151,8 @@ classdef SignalView < handle
             zoomValue   = this.ZoomSlider.Value;
             scaleValue  = this.ScaleSlider.Value;
 
-            % Visible sample window from scroll and zoom (same mapping as the
-            % original plotECG: zoom 0 shows all N, zoom 1 shows about 7).
+            % Visible sample window from scroll and zoom: zoom 0 shows all N,
+            % zoom 1 shows about 7.
             numPoints  = max(2, round(this.NumSamples * exp(this.ZoomDecay * zoomValue)));
             startIndex = max(1, round((this.NumSamples - numPoints) * scrollValue + 1));
             endIndex   = min(this.NumSamples, startIndex + numPoints);
@@ -379,17 +373,13 @@ classdef SignalView < handle
         end
 
         function overlay = parseOverlays(~, eeg)
-        %PARSEOVERLAYS  Extract IBI markers, point events and area events.
-        %   Ported from plotECG: point events are those with duration < 1 and
-        %   area events those with a longer duration. Missing fields degrade
-        %   gracefully to empty overlays.
-            overlay = struct("IbiEvents", {{}}, ...
+        %PARSEOVERLAYS  Extract point events and area events from eeg.event.
+        %   Point events are those with duration < 1 and area events those
+        %   with a longer duration. Missing fields degrade gracefully to
+        %   empty overlays.
+            overlay = struct( ...
                 "EventTime", [], "EventLabel", string.empty, ...
                 "AreaTime", [], "AreaDur", [], "AreaLabel", string.empty);
-
-            if isfield(eeg, "IBIevent")
-                overlay.IbiEvents = eeg.IBIevent;
-            end
 
             if ~isfield(eeg, "event") || isempty(eeg.event)
                 return;
@@ -405,7 +395,7 @@ classdef SignalView < handle
 
                 isPoint = dur < 1;
                 overlay.EventLabel = types(isPoint);
-                overlay.EventTime  = eeg.times(latency(isPoint));
+                overlay.EventTime  = eeg.times(max(1, round(latency(isPoint))));
 
                 isArea = dur > 0;
                 codes = repmat("-", 1, numel(eeg.event));
@@ -421,44 +411,13 @@ classdef SignalView < handle
         end
 
         function drawOverlays(this, startTime, endTime)
-        %DRAWOVERLAYS  Redraw the IBI / event / area markers within the window.
+        %DRAWOVERLAYS  Redraw the event / area markers within the window.
         %   Bounded by the Max* options so a dense window never floods the axes
         %   with cursors. Previous markers are cleared first.
-            delete(findobj(this.Axes, "Tag", "ibi"));
             delete(findobj(this.Axes, "Tag", "event"));
 
-            this.drawIbiMarkers(startTime, endTime);
             this.drawPointEvents(startTime, endTime);
             this.drawAreaEvents(startTime, endTime);
-        end
-
-        function drawIbiMarkers(this, startTime, endTime)
-        %DRAWIBIMARKERS  Colour-coded interbeat-interval cursors in the window.
-            for i = 1:numel(this.Overlay.IbiEvents)
-                ibi = this.Overlay.IbiEvents{i};
-                rTop = ibi.RTopTime;
-                visible = (rTop > startTime) & (rTop < endTime);
-                visible = visible(1:numel(ibi.ibis));
-                times = rTop(visible);
-                labels = ibi.ibis(visible);
-                classes = ibi.classID(visible);
-                if numel(times) >= this.Options.MaxIBIs
-                    continue;
-                end
-                for r = 1:numel(times)
-                    if i == 1 && isKey(this.IbiColors, classes(r))
-                        colour = this.IbiColors(classes(r));
-                    else
-                        colour = "blue";
-                    end
-                    cursor(this.Axes, times(r), [], @uiextras.delCursor, ...
-                        'Color', colour, 'LineStyle', '-.', ...
-                        'Label', strcat(classes(r), " - ", num2str(labels(r))), ...
-                        'LabelVerticalAlignment', 'top', ...
-                        'LabelHorizontalAlignment', 'right', ...
-                        'Tag', 'ibi', 'ID', [i r]);
-                end
-            end
         end
 
         function drawPointEvents(this, startTime, endTime)
@@ -499,8 +458,8 @@ classdef SignalView < handle
 
     methods (Access = private, Static)
         function [tickPos, addVec] = autoStackNoOverlap(y)
-        %AUTOSTACKNOOVERLAP  Even, non-overlapping vertical offsets per channel.
-        %   Ported from plotECG's fixed-mode stacking (evenly spaced channels).
+        %AUTOSTACKNOOVERLAP  Even, non-overlapping vertical offsets per channel
+        %   (fixed-mode stacking: evenly spaced channels).
             signalMed = median(y, 1, "omitnan");
             centred = y - signalMed;
             overlap = min(centred(:, 1:end-1), [], 1) - max(centred(:, 2:end), [], 1);
@@ -515,7 +474,6 @@ classdef SignalView < handle
 
         function [tickPos, addVec] = autoStack(y)
         %AUTOSTACK  Compact vertical offsets per channel for dynamic mode.
-        %   Ported from plotECG's dynamic-mode stacking.
             signalMed = median(y, 1, "omitnan");
             centred = y - signalMed;
             overlap = diff(centred, 1, 2);

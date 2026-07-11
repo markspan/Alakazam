@@ -24,3 +24,35 @@
 .alz-menu-item-disabled { color: #999; cursor: default; }
 .alz-menu-item-disabled:hover { background: none; }
 .alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }
+
+/* While a branch is being dragged, show a "copy"/apply cursor everywhere,
+   not the native browser "move" cursor -- a drop never moves the node, it
+   always applies its transformations to the dropped-on dataset (see
+   alakazam-tree.js's file header comment). Applied to <html> (not just the
+   dragged element) because yy-tree's Input._pickup() reparents the dragged
+   row to document.body and positions it under the pointer, so the pointer
+   is constantly over other rows/whitespace, not just the dragged node
+   itself; !important is needed to beat TREE_STYLES' own inline
+   cursor:pointer on .yy-tree-name/.yy-tree-content. */
+html.alz-dragging, html.alz-dragging * { cursor: copy !important; }
+
+/* While MATLAB is off computing the result of a drop (evaluateDroppedBranch
+   can run a real transformation, so this can take a moment), swap to the
+   OS-native busy cursor -- on this app's target platform (Windows), the
+   browser's cursor:wait keyword renders as Windows' own animated "busy"
+   ring/hourglass, so no custom animated-cursor image asset is needed (a
+   CSS cursor:url() pointing at an animated GIF/cursor resource generally
+   does not animate across browsers, unlike the native OS cursor). Cleared
+   by bridge.js's applyData the moment MATLAB pushes fresh tree state back;
+   WorkSpaceTree.notifyDropHandled (called via onCleanup from
+   Alakazam.onNodeDropped) guarantees that push happens for every drop
+   outcome -- a real transformation, an ignored drop, or an error -- so
+   this can never get stuck on. */
+html.alz-busy, html.alz-busy * { cursor: wait !important; }
+
+/* The node currently under the drag -- i.e. whichever dataset would
+   actually receive the dropped branch's transformations if released right
+   now (see alakazam-tree.js's _onDragPointerMove). A dashed outline (not
+   just a background tint) so it stays visible layered over both the hover
+   tint and the solid-blue alz-row-selected background. */
+.alz-drop-target { outline: 2px dashed #4a7fc9; outline-offset: -2px; background: rgba(74, 127, 201, 0.18); }

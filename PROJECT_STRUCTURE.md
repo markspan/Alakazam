@@ -50,7 +50,7 @@ To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
 | `src/EEGLabEnvironment.m` | Ensures EEGLAB and the required plugins (bva-io, XDF, ICLabel, FastICA) are installed, that EEGLAB has actually been *run* at least once in the current MATLAB session (not just found on the path -- see `ensureEEGLabInitialized`), and warns if the Signal Processing or Statistics and Machine Learning toolboxes are missing; called once at startup. |
 | `src/AlakazamPlotter.m` | Renders EEG datasets into tabs of the app's plots tabgroup (plotting split out of the main class). |
 | `src/MinMaxPyramid.m` | Precomputed min/max pyramid: the decimation engine for fast signal plotting. |
-| `src/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed Tools.plotECG). |
+| `src/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed legacy plotting tool). |
 | `src/EpochView.m` | Keyboard-driven epoched multichannel view (replaces Tools.plotEpochedTimeMulti). |
 | `src/AverageView.m` | Trial-average view with error bands and overlay (replaces Tools.plotEpochedTimeMultiAverage). |
 | `src/FourierView.m` | Keyboard-driven frequency-domain view (one channel's spectrum at a time, band shading, zoom/pan; up/down arrows step the channel, left/right the trial -- same interaction model as EpochView/AverageView; replaces Tools.plotFourier). |

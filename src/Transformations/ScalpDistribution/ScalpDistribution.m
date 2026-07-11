@@ -19,13 +19,13 @@ function [pfigure, ropts] = ScalpDistribution(input, ~)
 %
 %   topoplot draws with legacy low-level graphics (gca/gcf, direct patch
 %   calls), so this uses a classic figure with a classic uicontrol slider,
-%   rather than a uifigure/uislider -- deliberately different from
-%   PoinCare's uifigure style, because topoplot needs the classic one.
+%   rather than a uifigure/uislider, because topoplot needs the classic one
+%   (deliberately different from other, uifigure-based transformation plots).
 %
 %   Signature (Alakazam transformation contract): the second argument is
-%   accepted but unused, matching PoinCare -- a pure-plot transformation is
-%   never replayed by dragging a branch (only persisted results are), so
-%   there is no stored-options form to support.
+%   accepted but unused -- a pure-plot transformation is never replayed by
+%   dragging a branch (only persisted results are), so there is no
+%   stored-options form to support.
 %     [pfigure, ropts] = ScalpDistribution(input)
 
 ropts = 'graph';

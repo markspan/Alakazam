@@ -20,6 +20,12 @@ function setup(htmlComponent) {
     })
 
     function applyData(data) {
+        // Any fresh Data push from MATLAB means it's no longer busy handling
+        // whatever caused the push (a drop's evaluateDroppedBranch is the
+        // main case -- see alakazam-tree.js's _onMove/alakazam-tree.css's
+        // html.alz-busy rule); WorkSpaceTree.notifyDropHandled guarantees a
+        // push happens for every drop outcome, so this always fires.
+        document.documentElement.classList.remove('alz-busy')
         if (data && data.nodes) {
             tree.setNodes(data.nodes, data.selectedId)
             htmlComponent.sendEventToMATLAB('rendered', {

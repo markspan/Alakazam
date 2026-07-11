@@ -4,8 +4,10 @@ classdef WorkSpaceTree < handle
 %   built from src/webtree/ -- see src/webtree/README.md) that renders a
 %   drag-and-drop tree via yy-tree, with per-node icons, a context menu
 %   (List events / Rename / Recalculate / Delete), double-click detection
-%   and Ctrl-aware drop semantics (see src/webtree/README.md for exactly what
-%   "Ctrl-aware" means here). uiextras.jTree was Java-Swing-based and could
+%   and always-revert drop semantics: dropping one node onto another never
+%   moves it, it always means "apply this branch's transformations to the
+%   dropped-on dataset" (see src/webtree/README.md). uiextras.jTree was
+%   Java-Swing-based and could
 %   be docked directly into the old Java ToolGroup desktop; the new
 %   AppContainer shell is web/CEF-based, so the data-browser tree needed a
 %   web-native replacement, not just a port.
@@ -52,6 +54,12 @@ classdef WorkSpaceTree < handle
         Nodes       % containers.Map: id (char) -> struct(id,label,parentId,icon,file,canListEvents,canRecalculate,isRoot)
         NextId = 1
         SelectedId  = ''
+        PushSeq = 0 % see push(): included in every Data push so it never
+                    % deep-equals the previous one, even when Nodes/
+                    % SelectedId happen to be unchanged (e.g. notifyDropHandled
+                    % after an ignored drop) -- guarantees the JS side's
+                    % DataChanged listener fires every time, not just when
+                    % content actually differs.
     end
 
     methods
@@ -118,15 +126,28 @@ classdef WorkSpaceTree < handle
         end
 
         function removeNode(this, id)
-        %REMOVENODE  Remove one node (and, implicitly, its JS-side subtree
-        %   display) by Id. Does not touch anything on disk; callers remove
-        %   descendant nodes explicitly first if the whole branch is going.
+        %REMOVENODE  Remove a node AND every descendant of it (walked via
+        %   parentId, since Nodes is a flat id->struct map, not a real
+        %   tree), in one push. Does not touch anything on disk; callers
+        %   remove the corresponding files themselves (see
+        %   Alakazam.onDeleteNode).
+        %   Removing only the given id and leaving its descendants in
+        %   Nodes used to orphan them: their parentId would point at an id
+        %   that no longer exists, and setNodes (src/webtree/src/
+        %   alakazam-tree.js) treats an unresolvable parentId as "top-level",
+        %   so a deleted branch's children reappeared as new root nodes --
+        %   still selectable, but their backing .mat files (deleted
+        %   recursively by onDeleteNode's own rmdir) were already gone,
+        %   crashing onSelectionChanged's load() the moment one was clicked.
             id = this.resolveId(id);
-            if isKey(this.Nodes, id)
-                remove(this.Nodes, id);
-            end
-            if strcmp(this.SelectedId, id)
-                this.SelectedId = '';
+            ids = this.branchIds(id);
+            for k = 1:numel(ids)
+                if isKey(this.Nodes, ids{k})
+                    remove(this.Nodes, ids{k});
+                end
+                if strcmp(this.SelectedId, ids{k})
+                    this.SelectedId = '';
+                end
             end
             this.push();
         end
@@ -157,6 +178,18 @@ classdef WorkSpaceTree < handle
         %CLEAR  Remove every node (used when reopening a workspace).
             this.Nodes = containers.Map('KeyType', 'char', 'ValueType', 'any');
             this.SelectedId = '';
+            this.push();
+        end
+
+        function notifyDropHandled(this)
+        %NOTIFYDROPHANDLED  Tell the JS side a drop has finished being
+        %   handled, whatever the outcome (a real transformation applied,
+        %   an ignored root/empty-target drop, or an error). The JS side
+        %   sets a busy/wait cursor the instant it sends nodeDropped (see
+        %   src/webtree/src/alakazam-tree.js's _onMove) and only clears it
+        %   once a fresh Data push arrives (see src/webtree/src/bridge.js's
+        %   applyData); Alakazam.onNodeDropped calls this via onCleanup so
+        %   it always runs when that callback returns, by any path.
             this.push();
         end
     end
@@ -247,7 +280,10 @@ classdef WorkSpaceTree < handle
         end
 
         function push(this)
-            this.Component.Data = this.buildData();
+            this.PushSeq = this.PushSeq + 1;
+            data = this.buildData();
+            data.seq = this.PushSeq;
+            this.Component.Data = data;
         end
 
         function data = buildData(this)
@@ -272,6 +308,20 @@ classdef WorkSpaceTree < handle
         function s = nodeStruct(this, id)
             n = this.Nodes(id);
             s = struct('Id', n.id, 'Name', n.label, 'UserData', n.file, 'IsRoot', n.isRoot);
+        end
+
+        function ids = branchIds(this, id)
+        %BRANCHIDS  ID plus every descendant of it, found by walking
+        %   parentId links (Nodes is a flat id->struct map, not a real
+        %   tree). Used by removeNode so a whole-branch delete removes
+        %   every descendant node too, not just the one the user clicked.
+            ids = {id};
+            allIds = keys(this.Nodes);
+            for k = 1:numel(allIds)
+                if isKey(this.Nodes, allIds{k}) && strcmp(this.Nodes(allIds{k}).parentId, id)
+                    ids = [ids, this.branchIds(allIds{k})]; %#ok<AGROW>
+                end
+            end
         end
 
         function onEvent(this, evt)
@@ -312,22 +362,15 @@ classdef WorkSpaceTree < handle
         end
 
         function handleDropped(this, d)
+        %HANDLEDROPPED  Tree callback: a node was dropped onto another (or
+        %   onto empty space/root). The JS side (see src/webtree/README.md)
+        %   always reverts its own visual move before this fires, so
+        %   this.Nodes never needs updating here; just forward the event.
             sourceId = d.sourceId;
             targetId = d.targetId;
             if isempty(targetId); targetId = ''; end
             if ~isKey(this.Nodes, sourceId)
                 return;
-            end
-            if d.reparented
-                % The JS side has already reparented on its own; mirror it
-                % here so this.Nodes (id -> parentId) stays the source of
-                % truth for any later addNode/removeNode calls, and push so
-                % Component.Data reflects it immediately rather than only
-                % after some later, unrelated mutation happens to push.
-                n = this.Nodes(sourceId);
-                n.parentId = targetId;
-                this.Nodes(sourceId) = n;
-                this.push();
             end
             src = this.nodeStruct(sourceId);
             if isempty(targetId) || ~isKey(this.Nodes, targetId)
@@ -335,8 +378,7 @@ classdef WorkSpaceTree < handle
             else
                 tgt = this.nodeStruct(targetId);
             end
-            this.invoke(this.NodeDroppedFcn, ...
-                struct('Source', src, 'Target', tgt, 'Reparented', d.reparented));
+            this.invoke(this.NodeDroppedFcn, struct('Source', src, 'Target', tgt));
         end
 
         function invoke(~, fcn, eventData)

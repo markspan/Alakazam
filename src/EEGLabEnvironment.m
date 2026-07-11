@@ -191,6 +191,10 @@ classdef EEGLabEnvironment
         %   'pop_loadset'" deep inside WorkSpace.loadSETFile, crashing the
         %   whole app construction -- instead of here, the one place that can
         %   actually explain what is wrong.
+
+            if isempty(which('pop_loadset'))
+               eeglab('nogui') 
+            end
             if ~isempty(which('pop_loadset'))
                 return; % EEGLAB has already been initialized this session
             end

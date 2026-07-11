@@ -32,6 +32,38 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-menu-item-disabled:hover { background: none; }
 .alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }
 
+/* While a branch is being dragged, show a "copy"/apply cursor everywhere,
+   not the native browser "move" cursor -- a drop never moves the node, it
+   always applies its transformations to the dropped-on dataset (see
+   alakazam-tree.js's file header comment). Applied to <html> (not just the
+   dragged element) because yy-tree's Input._pickup() reparents the dragged
+   row to document.body and positions it under the pointer, so the pointer
+   is constantly over other rows/whitespace, not just the dragged node
+   itself; !important is needed to beat TREE_STYLES' own inline
+   cursor:pointer on .yy-tree-name/.yy-tree-content. */
+html.alz-dragging, html.alz-dragging * { cursor: copy !important; }
+
+/* While MATLAB is off computing the result of a drop (evaluateDroppedBranch
+   can run a real transformation, so this can take a moment), swap to the
+   OS-native busy cursor -- on this app's target platform (Windows), the
+   browser's cursor:wait keyword renders as Windows' own animated "busy"
+   ring/hourglass, so no custom animated-cursor image asset is needed (a
+   CSS cursor:url() pointing at an animated GIF/cursor resource generally
+   does not animate across browsers, unlike the native OS cursor). Cleared
+   by bridge.js's applyData the moment MATLAB pushes fresh tree state back;
+   WorkSpaceTree.notifyDropHandled (called via onCleanup from
+   Alakazam.onNodeDropped) guarantees that push happens for every drop
+   outcome -- a real transformation, an ignored drop, or an error -- so
+   this can never get stuck on. */
+html.alz-busy, html.alz-busy * { cursor: wait !important; }
+
+/* The node currently under the drag -- i.e. whichever dataset would
+   actually receive the dropped branch's transformations if released right
+   now (see alakazam-tree.js's _onDragPointerMove). A dashed outline (not
+   just a background tint) so it stays visible layered over both the hover
+   tint and the solid-blue alz-row-selected background. */
+.alz-drop-target { outline: 2px dashed #4a7fc9; outline-offset: -2px; background: rgba(74, 127, 201, 0.18); }
+
 </style>
 </head>
 <body>
@@ -1127,7 +1159,7 @@ var AlakazamTree = (() => {
   icons.open = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M20 35 L50 70 L80 35" fill="none" stroke="#666" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var TREE_STYLES = {
     nameStyles: {
-      padding: "3px 6px",
+      padding: "1px 6px",
       margin: "0",
       background: "transparent",
       "user-select": "none",
@@ -1138,7 +1170,7 @@ var AlakazamTree = (() => {
     contentStyles: {
       display: "flex",
       "align-items": "center",
-      padding: "2px 4px",
+      padding: "1px 4px",
       "border-radius": "4px",
       cursor: "pointer"
     },
@@ -1169,6 +1201,7 @@ var AlakazamTree = (() => {
   };
   var ROOT_ID = "__root__";
   var DOUBLE_CLICK_MS = 400;
+  var LEAVE_GRACE_MS = 250;
   var CONTEXT_ITEMS = [
     { action: "listEvents", label: "List events" },
     { separator: true },
@@ -1185,11 +1218,22 @@ var AlakazamTree = (() => {
       this._onEvent = options2 && options2.onEvent || function() {
       };
       this._byId = /* @__PURE__ */ new Map();
-      this._ctrlDown = false;
       this._lastClick = { id: null, time: 0 };
       this._menuEl = null;
       this._highlightedLeaf = null;
+      this._dropTargetLeaf = null;
+      this._leaveGraceTimer = null;
       this._root = { id: ROOT_ID, name: "", children: [], expanded: true };
+      document.body.addEventListener("mouseleave", (e) => {
+        if (!this._pending) return;
+        e.stopImmediatePropagation();
+        clearTimeout(this._leaveGraceTimer);
+        this._leaveGraceTimer = setTimeout(() => this._cancelDrag(), LEAVE_GRACE_MS);
+      });
+      document.body.addEventListener("mouseenter", () => {
+        clearTimeout(this._leaveGraceTimer);
+        this._leaveGraceTimer = null;
+      });
       this._tree = new Tree(this._root, {
         parent: container,
         move: true,
@@ -1202,16 +1246,8 @@ var AlakazamTree = (() => {
       this._tree.on("move-pending", (leaf) => this._onMovePending(leaf));
       this._tree.on("move", (leaf) => this._onMove(leaf));
       this._tree.on("name-change", (leaf, name) => this._onNameChange(leaf, name));
-      window.addEventListener("keydown", (e) => {
-        if (e.key === "Control") this._ctrlDown = true;
-      });
-      window.addEventListener("keyup", (e) => {
-        if (e.key === "Control") this._ctrlDown = false;
-      });
-      window.addEventListener("blur", () => {
-        this._ctrlDown = false;
-      });
       document.addEventListener("mousedown", (e) => this._maybeCloseMenu(e));
+      document.addEventListener("mousemove", () => this._onDragPointerMove());
     }
     /**
      * Replace the whole node set. `nodes` is a flat array:
@@ -1272,6 +1308,48 @@ var AlakazamTree = (() => {
         leaf.content.classList.add("alz-row-selected");
       }
     }
+    // Highlights whichever node is the current prospective drop target while
+    // dragging -- distinct from _applySelectionHighlight (click selection),
+    // so a drag over a different node doesn't fight the tree's own
+    // selection colour. Mirrors _applySelectionHighlight's leaf.content/
+    // single-previous-highlight pattern.
+    _setDropTargetHighlight(leaf) {
+      if (this._dropTargetLeaf === leaf) return;
+      if (this._dropTargetLeaf) {
+        this._dropTargetLeaf.content.classList.remove("alz-drop-target");
+      }
+      this._dropTargetLeaf = leaf;
+      if (leaf) {
+        leaf.content.classList.add("alz-drop-target");
+      }
+    }
+    // Figures out which node the drag would drop onto *right now* and
+    // highlights it, so the user always has a clear answer to "what am I
+    // about to apply this branch to" while dragging (yy-tree's own
+    // indicator is just a thin insertion line, easy to lose track of once
+    // the row list has collapsed around it during the drag).
+    //
+    // There is no per-frame hook from yy-tree for this, so this reads its
+    // internal state directly (vendored, pinned, build-time-only code, same
+    // justification as the icons override above): Input._up() always does
+    // `indicator.parentNode.insertBefore(this._target, indicator)` then
+    // `_moveData()` reads `this._target.parentNode.data` as the new
+    // parent -- i.e. the indicator's CURRENT parentNode, at any moment
+    // during the drag, already tells us exactly what dropping right now
+    // would resolve to: either a rendered leaf element (a real node, whose
+    // own `.data` is the prospective target) or this._tree.element itself
+    // (the root container, i.e. a targetId:null/no-target drop -- nothing
+    // to highlight).
+    _onDragPointerMove() {
+      if (!this._pending) return;
+      const indicatorEl = this._tree._input._indicator.get();
+      const parentEl = indicatorEl && indicatorEl.parentNode;
+      if (parentEl && parentEl.isLeaf && parentEl.data !== this._pending.data) {
+        this._setDropTargetHighlight(parentEl);
+      } else {
+        this._setDropTargetHighlight(null);
+      }
+    }
     _findLeafByData(data) {
       const walk = (el2) => {
         if (el2.isLeaf && el2.data === data) {
@@ -1321,22 +1399,48 @@ var AlakazamTree = (() => {
         oldParent: leaf.data.parent,
         oldIndex: leaf.data.parent.children.indexOf(leaf.data)
       };
+      document.documentElement.classList.add("alz-dragging");
     }
     _onMove(leaf) {
       const data = leaf.data;
       const newParent = data.parent;
       const targetId = newParent.id === ROOT_ID ? null : newParent.id;
-      if (this._ctrlDown && this._pending && this._pending.data === data) {
+      document.documentElement.classList.remove("alz-dragging");
+      this._setDropTargetHighlight(null);
+      if (this._pending && this._pending.data === data) {
         const { oldParent, oldIndex } = this._pending;
         newParent.children.splice(newParent.children.indexOf(data), 1);
         oldParent.children.splice(oldIndex, 0, data);
         data.parent = oldParent;
         this._tree.update();
-        this._onEvent({ type: "nodeDropped", sourceId: data.id, targetId, reparented: false });
-      } else {
-        this._onEvent({ type: "nodeDropped", sourceId: data.id, targetId, reparented: true });
       }
       this._pending = null;
+      document.documentElement.classList.add("alz-busy");
+      this._onEvent({ type: "nodeDropped", sourceId: data.id, targetId });
+    }
+    // Called after the pointer has been outside the tree for LEAVE_GRACE_MS
+    // during a drag (see the constructor's mouseleave listener, which
+    // intercepts the leave before yy-tree's own Input ever sees it -- so
+    // Input's internal state, e.g. Input._target/_moving, is exactly as it
+    // was mid-drag and needs manually unwinding here, mirroring what
+    // Input._up() itself does on a normal drop (node_modules/yy-tree/src/
+    // input.js) minus _moveData()/emit('move'): nothing was ever actually
+    // dropped, so the data graph was never touched and needs no revert --
+    // just discard the floating dragged row/indicator and rebuild the real
+    // tree fresh from the (unmutated) data.
+    _cancelDrag() {
+      this._leaveGraceTimer = null;
+      const input = this._tree._input;
+      const target = input._target;
+      if (!target) return;
+      input._indicator.get().remove();
+      target.remove();
+      input._target = null;
+      input._moving = null;
+      this._pending = null;
+      document.documentElement.classList.remove("alz-dragging");
+      this._setDropTargetHighlight(null);
+      this._tree.update();
     }
     _onNameChange(leaf, name) {
       this._onEvent({ type: "nodeRenamed", id: leaf.data.id, name });
@@ -1410,6 +1514,12 @@ function setup(htmlComponent) {
     })
 
     function applyData(data) {
+        // Any fresh Data push from MATLAB means it's no longer busy handling
+        // whatever caused the push (a drop's evaluateDroppedBranch is the
+        // main case -- see alakazam-tree.js's _onMove/alakazam-tree.css's
+        // html.alz-busy rule); WorkSpaceTree.notifyDropHandled guarantees a
+        // push happens for every drop outcome, so this always fires.
+        document.documentElement.classList.remove('alz-busy')
         if (data && data.nodes) {
             tree.setNodes(data.nodes, data.selectedId)
             htmlComponent.sendEventToMATLAB('rendered', {

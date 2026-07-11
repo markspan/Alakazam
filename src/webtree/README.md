@@ -12,14 +12,14 @@ drag-and-drop tree, MIT licensed) with:
 - a custom right-click context menu (List events / Rename / Recalculate /
   Delete), also not native to yy-tree;
 - double-click detection (yy-tree only emits a single `clicked` event);
-- Ctrl-aware drop semantics matching Alakazam's own tree: yy-tree's native
-  drag is a *reorder* gesture (insert-as-sibling, mutating its data
-  immediately in `_moveData()`). No modifier held reparents for real
-  (yy-tree's own mutation is left standing). Ctrl held means "apply this
-  node's transformation to the one it was dropped onto" -- the visual/data
-  move is reverted (back to the exact original parent+index) and a
-  `nodeDropped {reparented:false}` event is sent instead, so MATLAB can
-  build the actual new result node itself.
+- drop semantics matching Alakazam's own tree: yy-tree's native drag is a
+  *reorder* gesture (insert-as-sibling, mutating its data immediately in
+  `_moveData()`), but this tree never actually moves a node -- dropping one
+  onto another always means "apply this node's transformation to the one
+  it was dropped onto", not "move it here". The visual/data move yy-tree
+  performs is always reverted (back to the exact original parent+index)
+  and a `nodeDropped` event is sent instead, so MATLAB can build the
+  actual new result node(s) itself.
 - the MATLAB &lt;-&gt; JS bridge (`src/bridge.js`) on top of `uihtml`'s
   `Data`/`DataChangedFcn`/`HTMLEventReceivedFcn`/`sendEventToMATLAB`
   contract -- see `WorkSpaceTree.m` for the MATLAB side of this contract.
@@ -40,7 +40,7 @@ committed, at `src/WorkSpaceTree.html`.
 ## Files
 
 - `src/alakazam-tree.js` -- the yy-tree wrapper (icons, context menu,
-  double-click, Ctrl-aware drop).
+  double-click, always-revert drop).
 - `src/alakazam-tree.css` -- styling for the icon/menu additions.
 - `src/bridge.js` -- glue between `uihtml`'s JS contract and
   `AlakazamTree.create`.
@@ -51,6 +51,6 @@ committed, at `src/WorkSpaceTree.html`.
   about).
 - `test_node.mjs` -- jsdom tests. Real pixel-based drag can't be simulated
   (jsdom has no layout engine, so `getBoundingClientRect()` is always
-  zero); drag/Ctrl-revert logic is instead tested by driving the wrapper
+  zero); the drag/revert logic is instead tested by driving the wrapper
   through the exact `move-pending`/`move` event contract verified directly
   in yy-tree's own `input.js` source.

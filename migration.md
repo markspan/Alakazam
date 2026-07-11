@@ -1864,3 +1864,506 @@ confirmed all three heads remain identically sized; and confirmed normal
 drag/redraw still works correctly afterward (the position-restore
 mechanism does not interfere with `redraw`'s own repeated
 `cla`/`topoplot` calls on every drag tick). `checkcode` clean.
+
+## Tree drag-and-drop: removed the move/reparent gesture, drop always applies the branch
+
+The tree previously had two drop behaviours depending on whether Ctrl was
+held during the drop: no Ctrl left yy-tree's own reparent in place (moved
+the branch to the new parent), Ctrl held reverted the move and instead
+applied the dropped branch's transformations to the target
+(`Alakazam.evaluateDroppedBranch`). The user reported the no-Ctrl case was
+unwanted ("I can move a branch now. I do not want that.") and asked for
+the apply-transformation behaviour unconditionally: drag a branch onto
+another node, and the transformations get replayed onto that node.
+
+Removed the move/reparent gesture entirely rather than just defaulting it
+off, across all three layers of the drop contract:
+
+- `src/webtree/src/alakazam-tree.js` (`AlakazamTree`): dropped the
+  `_ctrlDown` field and its three `keydown`/`keyup`/`blur` window
+  listeners. `_onMove` now unconditionally reverts the move yy-tree just
+  performed (splices the node back to its pre-drag parent/index, exactly
+  as the old Ctrl-held branch did) and emits a plain
+  `{type:'nodeDropped', sourceId, targetId}` -- no `reparented` field at
+  all, since there is now only one behaviour.
+- `src/WorkSpaceTree.m` (`handleDropped`): dropped the
+  `if d.reparented ... end` mirroring block (nothing to mirror any more,
+  the JS side never moves a node) and the `Reparented` field on the
+  struct passed to `NodeDroppedFcn`.
+- `src/Alakazam.m` (`onNodeDropped`): dropped the `if ~eventData.Reparented`
+  conditional -- `evaluateDroppedBranch` is now called unconditionally.
+  This needed a **new** guard that the old conditional had implicitly
+  covered: `eventData.Target` can be `[]` for a drop onto empty space/root
+  (no dataset to apply the branch to), and `evaluateDroppedBranch`
+  unconditionally dereferences `targetNode.UserData`, so
+  `onNodeDropped` now returns early when `isempty(eventData.Target)`, in
+  addition to the existing root-source guard.
+
+`src/webtree/test_node.mjs`'s drag-simulation tests were rewritten to
+match: the old "5a: no Ctrl, real reparent, mutation stands" case (the
+only one that previously expected the move to stick) became "the move is
+always reverted, even for a plain top-level-onto-top-level drop"; the
+former Ctrl-held cases (5b/5c) kept their revert-to-original-parent
+assertions but dropped all Ctrl framing and the `reparented` field from
+the expected event JSON.
+
+Verified: `cd src/webtree && npm run build && npm test` (jsdom drag
+simulation, all cases pass, dist copied to `src/WorkSpaceTree.html`);
+`checkcode` clean on `WorkSpaceTree.m`/`Alakazam.m`; a headless functional
+test (constructing a real `WorkSpaceTree` and driving it through its own
+`Component.HTMLEventReceivedFcn`, exactly as the JS bridge does, since
+`onEvent`/`handleDropped`/`nodeStruct` are private -- mirroring the
+standalone-algorithm-replication pattern used elsewhere in this session
+for `onNodeDropped`'s own guard logic, since constructing a full `Alakazam`
+needs EEGLAB) confirms: `handleDropped` forwards a `Reparented`-free
+Source/Target struct and yields `Target = []` for an empty `targetId`;
+`onNodeDropped`'s guard ignores a root-source drop, ignores an empty-target
+drop (the new case), and unconditionally reaches `evaluateDroppedBranch`
+for a normal node-onto-node drop.
+
+## Tree drag-and-drop: cursor feedback while a drag is in progress
+
+Immediate follow-up to the above: the browser's native drag cursor still
+read as a "move" cursor while dragging a branch, which is misleading now
+that a drop never moves anything (it applies the branch's transformations
+to the target). `src/webtree/src/alakazam-tree.js`'s `_onMovePending`/
+`_onMove` now toggle an `alz-dragging` class on `<html>` for the duration
+of the drag; `alakazam-tree.css` adds `html.alz-dragging, html.alz-dragging
+* { cursor: copy !important; }`.
+
+Two things confirmed directly rather than assumed, both against
+`node_modules/yy-tree/src/input.js`:
+- The class has to go on `<html>` (or another ancestor covering the whole
+  page), not just the dragged row: yy-tree's `Input._pickup()` reparents
+  the dragged element to `document.body` and positions it absolutely under
+  the pointer, so the pointer spends the whole drag over *other* rows/
+  whitespace, not the dragged node itself.
+- `!important` is required: `TREE_STYLES` already sets inline
+  `cursor: pointer` on every row's name/content spans, which would
+  otherwise win over an inherited, non-`!important` cursor value.
+- `move-pending` and `move` are a reliable start/end pair with no
+  cancel/escape path -- `Input._up()` always emits `move` once the drag
+  threshold (`_moving`) has been crossed, including on `mouseleave`, so
+  the class is guaranteed to come back off.
+
+Verified: `cd src/webtree && npm run build && npm test`; a new jsdom test
+drives `move-pending` then `move` directly and asserts
+`document.documentElement.classList.contains('alz-dragging')` is `false`
+before the drag, `true` after `move-pending`, and `false` again after
+`move`. `dist/alakazam-tree.html` copied to `src/WorkSpaceTree.html`.
+
+## Fixed: Clear WorkSpace opened a stray figure window and looked hung
+
+The user reported that "Clear WorkSpace" opens a figure window and the app
+"does not come back." Root cause, confirmed directly:
+[`src/@WorkSpace/rawclear.m`](src/@WorkSpace/rawclear.m) is leftover
+classic-figure-era code -- `set(gcf,'Pointer','watch')` before the
+delete/recreate, `set(gcf,'Pointer','arrow')` after. `gcf` only tracks
+classic figures, not this app's `uifigure` shell, so calling it with none
+open **silently creates a brand-new blank classic figure** rather than
+erroring or resolving to `MainFigure`. Confirmed empirically: a headless
+`uifigure` exists, `findall(0,'Type','figure')` reports 1 (the uifigure
+itself is `Type=='figure'` too), then `set(gcf,'Pointer','watch')` bumps
+that count to 2 -- a real new window, popped up on top of/stealing focus
+from `MainFigure`, which is what read as "the program does not come
+back" (it hadn't hung; the blank stray figure was just occluding/focus-
+stealing the real app window).
+
+Fixed to use `this.Parent.MainFigure` (the `WorkSpace`'s own reference to
+the owning `Alakazam` app) directly instead of `gcf`, and wrapped the
+pointer-restore in `onCleanup` rather than a plain trailing `set(...)` --
+the old code left the watch cursor stuck forever (and the stray figure
+open) if `rmdir`/`mkdir`/`open(this)` threw partway through; `onCleanup`
+restores the pointer even on that path.
+
+Verified: `checkcode` clean; a headless functional test (constructing a
+real `uifigure` as a stand-in `MainFigure`, driving `rawclear.m`'s
+"Yes, delete!" body directly -- `questdlg` itself would block headlessly,
+and `open(this)` needs a full `WorkSpace`/`Tree`, both out of scope for
+this focused test) confirms no additional classic figure appears
+(`findall(0,'Type','figure')` count unchanged, counting `MainFigure`
+itself as the baseline) and the pointer is restored to `'arrow'`
+afterward; separately confirmed the *old* `gcf`-based code, run against
+the same harness, does reproduce the stray-figure bump (1 -> 2), so this
+test would have caught the regression.
+
+## Tree drag-and-drop: busy cursor while MATLAB computes, live drop-target highlight
+
+Two follow-up requests on the drag-and-drop redesign: (1) the cursor
+doesn't change while MATLAB is off running `evaluateDroppedBranch`
+("the drop is being calculated") -- wanted an animated hourglass-style
+busy indicator; (2) while dragging, the row list collapses around the
+insertion point (expected, fine), but there's no clear indication of
+*which* node is the "DROPBRANCH" -- the one that will actually receive the
+dropped branch's transformations.
+
+**Busy cursor.** `src/webtree/src/alakazam-tree.js`'s `_onMove` now adds
+an `alz-busy` class to `<html>` the instant it sends `nodeDropped`
+(alongside removing `alz-dragging`); `alakazam-tree.css` adds
+`html.alz-busy, html.alz-busy * { cursor: wait !important; }`. `cursor:
+wait` rather than a custom animated-cursor image: on this app's target
+platform (Windows), the browser renders it as the OS's own animated busy
+indicator, whereas `cursor: url(...)` pointing at an animated GIF/cursor
+resource generally does not animate across browsers -- the OS-native
+route gets the "animated hourglass" the user asked for without an asset.
+
+Clearing it is the hard part: the only MATLAB->JS signal available is a
+fresh `Component.Data` push (observed via `bridge.js`'s `DataChanged`
+listener), and `Alakazam.onNodeDropped`'s existing guards (root source,
+empty target) returned *before* ever reaching `evaluateDroppedBranch`/
+`persistResultNode`'s own push -- so an ignored drop, or a thrown
+transformation error, would have left the busy cursor stuck forever.
+Fixed with the same `onCleanup` technique as the rawclear.m fix above:
+`onNodeDropped` now does `notifyDone = onCleanup(@()
+sourceTree.notifyDropHandled());` right after setting `ActiveTree`, so a
+push happens when the callback returns by *any* path -- success, an
+ignored drop, or an error unwinding the stack. `WorkSpaceTree` gained
+`notifyDropHandled()` (a thin public wrapper around the existing private
+`push()`) and a `PushSeq` counter stamped into every pushed payload as a
+`seq` field, so consecutive pushes can never look identical to `Data`'s
+change-detection even when nothing about the node set actually changed
+(e.g. two ignored drops in a row) -- belt-and-suspenders alongside the
+`onCleanup` guarantee itself.
+
+**Live drop-target highlight.** yy-tree's own visual feedback during a
+drag is just a thin horizontal insertion-line indicator -- easy to lose
+track of once the row list collapses around it, exactly the user's
+complaint. There's no per-frame hook from yy-tree for "what would this
+drop onto right now," so `_onDragPointerMove` (a `document`-level
+`mousemove` listener, registered so it always runs *after* yy-tree's own
+`document.body`-level listener, since bubble-phase dispatch reaches
+`document` after `body` regardless of registration order) reads yy-tree's
+internal state directly (vendored, pinned code, same justification as the
+existing icon-override reach-in): confirmed in
+`node_modules/yy-tree/src/input.js` that `Input._up()` always does
+`indicator.parentNode.insertBefore(this._target, indicator)` then
+`_moveData()` reads `this._target.parentNode.data` as the resolved new
+parent -- meaning the indicator's *current* `parentNode`, at any moment
+mid-drag, already tells us exactly what dropping right now would resolve
+to (a rendered leaf element, whose own `.data` is the prospective target,
+or the tree's root container for a no-target drop). `_setDropTargetHighlight`
+applies a new `alz-drop-target` class (dashed outline + light tint,
+distinct from the solid-blue click-selection highlight so the two don't
+visually fight) to that leaf, clearing the previous one -- mirroring the
+existing `_applySelectionHighlight` pattern. Cleared on drop
+(`_onMove`) and guarded against ever highlighting the dragged node itself.
+
+Verified: `cd src/webtree && npm run build && npm test`. Real pixel-based
+hit-testing can't be simulated in jsdom (no layout engine), so the new
+drop-target tests drive `_onDragPointerMove` directly against a manually
+repositioned indicator element (exactly mirroring what `Input._move()`
+would have just done to it) rather than dispatching real `mousemove`
+events -- confirmed: highlights the node the indicator is parented under,
+clears for a root/no-target position, never highlights the dragged node
+itself, and clears once the drop completes. The busy-cursor test confirms
+`alz-busy` turns on the instant a drop is sent (clearing it is
+`bridge.js`'s job, not part of the bundle `test_node.mjs` exercises --
+`bridge.js` is 3 lines, reviewed by hand). `dist/alakazam-tree.html`
+copied to `src/WorkSpaceTree.html`. `checkcode` clean on
+`WorkSpaceTree.m`/`Alakazam.m`. A new headless MATLAB functional test
+(driving `onNodeDropped`'s exact guard/`onCleanup` structure against a
+real `WorkSpaceTree`, `evaluateDroppedBranch` stood in by a stub function)
+confirms `notifyDropHandled` fires exactly once for every outcome: a
+root-source drop, an empty-target drop, a thrown error (propagates as
+expected *and* still notifies, proving `onCleanup` runs on the
+error-unwind path), and the normal successful case.
+
+## Fixed: deleting a branch crashed on the next click ("Unable to find file or directory")
+
+The user reported that right-click -> Delete on a branch throws
+`Error using load: Unable to find file or directory ".../
+Baseline11195207.mat"` out of `Alakazam/onSelectionChanged`, immediately
+after deleting a node. Root cause: `WorkSpaceTree.removeNode(id)` only
+ever removed the *one* node it was given from `this.Nodes` -- its own
+docstring said as much ("callers remove descendant nodes explicitly first
+if the whole branch is going"), but `Alakazam.onDeleteNode` never actually
+did that. It deletes descendant *files* recursively (`rmdir(childDir,
+"s")`) and closes their open tabs/tiles, but calls `removeNode` exactly
+once, for the top node the user right-clicked.
+
+That left every descendant still sitting in `this.Nodes` with a
+`parentId` pointing at an id that no longer existed. `setNodes`
+(`src/webtree/src/alakazam-tree.js`) treats an unresolvable `parentId` as
+"top-level" (`const parent = n.parentId != null ? byId.get(n.parentId) :
+null; if (parent) {...} else { this._root.children.push(data) }`) -- so a
+deleted branch's children resurfaced as brand-new *root* nodes in the
+tree, still fully clickable, while their backing `.mat` files had already
+been deleted out from under them by the recursive `rmdir`. Clicking one
+(as the user did, right after the delete) crashed `onSelectionChanged`'s
+`load(eventData.UserData, "EEG")`.
+
+Fixed at the `WorkSpaceTree` layer, not the `Alakazam.onDeleteNode` call
+site: `removeNode` now walks `parentId` links via a new private
+`branchIds(id)` helper (id plus every descendant, `Nodes` being a flat
+map rather than a real tree) and removes the whole branch -- and clears
+`SelectedId` if it pointed at any of them -- in one `push()`. No change
+needed in `Alakazam.m`: `onDeleteNode`'s single `removeNode(node.Id)`
+call now does the right thing automatically, and its own file/tab/tile
+cleanup already walked the same `childDir` recursively, so the two stay
+in lockstep.
+
+Verified: `checkcode` clean. A headless functional test (building a real
+`WorkSpaceTree` reproducing the exact reported shape --
+`corrected_elist` -> `DefineBins11195205` -> `Baseline11195207`, selected,
+plus an unrelated sibling branch -- constructing a full `Alakazam` needs
+EEGLAB, and the bug was purely in the JS-facing `Nodes` bookkeeping, no
+disk access involved) confirms: deleting the middle node removes both it
+and its descendant from the pushed `Data`; the unrelated sibling branch
+and the shared root are untouched; no remaining node's `parentId` still
+references the deleted id (the exact condition that used to resurface
+orphans as new roots); and the selection is cleared since the selected
+node was removed.
+
+## Fixed: dragging out of the tree fired a drop instead of cancelling
+
+The user reported that a drop also fires just from the cursor leaving the
+tree area entirely -- not something that should count as a drop at all.
+Root cause: yy-tree's `Input` (`node_modules/yy-tree/src/input.js`)
+registers `document.body.addEventListener('mouseleave', e =>
+this._up(e))` right alongside its `mouseup`/`touchend` listeners, and
+`_up()` treats a `mouseleave` exactly like a real mouse-button release --
+it finalizes the move (`_moveData()`, emits `'move'`) with no separate
+"cancelled" concept. Since `_onMove` already unconditionally sent
+`nodeDropped` whenever `'move'` fired, simply carrying the pointer off the
+edge of the tree's own uihtml page (into the ribbon, the plots area, even
+just past the window edge) was enough to apply whatever branch was being
+dragged onto whatever node the drop indicator happened to be resting on.
+uihtml renders in its own embedded document, with no "pointer left the
+whole app" signal of its own -- `mouseleave` on that document's `body` is
+the only place this is observable at all.
+
+Fixed by intercepting it one layer up, in `alakazam-tree.js`'s
+`AlakazamTree` constructor: a `document.body` `'mouseleave'` listener is
+registered *before* `new Tree(...)` (which is what constructs `Input` and
+registers *its* `mouseleave` listener). Listeners on the same element for
+the same event fire in registration order, so this one always runs first,
+setting `this._pointerLeftDuringDrag = true` if a drag was in progress at
+that moment (checked via `this._pending`, already used for the same
+purpose elsewhere) -- and since `_up()`'s subsequent, synchronous
+`'move'` emission happens later in that same call stack, `_onMove` can
+read the flag reliably every time. `_onMove` now branches on it: the data-
+graph revert (undoing yy-tree's own `_moveData()`) and cursor-class
+cleanup still run unconditionally as before, but if the flag is set,
+`_onMove` returns before setting `alz-busy` or sending `nodeDropped` --
+the drag is simply abandoned, and the dragged row snaps back to its
+original tree position via the same revert-then-`update()` path an
+ordinary reverted drop already used. `_onMovePending`'s own comment
+("there is no cancel/escape path") no longer applied and was corrected.
+
+Verified: `cd src/webtree && npm run build && npm test`. Two new jsdom
+tests dispatch a real `mouseleave` DOM event on `document.body` (exercising
+the actual listener wiring, not just calling internal methods) mid-drag
+and confirm no `nodeDropped` event is sent and `alz-busy` never turns on
+(while `alz-dragging` still correctly turns off); a second test confirms a
+stray `mouseleave` firing with *no* drag in progress doesn't wrongly
+poison a later, real drag. `dist/alakazam-tree.html` copied to
+`src/WorkSpaceTree.html`. No MATLAB-side change needed -- the bug and its
+fix are entirely within the JS drag-gesture layer.
+
+## Fixed: the mouseleave-cancel fix above broke normal overlay drops
+
+Immediate regression from the previous entry: the user reported they
+could no longer drop one Averaged dataset onto another to overlay their
+plots (`Alakazam.overlayAverage`, via `evaluateDroppedBranch`'s
+`isOverlayableAverage` special case) -- a genuine, ordinary tree-node-
+onto-tree-node drag, never intended to leave the tree's own bounds at
+all. The previous fix's blanket "any `mouseleave` mid-drag cancels" was
+too eager: dragging toward a row near a (possibly narrow, e.g. the split
+"Data & Analyses"/"Grand Averages" panels) tree panel's edge is exactly
+the kind of drag most likely to graze past the exact pixel boundary for
+an instant from ordinary mouse imprecision -- and that innocent overshoot
+was now silently aborting an otherwise completely normal, intended drop.
+
+Replaced the instant-cancel with a short grace period. The constructor's
+early `mouseleave` listener (registered before `new Tree(...)`/`Input`,
+so it always runs first and can `stopImmediatePropagation()` to keep
+Input's own listener from ever seeing the event at all -- unchanged from
+the previous fix) now, instead of just flagging the leave, arms a
+`setTimeout(() => this._cancelDrag(), LEAVE_GRACE_MS)` (250ms). A
+matching early `mouseenter` listener clears that timer. If the pointer
+comes back within the grace window, **nothing else needs to happen**:
+because the `mouseleave` was intercepted before Input ever processed it,
+Input's own internal drag state (`_target`/`_moving`, the floating ghost
+row, the indicator) was never touched in the first place, so the drag
+simply continues exactly as if the momentary excursion never happened --
+Input's own `mousemove`/`mouseup` listeners pick up right where they left
+off. Only if the timer actually fires (no re-entry in time) does the new
+`_cancelDrag()` manually unwind the drag: remove the floating ghost row
+and indicator, null out `Input._target`/`_moving` directly (reaching into
+those private fields the same way `_onDragPointerMove` already reaches
+into `Input._indicator`), then call `this._tree.update()` -- since the
+data graph was never mutated in this path (that only ever happens inside
+`Input._moveData()`, which never ran), a plain rebuild-from-data is
+enough to make the dragged row reappear exactly where it started, no
+revert-then-restore dance needed.
+
+`_onMove` (the real-drop path) is otherwise back to its pre-previous-
+entry form -- no more `cancelled` flag or early return, since a genuine
+`'move'` event now always represents an actual completed drop (the
+mouseleave-triggered case is fully absorbed by the interceptor before
+Input can ever emit it).
+
+Verified: `cd src/webtree && npm run build && npm test`. The previous
+entry's two tests (which drove the drag purely through the wrapper's own
+`emit('move-pending'/'move')` shortcut) were replaced with four that
+drive a **real** `Input` pickup instead (`down()` + `move()` past the
+threshold, using the file's own existing low-level test helpers) --
+necessary because the emit shortcut only ever fires this wrapper's own
+event handlers, never touching `Input._target`/`_moving`/the indicator at
+all, so it couldn't actually exercise `_cancelDrag`'s interaction with
+real `Input` state. The four: (1) a real `mouseleave` mid-drag is
+intercepted before `Input._up()` can run (`Input._target`/`_moving`
+remain set, no event sent yet); (2) letting the grace period lapse with
+no re-entry cancels cleanly (`Input` state cleared by `_cancelDrag`
+itself, no event ever sent, the node provably still under its original
+parent); (3) a `mouseenter` partway through the grace period keeps the
+exact same drag alive, and a subsequent real `mouseup` completes it
+normally (`nodeDropped` sent, busy cursor on); (4) a stray
+`mouseleave`/`mouseenter` pair with no drag in progress is a no-op.
+`dist/alakazam-tree.html` copied to `src/WorkSpaceTree.html`. No
+MATLAB-side change needed.
+
+## Tree rows: tighter vertical spacing
+
+User feedback: the vertical gap between tree rows read as too loose.
+`alakazam-tree.js`'s `TREE_STYLES` stacks two separate vertical paddings
+per row -- `nameStyles.padding` (the name span) sits inside
+`contentStyles.padding` (the whole-row flex container) -- so both
+contributed to the gap. Tightened `nameStyles.padding` from `'3px 6px'`
+to `'1px 6px'` and `contentStyles.padding` from `'2px 4px'` to `'1px 4px'`
+(horizontal padding untouched), trimming 6px of vertical space per row
+(3px off the top, 3px off the bottom) on top of the existing 1px
+`.yy-tree-leaf` row-to-row margin, left as is. Verified: `cd src/webtree
+&& npm run build && npm test` (a pure styling change; no behavioural test
+needed, existing suite still green). `dist/alakazam-tree.html` copied to
+`src/WorkSpaceTree.html`.
+
+## Grand Average persistence: investigated, not reproducible
+
+The user reported grand averages don't survive an Alakazam restart --
+suspected the Grand Averages tree fails to rediscover
+`CacheDirectory/GrandAverages/*.mat` on reopen. Investigated thoroughly
+before touching any code (`WorkSpace.open`/`loadGrandAverages`/
+`Alakazam.saveGrandAverage` all read correctly on inspection) and then
+verified empirically against the user's own real default workspace,
+including their real pre-existing grand average file
+(`Data/Cache/GrandAverages/d.mat`): a headless `WorkSpace`-only test, a
+single-process `startAlakazam()` -> `delete()` -> `startAlakazam()`
+round trip, and -- the most faithful reproduction possible -- **two
+fully independent MATLAB processes** (the first creates and saves a
+brand-new grand average and exits completely; the second is a genuinely
+cold `startAlakazam()` in a brand-new process, sharing nothing but the
+files on disk) all correctly rediscover every grand average, old and
+newly-created alike. No code defect found or changed. Test artifacts
+were cleaned out of the real `Data/Cache/GrandAverages/` folder
+afterward, leaving only the user's own `d.mat`. The user separately
+reported the problem seems to no longer reproduce on their end.
+
+## Removed the last ECG remnant: SignalView's IBI-marker overlay
+
+The user confirmed the app is strictly EEG-only now (no more ECG/HRV
+traces) and asked for any remaining ECG/MEG code to be found and removed.
+Audited the whole `src/` tree first: no MEG code exists anywhere, and no
+beat-detection/R-peak-producing pipeline exists in this repo at all --
+`EEG.IBIevent` was only ever *read*, never produced, by anything here (a
+holdover from an earlier multi-modal-physiology era of the tool). The
+only real remnant was `SignalView.m`'s interbeat-interval marker overlay
+and its one small support file:
+
+- `src/SignalView.m`: removed `drawIbiMarkers` entirely (drew
+  colour-coded, AAMI-beat-class-coloured, draggable cursors at each
+  `eeg.IBIevent{i}.RTopTime`), the `IbiColors` constant (AAMI beat-class
+  colour dictionary: N/L/S/T/1/2/i), the `MaxIBIs` constructor option
+  (never actually passed by either `AlakazamPlotter.plotContinuous` call
+  site, so always inert in practice), the `'ibi'`-tag cleanup line and
+  `drawIbiMarkers` call in `drawOverlays`, and the `IbiEvents` field +
+  `eeg.IBIevent` read in `parseOverlays`. `drawPointEvents`/
+  `drawAreaEvents` (the generic EEGLAB stimulus-marker/artifact-window
+  overlays -- not ECG-specific despite sharing `parseOverlays`'s
+  `eeg.event` parsing with the removed code) are untouched, since they
+  read `eeg.event`, a different field, and every EEG dataset uses them.
+  Also reworded the file's "clean replacement for the old Tools.plotECG"
+  / "Ported from plotECG" attribution comments (class docstring, the
+  zoom-mapping comment, both `autoStack*` docstrings) to drop the
+  ECG-specific naming while keeping the actual technical content.
+- `src/+uiextras/delCursor.m`: deleted outright. Its only live statement
+  was a generic `delete(vl)`; the rest was already-commented-out
+  `EEG.IBIevent.RTopTime/ibis/RTopVal`-mutating code. Its only caller was
+  `drawIbiMarkers`'s cursor-delete callback (`drawPointEvents`'s own
+  cursors pass `[]` for this callback, so never called it) -- fully
+  orphaned once `drawIbiMarkers` is gone.
+- `src/@cursor/cursor.m` and `src/@label/label.m` deliberately **not**
+  touched: both are generic draggable-marker/area helper classes with no
+  ECG-specific content, still load-bearing for `drawPointEvents`/
+  `drawAreaEvents`'s ordinary EEG event overlays.
+- Cosmetic-only, non-functional wording cleanup: `AlakazamPlotter.m`'s
+  "IBI/event overlays" comment, `PROJECT_STRUCTURE.md`'s "replaces the
+  removed Tools.plotECG" row, and `ScalpDistribution.m`'s
+  "PoinCare"-comparison comments (`PoinCare` was a since-fully-deleted
+  Poincaré-plot HRV transformation; no `PoinCare.m` exists anywhere in
+  the repo, confirmed by search) -- all reworded to drop the ECG/HRV
+  tool references while keeping the actual explanation. Left the `EOG/
+  ECG` mentions in `EnsureChanlocs.m`/`FillChanlocs.m`/`AutoEyeICA.m`/
+  `AutoGEDAI.m`/`ScalpDistribution.m` as-is: these are generic
+  "a channel with no scalp position" handling that names ECG only as an
+  illustrative example (a real EEG cap commonly carries a spare ECG
+  channel for cardiac-artifact ICA-component identification) -- not ECG
+  *support*, and removing the example would make the comments less
+  useful, not more accurate.
+
+Verified: `checkcode` clean on `SignalView.m`, `AlakazamPlotter.m`,
+`ScalpDistribution.m`. A functional test against a real EEGLAB dataset
+(`12_P3_corrected_elist.set`) confirms `SignalView` still constructs and
+redraws correctly, `IbiColors`/`drawIbiMarkers` no longer exist on the
+class, `Overlay` no longer carries an `IbiEvents` field, no `'ibi'`-tagged
+graphics object is ever produced, and the generic `eeg.event`-driven
+overlay path still runs without error.
+
+## Fixed: point-event markers had silently stopped drawing at all
+
+Found while checking that ECG removal (previous entry) hadn't disturbed
+the generic EEG event overlays: the user separately noticed real
+`AlakazamPlotter` plots weren't showing event markers at all. Root
+cause, confirmed against a real EEGLAB dataset
+(`12_P3_corrected_elist.set`): `SignalView.parseOverlays`'s point-event
+line, `overlay.EventTime = eeg.times(latency(isPoint))`, indexes
+`eeg.times` directly with raw EEGLAB event latencies -- which are
+fractional sample positions (e.g. `745.75`), not integers. MATLAB throws
+`Array indices must be positive integers or logical values` on that,
+silently swallowed by `parseOverlays`'s own `try/catch` ("leave overlays
+empty if the event structure is malformed"), so `EventTime` came back
+empty for every real dataset with sub-sample-precision latencies --
+`drawPointEvents` then had nothing to draw, with no visible error
+anywhere. The sibling `AreaTime` line two lines below already had the
+right fix in place (`eeg.times(max(1, floor(latency(isArea))))`);
+`EventTime` was just missing the equivalent clamp-and-round. Fixed to
+`eeg.times(max(1, round(latency(isPoint))))` (round rather than
+`AreaTime`'s floor, since a point marker's own position benefits from
+nearest-sample accuracy rather than truncation to a window-start
+boundary). This bug predates the ECG-removal work above and is unrelated
+to it -- `parseOverlays`'s event-parsing block was carried over verbatim
+in that change.
+
+Also raised `MaxEvents` (the density cap bounding how many point-event
+cursors a single window may show before `drawPointEvents` bails out
+entirely rather than flooding the axes) from 30 to 100, since 30 proved
+too easily exceeded on real recordings with dense stimulus/response
+markers -- e.g. `12_P3_corrected_elist.set`'s zoomed-out view alone has
+403.
+
+Verified: `checkcode` clean on `SignalView.m`. Confirmed directly against
+the real dataset that `latency(1) = 745.75` reproduces the exact
+swallowed exception; after the fix, `parseOverlays` returns all 403
+`EventTime` values instead of `[]`, and a manually-constructed `cursor()`
+call with real overlay data succeeds and renders. Full end-to-end
+verification through `SignalView.redraw()`'s own zoom/scroll-driven
+window math was inconclusive in this headless environment specifically
+(a `uifigure('Visible','off')` never lays out, so `AxWidthPx`/`AxWidthCm`
+stay at their construction-time placeholder values, the same known
+"stale axes width" gotcha `AlakazamPlotter.plotCurrent`'s `drawnow`
+already works around for the *first* redraw elsewhere -- see the
+SignalView-initial-view-width entry earlier in this file) -- not a
+defect in the fix itself, just a limitation of driving zoom/pan math
+without a real, visible, laid-out figure. Recommend an interactive
+sanity check (open a continuous dataset, confirm event markers now
+appear while scrolling) to fully close this out.
