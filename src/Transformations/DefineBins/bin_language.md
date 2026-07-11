@@ -17,7 +17,7 @@ the [quick reference](#quick-reference) at the end.
 bin 1 "Targets" 112
 ```
 
-That's it: a bin number, a quoted label, and a **code** — the marker that
+That's it: a bin number, a quoted label, and a **code** , the marker that
 identifies an event. Every event marked `112` (or `"112"`; numeric codes
 match either form) now belongs to bin 1.
 
@@ -29,7 +29,7 @@ bin 2 "Any of five stimuli" {"s11" "s22" "s33" "s44" "s55"}
 ```
 
 Pipe-separated (`|`) is compact for a few codes; a braced list reads better
-for many. They're interchangeable — use whichever is more readable. A code
+for many. They're interchangeable , use whichever is more readable. A code
 may also be a quoted marker with wildcards: `?` (exactly one character) or
 `*` (any run), e.g. `"s??"` matches `s11`, `s77`, ... but not `s1` or `s123`.
 Matching is always case-insensitive.
@@ -80,7 +80,7 @@ bin 3 "Either stimulus"       (112 or 122) and next(118) within (200,1200] ms
 
 Precedence is the usual one (`not` tightest, then `and`, then `or`); group
 with `( )` to override. **Adjacent terms are `and`-ed even without the
-keyword** — `112 next(118)` means exactly `112 and next(118)` — which reads
+keyword** , `112 next(118)` means exactly `112 and next(118)` , which reads
 nicely for "everything except":
 
 ```
@@ -93,7 +93,7 @@ these".)
 ## 6. Reaction time, for free
 
 Whenever a bin matches via a relation, `DefineBins` records the signed delay
-to that neighbour as the reaction time, in `EEG.bindesc(b).rt` — no extra
+to that neighbour as the reaction time, in `EEG.bindesc(b).rt` , no extra
 syntax needed. Filter on it with `rt within`:
 
 ```
@@ -101,14 +101,14 @@ bin 1 "Fast responses" 112 and next(118) rt within (200,500] ms
 bin 2 "Slow responses" 112 and next(118) rt within (500,1200] ms
 ```
 
-This is a **post-filter** on the already-computed RT, not another relation —
+This is a **post-filter** on the already-computed RT, not another relation ,
 a match with no RT (a pure anchor bin, or one reached through `not`) is
 dropped by an `rt within` filter.
 
 ## 7. Cutting epochs (the GUI fields, not the language)
 
 The time window to cut around each matched event is **not** written in the
-script — it's the two **Epoch start (ms)** / **Epoch stop (ms)** fields
+script , it's the two **Epoch start (ms)** / **Epoch stop (ms)** fields
 above the editor, shared by every bin, e.g. `-200` and `800`. Leave both
 blank to keep the data continuous (tag bins only, no segmenting); fill both
 to get a segmented (`channels × time × trials`) dataset. The values, and the
@@ -151,8 +151,8 @@ bin 2 "Unrelated" 122 and answered
 
 This is the main reason to reach for `let`: it de-duplicates the part that's
 usually repeated verbatim across several bins. A relation inside an alias
-means exactly what it would mean written out inline at the reference site —
-including RT capture — whether that's directly in a bin, or as the argument
+means exactly what it would mean written out inline at the reference site ,
+including RT capture , whether that's directly in a bin, or as the argument
 to another relation (`next(answered)`, testing whether a *neighbour*
 satisfies it).
 
@@ -165,11 +165,11 @@ bin 3 "N400 effect" = bin 2 - bin 1
 ```
 
 `= <sum/difference of bin numbers>` builds a bin from **other bins'
-averages** instead of an event predicate — there's no `:`/expression at all.
+averages** instead of an event predicate , there's no `:`/expression at all.
 It has no trials of its own: `Average` averages the ordinary bins first,
 then forms the combination, propagating the standard error as the root of
 the summed squared errors. Since the terms are matched on different anchors,
-they typically carry different trial counts (74 vs 68, say) — the legend
+they typically carry different trial counts (74 vs 68, say) , the legend
 shows this as `N400 effect (n=68-74)` rather than a misleading "0 trials".
 
 ## 12. Interaction effects: combination bins referencing combination bins
@@ -185,7 +185,7 @@ bin 6 "Relatedness, unexpected" = bin 4 - bin 3
 bin 7 "Relatedness x Expectancy" = bin 6 - bin 5
 ```
 
-A combination bin may reference **another** combination bin — a
+A combination bin may reference **another** combination bin , a
 difference-of-differences, e.g. an interaction effect in a factorial design.
 Declaration order doesn't matter (bin 7 could equally be written before bin
 5/6); nesting is arbitrarily deep. A combination bin referencing itself,
@@ -201,7 +201,7 @@ is caught immediately when the script is parsed.
 | Kind | Written as | Matches |
 |---|---|---|
 | Numeric | `112` | marker `112` or `"112"` |
-| Text | `"S201"` | marker `S201` (must be quoted — a bare word is an identifier/alias name) |
+| Text | `"S201"` | marker `S201` (must be quoted , a bare word is an identifier/alias name) |
 
 Wildcards (`?` one char, `*` any run) only work inside quotes, so a numeric
 pattern like `"1??"` needs quoting too. Whitespace inside a marker is
@@ -254,14 +254,14 @@ if it went through `or`); `NaN` for a pure-anchor match or one from a `not`.
 
 Writes/reads the epoch bounds and the script together as one `.binscript`
 file: a `% epoch_start_ms: …` / `% epoch_stop_ms: …` header, then the script
-text. A plain script file with no header loads fine too — the epoch fields
+text. A plain script file with no header loads fine too , the epoch fields
 are just left as they were.
 
 ### Errors
 
 Every parse error shows the exact line, a caret under the mistake, and a
 plain-language explanation of what went wrong and how to fix it (usually
-with an example) — not just a bare "column 32" reference. A handful of
+with an example) , not just a bare "column 32" reference. A handful of
 higher-level checks (a script with no bins, a combination bin cycle, a
 dataset with no epoch-able data) are reported the same way even without a
 single column to point at.
