@@ -320,8 +320,13 @@ classdef Alakazam < handle
             save(EEG.File, "EEG");
 
             if isempty(existingNode)
+                % 'grandAverage', not WorkSpaceTree.iconFor(EEG.DataType)
+                % (which would just give the same badge a plain per-subject
+                % Average result gets) -- a Grand Average is its own
+                % distinct concept with its own dedicated tree icon,
+                % regardless of the underlying data's time/frequency domain.
                 newNode = this.Workspace.GrandAveragesTree.addNode(EEG.id, '', ...
-                    WorkSpaceTree.iconFor(EEG.DataType), EEG.File, WorkSpaceTree.optsFor(EEG));
+                    'grandAverage', EEG.File, WorkSpaceTree.optsFor(EEG));
                 this.Workspace.GrandAveragesTree.SelectedNodes = newNode;
             else
                 this.Workspace.GrandAveragesTree.renameNode(existingNode.Id, EEG.id);
@@ -626,11 +631,28 @@ classdef Alakazam < handle
 
                 this.Plotter.plotCurrent();
                 this.MainFigure.Pointer = "arrow";
+                this.restoreFocus();
 
             catch ME
                 this.MainFigure.Pointer = "arrow";
+                this.restoreFocus();
                 this.showTransformationError(transformId, ME);
             end
+        end
+
+        function restoreFocus(this)
+        %RESTOREFOCUS  Bring MainFigure back to front/focus after running a
+        %   transformation. Most transforms' own options dialogs are now
+        %   TransformOptionsDialog (uifigure-based, replacing the old
+        %   uiextras.settingsdlg -- see migration.md), but a few classic
+        %   Java/AWT dialogs remain in the pipeline (e.g. AutoGEDAI's
+        %   GEDAI-install consent questdlg, FourierGui.m's GUIDE-based
+        %   figure). Once one of those closes, focus lands on the main
+        %   MATLAB desktop/command window instead of back on this
+        %   uifigure-based app, a known quirk of mixing the two windowing
+        %   systems. Called after every transformation (success or
+        %   failure), harmless for ones that never showed a dialog at all.
+            figure(this.MainFigure);
         end
 
         function showTransformationError(this, transformId, ME)
@@ -762,6 +784,9 @@ classdef Alakazam < handle
             titleText = sprintf('Events in "%s"', node.Name);
 
             if ~isfield(EEG, "event") || isempty(EEG.event)
+                % LEGACY-JAVA-GUI: msgbox is a classic Java/AWT dialog, not
+                % a uifigure -- see migration.md's "old-style Java-based
+                % graphics" checklist.
                 msgbox("This dataset has no events.", titleText);
                 return;
             end
@@ -781,6 +806,7 @@ classdef Alakazam < handle
             for i = 1:numel(uTypes)
                 lines(i) = sprintf("%s: %d", uTypes(i), counts(i));
             end
+            % LEGACY-JAVA-GUI: msgbox, see the note above.
             msgbox(char(strjoin(lines, newline)), titleText);
         end
 
@@ -796,6 +822,9 @@ classdef Alakazam < handle
                 return; % nothing selected, or a root node
             end
 
+            % LEGACY-JAVA-GUI: inputdlg is a classic Java/AWT dialog, not
+            % a uifigure -- see migration.md's "old-style Java-based
+            % graphics" checklist.
             answer = inputdlg('New name:', 'Rename node', 1, {node.Name});
             if isempty(answer)
                 return; % cancelled
@@ -830,6 +859,9 @@ classdef Alakazam < handle
                 return; % nothing selected, or a root node
             end
 
+            % LEGACY-JAVA-GUI: questdlg is a classic Java/AWT dialog, not
+            % a uifigure -- see migration.md's "old-style Java-based
+            % graphics" checklist.
             answer = questdlg( ...
                 sprintf('Delete "%s" and everything computed from it? This cannot be undone.', node.Name), ...
                 'Delete node', 'Delete', 'Cancel', 'Cancel');
@@ -911,6 +943,7 @@ classdef Alakazam < handle
         %   saves it as a new top-level node in the Grand Averages tree.
             [candidateFiles, candidateLabels] = this.findGrandAverageCandidates();
             if numel(candidateFiles) < 2
+                % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
                 msgbox(['A grand average needs at least two Averaged datasets ' ...
                         'to combine, and fewer than two were found in this ' ...
                         'workspace. Run the Average transformation on more ' ...
@@ -926,8 +959,52 @@ classdef Alakazam < handle
             try
                 this.saveGrandAverage(spec, []);
             catch err
+                % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
                 warndlg(err.message, 'Could not compute grand average');
             end
+        end
+
+        function onExportGrandAverages(this)
+        %ONEXPORTGRANDAVERAGES  Toolbar callback (Grand Average tab):
+        %   export every Grand Average currently in
+        %   Workspace.GrandAveragesTree to one long-format, R-compatible
+        %   CSV (see exportGrandAveragesCSV). A bulk export of everything,
+        %   not a per-node action -- one button press is the simplest UI
+        %   for "get everything I have computed into R", and the resulting
+        %   long/tidy format already carries a grand_average column to
+        %   filter/facet by in R, so there is no real need for a
+        %   per-grand-average export instead.
+            nodes = this.Workspace.GrandAveragesTree.allNodes();
+            if isempty(nodes)
+                % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+                msgbox(['There are no Grand Averages to export yet. Use ' ...
+                    '"Define Grand Average..." first.'], 'Nothing to export');
+                return;
+            end
+
+            exportsDir = this.Workspace.ExportsDirectory;
+            if isempty(exportsDir) || ~isfolder(exportsDir)
+                exportsDir = pwd;
+            end
+            [fileName, pathName] = uiputfile('*.csv', 'Export Grand Averages', ...
+                fullfile(exportsDir, 'grand_averages.csv'));
+            if isequal(fileName, 0)
+                return; % cancelled
+            end
+            targetFile = fullfile(pathName, fileName);
+
+            this.MainFigure.Pointer = 'watch';
+            restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
+            try
+                exportGrandAveragesCSV(nodes, targetFile);
+            catch err
+                % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
+                warndlg(err.message, 'Could not export Grand Averages');
+                return;
+            end
+            % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+            msgbox(sprintf('Exported %d Grand Average(s) to:\n%s', numel(nodes), targetFile), ...
+                'Export complete');
         end
 
         function onRecalculateNode(this)
@@ -963,6 +1040,7 @@ classdef Alakazam < handle
             try
                 this.saveGrandAverage(spec, node);
             catch err
+                % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
                 warndlg(err.message, 'Could not compute grand average');
             end
         end
@@ -1003,6 +1081,30 @@ classdef Alakazam < handle
             end
 
             this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+        end
+
+        function onTreeRenderError(this, eventData, sourceTree)
+        %ONTREERENDERERROR  Tree callback: the JS side threw while trying to
+        %   render a Data push (see src/webtree/src/bridge.js's applyData
+        %   try/catch, added after a bug -- a MATLAB struct array of exactly
+        %   one node serializing to a bare JSON object instead of a
+        %   single-element array -- silently blanked the Grand Averages tree
+        %   and surfaced only as a generic, unactionable "HTMLSource may be
+        %   referencing unsupported functionality or may have a JavaScript
+        %   error" console warning with no message or stack at all). Prints
+        %   the real message/stack MATLAB would otherwise never see; a
+        %   warning rather than a dialog since this always indicates a code
+        %   bug in src/webtree, not something the analyst can act on beyond
+        %   reporting it.
+            if isequal(sourceTree, this.Workspace.GrandAveragesTree)
+                treeName = 'Grand Averages';
+            else
+                treeName = 'Data & Analyses';
+            end
+            warning('Alakazam:treeRenderError', ...
+                ['The %s tree failed to render (this is a bug in src/webtree, ' ...
+                 'not something wrong with your data): %s\n%s'], ...
+                treeName, eventData.Message, eventData.Stack);
         end
 
         function onSelectionChanged(this, eventData, sourceTree)
@@ -1069,6 +1171,8 @@ classdef Alakazam < handle
                     this.openSettings();
                 case 'defineGrandAverage'
                     this.onDefineGrandAverage();
+                case 'exportGrandAverages'
+                    this.onExportGrandAverages();
                 case 'viewTabs'
                     this.setPlotsViewMode("tabs");
                 case 'viewGrid'
@@ -1154,12 +1258,15 @@ classdef Alakazam < handle
         end
 
         function dispatchWheel(this, eventData)
-        %DISPATCHWHEEL  Forward a mouse-wheel event to the SignalView on the
-        %   active tile (see activeTileTag), if any. Wheel events are
-        %   figure-wide; every open dataset is a uitab on the one shared
-        %   MainFigure, so they are dispatched centrally here rather than
-        %   each SignalView wiring its own fig.WindowScrollWheelFcn (see
-        %   SignalView.buildGraphics and setupMainWindow).
+        %DISPATCHWHEEL  Forward a mouse-wheel event to whichever View
+        %   (SignalView, EpochView, TimeFrequencyView,
+        %   ScalpDistributionView or AverageView -- the views with wheel
+        %   navigation) is on the active tile (see activeTileTag), if
+        %   any. Wheel events are figure-wide; every open dataset is a
+        %   uitab on the one shared MainFigure, so they are dispatched
+        %   centrally here rather than each view wiring its own
+        %   fig.WindowScrollWheelFcn (see SignalView.buildGraphics and
+        %   setupMainWindow). See dispatchKey.
             tag = this.activeTileTag();
             if strcmp(tag, "")
                 return;
@@ -1168,16 +1275,20 @@ classdef Alakazam < handle
             if isempty(tab) || ~isvalid(tab(1))
                 return;
             end
-            view = getappdata(tab(1), "SignalView");
-            if ~isempty(view) && isvalid(view)
-                view.onWheel(eventData);
+            for viewName = ["SignalView", "EpochView", "TimeFrequencyView", "ScalpDistributionView", "AverageView"]
+                view = getappdata(tab(1), char(viewName));
+                if ~isempty(view) && isvalid(view)
+                    view.onWheel(eventData);
+                    return;
+                end
             end
         end
 
         function dispatchKey(this, eventData)
-        %DISPATCHKEY  Forward a key-press event to whichever View (EpochView
-        %   or AverageView -- the only two with keyboard navigation) is on
-        %   the active tile (see activeTileTag), if any. See dispatchWheel.
+        %DISPATCHKEY  Forward a key-press event to whichever View (EpochView,
+        %   AverageView, FourierView or TimeFrequencyView -- the views with
+        %   keyboard navigation) is on the active tile (see activeTileTag),
+        %   if any. See dispatchWheel.
             tag = this.activeTileTag();
             if strcmp(tag, "")
                 return;
@@ -1186,7 +1297,7 @@ classdef Alakazam < handle
             if isempty(tab) || ~isvalid(tab(1))
                 return;
             end
-            for viewName = ["EpochView", "AverageView", "FourierView"]
+            for viewName = ["EpochView", "AverageView", "FourierView", "TimeFrequencyView"]
                 view = getappdata(tab(1), char(viewName));
                 if ~isempty(view) && isvalid(view)
                     view.onKey(eventData);

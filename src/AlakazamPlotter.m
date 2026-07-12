@@ -143,7 +143,26 @@ classdef AlakazamPlotter < handle
         %   keyboard/wheel shortcuts route to whichever tile was last
         %   clicked while several are visible at once in Grid/Stack mode --
         %   see Alakazam.dispatchKey and migration.md.
-            if strcmpi(eeg.DataType, "TIMEDOMAIN")
+        %
+        %   EEG.id (stamped by Alakazam.persistResultNode to the
+        %   transformation's own id) is checked first for transformations
+        %   whose result needs a dedicated view rather than falling into
+        %   the generic DataFormat/DataType routing below -- e.g.
+        %   TimeFrequency's result is still DataFormat "EPOCHED" with
+        %   multiple trials (so it would otherwise land in EpochView,
+        %   which cannot draw an ERSP heatmap), and ScalpDistribution's
+        %   result is still DataFormat "AVERAGED" with trials==1 (so it
+        %   would otherwise land in AverageView, which cannot draw a
+        %   scalp topography).
+            if strcmpi(eeg.id, "TimeFrequency")
+                view = TimeFrequencyView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "TimeFrequencyView", view);
+            elseif strcmpi(eeg.id, "ScalpDistribution")
+                view = ScalpDistributionView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "ScalpDistributionView", view);
+            elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1
                         % Multichannel epoched data (channels x time x trials).

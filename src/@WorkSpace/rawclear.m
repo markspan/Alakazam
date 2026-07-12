@@ -1,4 +1,7 @@
 function rawclear(this,~,~)
+    % LEGACY-JAVA-GUI: questdlg is a classic Java/AWT dialog, not a
+    % uifigure -- see migration.md's "old-style Java-based graphics"
+    % checklist.
     answer = questdlg('Are you sure you want to delete all your work?', ...
     	'Clear Workspace?', ...
         'Yes, delete!','Sorry, what? No!','Sorry, what? No!');

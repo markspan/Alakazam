@@ -28,6 +28,9 @@ function open(this,~,~)
                 'exist on this computer, or "Edit WorkSpace" to point the ', ...
                 'Raw, Cache and Exports directories at valid local folders.\n\n', ...
                 '(%s)'], dirPath, reason);
+            % LEGACY-JAVA-GUI: msgbox is a classic Java/AWT dialog, not a
+            % uifigure -- see migration.md's "old-style Java-based
+            % graphics" checklist.
             uiwait(msgbox(explanation, ...
                 'Alakazam: workspace directory problem', 'warn', 'modal'));
             return;

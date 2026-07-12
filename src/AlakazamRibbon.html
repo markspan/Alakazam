@@ -15,10 +15,14 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 }
 /* Per-tab shades of blue; keyed off the tab's own id (see alzRender) --
    .alz-active always wins regardless of shade, since it matches on two
-   classes (higher specificity) rather than one. */
+   classes (higher specificity) rather than one. Tools/Grand Average now
+   match the tree's own 'raw'/'grandAverage' icon colours exactly (see
+   src/webtree/src/alakazam-tree.js's ICONS map and migration.md) --
+   Grand Average deliberately the darker of the two (it was the lighter
+   shade before, which read backwards next to Tools). */
 .alz-tab-home { background: #4a7fc9; }
-.alz-tab-tools { background: #2d5f99; }
-.alz-tab-grandAverage { background: #7aa7dd; }
+.alz-tab-tools { background: #6fa8dc; }
+.alz-tab-grandAverage { background: #2e5c8a; }
 .alz-tab:hover { filter: brightness(1.12); }
 /* #f5f5f5 matches uifigure's default Color (the window background, see
    Alakazam.setupMainWindow) so the selected tab blends into the window

@@ -1,4 +1,12 @@
 function varargout = FourierGui(varargin)
+% LEGACY-JAVA-GUI: this entire file is a GUIDE-generated dialog --
+% handles.figure1 (created by the companion FourierGui.fig binary, not
+% by any uifigure(...) call in this .m file's own text) is a classic
+% Java/AWT figure, and every callback/control here is GUIDE machinery on
+% top of it. Not migrated in this pass: unlike the settingsdlg call
+% sites (a single-function swap to TransformOptionsDialog), this would
+% mean rebuilding the whole options UI from scratch. See migration.md's
+% "old-style Java-based graphics" checklist.
 % FOURIERGUI M-file for FourierGui.fig
 %      FOURIERGUI, by itself, creates a new FOURIERGUI or raises the existing
 %      singleton*.

@@ -9,7 +9,8 @@ classdef AverageView < handle
 %   identifies each line. It replaces the old Tools.plotEpochedTimeMultiAverage
 %   function with a clean stateful class.
 %
-%   The up / down arrow keys step the displayed channel for every line at once.
+%   The up / down arrow keys, or the mouse wheel, step the displayed
+%   channel for every line at once.
 %
 %   Style follows the project standard.
 %
@@ -196,6 +197,24 @@ classdef AverageView < handle
                     return;
             end
             this.redraw();
+        end
+
+        function onWheel(this, callbackData)
+        %ONWHEEL  Scroll the mouse wheel to step the shown channel -- the
+        %   same direction convention as the up/down arrow keys (positive
+        %   VerticalScrollCount, i.e. scrolling down, steps forward
+        %   through channels, matching downarrow). Public: dispatched
+        %   centrally by Alakazam.dispatchWheel for whichever tab is
+        %   currently active, mirroring EpochView's/TimeFrequencyView's/
+        %   ScalpDistributionView's own onWheel contract.
+            if callbackData.VerticalScrollCount > 0
+                maxChan = min(cellfun(@(s) size(s.data, 1), this.Series));
+                this.Channel = min(maxChan, this.Channel + 1);
+            else
+                this.Channel = max(1, this.Channel - 1);
+            end
+            this.redraw();
+            this.notifyActivated();
         end
 
         function notifyActivated(this)

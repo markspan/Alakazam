@@ -2367,3 +2367,1445 @@ defect in the fix itself, just a limitation of driving zoom/pan math
 without a real, visible, laid-out figure. Recommend an interactive
 sanity check (open a continuous dataset, confirm event markers now
 appear while scrolling) to fully close this out.
+
+## Fixed: a tree with exactly one node rendered totally blank
+
+The user reported the Grand Averages tree was "totally empty" after a
+full MATLAB restart, alongside repeated "HTMLSource may be referencing
+unsupported functionality or may have a JavaScript error" console
+warnings -- while the Data & Analyses tree (the sibling `WorkSpaceTree`
+right above it) rendered fine. A first attempt to reproduce via a fresh
+`startAlakazam()` and reading `Component.Data` directly in MATLAB
+appeared to show the grand average ("tester", the user's real, only
+saved grand average) present and correct -- which was the wrong layer to
+check, and gave a false "works for me."
+
+Root cause, found by dumping the *exact* JSON MATLAB actually sends
+(`jsonencode(app.Workspace.GrandAveragesTree.Component.Data)`) rather
+than trusting the MATLAB-side struct: `WorkSpaceTree.buildData()` built
+`nodes` as a MATLAB struct array, and `jsonencode` (the same machinery
+`uihtml`'s `Data` marshaling is built on) collapses a **1x1** struct
+array to a bare JSON object instead of a single-element array --
+confirmed directly: `jsonencode(repmat(struct('a',1),1,1))` gives
+`{"a":1}`, not `[{"a":1}]`; 2+ elements and 0 elements both serialize
+correctly, only exactly 1 does not. `alakazam-tree.js`'s `setNodes` does
+`for (const n of nodes)`, and confirmed directly against the real
+bundled JS that this throws `"nodes is not iterable"` on a bare object --
+uncaught, surfacing as exactly the vague "may have a JavaScript error"
+warning MATLAB reported, and leaving the tree completely unrendered
+(the exception fires before any node is processed). This reproduces for
+*any* tree with exactly one node -- most commonly the Grand Averages
+tree, since it is entirely plausible to have saved only one grand
+average, while the Data & Analyses tree almost always has several nodes
+(every raw import plus its whole analysis chain) and so essentially
+never hits the collapse.
+
+Fixed by building `nodes` as a **cell** array instead of a struct array
+(confirmed: `jsonencode({struct('a',1)})` gives `[{"a":1}]`, reliably an
+array regardless of count) -- sidesteps the struct-array collapse
+entirely rather than special-casing `count == 1`. Assigned into the data
+struct as `struct('nodes', {nodes}, ...)` (double-wrapped, not
+`struct('nodes', nodes, ...)`): `struct()`'s own cell-value convention
+otherwise treats an unwrapped cell array as "one struct element per
+cell" (broadcasting into a struct *array*), which is the opposite of
+what is needed here -- a scalar `data` struct whose one `nodes` field
+holds the whole cell array intact.
+
+Verified: `checkcode` clean. Confirmed directly against the real,
+previously-affected data (`jsonencode` of a real, fresh
+`startAlakazam()`'s `GrandAveragesTree.Component.Data` with the user's
+actual one saved grand average, `tester.mat`) that `nodes` now starts
+with `[`, a real array. Reproduced the JS-side crash directly against
+the real bundled `alakazam-tree.js` with the exact pre-fix bare-object
+payload (`"nodes is not iterable"`), and confirmed the fixed one-element
+array payload renders correctly (`icons.length === 1`) -- both the
+failure and the fix are demonstrated against the real code, not
+inferred. A new headless MATLAB test
+(`test_workspacetree_single_node_array.m`) builds a real `WorkSpaceTree`
+and checks the raw `jsonencode`'d shape of `Component.Data` at 0, 1, and
+2 nodes, asserting `nodes` always starts with `[` -- the JSON *text*
+itself, since `jsondecode` collapses a genuine one-element array back to
+a scalar struct too, so a decoded round-trip can't tell a real
+single-element array apart from the bug it's meant to catch.
+
+## Surfacing JS-side tree render failures as a real, readable warning
+
+Immediate follow-up, prompted by the diagnosis cost of the bug above:
+the only visible symptom on the MATLAB side was a vague, generic
+"HTMLSource may be referencing unsupported functionality or may have a
+JavaScript error" console warning, with no message, no stack trace, and
+no indication of which tree or what actually went wrong -- because
+`uihtml`'s JS runs inside its own embedded CEF browser process, and a
+JS exception there has no language-level bridge back into MATLAB. It
+just dies in that browser's own (invisible from MATLAB) devtools
+console unless something explicitly reports it back.
+
+`src/webtree/src/bridge.js`'s `applyData` (previously bare, no
+try/catch around `tree.setNodes(...)`) now wraps that call: on an
+exception, it `console.error`s the real error (in case devtools ever is
+attached) and, more importantly, sends a new `renderError` event back to
+MATLAB via `sendEventToMATLAB('renderError', {message, stack})` --
+`String(e.message)`/`String(e.stack)`, so it survives the MATLAB<->JS
+JSON bridge as plain text regardless of `Error` object serialization
+quirks. `WorkSpaceTree.m` gained a matching `RenderErrorFcn` callback
+property (alongside the existing `SelectionChangedFcn`/`NodeDroppedFcn`/
+etc. family) and an `onEvent` case dispatching to it with
+`struct('Message', d.message, 'Stack', d.stack)`. `WorkSpace.
+CreateTreeComponent.m` wires both trees' `RenderErrorFcn` to a new
+`Alakazam.onTreeRenderError(this, eventData, sourceTree)`, which names
+which of the two trees failed (`Workspace.GrandAveragesTree` vs. the
+data tree, compared via `isequal(sourceTree, ...)`) and prints the real
+message and stack via `warning('Alakazam:treeRenderError', ...)` -- a
+warning rather than a dialog, since this always indicates an actual bug
+in `src/webtree`, not something the analyst did wrong or can act on
+beyond reporting it.
+
+Verified end to end against the real bundled JS, not just individual
+pieces in isolation: fed `bridge.js`'s real `setup()` function the exact
+bare-object payload that caused the original bug and confirmed it now
+sends a `renderError` event carrying the real message
+(`"nodes is not iterable"`) and a real stack trace naming `setNodes`,
+rather than silently failing. A new headless MATLAB test
+(`test_tree_render_error_surfaced.m`) drives a real `WorkSpaceTree`
+through its actual `HTMLEventReceivedFcn` with that exact payload,
+confirms `RenderErrorFcn` receives the real message and stack, and
+confirms a replica of `onTreeRenderError`'s own warning formatting
+produces readable, specific output naming the tree and the error --
+composed together, this closes the loop from "silent blank tree with a
+useless warning" to "a specific, actionable MATLAB warning naming
+exactly what broke." `checkcode` clean on `WorkSpaceTree.m`,
+`Alakazam.m`, `@WorkSpace/CreateTreeComponent.m`. `dist/alakazam-tree.html`
+copied to `src/WorkSpaceTree.html`; the existing `test_node.mjs` suite
+(which bundles only `alakazam-tree.js`, not `bridge.js`) still passes
+unchanged.
+
+## Export: Grand Averages to an R-compatible CSV
+
+First real export capability in the app (`dependencies.md`'s own
+gap-analysis audit had flagged that `ExportsDirectory` was a configured-
+but-unused setting -- nothing anywhere ever wrote into it). Added a
+"Export Grand Averages..." button to the ribbon's Grand Average tab,
+right alongside the existing "Define Grand Average...", with a new
+hand-drawn icon (`src/Icons/ExportGrandAverages.svg`, matching the rest
+of the icon set: 24x24 viewBox, `#4a7fc9` stroke, `fill="none"` -- a
+small data table with an arrow breaking out of it, for "tabular data
+leaving the app").
+
+**Scope: bulk, not per-node.** One button exports *every* Grand Average
+currently in `Workspace.GrandAveragesTree` into a single CSV, rather than
+requiring a tree selection first -- the simplest possible UI for "get
+everything I've computed into R", and the long/tidy output format (below)
+already carries a `grand_average` column to filter/facet by on the R
+side, so a combined file loses nothing a per-file export would have kept.
+
+**Format**: long/tidy, not a wide channel x time matrix -- one row per
+(grand average x bin x channel x time point), columns `grand_average,
+bin, channel, time_ms, amplitude, sem, n_subjects`. This is what R's
+`read.csv()` + `ggplot2`/`dplyr` expect directly with no reshape needed
+(`ggplot(df, aes(time_ms, amplitude, colour = bin)) + geom_line() +
+facet_wrap(~channel)`). `n_subjects` (constant per grand average) is
+written as `NA` when unknown; an individual `NaN` amplitude/sem sample
+is left as literal `NaN` text rather than forced to `NA`, since forcing
+it would break the vectorized numeric write for what is the exception
+case, not the rule -- confirmed R's own `as.numeric()`/`read.csv()`
+parse `"NaN"` into R's own `NaN` correctly either way (`is.na(NaN)` is
+`TRUE` in R), so both spellings resolve to "missing" on the R side.
+
+**New files/methods**:
+- `src/exportGrandAveragesCSV.m` -- the actual writer, a plain function
+  (not a method) taking a `WorkSpaceTree.allNodes()`-shaped struct array
+  and a target path, kept separate from `Alakazam.m` the same way
+  `GrandAverage.m` (computation) is already kept separate from
+  `Alakazam.saveGrandAverage` (UI orchestration). Writes one `fprintf`
+  call per (grand average x bin x channel) -- the row-constant text
+  fields (grand average name, bin label, channel label, n_subjects) are
+  baked into that call's format string as literal text (`%%`-escaped
+  around the numeric placeholders that do cycle), and the whole time
+  series is written in one shot via `fprintf`'s normal numeric-matrix
+  cycling -- not one `fprintf` per row, which would mean hundreds of
+  thousands of calls for a realistic dataset. Confirmed fast in practice:
+  23,808 rows (31 channels x 256 samples x 3 bins, the user's own real
+  `tester.mat`) exported in 0.14s.
+- `WorkSpaceTree.allNodes()` -- new public accessor returning every
+  current node in the same `struct(Id,Name,UserData,IsRoot)` shape
+  `SelectedNodes`/`addNode` already use. Added rather than having
+  `Alakazam.m` reach into `Component.Data` directly, since `Alakazam.m`
+  never does that anywhere else -- every other tree read goes through a
+  proper `WorkSpaceTree` accessor, and this keeps it that way.
+- `Alakazam.onExportGrandAverages` -- ribbon dispatch target
+  (`onRibbonAction`'s new `'exportGrandAverages'` case): guards against
+  zero grand averages (`msgbox`, not silently exporting an empty file),
+  prompts via `uiputfile` defaulting into `Workspace.ExportsDirectory`,
+  wraps the actual write in the same watch-cursor/`onCleanup` pattern
+  `rawclear.m` already established this session, and reports success/
+  failure via `msgbox`/`warndlg` matching `onDefineGrandAverage`'s own
+  existing error-handling convention.
+
+Verified: `checkcode` clean on `AlakazamRibbon.m`, `Alakazam.m`,
+`WorkSpaceTree.m`, `exportGrandAveragesCSV.m`. Ran the exporter directly
+against the user's real `tester.mat` grand average and confirmed: row
+count exactly matches `nChan x nSamples x nBins`; the file round-trips
+cleanly through `readtable` with every column inferring the expected
+type (text for `grand_average`/`bin`/`channel`, numeric for the rest) --
+exactly what R's `read.csv()` would also infer. Ran the full path a
+second time through a real `startAlakazam()` instance
+(`Workspace.GrandAveragesTree.allNodes()` -> `exportGrandAveragesCSV`),
+confirming the real, live tree enumeration and exporter work together
+correctly, not just in isolation. Confirmed the ribbon itself actually
+exposes the new button: dumped `AlakazamRibbon`'s real `Component.Data`
+JSON and found `exportGrandAverages` present with the correct label,
+tooltip, and a properly base64-encoded `data:image/svg+xml` icon.
+`uiputfile`'s own interactive dialog cannot be driven headlessly, so the
+save-path-selection step itself was not exercised end-to-end; everything
+around it (guard, exporter, tree enumeration, ribbon wiring) was.
+
+## New transformation: TimeFrequency (wavelet ERSP plots, Plots section)
+
+A new pure-plot transformation, `src/Transformations/TimeFrequency/`,
+added to the ribbon's existing "Plots" group (alongside
+`ScalpDistribution`). Computes an event-related spectral perturbation
+(ERSP) heatmap per bin: complex Morlet wavelet convolution against every
+trial in a bin, variable wavelet cycles growing linearly with frequency
+(EEGLAB `newtimef`'s own time/frequency-resolution tradeoff -- few cycles
+at low frequencies for temporal precision, more at high frequencies for
+spectral precision), single-trial power averaged across a bin's trials,
+then dB-baseline-corrected against a user-set pre-stimulus window. One
+tile per bin (up to 3 per row, matching `ScalpDistribution`'s own tiling),
+a shared symmetric colour scale across every bin so they stay visually
+comparable, and a hand-built diverging blue/white/red colormap centred on
+0 dB (MATLAB ships no built-in diverging colormap). Every channel x bin
+is computed once up front with a progress bar; Up/Down arrow keys then
+just re-slice the already-computed array and redraw -- instant, rather
+than re-running the wavelet convolution live on every channel step (which
+would be multi-second-per-keypress, unlike this app's other keyboard-
+driven views).
+
+**New files**:
+- `src/Transformations/TimeFrequency/TimeFrequency.m` -- the
+  transformation entry point: validates `DataFormat == 'EPOCHED'` and a
+  non-empty `bindesc` (time-frequency power needs individual trials, not
+  an already-averaged ERP), a `uiextras.settingsdlg` options dialog
+  (frequency range, wavelet cycles, baseline window) remembered
+  per-workspace via `TransformSettings` (matching `Baseline.m`'s
+  pattern), builds the tiled `uifigure`/`uiaxes` heatmap grid, and owns
+  the arrow-key channel-stepping.
+- `src/Transformations/+TransTools/ComputeErsp.m` -- the actual wavelet
+  computation, pulled out of `TimeFrequency.m` into the existing
+  `+TransTools` shared-helper package (alongside `CreateFilter.m`/
+  `WindowByName.m`) specifically so it can be called and verified
+  directly, without going through `TimeFrequency.m`'s own blocking
+  options dialog. One shared `nfft` (sized for the widest/lowest-
+  frequency wavelet) lets each trial's FFT be computed once and reused
+  across every frequency's wavelet multiplication. A bin with no matched
+  trials leaves its slice of the output as `NaN` rather than erroring.
+- `src/Transformations/TimeFrequency/TimeFrequency.json`,
+  `TimeFrequency.png` (24x24 RGBA icon, built directly as a MATLAB pixel
+  array via `imwrite(..., 'Alpha', ...)` rather than rasterized from SVG
+  -- no SVG rasterization tool, e.g. `rsvg-convert`/`inkscape`/`magick`/
+  `cairosvg`, is available on this machine), and `src/Icons/
+  TimeFrequency.svg` (hand-drawn SVG design source, matching the PNG's
+  exact grid/opacity layout, added per the user's specific request for
+  an SVG version alongside the PNG -- following the existing
+  `Fourier.svg`/`Average.svg`/etc. source-alongside-runtime-PNG
+  convention).
+
+**API pitfalls caught while building this** (both fixed before this was
+considered done, not left as latent bugs): `TransTools.progressbar` has
+no output argument and uses `persistent` internal state (a first draft
+wrongly assumed a handle-returning API, `h = progressbar(0, 'title')`,
+matching neither the real signature nor `Fourier.m`'s actual usage); and
+a bin with zero matched trials has to still call `TransTools.progressbar`
+in its skip branch, not just advance the internal counter, or a dataset
+whose *last* bin happens to be empty would never send the
+`fractiondone==1` call that auto-closes the popup.
+
+**MATLAB subfunctions aren't independently testable**: the ERSP
+computation started as a local function inside `TimeFrequency.m`, then
+had to be extracted to `+TransTools/ComputeErsp.m` once it became clear a
+local function can't be called from an external test script without
+going through the file's own blocking dialog -- this is the concrete
+reason `ComputeErsp.m` exists as a separate file rather than staying
+inline.
+
+Verified: `checkcode` clean on both `TimeFrequency.m` and
+`ComputeErsp.m`. Built a synthetic epoched dataset (40 trials, 3
+channels, two bins) with a real, randomly-phased 10 Hz sinusoidal burst
+injected into one bin only during a post-stimulus window (200-600 ms),
+absent from the pre-stimulus baseline and from the second, deliberately
+empty bin. `TransTools.ComputeErsp` correctly reported +26.9 dB at ~10 Hz
+during the burst window vs. +0.5 dB outside it and +0.4 dB at a
+far-off (~31 Hz) frequency during the same window -- confirming the
+wavelet convolution, trial-averaging, and baseline correction are all
+correct together, and that the result is properly time- and frequency-
+specific, not just generally noisy. The empty second bin came back
+entirely `NaN` with no crash. Separately confirmed ribbon discovery:
+constructed a real `AlakazamRibbon` against the actual
+`src/Transformations` folder and dumped its `Component.Data`, confirming
+`TimeFrequency` is grouped into the "Plots" ribbon section alongside
+`ScalpDistribution` with a correctly base64-encoded PNG icon. Confirmed
+`TimeFrequency.png`'s format (24x24, truecolor+alpha, 24-bit) exactly
+matches an existing icon (`Average.png`) via `imfinfo`. Not yet
+exercised: the actual UI (options dialog, heatmap rendering, arrow-key
+stepping) through a live `startAlakazam()` session -- `uiextras.
+settingsdlg` blocks on user input and can't be driven headlessly, so this
+still needs a manual interactive check.
+
+## TimeFrequency: converted from a pure plot to a persisted, tree-node result
+
+Follow-up to the above: TimeFrequency (and, in spirit, ScalpDistribution --
+see the next section) started as a "pure plot" transformation (see
+`Alakazam.onTransformation`'s `ishandle(result.EEG)` short-circuit): it
+returned a graphics handle, so nothing was persisted or added to the tree,
+matching `ScalpDistribution`'s existing precedent. On request, TimeFrequency
+is now a normal, persisted transformation instead -- it gets a tree node
+under the epoched dataset it was run on, and opens in its own tab in
+`PlotsTabGroup`, the same way `Average`/`Fourier` results do.
+
+**Signature change**: `[pfigure, ropts] = TimeFrequency(input, ~)` ->
+`[EEG, opts] = TimeFrequency(varargin)`, matching `Fourier.m`'s own
+1-or-2-arg contract exactly (`TimeFrequency(input)` pops the options
+dialog and stores the choice in `TransformSettings`; `TimeFrequency(input,
+opts)` replays with a stored options struct and no dialog -- the form used
+when a branch bearing this transformation is dragged onto another
+dataset). All the validation and the `TransTools.ComputeErsp` call are
+unchanged; the returned `EEG` is `input` carried forward (`.data`,
+`.chanlocs`, `.bindesc`, etc. all untouched and still meaningful) plus two
+new fields, `.ersp` and `.freqs`, that the new view draws from -- `.data`
+itself is deliberately left alone rather than overwritten, since TimeFrequency
+computes a derived visualization, not a reshape of the same signal (unlike
+`Average`, which does replace `.data`).
+
+**New file**: `src/TimeFrequencyView.m` -- a new View class (the app's
+fifth: `EpochView`/`AverageView`/`FourierView`/`SignalView` were the only
+family members before this, and none of them draw a multi-tile grid, so
+this establishes that pattern for the first time). Follows the existing
+View contract exactly: `(fig, eeg)` constructor building into the given
+uitab directly (no owned `uifigure` of its own, unlike the transformation's
+previous pure-plot incarnation), a public `redraw()`, a public `onKey`
+handling up/down arrow channel-stepping, and the `ActivatedFcn`/
+`notifyActivated()` boilerplate every other View class carries. Internally
+it is the previous pure-plot version's own tile-grid/heatmap/colormap code,
+relocated wholesale from a standalone `uifigure` into `uigridlayout`/
+`uiaxes` children of the tab.
+
+**Dispatch**: `AlakazamPlotter.plotEpoched` checks `eeg.id` (stamped by
+`Alakazam.persistResultNode` to the transformation's own id, and -- unlike
+`.DataFormat`/`.DataType` -- unique enough to identify "this specific
+transformation's result needs a dedicated view") before falling through to
+the existing `DataFormat`/`DataType` routing: a TimeFrequency result is
+still `DataFormat = "EPOCHED"` with `trials > 1`, so without this check it
+would silently fall into `EpochView`, which cannot draw an ERSP heatmap.
+Added `"TimeFrequencyView"` to `Alakazam.dispatchKey`'s hardcoded view-name
+list too, or its arrow-key channel-stepping would never receive events.
+
+**A real bug caught by testing, not just checkcode**: `uilabel.Layout.
+Column = [1 nCols]` throws ("must be ... a 1x2 increasing array") when
+`nCols == 1` (a single-bin dataset) -- `[1 1]` is not strictly increasing.
+This exact pattern existed unchanged in the pre-conversion `TimeFrequency.m`
+too, but was never actually exercised with a single-bin dataset by any
+earlier test in this project (every prior functional test used 2+ bins).
+Fixed in `TimeFrequencyView`'s constructor: set the label's `Layout.Column`
+to a plain scalar `1` when `nCols == 1`, the `[1 nCols]` range only when
+`nCols > 1`.
+
+Verified: `checkcode` clean on `TimeFrequency.m`, `TimeFrequencyView.m`,
+`AlakazamPlotter.m`, `Alakazam.m`. A full headless functional test built a
+minimal stand-in "app" (just the `PlotsTabGroup`/`MainFigure`/
+`registerTileClick`/`refreshPlotsView` surface `AlakazamPlotter.plotCurrent`
+actually touches) and drove the real, unmodified `AlakazamPlotter` +
+`TimeFrequencyView` classes end to end: confirmed the 2-arg replay form
+returns a real, correctly-shaped struct (not a handle); confirmed
+`plotCurrent` creates exactly one tab, tagged with the result's own file
+path (the tab-reuse/close/tile key every other transformation relies on);
+confirmed it dispatches specifically to `TimeFrequencyView` and *not* also
+to `EpochView`/`AverageView`/`FourierView`; exercised up/down arrow-key
+channel stepping including edge clamping, and confirmed the redrawn tile's
+`CData` actually matches the newly-selected channel's ERSP slice (not just
+that `redraw()` ran without erroring); confirmed a second `plotCurrent()`
+call for the same result file reuses the existing tab rather than
+duplicating it. Separately re-tested with a 4-bin dataset (2x3 tile grid,
+wrapping rows) to regression-guard the `Layout.Column` fix's `nCols > 1`
+branch. Not yet exercised: the real interactive UI end to end (options
+dialog, drag-and-drop replay onto a sibling dataset, right-click tab
+close, Grid/Stack tiling) through a live `startAlakazam()` session.
+
+## TimeFrequency: two user-reported bugs, both fixed
+
+Two real bugs reported after the conversion above, both fixed in
+`TimeFrequencyView.m`/`TransTools/ComputeErsp.m`:
+
+**Axes not tightly bound to the data's real range.** `imagesc(ax, x, y,
+C)` sets `XData`/`YData` but does not itself constrain `XLim`/`YLim` to
+those vectors' extent -- axes default to "auto" limits, which MATLAB
+rounds out to the next "nice" tick value (e.g. a 1000 ms epoch spanning
+-200 to 800 ms was shown with an axis running -400 to 800 ms; 0-40 Hz
+shown as 0-45 Hz). Fixed by pinning each tile's axes explicitly:
+`xlim(ax, [eeg.times(1), eeg.times(end)]); ylim(ax, [eeg.freqs(1),
+eeg.freqs(end)]);`, right after the `imagesc` call in
+`TimeFrequencyView`'s constructor.
+
+**A difference/combo bin ("Effect = bin2 - bin1") rendered as a solid,
+meaningless block.** Root cause: `DefineBins.m` leaves `bindesc(b).trials
+= []` for a combination bin (it has no trials of its own -- see
+`DefineBins.m:701`, `binRecord`), so `ComputeErsp`'s existing
+empty-trials guard left its whole `ersp(:,:,:,b)` slice as `NaN`. NaN
+pixels render using the colormap's edge colour rather than a distinct
+"missing" colour, which is exactly what looked like "a full, massive
+blue block" (the diverging colormap's low end). `Average.m` already has
+the right pattern for this exact kind of bin (`Average.m:81-143`):
+resolve combo bins in dependency order, computing each as the
+coefficient-weighted sum of the bins its `.combo` struct array
+references. Ported the same scheme into `ComputeErsp.m`: after computing
+every ordinary (non-combo) bin's ERSP as before, a second pass walks
+combo bins in dependency order (repeating until every one resolves or a
+pass makes no further progress, so a combo-of-a-combo, e.g. an
+interaction effect, still works) and sets `ersp(:,:,:,b) = sum(coeff_t *
+ersp(:,:,:,refPos_t))`. This is a legitimate operation specifically
+because ERSP is already in dB (log-power): a signed sum of dB values
+across bins is exactly the standard ERSP contrast/difference map
+convention, the same reasoning that lets `Average.m` sum plain voltage
+averages (linear to begin with) for the same kind of bin. The
+progress-bar's `total` denominator now only counts non-combo bins (the
+combo pass itself is cheap arithmetic, not wavelet convolution, so it
+needs no progress reporting of its own); guarded the pathological
+all-combo-bins case (`total` would otherwise be `0/0`) by flooring
+`total` at 1 and force-closing the popup if no ordinary bin ever ran.
+
+Verified: extended the headless test suite with a 3-bin synthetic
+dataset (two ordinary bins with disjoint trial subsets, plus a genuine
+`DefineBins`-shaped combo bin -- `.combo = struct('coeff', {1,-1}, 'bin',
+{2,1}, ...)`, referencing the other two bins **by their `.index` field,
+not array position**, matching `DefineBins.m`'s real convention).
+Confirmed the difference bin's ERSP is no longer `NaN`/constant, and is
+**exactly** bin 2's ERSP minus bin 1's ERSP element-for-element (max
+absolute difference < 1e-9), not merely "some now-plausible numbers".
+Confirmed the two ordinary bins are still computed normally (the
+`isCombo` filtering did not accidentally skip real bins). Separately
+confirmed every tile's `XLim`/`YLim` after construction exactly equals
+`[eeg.times(1) eeg.times(end)]`/`[eeg.freqs(1) eeg.freqs(end)]` for a
+deliberately "non-round" epoch window (-200 to 800 ms), not MATLAB's
+auto-rounded bounds. Re-ran every previous TimeFrequency test (the 10 Hz
+burst-detection test and the full tree/tab/`AlakazamPlotter` end-to-end
+test) to confirm neither fix regressed anything already verified;
+`checkcode` clean on both changed files.
+
+**Follow-up**: every tile shares the same frequency range, one shared
+colour scale, and one shared colorbar already, so repeating the
+frequency-axis ticks/label on every single tile was pure clutter. Only
+the leftmost tile in each row (`col == 1`) now shows `ylabel(ax,
+"Frequency (Hz)")`; every other tile has `ax.YAxis.Visible = "off"`
+(hides the ruler -- ticks, tick labels, axis label -- but not the
+plotted data itself). Verified directly against a 5-bin (2-row, `nCols =
+3`) grid: bins 1 and 4 (column 1 of each row) have `YAxis.Visible ==
+"on"`, every other bin has it `"off"`.
+
+## ScalpDistribution: initially NOT converted -- a real topoplot/uiaxes conflict (superseded, see below)
+
+Attempted the same conversion for `ScalpDistribution` (also requested), but
+hit a genuine, confirmed architectural blocker before writing any
+conversion code: `ScalpDistribution.m`'s own existing comments already flag
+that EEGLAB's `topoplot` needs a classic figure (`gca`/`gcf`, direct legacy
+patch calls), which is why it currently opens its own classic `figure()`
+rather than a `uifigure` -- `PlotsTabGroup`'s tabs, however, are
+`uifigure`-family only.
+
+Tested directly (not just inferred from the comment) whether that
+constraint still holds in this MATLAB version: `uicontrol` and `axes(...)`
+targeting a `uiaxes` inside a `uitab` both now run without error (an
+apparent relaxation in recent MATLAB versions of what used to be a hard
+block) -- but `topoplot` itself, called that way, silently draws **zero
+graphics children** into the target `uiaxes` rather than actually
+rendering the scalp map, and `axes(uiaxesHandle)` turned out to still
+create/switch to a brand-new separate classic axes elsewhere rather than
+truly making the `uiaxes` current. So the failure mode moved from "throws
+an error" to "silently renders nothing" -- arguably worse, since it would
+not be caught by casual testing. `ScalpDistribution` therefore still opens
+its own classic-figure pure plot, unconverted, pending a decision on how to
+resolve this (see the conversation for the options discussed: hand-rolling
+a `uiaxes`-compatible scalp-topography renderer without `topoplot`, versus
+a lighter-weight compromise).
+
+## Tree drag threshold: a click with slight cursor movement was registered as a drag
+
+Reported: "clicking a tree branch, then moving the cursor while clicking,
+gets registered as a drag." Root cause: two compounding bugs in the
+vendored `yy-tree` dependency (`src/webtree/node_modules/yy-tree`, pulled
+in at build time, not part of this repo's own source), confirmed directly
+against its real source rather than assumed:
+
+1. `Input._checkThreshold` (`yy-tree/src/input.js`) computes the mouse-move
+   distance since mousedown but only checks its **truthiness**, never
+   actually compares it against any threshold -- so literally any cursor
+   movement at all, even a single pixel of ordinary mouse jitter during a
+   click, immediately starts a drag.
+2. The `threshold` constructor option `yy-tree`'s own JSDoc documents
+   (`@param {number} [options.threshold=10] number of pixels to move to
+   start a drag`) is a dead option: `defaults.js` declares it and `Tree`'s
+   constructor accepts it into `this._options`, but `Tree` never exposes it
+   via a getter (unlike every *other* documented option -- `move`,
+   `select`, `holdTime`, etc. all have one) and nothing in the library ever
+   reads it back. So even fixing bug 1 to compare against `tree.threshold`
+   compares against `undefined`, which is never `> anything` -- confirmed
+   empirically (a debug script showed `tree._tree.threshold === undefined`
+   even after passing `threshold: 10` in the constructor options) before
+   settling on a fix, not assumed.
+
+**Fix** (`src/webtree/src/alakazam-tree.js`): patched as a runtime instance
+override, `this._tree._input._checkThreshold = function (e) {...}`, right
+after `new Tree(...)` in the constructor -- not a source edit, since
+`yy-tree` is a vendored npm dependency, not part of this file. Compares the
+real Euclidean distance against a new local constant,
+`DRAG_THRESHOLD_PX = 10`, defined in this file rather than trying to read
+back `tree.threshold`/`tree._options.threshold` (the latter would work,
+since `_options` does hold the value, but reaching into a documented-as-
+private, `_`-prefixed field of a third-party library for a value it never
+itself honours is worse than just owning the constant outright). Logic is
+otherwise identical to the original `_checkThreshold`.
+
+**Node.js is actually available in this environment** (`v24.18.0`,
+confirmed via `node --version`), contrary to an earlier, now-stale note in
+this project (`src/webtree/README.md`/an earlier planning doc claimed no
+Node install existed anywhere on the machine). This fix was therefore
+built and verified the *right* way -- edit `alakazam-tree.js`, run the real
+`npm run build` (`esbuild` -> `assemble.mjs`), and copy the real output
+over `src/WorkSpaceTree.html` -- rather than hand-syncing the two files by
+inspection, eliminating any risk of manual transcription drift. (A first
+attempt at this fix *was* hand-synced into `WorkSpaceTree.html` before
+Node was confirmed available; diffing it against the first real build
+afterwards showed it was byte-identical modulo line endings, but it also
+carried forward the exact same "compares against `tree.threshold`, which
+is `undefined`" mistake the real build's own test run then caught -- see
+below. That hand-edit was fully superseded by the real, tested build
+before landing.)
+
+**Caught by the project's own test suite, not manual inspection**: the
+existing `src/webtree/test_node.mjs` regression suite (also run via a real
+`node test_node.mjs`, previously believed to need Node too) already had
+two `down(x, 10, 10); move(15, 15)` calls meant to simulate crossing the
+drag threshold, with a comment explicitly acknowledging they relied on the
+*old, buggy* "any movement at all" behaviour ("any non-zero movement
+crosses yy-tree's threshold check"). Distance from (10,10) to (15,15) is
+~7.07px -- comfortably *under* the new, correctly-enforced 10px threshold
+-- so fixing the bug correctly broke these two pre-existing tests
+(`AssertionError: sanity: dragging cursor should be on mid-drag`), which is
+exactly what should happen to a test that was unknowingly depending on the
+bug. Updated both to `move(30, 30)` (~28px, clearly past threshold) and
+corrected their comments. Added a new dedicated regression test for the
+actual reported bug: mousedown, a small `move(13, 12)` (~3.6px, well under
+threshold), then mouseup on a *different* node (so as not to disturb the
+adjacent double-click test's own timing-sensitive state) -- asserts
+`_moving` never became true and the interaction still produces exactly one
+`nodeClicked` event, not a drag.
+
+Verified: `node src/webtree/test_node.mjs` -- the full suite (render/
+click/double-click/context-menu, drop-always-reverts logic, drag-cursor/
+busy-cursor/drop-target-highlight toggling, the mouseleave-mid-drag grace-
+period state machine, and the new sub-threshold-jitter test) passes
+against the real, freshly-built bundle. Confirmed genuine real drags (a
+deliberate move well past 10px) still work correctly throughout -- this
+was not a blanket "never drag" fix, only a "don't drag on tiny, accidental
+movement" fix. `src/WorkSpaceTree.html` was regenerated by the real build
+pipeline (`npm run build` in `src/webtree/`), not hand-edited.
+
+## ScalpDistribution: converted after all -- ported topoplot() instead of calling it
+
+Follow-up to the section above: asked to revisit this specifically ("we
+have the sources...") -- since EEGLAB's `topoplot.m` is plain, readable
+MATLAB source (not a compiled/mex black box), the actual fix was to port
+its core algorithm to a new `TransTools.DrawScalpMap.m`, targeting an
+explicit axes handle throughout (`surface(ax,...)`, `contour(ax,...)`,
+`patch(ax,...)`, `plot(ax,...)`) instead of `topoplot`'s own implicit
+`gca`/`gcf` state, rather than trying to coerce `topoplot()` itself into
+working inside a `uiaxes`.
+
+**Scope**: `DrawScalpMap` is a restricted port, not a general
+reimplementation of every `topoplot` option -- only the exact code path
+`ScalpDistribution.m`'s own call used (`STYLE='both'`, `SHADING='flat'`,
+`ELECTRODES='on'`, `EMARKER='.'`, `headrad=rmax=0.5`, `CONVHULL` off, no
+`EMARKER2CHANS`/grid/colorbar): interpolate electrode values onto a 67x67
+grid via `griddata(...,'v4')` (a pure computation, no graphics dependency
+at all, hence no porting needed there), mask outside the head circle,
+draw the colour-filled surface + 6 contour lines, a masking ring to hide
+the jagged grid boundary, the cartoon head/nose/ears outline (fixed
+geometry, ported verbatim from `topoplot.m`'s own hand-drawn `EarX`/`EarY`
+point arrays), and electrode marker dots.
+
+**A real, non-obvious coordinate bug caught only by testing against the
+actual template data, not documentation**: `topoplot.m`'s own help text
+states "0 deg. points to the nose," which was the natural first
+assumption for the pol2cart-based coordinate swap `DrawScalpMap` needed
+(`[px,py]=pol2cart(theta,radius)`, plotted as `(py,px)`). Verified this
+directly against the real `Dipfit1005File` standard 10-5 template (not
+assumed) and found it does **not** hold for that template's raw
+`chanlocs.theta`: frontal/occipital electrodes (Fpz, Fz, Oz) landed on the
+*horizontal* axis, not vertical. Root cause: `topoplot.m` **always**
+re-derives `Th`/`Rd` via a second `readlocs(loc_file)` call internally
+(`topoplot.m:692-694`), even when already given a struct with `.theta`/
+`.radius` set -- so a template's raw `.theta`/`.radius` fields are not
+necessarily what `topoplot()` would actually plot with. Fixed by calling
+the identical `readlocs(chanlocs)` inside `DrawScalpMap` too (using its
+`Th`/`Rd`/`indices` outputs, reordering/subsetting `values` to match
+`indices` exactly as `topoplot.m` does with its own `Values(indices)`),
+rather than trusting the raw struct fields or a theoretical convention
+from the help text.
+
+**Verified against the real `topoplot()`, not an independent guess**:
+built a real 6-channel test set (Fpz/Fz/Cz/Oz/T7/T8, resolved against the
+real 10-5 template), ran the actual `topoplot(values, chanlocs,
+'electrodes','labelpoint')` in a classic figure, and read back its own
+drawn electrode-marker `Line` object's `XData`/`YData` directly (not the
+accompanying text labels -- `topoplot.m:1554` deliberately offsets each
+label's text position by `+0.01` horizontally for on-screen readability,
+which is a red herring for marker-position comparison and cost one
+debugging round-trip before being traced to that exact line). Compared
+against `DrawScalpMap`'s own drawn marker positions for the identical
+input: **exact match to floating-point precision (error 0.00000) on
+every one of the 6 electrodes.**
+
+**Conversion** (mirroring the same pattern as `TimeFrequency.m`/
+`TimeFrequencyView.m`): `ScalpDistribution.m` is now `[EEG, opts] =
+ScalpDistribution(input, opts)` (matching `Average.m`'s minimal-options
+pattern -- it never had a real dialog). It resolves scalp positions once
+(the expensive template lookup) and computes one shared, symmetric colour
+scale across the *whole* dataset (every bin, every instant -- not just
+whichever bins happen to be ticked at transform-time, so the scale stays
+stable regardless of later tick changes), stamping `.ScalpChanlocs`/
+`.ScalpHasPos`/`.ScalpMapLimit` onto the result. All drawing -- including
+the actual live, cheap-enough-to-redo-per-frame `griddata` interpolation
+-- moved into the new `ScalpDistributionView` (`src/ScalpDistributionView.m`),
+the app's 6th View class: a tile grid (up to 3 per row, wrapping, the
+`Layout.Column` `[1 1]`-rejection fix from `TimeFrequencyView` reused
+here directly) plus a `uislider` (uifigure-native -- its
+`ValueChangingFcn` fires continuously during the drag itself, the
+uifigure-native equivalent of the previous classic-`uicontrol`-slider's
+`PostSet`-listener trick, and arguably simpler; no more `positionGuard`
+timer either, since `DrawScalpMap`'s `uiaxes` don't suffer the
+colorbar-shrinks-my-axes quirk `topoplot`'s classic axes did).
+
+**A layering fix required by the conversion itself**: the "only draw bins
+ticked in the sibling AverageView tab" logic used to run *inside* the
+transformation function, where `EEG.File` still pointed at the parent
+Average dataset (before `Alakazam.persistResultNode` overwrites it with
+this result's own new cache path). Moving that lookup into the View (the
+only place with access to sibling tabs at all) broke it silently at
+first, since by the time the View runs, `eeg.File` is already this
+result's *own* file, not the parent's -- the AverageView sibling tab is
+tagged with the parent's file, so the lookup never found it. Fixed by
+having `ScalpDistribution.m` stash the parent's file explicitly as
+`EEG.ScalpSourceFile = input.File` before returning (captured while
+`input.File` still is the parent), with `ScalpDistributionView` looking
+up siblings by that field instead of `eeg.File`. Also softened the
+"every bin unticked" case from a hard error (the pure-plot version's own
+behaviour) to a fallback showing every bin -- appropriate now that this
+is a real, persisted, reopenable result rather than a one-shot plot.
+
+Verified end-to-end: a real 2-bin synthetic Averaged dataset (6 real
+10-5-labelled channels) run through `ScalpDistribution`, confirmed the
+result carries resolved positions/map limit; drove the real, unmodified
+`AlakazamPlotter` + `ScalpDistributionView` (same minimal stand-in "app"
+technique as the `TimeFrequency` tests) and confirmed it dispatches to
+`ScalpDistributionView` specifically (not `AverageView`, the collision
+this id-check guards against, since a `ScalpDistribution` result is still
+`DataFormat="AVERAGED"`/`trials==1`); confirmed the no-sibling-tab
+fallback draws every bin with the correct shared `CLim`; confirmed
+`redraw()` updates every tile and the time label without error; built a
+*real* `AverageView` as a sibling tab, unticked one bin by driving its
+actual `uicheckbox` (`Value` + firing its real `ValueChangedFcn`, not
+reaching into the private `Visible` property directly), and confirmed a
+freshly-constructed `ScalpDistributionView` correctly draws only the
+still-ticked bin. Re-ran every `TimeFrequency` test afterward to confirm
+the shared `AlakazamPlotter.plotEpoched` edit didn't regress anything
+already verified there. `checkcode` clean on
+`ScalpDistribution.m`/`ScalpDistributionView.m`/`DrawScalpMap.m`/
+`AlakazamPlotter.m`. Confirmed via a real `AlakazamRibbon` instance that
+`ScalpDistribution` is still correctly discovered in the "Plots" ribbon
+group alongside `TimeFrequency` after the conversion. Not yet exercised:
+the real interactive UI (slider drag feel, tile click-to-activate in
+Grid/Stack mode) through a live `startAlakazam()` session.
+
+## ScalpDistribution: three follow-up fixes (orientation, slider labels, colorbar)
+
+Reported after the conversion above: "frontal electrodes are plotted on
+the right ear -- the Oz-Cz-Fpz line should point up," the slider's tick
+labels showed raw fractions, and the tile grid had no colorbar at all.
+
+**Rotation.** The unrotated coordinates `DrawScalpMap.m` computes
+(verified exactly against real `topoplot()` output, see the section
+above) put the template's anterior-posterior line on the horizontal axis
+for `Dipfit1005File`'s `standard_1005.elc` template, not vertical --
+anatomically valid (it is exactly what real `topoplot()` itself draws for
+this template) but not the conventional "nose up" cartoon-head
+orientation most EEG viewers expect. Rotated 90 degrees clockwise on
+request: `[a,b] = pol2cart(theta,radius)` (topoplot's own raw values,
+unchanged) then `horiz = a; vert = -b;` (previously `[px,py] =
+pol2cart(...)`, plotted directly as `(py,px)` with no rotation) -- the
+standard clockwise-rotation identity for a screen point `(h,v) -> (v,
+-h)`. Applied consistently everywhere `px`/`py` were previously used:
+the interpolation grid's sample/query coordinates, the `griddata` call,
+and the electrode marker plot. Verified two ways: (1) the existing
+exact-match-against-real-`topoplot()` test now compares against the
+*rotated* ground truth (`expected = [truthY(i), -truthX(i)]`) and still
+matches to floating-point precision on all 6 test electrodes; (2) a new,
+directly-readable anatomical assertion confirms Fpz lands well above
+centre, Oz well below, T7 well left, T8 well right.
+
+**Slider tick labels.** `uislider`'s own default `MajorTicks`/
+`MajorTickLabels` are 5 raw, evenly-spaced fractions of `Limits` --
+ugly whenever the time range's endpoints are not themselves round
+numbers. Fixed in `ScalpDistributionView`'s constructor: `MajorTicks` is
+now `round(linspace(times(1), times(end), 5))` and `MajorTickLabels` a
+matching `sprintf('%.0f', ...)` per tick, both set explicitly rather than
+relying on uislider's defaults.
+
+**Single shared colorbar.** Every tile in the grid always carries the
+same `CLim` (`DrawScalpMap` is always called with this dataset's one
+`ScalpMapLimit`), so one colorbar describes every tile at once -- added
+via `colorbar(this.Axes(min(nCols, nBins)))`, the exact same
+last-tile-of-the-first-row placement convention `TimeFrequencyView`
+already uses, labelled `"Amplitude (\muV)"` to match `AverageView`'s own
+y-axis wording.
+
+Verified: extended `test_scalpdistribution.m` with direct checks that
+`Slider.MajorTicks` exactly equals the expected 5 rounded values,
+`Slider.MajorTickLabels` are whole numbers with no decimal point and read
+back exactly as expected via `str2double`, and `findobj(fig, 'Type',
+'colorbar')` finds exactly one. Re-ran the full `ScalpDistribution` and
+`TimeFrequency` test suites afterward -- all still pass. `checkcode`
+clean on `DrawScalpMap.m` and `ScalpDistributionView.m`.
+
+## Shared colorbar was shrinking its target tile -- fixed in both grid views
+
+Reported: "the rightmost head now is plotted smaller." Root cause:
+`colorbar(this.Axes(min(nCols, nBins)))` attaches the colorbar directly
+to one real tile's axes, and MATLAB narrows that axes' own `Position` to
+make room for it -- confirmed directly (not assumed) with a minimal
+`uigridlayout` + two `uiaxes` test: the colorbar's target axes'
+`InnerPosition` width shrank by ~17% the moment `colorbar(ax)` was
+called, even with no aspect-ratio constraint at all. `ScalpDistributionView`
+made this far more visible than `TimeFrequencyView`: `DrawScalpMap.m`
+calls `axis(ax, 'square')` (matching `topoplot()`'s own behaviour), so
+narrowing that tile's width to fit the colorbar also shrinks its *height*
+to preserve the square aspect -- the exact same underlying mechanism the
+pre-conversion classic-figure version's own `positionGuard` timer used to
+fight (see its own comment, still in `migration.md`'s earlier
+`ScalpDistribution` section) -- but this time triggered by our own
+colorbar, not a user-added one, and inescapable rather than intermittent
+without a similar counter-measure. `TimeFrequencyView`'s `imagesc` tiles
+have no such constraint, so the same shrink there is real but subtler
+(width-only, no visible height change) -- checked directly and confirmed
+it was never actually fixed there either, despite being asked about "the
+trick from TimeFrequency": no such trick currently exists in that file.
+
+**Fix, applied to both views identically**: don't attach the colorbar to
+any real tile at all. Reserve an extra, narrow (56px) trailing grid
+column, create a dedicated `uiaxes` there with `Visible = "off"` and its
+`CLim` set to the shared scale (`ScalpMapLimit` / the constant `climAbs`
+computed over the whole `ersp` tensor), and attach the colorbar to that
+invisible axes instead (`colorbar(colorbarAxes)`). Verified directly with
+the same minimal reproduction: every real tile's `InnerPosition` is then
+completely unaffected, to the pixel, by the colorbar's presence. The
+hidden axes' `Layout.Row` spans every tile row (`[1, nRows]`, or a plain
+scalar `1` when `nRows == 1` -- same `[1 1]`-rejection guard as
+elsewhere) so the colorbar has the full grid height to draw across, not
+just one row's worth.
+
+Verified: added a direct size-parity check to both
+`test_scalpdistribution.m` and `test_timefrequency_fixes.m` (both already
+build multi-tile datasets) -- every tile's `InnerPosition` width/height,
+read after a real `drawnow`, now matches every other tile's exactly, for
+both views. Re-ran the full regression suite (`TimeFrequency`,
+`ScalpDistribution`, `DrawScalpMap` orientation) afterward -- all still
+pass. `checkcode` clean on `ScalpDistributionView.m`, `TimeFrequencyView.m`,
+`DrawScalpMap.m`.
+
+## ScalpDistribution slider: round-5 range and no minor-tick clutter
+
+Reported: "the slider does not need all the micro steps plotted below it
+(they should be reachable though...), and it's also not pretty-printed
+yet -- round the upper and lower values to the closest 5 or 0."
+
+**"Micro steps."** `uislider.MinorTicksMode` defaults to `"auto"`, which
+densely auto-generates an unlabelled minor tick mark roughly every `Step`
+(default `1`) between major ticks -- on a several-hundred-ms range that
+is a wall of clutter with no individually-readable meaning. Confirmed
+directly this is invisible when only inspecting the `MinorTicks`
+property headless (it stays `[]` until something actually triggers
+`"auto"` to materialise it), which is why it wasn't caught by the
+previous round's testing -- the property value itself doesn't reveal
+what `"auto"` mode will render. Fixed by locking `MinorTicksMode =
+"manual"` with `MinorTicks = []`: this only suppresses the *visual* tick
+marks, it does not touch `Step`/`Value` at all, so every point in
+between remains exactly as reachable by dragging as before -- verified
+directly by setting `Slider.Value` to an arbitrary non-tick fractional
+value (`-33.5`) and confirming it's accepted unchanged.
+
+**Round-to-5 range.** The slider's own end-to-end range
+(`eeg.times(1)`/`eeg.times(end)`) is rarely a round number (wherever the
+nearest sample happens to land), and `Limits` drives both the draggable
+range and, via `MajorTicks`, the printed tick labels -- so both were
+inconsistently un-pretty at the very ends even after the previous
+`MajorTicks` rounding fix. Fixed by rounding `Limits` itself to the
+nearest 5 (`roundTo5 = @(t) round(t/5)*5`) before constructing the
+slider, then deriving `MajorTicks` from the already-rounded `Limits`
+rather than the raw `eeg.times` bounds. A rounded endpoint landing a few
+ms past the true data edge is harmless: `redraw()` always maps whatever
+`Value` the slider lands on to the nearest real sample in `eeg.times`
+(its own `min(abs(eeg.times-t))` lookup), so it simply clamps to the
+nearest real edge sample rather than erroring or leaving a gap.
+
+Verified: extended `test_scalpdistribution.m`'s synthetic dataset to use
+deliberately non-round-5 endpoints (`times(1) = -197`, `times(end) =
+803`, previously exact multiples of 5 by coincidence and so never
+actually exercising this rounding) and confirmed `Slider.Limits` reads
+back exactly `[-195, 805]`; confirmed `MajorTicks`/`MajorTickLabels` are
+derived from those rounded `Limits`, not the raw times bounds; confirmed
+`MinorTicksMode == "manual"` and `MinorTicks` is empty; confirmed setting
+`Slider.Value` to an arbitrary fractional value not on any tick still
+succeeds, proving hiding the minor ticks did not restrict reachability.
+Re-ran the full regression suite (`TimeFrequency`, `ScalpDistribution`,
+`DrawScalpMap` orientation) afterward -- all still pass. `checkcode`
+clean on `ScalpDistributionView.m`.
+
+## Two more hand-crafted tree icons: subject dataset and Grand Average
+
+Reported: the tree's Grand Average and subject-dataset (raw import) node
+icons "are colourful, but deviant from our handcrafted set."
+
+Traced both to `src/webtree/src/alakazam-tree.js`'s `ICONS` map (the
+tree's own small, hand-drawn icon family -- `raw`/`time`/`freq`/`default`,
+each a flat-coloured rounded-square badge with a simple white glyph, the
+established style since the tree's icon set was last redrawn). Neither
+node type actually had its own dedicated icon: a freshly-imported subject
+dataset's root node already used `raw` (a generic folder+document glyph,
+not anything specific to "this is one subject's recording"), and a Grand
+Average's root node just borrowed whichever of `time`/`freq` a plain
+per-subject `Average` result would also get (`WorkSpaceTree.iconFor(EEG.
+DataType)`, in both `Alakazam.saveGrandAverage`'s fresh-creation path and
+`WorkSpace.loadGrandAverages`'s rebuild-from-disk path) -- a stale
+comment in `alakazam-tree.js` itself even still described `raw` as
+"doubling as... the 'Grand Averages' branch" icon, evidence this was
+never actually a considered, dedicated choice to begin with, just
+whatever was already at hand when those two code paths were written.
+
+**`raw` redesigned in place** (same key, same 3 call sites --
+`WorkSpace.loadBVAFile`/`loadMATFile`/`loadSETFile` -- untouched, they
+already meant exactly "a subject's own freshly-imported root node"):
+kept the amber badge colour, replaced the folder+document glyph with a
+simple person silhouette (a circle head + shoulder arc, the same
+filled-white-shape-on-badge technique `raw`'s old glyph already used),
+since that root node represents one subject's own recording, not a
+generic file.
+
+**New `grandAverage` key added**: a small "three source nodes merging
+into one" glyph (three white dots connected by lines converging to one
+larger dot) on a new violet badge (`#8e5fc9`, distinct from every
+existing badge colour), directly representing "several combined into a
+group result" rather than reusing a time/frequency-domain badge that
+says nothing about it being a *combination* at all. Wired into both
+places that used to borrow `time`/`freq`: `Alakazam.saveGrandAverage`
+and `WorkSpace.loadGrandAverages` now pass the literal `'grandAverage'`
+unconditionally, regardless of the underlying data's time/frequency
+domain (a Grand Average is its own concept either way, not two different
+badges depending on domain).
+
+Icon lookup itself needed no changes to support a new key --
+`alakazam-tree.js`'s `_onRender` already does a plain `ICONS[data.icon]
+|| ICONS.default` dictionary lookup with no fixed enum to extend, and
+`WorkSpaceTree.addNode` already stores whatever icon string it's given
+verbatim (`char(icon)`, no validation against a fixed set) -- so both new
+keys are simple, low-risk additions riding on already-generic,
+already-tested plumbing.
+
+Verified: extended `src/webtree/test_node.mjs` with a sixth test node
+using `icon: 'grandAverage'` and confirmed its rendered icon HTML
+contains the new badge's own `#8e5fc9` fill (i.e. it is genuinely using
+the new dedicated icon, not silently falling back to `ICONS.default`).
+Ran the real build pipeline (`npm run build` in `src/webtree/`) and
+`npm test` (`node test_node.mjs`) -- the full existing suite (render/
+click/double-click/context-menu, drop-always-reverts, drag-cursor/
+busy-cursor/drop-target-highlight, the mouseleave grace-period state
+machine, the sub-threshold-jitter regression) still passes unchanged,
+confirming the new node/icon did not disturb anything already covered.
+Copied the freshly built `dist/alakazam-tree.html` over `src/
+WorkSpaceTree.html` (real build output, not hand-synced). `checkcode`
+clean on `Alakazam.m` and `WorkSpace/loadGrandAverages.m`.
+
+**Follow-up**: recoloured both new badges, on request, into the same
+blue family as `freq`'s existing `#4a7fc9` (the app's own accent blue --
+ribbon, tile selection, tree row selection) rather than the amber/violet
+first picked -- `raw` (subject dataset) is now a lighter sky blue
+(`#6fa8dc`), `grandAverage` a darker navy blue (`#2e5c8a`), bracketing
+`freq`'s own shade rather than matching it exactly, so the three remain
+distinguishable by lightness plus glyph shape, not colour alone (the
+same "colour and shape both carry meaning" principle the whole `ICONS`
+set already follows). Updated `test_node.mjs`'s colour-content assertion
+to match the new `#2e5c8a`; re-ran the real build (`npm run build`) and
+test (`npm test`) pipeline -- unchanged pass. Re-copied the freshly built
+`dist/alakazam-tree.html` over `src/WorkSpaceTree.html`.
+
+## Ribbon tab colours: exactly the new tree-icon blues, Grand Average darker than Tools
+
+Follow-up to the section above: on request, the ribbon's own tab strip
+(`src/AlakazamRibbon.html`, hand-written, no build step) now uses exactly
+those same two colours, not just the tree. `.alz-tab-tools` was `#2d5f99`,
+`.alz-tab-grandAverage` was `#7aa7dd` -- Grand Average was the *lighter*
+of the two, which read backwards (it's normally thought of as "the more
+composed/senior" concept). Set `.alz-tab-tools` to `#6fa8dc` (matching
+the tree's `raw`/subject-dataset icon) and `.alz-tab-grandAverage` to
+`#2e5c8a` (matching the tree's `grandAverage` icon) -- Grand Average is
+now the darker of the two, as it should read. `.alz-tab-home` is
+unchanged (`#4a7fc9`, already matching the tree's `freq` icon).
+
+## EpochView redesigned as an ERP-image; trial mode removed
+
+The multichannel epoched-data view ("really ugly," per direct feedback)
+was an overlaid-line-traces plot: channel mode drew every trial as a
+separate line for one channel, trial mode drew every channel as a
+separate line for one trial. Neither scales -- MATLAB's own line colour
+order cycles after 7 colours, so with realistic trial/channel counts
+(dozens to hundreds) distinct trials/channels become visually
+indistinguishable well before the legend (up to 35 rows per column) that
+was supposed to tell them apart does too.
+
+**Redesign**: an ERP-image -- the standard EEGLAB/FieldTrip answer to
+exactly this problem. Time on the x-axis, trial on the y-axis, colour the
+signed amplitude, for the current channel (still stepped by up/down
+arrows, the same interaction the old channel mode used). A row's
+position on the y-axis already identifies which trial it is, so no
+legend is needed at all -- `ShowLegend`/the `"l"` key toggle were removed
+entirely, not just defaulted off. A thin trial-average trace is drawn
+below the heatmap (the same "single-trial detail plus the summary at
+once" pairing an ERP-image conventionally uses). One shared, symmetric
+colour scale is computed once over the *whole* dataset (every channel,
+every trial) in the constructor, not autoscaled fresh per redraw -- the
+same "shared scale across the whole view" convention `ScalpDistribution`/
+`TimeFrequency` already established, so paging through channels is an
+eye-to-eye comparison (does channel 3 swing wider than channel 5?), not
+each channel silently getting its own local scale.
+
+**Trial mode removed entirely**, on request ("There is no trial mode
+anymore, is there? There shouldn't be...") -- not hidden, not defaulted
+off: `Trial`/`Mode` properties, `redrawTrialMode`, and the left/right-
+arrow key cases are gone from the class outright. Up/down arrows are now
+the *only* navigation; left/right are a plain no-op (falls through
+`onKey`'s `switch`/`otherwise`).
+
+**Bin-aware row ordering**, reusing the existing `.epoch(t).bini`/
+`.bindesc` infrastructure the old legend text already read from: rows are
+grouped by each trial's first bin membership (a stable sort, so trials
+within a group keep their original relative order), trials with no bin
+membership trailing last -- a real, useful "sort trials by the one
+variable this app already tracks" capability an ERP-image conventionally
+supports, not just a rendering change. Thin white separator lines and a
+right-margin text label mark each group boundary. A trial belonging to
+more than one bin is grouped under its first bin only (a deliberate v1
+simplification -- its other bin memberships aren't otherwise indicated).
+
+**Shared `TransTools.DivergingColormap`**: the ERP-image's blue/white/red
+colour scale is the exact same "signed, zero-centred quantity" convention
+`TimeFrequencyView` already used for ERSP power -- pulled `TimeFrequencyView`'s
+own private `divergingColormap` method out into `TransTools.DivergingColormap.m`
+once a second view wanted the identical six-line construction, rather
+than duplicating it a third time by hand-copying into `EpochView` too.
+`TimeFrequencyView` now calls the shared version; its own copy is deleted.
+
+**A real bug caught by testing, not just checkcode**: `yline`'s return
+value has `Type == "constantline"` (`matlab.graphics.chart.decoration.
+ConstantLine`), not `"line"` -- an early draft's own bin-group-separator
+cleanup (`delete(findobj(this.HeatAxes, "Type", "line"))`, run at the top
+of every redraw so stale separators from a prior channel don't
+accumulate) would therefore never actually have found or deleted them,
+confirmed directly with a standalone `yline` + `findobj` check before
+fixing it, not assumed from the property name. Also caught (same
+review pass, before it ever ran): channel-mode redraws left a prior
+trial-mode redraw's explicit `YTick`/`YTickLabel` (channel names) stale
+on the heatmap axes -- moot now that trial mode itself was removed
+entirely, but was a real bug in the interim design and is documented here
+since the fix (`YTickMode`/`YTickLabelMode` reset to `"auto"`) is exactly
+the kind of "switching between two very different tick schemes on the
+same axes" mistake worth remembering if a similar view ever grows a
+second mode again.
+
+Verified: a synthetic 3-channel, 6-trial dataset with a deliberately
+mixed bin pattern (`bini` per trial = `[2, 1, [], 1, 2, []]`, trials 3
+and 6 unbinned) confirmed `TrialOrder` exactly equals the hand-computed
+expected stable-sort order (`[3 6 2 4 1 5]`); confirmed the heatmap's
+`CData` is the current channel's data with rows in that exact order, and
+`XData` is the real sample times; confirmed the trace is exactly
+`mean(data, 2)` for the current channel; confirmed exactly 2 separator
+lines and 3 group labels ("no bin", "1 BinA", "2 BinB") are drawn, with
+the right text; confirmed `ColorLimit` is `max(abs())` over the *whole*
+dataset, not just the current channel; exercised up/down arrow-key
+stepping including clamping at both ends, confirming the heatmap updates
+to the new channel's own bin-ordered data each time; confirmed the class
+no longer has `Trial`/`Mode` properties or a `redrawTrialMode` method at
+all (`isprop`/`ismethod`), and that left/right arrow keys are a genuine
+no-op (channel and displayed `CData` both provably unchanged after
+pressing them). Separately drove the real `AlakazamPlotter.plotCurrent`
+dispatch path with a real multichannel `trials > 1` epoched dataset and
+confirmed it still lands on `EpochView` as before, and that
+`Alakazam.onSettingsChanged`'s own no-arg `view.redraw()` refresh call
+still runs cleanly. Re-ran the full `TimeFrequency` regression suite
+afterward to confirm extracting `DivergingColormap` didn't disturb it --
+unchanged pass. `checkcode` clean on `EpochView.m`, `TimeFrequencyView.m`,
+and the new `TransTools/DivergingColormap.m`.
+
+## Three follow-ups: mismatched colorbars, and mouse-wheel channel stepping
+
+Reported: "the time-frequency map colorbar does not match the colors in
+the timefrequency plots," "in EpochView, mouse scroll should change
+channels (cf. keyup/down)," and "ScalpDistribution now has a different
+colorbar compared to all other plots."
+
+**Colorbar/colormap mismatch (TimeFrequencyView and ScalpDistributionView
+both).** Root cause, confirmed directly by reading the code rather than
+just trusting the report: the dedicated hidden `colorbarAxes` added in an
+earlier fix (to stop a colorbar shrinking whichever real tile it was
+attached to) was never given `colormap(colorbarAxes, cmap)` at all -- it
+silently used MATLAB's own default colormap (parula), while every real
+tile used the diverging blue/white/red colormap (`TimeFrequencyView`) or
+whatever colormap `DrawScalpMap` set on its own target axes
+(`ScalpDistributionView`). The colorbar's gradient and the heatmaps'
+actual colours were simply never the same colormap object. Fixed in both
+views: `colormap(colorbarAxes, cmap)` (or `TransTools.DivergingColormap()`
+directly) right after creating the hidden axes, matching whatever the
+real tiles use exactly.
+
+**`DrawScalpMap` itself never set a colormap either** -- unlike
+`TimeFrequencyView`/`EpochView`'s ERP-image, it left every scalp-map
+tile on MATLAB's own default (parula), which is why ScalpDistribution's
+colours looked different from "all other plots" even before the
+colorbar-mismatch bug above: scalp amplitude is exactly the same signed,
+zero-centred quantity ERSP power and ERP-image amplitude already are, so
+on request it now explicitly sets `colormap(ax, TransTools.
+DivergingColormap())` too, for one consistent colour convention across
+every plot in the app that shows a signed quantity.
+
+**EpochView mouse-wheel channel stepping.** Added `EpochView.onWheel`
+(the same public contract `SignalView.onWheel` already establishes:
+`callbackData.VerticalScrollCount`, positive for scrolling down), mapped
+to the identical direction/clamping logic the up/down arrow keys already
+use (`VerticalScrollCount > 0` steps forward, matching `downarrow`).
+Wired into `Alakazam.dispatchWheel`, which previously only ever checked
+`SignalView` -- turned into the same `for viewName = [...]` loop pattern
+`dispatchKey` already uses for its own multi-view list, rather than a
+second bespoke single-view dispatch method.
+
+Verified: extended `test_timefrequency_fixes.m` and `test_scalpdistribution.m`
+with a direct check that the hidden colorbar axes' `colormap(...)`
+exactly equals the real tiles' own `colormap(...)` (located via
+`setdiff` against the known tile-axes array, since neither view stores
+the hidden axes as a class property); `test_scalpdistribution.m`
+additionally confirms the tiles' colormap now equals
+`TransTools.DivergingColormap()` exactly, not MATLAB's default. Extended
+`test_epochview.m` with a wheel-scroll test: scrolling up steps the
+channel back (matching `uparrow`), scrolling down steps it forward
+(matching `downarrow`), clamps at the last channel exactly like the
+arrow-key test already confirms, and the heatmap's `CData` reflects the
+wheel-selected channel's own bin-ordered data. Re-ran the full
+`TimeFrequency`/`ScalpDistribution`/`DrawScalpMap`-orientation/`EpochView`
+regression suite afterward -- all still pass. `checkcode` clean on
+`TimeFrequencyView.m`, `ScalpDistributionView.m`,
+`TransTools/DrawScalpMap.m`, `EpochView.m`, and `Alakazam.m`.
+
+**EpochView "plot trials by bin" setting, and TimeFrequency mouse-wheel
+channel stepping.**
+
+New `AlakazamSettings` schema entry: `graphics`/`epochImage`/`groupByBin`
+(bool, default `false`), auto-built into the Settings dialog's Graphics
+tab as a second section alongside the existing `erpPlot` one (the tab
+builder's third argument just takes an array of sections --
+`AlakazamSettings.tab('graphics', 'Graphics', [erpPlot, epochImage])` --
+no dialog-side code needed at all, per the class's own "add one schema
+entry, everything else follows" design). Confirmed `erpPlot` is consumed
+exclusively by `AverageView` (the trial-averaged ERP view), not
+`EpochView` at all, so the new setting got its own section rather than
+being folded into `erpPlot`.
+
+Unchecked (default), `EpochView` is unchanged: one row per trial,
+grouped by its first bin membership only. Checked, rows are grouped
+strictly by bin, top to bottom, and a trial belonging to more than one
+bin is plotted once per bin -- so the row count can exceed the trial
+count. Implementation: `TrialOrder` was already "a list of trial indices
+to plot as rows, in order" rather than strictly a permutation of
+`1:nTrials`, and MATLAB's row-indexing (`data(this.TrialOrder, :)`)
+already replicates a row on a repeated index for free, so no change was
+needed to the drawing code itself -- only to how `TrialOrder` is built.
+Added `RowBinKey` (1 x nRows, parallel to `TrialOrder`, one bin key per
+*row* rather than per *trial*) since a trial can now occupy more than
+one row, each under a different bin -- `drawBinGroupLines` (separators +
+right-margin labels) now reads `RowBinKey` directly instead of
+re-deriving a per-row key via `groupKey(this.TrialOrder)`, which would
+have given a duplicated row's SECOND occurrence the same ("first bin")
+key as its first. New private `computeTrialOrderByBin` builds the
+grouped-by-bin order/keys: unbinned trials first (same convention as
+before), then each bin ascending, listing every trial that belongs to it
+in original trial order.
+
+`TrialOrder`/`RowBinKey` are now recomputed at the top of every
+`redraw()` (moved out of the constructor, where they were previously
+computed once) specifically so toggling the setting in the Settings
+dialog and clicking Save -- which calls every open view's no-arg
+`redraw()` via `Alakazam.onSettingsChanged` -- actually updates an
+already-open EpochView tab, rather than only taking effect on tabs
+opened after the change.
+
+`TimeFrequencyView` gained `onWheel`, mirroring `EpochView.onWheel`'s
+exact contract and direction convention (`VerticalScrollCount > 0` steps
+forward, matching its existing `onKey`'s `downarrow` case -- it already
+had arrow-key channel stepping, just not wheel). `Alakazam.dispatchWheel`
+now includes `"TimeFrequencyView"` in its view-name loop alongside
+`SignalView`/`EpochView`.
+
+Verified: extended `test_epochview.m` with a dedicated 4-trial fixture
+where one trial belongs to two bins -- confirms `groupByBin=false`
+matches the pre-existing single-row-per-trial behaviour exactly (regression
+guard), and `groupByBin=true` produces the expected 5-row order with the
+duplicated trial's row appearing twice, both showing that trial's data,
+correct separator/label placement across 3 groups, and a trial-average
+trace unaffected by the row duplication (still the mean over the 4 real
+trials). Extended `test_timefrequency_tree.m` with a wheel-scroll test
+identical in spirit to `EpochView`'s: scroll up/down step the channel
+matching uparrow/downarrow, clamp at the last channel, and the tile's
+`CData` reflects the wheel-selected channel. Settings-side: confirmed
+`AlakazamSettings.schema()` reports two sections under the `graphics`
+tab and that a headless `SettingsDialog()` builds without error against
+the two-section tab. All tests only ever call `AlakazamSettings.set()`
+(in-memory), never `.save()`, so none of this touches the real
+`AlakazamSettings.json` in `prefdir`. `checkcode` clean on `EpochView.m`,
+`TimeFrequencyView.m`, `Alakazam.m`, and `AlakazamSettings.m`.
+
+**Follow-up: bin labels moved onto the y-axis itself.** The bin-group
+labels were originally drawn as floating `text()` annotations along the
+plot's right margin; on request they're now genuine `YTick`/
+`YTickLabel` values on `HeatAxes` (replacing the default numeric trial
+ticks), which is the conventional place a reader looks for row-grouping
+information and stays correctly positioned regardless of pan/zoom.
+`drawBinGroupLines` no longer creates or cleans up `text` objects at
+all -- just separators (`yline`, unchanged) plus `this.HeatAxes.YTick`/
+`YTickLabel` set directly from each group's midpoint row and label
+string. Verified: `test_epochview.m`'s label assertions now read
+`view.HeatAxes.YTick`/`YTickLabel` (confirming exactly 3 ticks reading
+"no bin"/"1 BinA"/"2 BinB", and that no `text`-type objects remain in
+`HeatAxes`) instead of hunting for `text` objects; the "group by bin"
+duplication sub-test was updated the same way. `checkcode` clean on
+`EpochView.m`.
+
+**Mouse-wheel time scrubbing for ScalpDistribution.** Added
+`ScalpDistributionView.onWheel`, the same public contract as
+`EpochView`/`TimeFrequencyView`'s own `onWheel` (`callbackData.
+VerticalScrollCount`, positive = scroll down = step forward) -- but
+stepping the time *slider* by one real sample (`eeg.times`) rather than
+a channel, since this view has no channel axis at all. Wired into
+`Alakazam.dispatchWheel`'s view-name loop alongside the other three.
+
+One wrinkle the other views didn't have: `Slider.Limits` is `eeg.times(1)`/
+`(end)` rounded to the nearest 5 ms (an earlier fix, for pretty-printed
+tick labels), which can land just *inside* the true data range -- e.g.
+`times(1) = -197` rounds up to a Limits floor of `-195`. Setting
+`Slider.Value` to the raw edge sample directly would then throw (`uislider`
+requires `Value` within `Limits`), so `onWheel` clamps the target sample
+time into `Slider.Limits` before assigning; `redraw()` already snaps
+whatever `Value` it's given back to the nearest real sample regardless,
+so the clamp never changes which sample actually gets drawn, just avoids
+a bogus out-of-range assignment.
+
+Verified: extended `test_scalpdistribution.m` with a wheel-scroll test
+(scroll down/up steps `Slider.Value` to the next/previous real sample,
+`10` ms apart in the test fixture, and the time-label readout updates to
+match) plus a dedicated edge-clamping test at both ends of the data
+range, confirming no error is thrown and the slider settles on the true
+edge sample rather than overshooting past it. `checkcode` clean on
+`ScalpDistributionView.m` and `Alakazam.m`.
+
+**EpochView bin-group brackets.** On request ("draw accolades from the
+label that indicate what trials are in what bin"), added a dedicated
+left-margin `BraceAxes` panel (a narrow extra `uigridlayout` column,
+collapsed to 0 width when the dataset has no bins) drawing an actual
+bracket per bin group, replacing the earlier plain y-axis tick labels.
+First pass drew a real curly-brace *curve* (cubic Bezier halves meeting
+at a spiked cusp) -- visually recognisable but, on review, "ugly": too
+wide, and long bin names got clipped against the axes edge. Rewritten on
+request to a much slimmer design: a plain vertical line spanning the
+group's rows, small perpendicular "grip" ticks at the two ends (marking
+the exact row boundaries, pointing right towards the heatmap), and one
+small tip at the vertical midpoint pointing left towards the label --
+which is now drawn rotated 90 degrees (`Text.Rotation = 90`), reading
+bottom-to-top alongside its own bracket, instead of horizontal text that
+needed unbounded width. `BraceAxes.Clipping = "off"` so a label longer
+than the column is still fully visible rather than truncated. The old
+Bezier-curve `drawBrace` implementation and its `bezierPt` static helper
+were replaced outright (four `plot` calls per bracket instead), not kept
+alongside the new one.
+
+Verified visually first, not just by assertion: rendered a real EpochView
+(via `exportapp`, headless) to a PNG for a deliberately adversarial
+fixture (tiny bin groups + a very long bin name) that reproduced the
+old curve's clipping problem, confirmed the redesign fixes it, then
+re-rendered with realistic-sized groups (dozens of trials, short typical
+bin names like "Standard"/"Deviant") to confirm the common case reads
+cleanly with no label overlap. `test_epochview.m`'s label assertions
+now check `BraceAxes` directly: exactly 4 line segments per bin group
+(the vertical line + 2 grips + 1 tip), one `text` object per group with
+`Rotation == 90`, and the label strings themselves -- both for the
+default and `groupByBin=true` fixtures. Also confirmed directly (outside
+the assertion-based suite) that a bins-less dataset collapses
+`Grid.ColumnWidth{1}` to 0 and leaves `BraceAxes` empty, matching the
+pre-existing "full heatmap width when there's nothing to bracket"
+behaviour. `checkcode` clean on `EpochView.m`.
+
+**Follow-up: rounded bracket tips, bigger labels, and trace/heatmap
+x-axis alignment.** Three more requests on the same bracket panel:
+
+1. *"Round the tips"* -- the bracket was previously drawn as 4 separate
+   sharp-cornered line segments (vertical line, 2 perpendicular grip
+   ticks, 1 perpendicular tip). Rewritten as a single continuous
+   polyline: straight segments joined by small elliptical-arc corners at
+   the two grip ends, and the tip replaced by a smooth half-sine "bump"
+   (rather than a flat right-angle stub) that peaks at the label side --
+   no sharp corners anywhere. Corner/bump radii shrink proportionally
+   for a very short (few-row) group rather than overlapping. `FontSize`
+   for the bracket labels bumped 8 -> 10 ("labels a bit bigger").
+
+2. *"Make the x-axis of the average ERP ... coincide with the x-axis of
+   the main part of the plot"* -- `TraceAxes` (the trial-average trace
+   below the heatmap) previously spanned both grid columns (`Layout.
+   Column = [1, 2]`, under the brace margin too), while `HeatAxes` only
+   occupied column 2 -- different widths, so their "t = 0" ticks did not
+   line up vertically even though both used the same XLim. Changed
+   `TraceAxes.Layout.Column` to `2`, matching `HeatAxes` exactly. That
+   alone wasn't sufficient though: `HeatAxes` also had its colorbar
+   attached directly to it (`colorbar(this.HeatAxes)`), which narrows an
+   axes' own `Position` to make room for the colorbar -- exactly the
+   "colorbar shrinks its target axes" bug already fixed in
+   `ScalpDistributionView`/`TimeFrequencyView` via a dedicated hidden
+   colorbar axes, just not yet applied to `EpochView`. Applied the same
+   fix here: a third, narrow (56px) trailing grid column holds a hidden
+   `colorbarAxes` (colour-matched via `TransTools.DivergingColormap()`,
+   `CLim` set once from `this.ColorLimit` since it never changes across
+   redraws), and `HeatAxes` no longer carries its own colorbar at all.
+   With both narrowing effects removed, `HeatAxes` and `TraceAxes` end
+   up pixel-identical in width and x-position.
+
+Verified: re-rendered a real `EpochView` (via `exportapp`, headless) to a
+PNG to confirm the rounded corners/tip actually render smoothly (not
+just "the math should produce a curve") -- both for a small-group case
+and a realistic-sized one, no overlap regression from the earlier
+brace-panel work. `test_epochview.m` updated: the bracket line-count
+assertion now expects 1 polyline per group (was asserting 4 separate
+segments); a new assertion directly checks `TraceAxes.Position` and
+`HeatAxes.Position` match in both x-origin and width after `drawnow` --
+this caught the colorbar-width bug immediately (first version of the
+column-alignment fix alone still failed with a ~70px width mismatch,
+which is what led to tracing it back to the direct-attached colorbar).
+`checkcode` clean on `EpochView.m`.
+
+**Bug fix: groupByBin=false still grouped by bin.** User report: "The
+epochplot does not respect the plotbybin setting. It plots by bin when
+there are bins." Root cause: EpochView's row-grouping (first-bin-only
+sort, separators, bracket labels) had originally been unconditional
+behaviour, from before the `groupByBin` setting existed at all -- when
+the setting was added, `computeTrialOrder`'s `false` branch was written
+to just keep that pre-existing "grouped by first bin" sort instead of
+turning grouping off, so a dataset with bins looked bin-grouped
+regardless of the setting; only the "does a multi-bin trial get
+duplicated" behaviour actually toggled. Fixed by making `false` (or no
+bins at all) mean genuinely NO grouping: natural `1:nTrials` order,
+`RowBinKey` all-zero, and `drawBinGroupLines` now gates the whole
+bracket/separator block on `this.HasBins && groupByBin` (both must be
+true) rather than `HasBins` alone -- when not grouped, `BraceAxes` stays
+empty and `Grid.ColumnWidth{1}` collapses to 0, exactly like a bins-less
+dataset. The margin column width is now set live inside
+`drawBinGroupLines` on every redraw (widened to 100 only when grouping
+is actually active) instead of being fixed once at construction from
+`HasBins` alone, so toggling the setting on an already-open tab both
+turns the brackets on/off AND resizes the margin column correctly. The
+now-dead `trialGroupKeys` helper (the old "first bin only" key
+function, no longer called from anywhere once the false-branch stopped
+using it) was deleted rather than left unused.
+
+Verified: rewrote the relevant sections of `test_epochview.m` --
+`groupByBin=false` now explicitly asserts natural order, all-zero
+`RowBinKey`, empty `BraceAxes.Children`, and a collapsed margin column,
+both for the original 6-trial fixture and the 4-trial multi-bin-trial
+fixture (previously that block asserted the OLD, buggy "grouped under
+first bin" behaviour as if it were correct -- a case of the test
+faithfully encoding the bug rather than catching it, since it was
+written for the same original design). Added an explicit toggle round-
+trip on the first fixture (set true, redraw, assert grouped+widened
+column; set false, redraw, assert natural order+collapsed column again)
+to directly exercise live toggling on an already-open tab, matching how
+`Alakazam.onSettingsChanged` actually drives it. Schema tooltip in
+`AlakazamSettings.m` and `EpochView.m`'s class-level doc comment updated
+to describe the corrected (opt-in) semantics. `checkcode` clean on both
+files.
+
+**Bug fix: transformations stealing window focus.** User report: after
+running a transformation (Baseline every time, reportedly others too),
+focus jumped from the Alakazam window to the main MATLAB desktop/command
+window. Root cause: `Baseline.m` (and likely other transforms) shows its
+options via `uiextras.settingsdlg`, a classic Java/AWT-backed figure --
+not a `uifigure`. Mixing that windowing system with an otherwise
+all-`uifigure` app means focus doesn't reliably return to the app once
+the classic dialog closes. Fixed centrally rather than per-transform:
+`Alakazam.onTransformation` now calls a new `Alakazam.restoreFocus()`
+(`figure(this.MainFigure)`) right after every transformation run, both
+on success and in the `catch` block -- harmless for transformations that
+never showed a dialog at all, and covers any transform that might hit
+this, not just Baseline. `checkcode` clean; sanity-checked `restoreFocus`
+is callable on a real `Alakazam()` instance.
+
+**"Edit WorkSpace" dialog rewritten as a uifigure.** `WorkSpace/edit.m`
+previously used `uiextras.inputgui` -- the same category of classic
+Java/AWT dialog as the focus-stealing bug above, for the same underlying
+reason. Rewritten as a `uifigure` styled to match the main app: a header
+bar in the ribbon's own Home-tab blue (`#4a7fc9`), the rest at
+`uifigure`'s default background. Three rows (Raw data / Intermediate /
+Exports folder), each a label + `uieditfield` + a small "..." (U+2026)
+browse button that opens a native `uigetdir` folder picker and writes
+the chosen path back into the field. OK normalizes each path with a
+trailing `filesep` (matching the old dialog's own behaviour, but via
+`filesep` instead of a hardcoded `'\'`) and calls `WorkSpace.open()`
+(which already handles a missing/uncreatable directory gracefully, so
+this dialog does not duplicate that validation); Cancel, or the window's
+own close button, discards changes. `WorkSpace.edit()` can only be
+invoked via `@WorkSpace`-folder method dispatch on a real `WorkSpace`
+instance (not a lightweight stub), so verified end-to-end against a real
+`Alakazam()` app: a `timer` clicking the dialog's OK/Cancel buttons
+directly (`ButtonPushedFcn`) while the main thread sits in `uiwait`,
+the same pattern `test_iirfilter_mlapptools_removal.m` already
+established for this exact "single-threaded script can't literally wait
+then click" problem. Confirms the dialog is genuinely a `uifigure` (not
+classic), exactly 3 fields pre-populated from the current workspace, 3
+browse buttons, OK applies an edited field with the trailing separator
+and leaves the app/figure valid afterward, Cancel discards an edited
+field and also leaves the app/figure valid. `checkcode` clean.
+
+**`uiextras.settingsdlg` removed from every real call site.** New
+`src/TransformOptionsDialog.m`: a `uifigure`-based, generic settings
+dialog deliberately mirroring `settingsdlg`'s own call signature
+(`'title'`/`'Description'`/`'separator'`/`{label;fieldname},default`
+pairs) so each of the 5 real call sites only needed its FUNCTION NAME
+swapped, not its argument list rewritten:
+`Baseline.m`, `TimeFrequency.m`, `AutoGEDAI.m`, `AutoEyeICA.m`,
+`ArtefactDetect.m`. Field kind is inferred from each default's MATLAB
+type, exactly like `settingsdlg` itself: a cell array of strings is a
+`uidropdown` (first element pre-selected -- callers already pre-order
+that with their own `putFirst`-style helper, e.g. AutoGEDAI's
+`strengthChoices`), a scalar logical a `uicheckbox`, numeric a
+`uieditfield('numeric')`, anything else a `uieditfield('text')`.
+Cancelling (or the window's own close button) returns `settings` built
+from the ORIGINAL default values, unchanged -- the same contract
+`settingsdlg`'s single-output form already has (confirmed by reading
+its own source: `[settings,button]=settingsdlg(...)` documents
+`button` as `'ok'`/`'cancel'`/`[]`, but `settings` itself is always a
+real struct even on cancel, which is why none of the 5 original call
+sites ever checked for an empty result) -- so no call site needed its
+own new cancel-handling code.
+
+Two real implementation bugs surfaced and fixed during construction,
+both caught by direct testing rather than assumption:
+- `struct('default', args{i+1}, ...)` inside the varargin parser threw
+  ("different number of elements") whenever a default was itself a cell
+  array of choices -- `struct()`'s own built-in behaviour treats a bare
+  cell-array VALUE as "broadcast into a struct array". Fixed by passing
+  `args(i+1)` (paren-indexed, a 1x1 cell) instead of `args{i+1}` (its
+  unwrapped contents), which `struct()` correctly collapses back to a
+  scalar field.
+- `uieditfield(...,'numeric')` and `uieditfield(...,'text')` report
+  DIFFERENT `.Type` values (`'uinumericeditfield'` vs. `'uieditfield'`)
+  -- confirmed directly with a two-line repro. Every test/call site that
+  searches for "edit fields" needs both types, not just `'uieditfield'`;
+  this cost a lengthy false-alarm debugging detour (chased a suspected
+  `uiwait`/timer race that never existed) before the real cause was
+  isolated by constructing the dialog synchronously, without `uiwait`,
+  and comparing `findobj` counts directly against the real component
+  classes created.
+
+Verified: `test_transformoptionsdialog.m` (structural checks across all
+four field kinds, Cancel-returns-original-defaults, OK-applies-edits)
+and `test_baseline_dialog_swap.m` (the real, unmodified `Baseline.m`
+end-to-end: `TransformSettings.get` seeds the dialog, a `timer` drives
+OK with an edited window, `TransformSettings.set` persists it, and the
+actual baseline correction is computed from the EDITED window, not the
+default -- confirmed numerically, mean amplitude ~0 over the edited
+window after correction). `checkcode` clean on `TransformOptionsDialog.m`
+and all 5 swapped transform files.
+
+**Remaining classic Java/AWT dialogs flagged, not migrated.** On
+request ("flag all uses of old-style java based graphics obsolete, if
+possible"): a full inventory found `msgbox`/`inputdlg`/`questdlg`/
+`warndlg`/`errordlg` calls remaining in `Alakazam.m` (9 sites -- tree
+CRUD confirmations and grand-average status dialogs), `rawclear.m`,
+`open.m`, `EEGLabEnvironment.m` (3 sites, all run at app STARTUP before
+`MainFigure` even exists, so there is no `uifigure` yet to parent a
+replacement to), and `AutoGEDAI.m`'s separate GEDAI-plugin-install
+consent prompt. `FourierGui.m` is a whole GUIDE-generated dialog (its
+`handles.figure1` comes from the companion `.fig` binary, not any
+`uifigure(...)` call in the `.m` text) -- migrating it would mean
+rebuilding its entire options UI from scratch, not a single-function
+swap like `settingsdlg` was. None of these were rewritten this pass
+(genuinely out of scope for "if possible" given the volume and, for
+`FourierGui.m`, the risk) -- each now carries a `% LEGACY-JAVA-GUI:`
+comment immediately above the call (or, for `FourierGui.m`, one
+file-level note at the top), so a future cleanup pass can find every
+site with `grep -rn LEGACY-JAVA-GUI src`. The `+uiextras/` package
+itself (`supergui.m`, `inputgui.m`, `settingsdlg.m`,
+`setFigDockGroup.m`) is left untouched -- third-party-style library
+code, not marked individually since `settingsdlg` itself has no more
+real callers and the others are still load-bearing for `FourierGui.m`.
+
+**Colour map setting.** New `AlakazamSettings` entry:
+`graphics`/`colormap`/`name`, a `'choice'` setting (`uidropdown` in
+`SettingsDialog`) between `"diverging"` (default -- this app's own
+hand-built blue-white-red map) and MATLAB's own `parula`/`jet`/`turbo`/
+`hot`/`cool`. Implemented inside `TransTools.DivergingColormap()`
+itself rather than as a new function: every one of its 5 existing call
+sites (`EpochView.m` x2, `ScalpDistributionView.m`,
+`TimeFrequencyView.m`, `TransTools/DrawScalpMap.m`) already calls it
+with zero arguments, so making its OWN body settings-aware means every
+plot that shows a signed, zero-centred quantity picks up the chosen
+colour map automatically, with no changes needed in any of the 4 view
+files -- confirmed directly (`EpochView.HeatAxes`'s live `colormap()`
+matches `parula(64)` after only changing the setting, no other code
+touched). Kept the existing function name despite it now covering
+non-diverging choices too, rather than renaming across 5 call sites, and
+updated its docstring to describe the broadened, settings-driven scope
+instead.
+
+Verified: `test_colormap_setting.m` -- the default reproduces the
+original hand-built map byte-for-byte (backward compatible), each
+built-in choice resolves to MATLAB's own `parula(64)`/`jet(64)`/etc.
+exactly, and a real `EpochView` picks up a changed setting with no view-
+side code touched. Re-ran the full existing `EpochView`/`TimeFrequency`/
+`ScalpDistribution` regression suite afterward with the setting at its
+default -- all still pass unchanged. `checkcode` clean on
+`AlakazamSettings.m` and `TransTools/DivergingColormap.m`.
+
+**`findobj` usage, surveyed on request.** Real (non-`+uiextras/`) call
+sites: `Alakazam.m` (10x -- tab/tile lookup by `Tag`, the `existingTab`/
+`tiledContent`/`wrapper` pattern `AlakazamPlotter.plotCurrent`,
+`closeTab`, `onDeleteNode`, `retile`/`untile`/`tileWrapperFor` all
+share), `AlakazamPlotter.m` (1x, the same tab-by-`Tag` lookup),
+`ScalpDistributionView.m` (1x, finding a sibling `AverageView` tab by
+its source file's `Tag`), `SignalView.m`/`EpochView.m` (1x each,
+`delete(findobj(ax,'Type',...))` to clear old event markers/separator
+lines before redrawing), and `TransTools/SelectWindow.m`/
+`FourierGui.m` (GUIDE-era controls, found by `Tag`/`Style`). The
+`+uiextras/` library files (`supergui.m`, `inputgui.m`) use it
+internally for their own classic-dialog control lookup -- unrelated to
+the app's own code.
+
+**AverageView mouse-wheel channel stepping.** The last of the 5 tab
+views to get it: `AverageView.onWheel` mirrors its own existing
+`onKey`'s up/down-arrow channel stepping (same clamping via
+`min(cellfun(@(s) size(s.data,1), this.Series))` for the per-series
+channel-count bound) and the same direction convention every other
+view's `onWheel` already uses (`VerticalScrollCount > 0` steps forward,
+matching downarrow). `Alakazam.dispatchWheel`'s view-name loop now
+reads `["SignalView", "EpochView", "TimeFrequencyView",
+"ScalpDistributionView", "AverageView"]` -- every dispatched-key-capable
+tab view now also has wheel navigation. Verified with
+`test_averageview_wheel.m`: direction/clamping at both ends, and the
+axes title reflects the wheel-selected channel after scrolling.
+`checkcode` clean on `AverageView.m` and `Alakazam.m`.

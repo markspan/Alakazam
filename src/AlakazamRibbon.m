@@ -188,18 +188,25 @@ classdef AlakazamRibbon < handle
         end
 
         function items = grandAverageItems(this, iconsDir)
-        %GRANDAVERAGEITEMS  "Define Grand Average..." launcher. Hand-drawn
-        %   SVG read from src/Icons/ (see workspaceItems for why: matches
-        %   the rest of the ribbon's own icon set instead of a borrowed,
-        %   mismatched MathWorks toolstrip icon -- this one used to reuse
-        %   control_app_24.png, an unrelated generic "app" icon). Three thin
-        %   mini-waveforms (individual subjects' averages) converge into one
-        %   bold waveform (the grand average), the same visual idea the
-        %   feature itself implements.
-            icon = this.encodeSvgFile(fullfile(iconsDir, 'GrandAverage.svg'));
+        %GRANDAVERAGEITEMS  "Define Grand Average..." launcher and "Export
+        %   Grand Averages..." exporter. Hand-drawn SVGs read from
+        %   src/Icons/ (see workspaceItems for why: matches the rest of the
+        %   ribbon's own icon set instead of a borrowed, mismatched
+        %   MathWorks toolstrip icon -- Define Grand Average used to reuse
+        %   control_app_24.png, an unrelated generic "app" icon). Define
+        %   Grand Average's icon: three thin mini-waveforms (individual
+        %   subjects' averages) converge into one bold waveform (the grand
+        %   average), the same visual idea the feature itself implements.
+        %   Export's icon: a small data table with an arrow breaking out of
+        %   it, matching the tabular CSV format it writes.
+            defineIcon = this.encodeSvgFile(fullfile(iconsDir, 'GrandAverage.svg'));
+            exportIcon = this.encodeSvgFile(fullfile(iconsDir, 'ExportGrandAverages.svg'));
             items = {struct('id', 'defineGrandAverage', 'label', 'Define Grand Average...', ...
                 'tooltip', 'Combine several subjects'' Average results into one grand average', ...
-                'icon', icon)};
+                'icon', defineIcon), ...
+                struct('id', 'exportGrandAverages', 'label', 'Export Grand Averages...', ...
+                'tooltip', 'Export every Grand Average to one R-compatible, long-format CSV', ...
+                'icon', exportIcon)};
         end
 
         function groups = transformationGroups(this, transRoot)

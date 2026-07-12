@@ -9,8 +9,9 @@ function CreateTreeComponent(this)
 %
 %   Both trees wire back to the SAME Alakazam callback methods
 %   (onSelectionChanged, onNodeDoubleClicked, onNodeDropped,
-%   onContextMenuAction) -- those only ever need the node struct the event
-%   already carries, so nothing about their bodies is tree-specific. The
+%   onContextMenuAction, onTreeRenderError) -- those only ever need the
+%   node struct the event already carries, so nothing about their bodies
+%   is tree-specific. The
 %   source WorkSpaceTree instance is passed as each callback's second
 %   argument (captured as this.Tree / this.GrandAveragesTree at call time,
 %   not construction time, since these anonymous functions run long after
@@ -29,13 +30,15 @@ function CreateTreeComponent(this)
         'SelectionChangedFcn',  @(e) this.Parent.onSelectionChanged(e, this.Tree), ...
         'NodeDoubleClickedFcn', @(e) this.Parent.onNodeDoubleClicked(e, this.Tree), ...
         'NodeDroppedFcn',       @(e) this.Parent.onNodeDropped(e, this.Tree), ...
-        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.Tree));
+        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.Tree), ...
+        'RenderErrorFcn',       @(e) this.Parent.onTreeRenderError(e, this.Tree));
 
     this.GrandAveragesTree = WorkSpaceTree(this.Parent.GrandAveragesTreePanel, ...
         'SelectionChangedFcn',  @(e) this.Parent.onSelectionChanged(e, this.GrandAveragesTree), ...
         'NodeDoubleClickedFcn', @(e) this.Parent.onNodeDoubleClicked(e, this.GrandAveragesTree), ...
         'NodeDroppedFcn',       @(e) this.Parent.onNodeDropped(e, this.GrandAveragesTree), ...
-        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.GrandAveragesTree));
+        'ContextMenuActionFcn', @(e) this.Parent.onContextMenuAction(e, this.GrandAveragesTree), ...
+        'RenderErrorFcn',       @(e) this.Parent.onTreeRenderError(e, this.GrandAveragesTree));
 
     this.ActiveTree = this.Tree;
 end

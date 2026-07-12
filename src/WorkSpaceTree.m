@@ -17,9 +17,9 @@ classdef WorkSpaceTree < handle
 %   set is pushed to the JS side as one Data snapshot on every change (via
 %   uihtml's Data property). Callback function handles
 %   (SelectionChangedFcn, NodeDroppedFcn, NodeDoubleClickedFcn,
-%   ContextMenuActionFcn), settable as constructor name-value pairs,
-%   mirror uiextras.jTree.Tree's own construction style so callers barely
-%   change shape.
+%   ContextMenuActionFcn, RenderErrorFcn), settable as constructor
+%   name-value pairs, mirror uiextras.jTree.Tree's own construction style
+%   so callers barely change shape.
 %
 %   Node "handles" returned by SelectedNodes / addNode / event callbacks
 %   are plain value structs (Id, Name, UserData, IsRoot), not object
@@ -48,6 +48,7 @@ classdef WorkSpaceTree < handle
         NodeRenamedFcn       = function_handle.empty
         NodeDoubleClickedFcn = function_handle.empty
         ContextMenuActionFcn = function_handle.empty
+        RenderErrorFcn       = function_handle.empty % fcn(struct(Message,Stack)); see onEvent's 'renderError' case
     end
 
     properties (Access = private)
@@ -174,6 +175,23 @@ classdef WorkSpaceTree < handle
             end
         end
 
+        function nodes = allNodes(this)
+        %ALLNODES  Every current node, in the same struct(Id,Name,UserData,
+        %   IsRoot) shape as SelectedNodes/addNode -- e.g. for a bulk
+        %   export that needs every Grand Average, not just the selected
+        %   one. Empty (0x0) when the tree has no nodes, matching
+        %   SelectedNodes' own empty-case shape.
+            ids = keys(this.Nodes);
+            if isempty(ids)
+                nodes = [];
+                return;
+            end
+            nodes = repmat(struct('Id', '', 'Name', '', 'UserData', '', 'IsRoot', false), 1, numel(ids));
+            for i = 1:numel(ids)
+                nodes(i) = this.nodeStruct(ids{i});
+            end
+        end
+
         function clear(this)
         %CLEAR  Remove every node (used when reopening a workspace).
             this.Nodes = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -287,22 +305,42 @@ classdef WorkSpaceTree < handle
         end
 
         function data = buildData(this)
+        %BUILDDATA  Build the Data payload pushed to the JS side. NODES is
+        %   built as a cell array, not a struct array: jsonencode (and
+        %   uihtml's Data marshaling, built on the same machinery) collapses
+        %   a 1x1 struct array to a bare JSON object instead of a
+        %   single-element array (confirmed directly: jsonencode(repmat(
+        %   struct(...),1,1)) gives '{"a":1}', not '[{"a":1}]' -- 2+ elements
+        %   and 0 elements both serialize correctly, only exactly 1 does
+        %   not). The JS side's setNodes does `for (const n of nodes)`,
+        %   which throws ("nodes is not iterable") on a bare object, so a
+        %   workspace with exactly one node (most commonly: exactly one
+        %   Grand Average) rendered a silently-blank tree with no nodes at
+        %   all. A cell array reliably serializes as a JSON array
+        %   regardless of element count (confirmed: jsonencode({struct(
+        %   'a',1)}) gives '[{"a":1}]'), so this sidesteps the collapse
+        %   entirely rather than special-casing count==1.
             ids = keys(this.Nodes);
-            nodes = repmat(struct('id', '', 'label', '', 'icon', '', 'parentId', [], ...
-                'canListEvents', false, 'canRecalculate', false), 1, numel(ids));
+            nodes = cell(1, numel(ids));
             for i = 1:numel(ids)
                 n = this.Nodes(ids{i});
                 parentId = n.parentId;
                 if isempty(parentId)
                     parentId = []; % top-level: JS treats [] the same as omitted
                 end
-                nodes(i) = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
+                nodes{i} = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
                     'parentId', parentId, 'canListEvents', n.canListEvents, ...
                     'canRecalculate', n.canRecalculate);
             end
             selId = this.SelectedId;
             if isempty(selId); selId = []; end
-            data = struct('nodes', nodes, 'selectedId', selId);
+            % Double-wrapped ({nodes}, not nodes): struct()'s own cell-value
+            % convention treats an unwrapped cell array as "one struct per
+            % cell" (struct-array broadcasting), which is not what is
+            % wanted here -- the extra wrapping layer says "this whole cell
+            % array is the single value of this one field on a scalar
+            % struct".
+            data = struct('nodes', {nodes}, 'selectedId', selId);
         end
 
         function s = nodeStruct(this, id)
@@ -358,6 +396,16 @@ classdef WorkSpaceTree < handle
                     end
                 case 'rendered'
                     % Diagnostic only (node/icon counts from the JS side); no-op.
+                case 'renderError'
+                    % A JS-side exception in bridge.js's applyData (e.g. the
+                    % single-node-array/jsonencode bug this was added to
+                    % catch) would otherwise die silently in the embedded
+                    % CEF browser's own console and surface on the MATLAB
+                    % side only as a vague, unactionable "HTMLSource may be
+                    % referencing unsupported functionality or may have a
+                    % JavaScript error" warning with no message or stack --
+                    % see bridge.js's own catch block for the full story.
+                    this.invoke(this.RenderErrorFcn, struct('Message', d.message, 'Stack', d.stack));
             end
         end
 

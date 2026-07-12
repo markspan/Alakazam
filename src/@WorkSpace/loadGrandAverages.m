@@ -16,12 +16,11 @@ function loadGrandAverages(this)
     for i = 1:numel(found)
         file = fullfile(found(i).folder, found(i).name);
         loaded = load(file, "EEG");
-        if isfield(loaded.EEG, "DataType") && strcmpi(loaded.EEG.DataType, "FREQUENCYDOMAIN")
-            iconKey = 'freq';
-        else
-            iconKey = 'time';
-        end
-        this.GrandAveragesTree.addNode(loaded.EEG.id, '', iconKey, file, ...
+        % 'grandAverage', matching Alakazam.saveGrandAverage's own fresh-
+        % creation path -- its own dedicated icon regardless of the
+        % underlying data's time/frequency domain, not a borrowed
+        % time/freq badge (see alakazam-tree.js's ICONS map comment).
+        this.GrandAveragesTree.addNode(loaded.EEG.id, '', 'grandAverage', file, ...
             WorkSpaceTree.optsFor(loaded.EEG));
     end
 end

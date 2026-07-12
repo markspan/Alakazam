@@ -76,18 +76,28 @@ const TREE_STYLES = {
 
 // Per-node-type icons: a coloured rounded-square "badge" holding a simple
 // white glyph, a common modern flat-icon pattern (distinguishable by both
-// colour and glyph shape, not colour alone) -- freq's blue matches the
-// accent colour used throughout the rest of the app (ribbon, tile
-// selection, tree row selection below). 'raw' doubles as the tree's root/
-// branch icon key (root imports AND the "Grand Averages" branch, see
-// WorkSpace.loadBVAFile/loadGrandAverages) -- a folder glyph, the same
-// closed-folder-tab silhouette AlakazamRibbon's own "Tabs" view-mode icon
-// uses (src/AlakazamRibbon.m's viewItems), recoloured white-on-badge to
-// match this set instead of that icon's outline style.
+// colour and glyph shape, not colour alone) -- freq's blue (#4a7fc9)
+// matches the accent colour used throughout the rest of the app (ribbon,
+// tile selection, tree row selection below). 'raw' and 'grandAverage'
+// (see below) are deliberately two more shades from that same blue
+// family (lighter/darker, not a different hue) rather than an unrelated
+// colour, on request -- distinguished from freq and each other by
+// lightness plus glyph shape, not hue alone. 'raw' is the icon for a
+// freshly imported subject dataset's own root node (see
+// WorkSpace.loadBVAFile/loadMATFile/loadSETFile) -- a simple person
+// silhouette, since that root node represents one subject's own
+// recording, not a generic file/folder. 'grandAverage' is its own
+// dedicated icon (three source nodes merging into one, the group-
+// combination idea) for WorkSpace.GrandAveragesTree's own root nodes
+// (see Alakazam.saveGrandAverage/WorkSpace.loadGrandAverages) -- these
+// used to just borrow 'time'/'freq' (the same badge a plain per-subject
+// Average result gets), which read as generic rather than as its own
+// distinct concept.
 const ICONS = {
-    raw:  '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#d9a441"/><path d="M5 8a1 1 0 0 1 1-1h4l1.6 1.8H18a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#fff"/></svg>',
+    raw:  '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#6fa8dc"/><circle cx="12" cy="8.5" r="3.3" fill="#fff"/><path d="M5.5 19c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="#fff"/></svg>',
     time: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#2f9e6e"/><path d="M4 14l3-4 3 5 3-7 3 4 4-3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     freq: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#4a7fc9"/><path d="M6 17V13M10 17V9M14 17V15M18 17V7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    grandAverage: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#2e5c8a"/><line x1="7" y1="6.5" x2="12" y2="16" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="12" y1="5.5" x2="12" y2="16" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><line x1="17" y1="6.5" x2="12" y2="16" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="6.5" r="1.7" fill="#fff"/><circle cx="12" cy="5.5" r="1.7" fill="#fff"/><circle cx="17" cy="6.5" r="1.7" fill="#fff"/><circle cx="12" cy="17" r="2.6" fill="#fff"/></svg>',
     default: '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="1" y="1" width="22" height="22" rx="5" fill="#8a8a8a"/><rect x="6" y="5" width="12" height="14" rx="1" fill="none" stroke="#fff" stroke-width="1.4"/></svg>'
 }
 
@@ -100,6 +110,15 @@ const DOUBLE_CLICK_MS = 400
 // enough that genuinely dragging away and letting go still cancels
 // promptly.
 const LEAVE_GRACE_MS = 250
+// Pixels of mouse movement since mousedown before a click becomes a drag --
+// see the _checkThreshold patch in the constructor. yy-tree documents a
+// `threshold` constructor option for exactly this, but never actually
+// exposes or reads it back anywhere (confirmed against its real source,
+// node_modules/yy-tree/src/tree.js has no `get threshold()`, unlike every
+// other documented option) -- it is a dead option, so this is defined here
+// as our own constant instead of trying to read tree.threshold/
+// tree._options.threshold back off the library.
+const DRAG_THRESHOLD_PX = 10
 const CONTEXT_ITEMS = [
     { action: 'listEvents', label: 'List events' },
     { separator: true },
@@ -164,6 +183,33 @@ class AlakazamTree {
             select: true,
             holdTime: 0 // we drive rename via the context menu, not press-and-hold
         }, TREE_STYLES)
+
+        // yy-tree's Input._checkThreshold (node_modules/yy-tree/src/input.js)
+        // has a bug: it computes the mouse-move distance since mousedown but
+        // only checks its TRUTHINESS, never actually compares it against any
+        // threshold -- so literally any cursor movement at all, even a single
+        // pixel of mouse jitter during an ordinary click, starts a drag
+        // (reported as "clicking a tree branch sometimes gets registered as a
+        // drag"). yy-tree's own docs promise a `threshold` constructor option
+        // for exactly this, but the library never actually reads it back (see
+        // DRAG_THRESHOLD_PX above), so this patches Input._checkThreshold
+        // directly as an instance override (not a source edit -- yy-tree is a
+        // vendored npm dependency, not part of this file) to add the missing
+        // comparison: a click only becomes a drag once the cursor has
+        // actually moved past DRAG_THRESHOLD_PX pixels from the mousedown
+        // point. Logic otherwise identical to the original.
+        this._tree._input._checkThreshold = function (e) {
+            if (!this._tree.move) return false
+            if (this._moving) return true
+            const dx = this._isDown.x - e.pageX
+            const dy = this._isDown.y - e.pageY
+            if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD_PX) {
+                this._moving = true
+                this._pickup()
+                return true
+            }
+            return false
+        }
 
         this._tree.on('render', (leaf) => this._onRender(leaf))
         this._tree.on('clicked', (leaf) => this._onClicked(leaf))

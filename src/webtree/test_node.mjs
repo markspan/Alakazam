@@ -32,14 +32,23 @@ tree.setNodes([
     { id: 'b', label: 'Fourier1', icon: 'freq', parentId: 'a' },
     { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false },
     { id: 'd', label: 'RawImport2', icon: 'raw', parentId: null },
-    { id: 'e', label: 'FourierResult1', icon: FAKE_ICON_URI, parentId: 'a' }
+    { id: 'e', label: 'FourierResult1', icon: FAKE_ICON_URI, parentId: 'a' },
+    { id: 'f', label: 'GrandAverage1', icon: 'grandAverage', parentId: null }
 ])
 
 // --- 1. rendering + icons ---
 const icons = container.querySelectorAll('.alz-icon')
-console.log(`icons rendered: ${icons.length} (expect 5)`)
-assert.strictEqual(icons.length, 5, 'one icon per node')
+console.log(`icons rendered: ${icons.length} (expect 6)`)
+assert.strictEqual(icons.length, 6, 'one icon per node')
 assert.ok(icons[0].innerHTML.includes('<svg'), 'key-based icon contains inline svg')
+
+// 'grandAverage' is its own dedicated icon (see alakazam-tree.js's ICONS
+// map), not a fallback to ICONS.default -- confirm it renders its own
+// distinct purple badge, not the grey default-icon badge.
+const grandAverageLeaf = findLeafByLabel('GrandAverage1')
+const gaIconHtml = grandAverageLeaf.content.querySelector('.alz-icon').innerHTML
+assert.ok(gaIconHtml.includes('#2e5c8a'), 'grandAverage icon should render its own dedicated navy-blue badge, not fall back to default')
+console.log('grandAverage renders its own dedicated icon, not the default fallback: OK')
 
 // A data:-URI icon (WorkSpaceTree.iconForResult, a per-transformation icon)
 // must render as a scaled <img>, not be looked up in the fixed ICONS map.
@@ -93,6 +102,25 @@ down(leafB, 10, 10); up(10, 10)
 console.log('after second click (should be double):', JSON.stringify(events))
 assert.strictEqual(events.length, 1)
 assert.strictEqual(JSON.stringify(events[0]), JSON.stringify({ type: 'nodeDoubleClicked', id: 'b' }))
+
+// --- 3b. a small, sub-threshold cursor movement during a click must still
+//     register as a click, not a drag -- this is the actual bug being
+//     regression-tested here: yy-tree's Input._checkThreshold used to check
+//     only whether the mouse moved AT ALL since mousedown, never comparing
+//     it against the tree's own configured `threshold` (10px), so ordinary
+//     mouse jitter while clicking (a few pixels) was silently registered as
+//     a drag instead. Uses a different node (leafD, not leafB) so this does
+//     not disturb leafB's double-click timing state above. ---
+events.length = 0
+const leafJitter = findLeafByLabel('RawImport2')
+down(leafJitter, 10, 10)
+move(13, 12) // distance ~3.6px, well under the 10px threshold -- must NOT start a drag
+assert.ok(!tree._tree._input._moving, 'a few pixels of jitter must not cross the drag threshold')
+up(13, 12)
+console.log('after click with sub-threshold jitter:', JSON.stringify(events))
+assert.strictEqual(events.length, 1, 'jitter within the threshold should still be one click event, not a drag')
+assert.strictEqual(JSON.stringify(events[0]), JSON.stringify({ type: 'nodeClicked', id: 'd' }))
+console.log('sub-threshold mouse jitter during a click is not mistaken for a drag: OK')
 
 // --- 4. context menu ---
 events.length = 0
@@ -280,7 +308,7 @@ html.classList.remove('alz-busy') // left on by test 8's final drop; bridge.js (
 events.length = 0
 const leafReal = findLeafByLabel('Fourier1')
 down(leafReal, 10, 10)
-move(15, 15) // any non-zero movement crosses yy-tree's threshold check and triggers a real Input._pickup()
+move(30, 30) // distance ~28px, past yy-tree's threshold (10px, see alakazam-tree.js's _checkThreshold patch), triggers a real Input._pickup()
 assert.ok(html.classList.contains('alz-dragging'), 'sanity: dragging cursor should be on mid-drag')
 assert.ok(input._target && input._moving, 'sanity: a real Input drag should be in progress')
 window.document.body.dispatchEvent(new window.MouseEvent('mouseleave'))
@@ -307,7 +335,7 @@ console.log('no re-entry within the grace period cancels the drag, leaving every
 events.length = 0
 const leafResume = findLeafByLabel('Fourier1')
 down(leafResume, 10, 10)
-move(15, 15)
+move(30, 30) // past the threshold -- see the comment on the identical call above
 window.document.body.dispatchEvent(new window.MouseEvent('mouseleave'))
 await sleep(LEAVE_GRACE_MS / 2) // well within the grace period
 window.document.body.dispatchEvent(new window.MouseEvent('mouseenter'))
