@@ -234,12 +234,6 @@ Scientific/methodological:
 
 Software toolkits (see [`dependencies.md`](dependencies.md) for the complete,
 versioned list):
-
-- GUI Layout Toolbox (R. Jackey, MathWorks) -- dialog widgets used throughout
-  the transformations' option dialogs, vendored at `src/+uiextras/`.
-- mlapptools (StackOverflow MATLAB chat community).
-  [github.com/StackOverflowMATLABchat/mlapptools](https://github.com/StackOverflowMATLABchat/mlapptools).
-  uifigure styling for the `IIRFilter` transformation's App Designer dialog.
 - MATLAB Toolstrip / ToolGroup demo by R. Chen.
   [undocumentedmatlab.com](http://undocumentedmatlab.com/articles/matlab-toolstrip-part-2-toolgroup-app).
   Historical: the app shell this originally adapted has since been replaced by
