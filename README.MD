@@ -3,7 +3,7 @@
 An interactive MATLAB workbench for EEG and event-related potential (ERP)
 analysis.
 
-![Screenshot](ScreenShot.jpg)
+![Screenshot](Screenshots/ScreenShot.jpg)
 
 ## Overview
 
