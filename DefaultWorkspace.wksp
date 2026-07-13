@@ -1,29 +1,6 @@
 {
-  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/EEG/",
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/C3/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
-  "TransformSettings": {
-    "DefineBins": {
-      "epochStart": "-200",
-      "epochStop": "800",
-      "script": "% Codes are markers; ? = any char; { } lists alternatives; | is or.\n% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.\n% let names a reusable expression (codes or relations); = makes a difference bin.\nlet infrequent = {\"11\" \"22\" \"33\" \"44\" \"55\"}\nlet frequent = \"??\" not infrequent\nbin 1 \"infrequent\"  infrequent and next(\"201\") within (200,1201] ms\nbin 2 \"Unrelated\"   frequent   and next(\"201\") within (200,1201] ms\nbin 3 \"Effect\"     = bin 1 - bin 2"
-    },
-    "AutoEyeICA": {
-      "EyeThreshold": 0.6
-    },
-    "AutoGEDAI": {
-      "Strength": "auto",
-      "Leadfield": "precomputed",
-      "LowCut": 0.4,
-      "RejectEpochs": "no",
-      "EpochENOVA": 0.9,
-      "RejectChannels": "no",
-      "ChannelENOVA": 0.9,
-      "Parallel": "no"
-    },
-    "Baseline": {
-      "Start": -100,
-      "Stop": -10
-    }
-  }
+  "TransformSettings": {}
 }

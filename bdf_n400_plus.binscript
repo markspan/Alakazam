@@ -1,0 +1,16 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+
+let prime  = {111, 112, 121, 122}
+let target = {211, 212, 221, 222}
+let related = "?1?"
+let unrelated = "?2?"
+
+bin 1 "Prime, related"    (prime and related)
+bin 2 "Prime, unrelated"  (prime and unrelated)
+bin 3 "Target, related"   (target and related) and next("201") within (200,1500] ms
+bin 4 "Target, unrelated" (target and unrelated) and next("201") within (200,1500] ms
+bin 5 "N400" = bin 4 - bin 3

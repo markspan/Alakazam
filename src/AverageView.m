@@ -41,18 +41,18 @@ classdef AverageView < handle
         Palette = [ ...
             0.00 0.00 1.00;   % blue
             1.00 0.00 0.00;   % red
-            0.00 0.55 0.00;   % green
-            0.75 0.00 0.75;   % magenta
             0.00 0.55 0.55;   % teal
             0.85 0.55 0.00;   % orange
-            0.00 0.00 0.00]   % black
+            0.00 0.00 0.00;   % black
+            0.00 0.55 0.00;   % green
+            0.75 0.00 0.75]   % magenta
     end
 
     methods
         function this = AverageView(fig, eeg)
         %AVERAGEVIEW  Build the view for an averaged dataset in FIG.
             this.Figure = fig;
-            this.Grid   = uigridlayout(fig, [1 2], "ColumnWidth", {'7x', '3x'}, ...
+            this.Grid   = uigridlayout(fig, [1 2], "ColumnWidth", {'9x', '1x'}, ...
                 "Padding", [4 4 4 4]);
             this.Axes   = uiaxes(this.Grid);
             this.Axes.Layout.Column = 1;
@@ -197,6 +197,7 @@ classdef AverageView < handle
                     return;
             end
             this.redraw();
+            this.notifyActivated();
         end
 
         function onWheel(this, callbackData)

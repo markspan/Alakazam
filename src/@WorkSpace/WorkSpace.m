@@ -22,19 +22,34 @@ classdef WorkSpace < handle
 
             if nargin == 1 || nargin == 4
             if nargin == 1
-                DIRS = jsondecode(fileread(fullfile(this.Parent.RepoRoot, 'DefaultWorkSpace.wksp')));
-                this.RawDirectory     = this.fromStoredPath(DIRS.RawDirectory);
-                this.CacheDirectory   = this.fromStoredPath(DIRS.CacheDirectory);
-                this.ExportsDirectory = this.fromStoredPath(DIRS.ExportsDirectory);
+                try
+                    DIRS = jsondecode(fileread(fullfile(this.Parent.RepoRoot, 'DefaultWorkSpace.wksp')));
+                    this.RawDirectory     = this.fromStoredPath(DIRS.RawDirectory);
+                    this.CacheDirectory   = this.fromStoredPath(DIRS.CacheDirectory);
+                    this.ExportsDirectory = this.fromStoredPath(DIRS.ExportsDirectory);
+                catch ME
+                    if strcmp(ME.identifier, 'MATLAB:undefinedVarOrClass') || ...
+                       contains(ME.message, 'No such file or directory') || ...
+                       contains(ME.message, 'cannot open')
+                        % Initialize with sensible defaults relative to RepoRoot
+                        this.RawDirectory     = fullfile(this.Parent.RepoRoot, 'Data', 'EEG');
+                        this.CacheDirectory   = fullfile(this.Parent.RepoRoot, 'Data', 'Cache');
+                        this.ExportsDirectory = fullfile(this.Parent.RepoRoot, 'Data', 'Exports');
+                        TransformSettings.reset();
+                    else
+                        rethrow(ME);
+                    end
                 % Per-transformation remembered options, if the default
                 % workspace file carries any (see WorkSpace.save/load and
                 % TransformSettings); absent on an older-format file, which
                 % TransformSettings.loadFrom treats as "none stored".
-                if isfield(DIRS, 'TransformSettings')
+                % if isfield(DIRS, 'TransformSettings')
+                if exist('DIRS','var') && isstruct(DIRS) && isfield(DIRS, 'TransformSettings')
                     TransformSettings.loadFrom(DIRS.TransformSettings);
                 else
                     TransformSettings.reset();
                 end
+            end
             elseif nargin == 4
                 this.RawDirectory = varargin{1};
                 this.CacheDirectory = varargin{2};
