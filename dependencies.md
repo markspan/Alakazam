@@ -35,10 +35,6 @@ These are vendored into the repository today. They are third-party and should be
 treated as read-only. Consider un-tracking them and listing them here as
 external installs in a later pass (see "Follow-up" below).
 
-| Toolkit | Location | Purpose | Source |
-|---|---|---|---|
-| GUI Layout Toolbox / uiextras | `src/+uiextras/` | Dialog helpers (`settingsdlg`, `inputgui`, `supergui`, ...) used throughout the Transformations' option dialogs | MathWorks / R. Jackey, plus EEGLAB's own `inputgui`/`supergui` (A. Delorme) |
-
 The MoBILAB, TMSi, Cortrium, jsonlab and dndcontrol code has been removed: the
 app now reads only BrainVision files (via the bva-io EEGLAB plugin) and
 previously-saved `.mat` datasets.
