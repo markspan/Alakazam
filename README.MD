@@ -186,6 +186,14 @@ and dialog (`GrandAverage.m`/`GrandAverageDialog.m`) and lands in the
 "Grand Averages" tree rather than nested under any one subject's branch
 (see [Key features](#key-features)).
 
+![ScreenshotERP](Screenshots/ERP.jpg)
+
+![ScreenshotScalp](Screenshots/ScalpDistribution.jpg)
+
+![ScreenshotEpoched](Screenshots/Epoched.jpg)
+
+![ScreenshotTF](Screenshots/TimeFrequency.jpg)
+
 ## References
 
 Scientific/methodological:
