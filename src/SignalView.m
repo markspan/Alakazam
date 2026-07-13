@@ -386,7 +386,7 @@ classdef SignalView < handle
             end
             try
                 latency = [eeg.event.latency];
-                dur = ones(1, numel(eeg.event));
+                dur = zeros(1, numel(eeg.event));
                 if isfield(eeg.event, "duration")
                     filled = ~cellfun(@isempty, {eeg.event.duration});
                     dur(filled) = [eeg.event.duration];
@@ -399,8 +399,8 @@ classdef SignalView < handle
 
                 isArea = dur > 0;
                 codes = repmat("-", 1, numel(eeg.event));
-                if isfield(eeg.event, "code")
-                    codes = string({eeg.event.code});
+                if isfield(eeg.event, "type")
+                    codes = string({eeg.event.type});
                 end
                 overlay.AreaLabel = codes(isArea) + " - " + types(isArea);
                 overlay.AreaTime  = eeg.times(max(1, floor(latency(isArea))));
