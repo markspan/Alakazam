@@ -87,7 +87,7 @@ function DrawScalpMap(ax, values, chanlocs, mapLimit)
     horiz  =  a;                        % rotated 90 degrees clockwise: anterior-posterior line now vertical, nose up
     vert   = -b;
 
-    plotrad = min(1.0, max(radius) * 1.02);
+    plotrad = min(1.0, max(radius) * 1.08);
     plotrad = max(plotrad, rmax);         % ScalpDistribution.m never overrides this, so plotrad >= rmax always
     headrad = rmax;                       % => always draw the cartoon head, matching the original's own behaviour
     squeezefac = rmax / plotrad;
@@ -164,15 +164,15 @@ function DrawScalpMap(ax, values, chanlocs, mapLimit)
     elseif numel(horiz) >= 80
         markerSize = 4;
     elseif numel(horiz) >= 64
-        markerSize = 5;
+        markerSize = 4;
     elseif numel(horiz) >= 48
-        markerSize = 6;
+        markerSize = 4;
     elseif numel(horiz) >= 32
-        markerSize = 8;
+        markerSize = 4;
     else
-        markerSize = 10;
+        markerSize = 5;
     end
-    plot(ax, horiz, vert, '.', 'Color', [0 0 0], 'MarkerSize', markerSize);
+    plot(ax, horiz, vert, 'o', 'Color', [0 0 0], 'MarkerSize', markerSize);
 
     axis(ax, 'square');
     axis(ax, 'off');
