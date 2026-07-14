@@ -49,8 +49,11 @@ function [EEG, options] = DefineBins(input, opts)
 %                Any relation may be constrained by a window:
 %                   ... within (200,1200] ms
 %                Interval notation is explicit about open/closed bounds and
-%                takes an optional unit (ms, the default, or samples). Windows
-%                are signed, so [-1200,-200) means "before".
+%                takes an optional unit (ms, the default; samples; or events,
+%                an ordinal count in the event stream instead of elapsed time
+%                -- within [-2,-2] events means "exactly two events before",
+%                immune to jitter in the interval itself, e.g. from variable
+%                RTs). Windows are signed, so [-1200,-200) means "before".
 %
 % A single optional 'epoch' statement gives the window to cut around every
 % matched event. It is written once and applies to ALL bins (they share one
@@ -245,7 +248,7 @@ end
 function [script, epochWin] = promptForScript()
     template = [ ...
         '% Codes are markers; ? = any char; { } lists alternatives; | is or.'              newline ...
-        '% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.'             newline ...
+        '% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.' newline ...
         '% let names a reusable expression (codes or relations); = makes a difference bin.' newline ...
         'let related = {"s11" "s22" "s33" "s44" "s55"}'                                    newline ...
         'bin 1 "Related"    related           and next("S201") within (200,1200] ms'       newline ...
@@ -593,6 +596,13 @@ function [tf, cap] = evalRel(node, p, ctx)
 end
 
 function d = delta(q, p, ctx, iv)
+    if ~isempty(iv) && strcmp(iv.unit, 'events')
+        % Ordinal distance in the event stream, not elapsed time: immune to
+        % RT/ISI jitter, unlike ms/samples -- e.g. within [-2,-2] events means
+        % "exactly two events before", regardless of how long that took.
+        d = q - p;
+        return;
+    end
     d = ctx.lat(q) - ctx.lat(p);
     if isempty(iv) || ~strcmp(iv.unit, 'samples')
         d = d / ctx.srate * 1000;   % ms
@@ -1063,7 +1073,7 @@ function [iv, k] = scanInterval(T, k)
     hiOpen = (c.val == ")"); k = k + 1;
     unit = 'ms';
     u = tokAt(T, k);
-    if u.kind == "kw" && (u.val == "ms" || u.val == "samples")
+    if u.kind == "kw" && (u.val == "ms" || u.val == "samples" || u.val == "events")
         unit = char(u.val); k = k + 1;
     end
     if lo > hi
@@ -1315,7 +1325,7 @@ end
 % ======================================================================= %
 function toks = tokenize(s)
     keywords = ["bin","let","rt","timelock","and","or","not", ...
-                "next","prev","adjacent","any","within","ms","samples"];
+                "next","prev","adjacent","any","within","ms","samples","events"];
     toks = struct('kind', {}, 'val', {}, 'pos', {}, 'len', {});
     i = 1; n = numel(s);
     while i <= n

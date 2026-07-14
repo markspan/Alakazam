@@ -7,7 +7,6 @@ let correct = next(201) within [200,1000] ms
 %
 % Exactly two events back = the immediately preceding trial's stimulus
 % (stim, resp, stim, resp, ...), regardless of RT/ITI jitter.
-
 let precededByRare     = prev(rare)     within [-2,-1] events
 let precededByFrequent = prev(frequent) within [-2,-1] events
 %
@@ -19,3 +18,6 @@ bin 1 "rare (c), preceded by rare (c)"     rare and correct and precededByRare a
 bin 2 "rare (c), preceded by frequent (c)" rare and correct and precededByFrequent and precededCorrect
 bin 3 "frequent (c), preceded by rare (c)"     frequent and correct and precededByRare and precededCorrect
 bin 4 "frequent (c), preceded by frequent (c)" frequent and correct and precededByFrequent and precededCorrect
+bin 5 "rare" rare
+bin 6 "frequent" frequent
+bin 7 "preceded by rare" "??" precededByRare

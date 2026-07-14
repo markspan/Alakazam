@@ -1,0 +1,35 @@
+{
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/p300/",
+  "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/p300/Cache/",
+  "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/p300/Export/",
+  "TransformSettings": {
+    "AutoGEDAI": {
+      "Strength": "auto",
+      "Leadfield": "precomputed",
+      "LowCut": 0.5,
+      "RejectEpochs": "no",
+      "EpochENOVA": 0.9,
+      "RejectChannels": "no",
+      "ChannelENOVA": 0.9,
+      "Parallel": "no"
+    },
+    "TimeFrequency": {
+      "MinFreq": 2,
+      "MaxFreq": 40,
+      "NumFreqs": 30,
+      "MinCycles": 3,
+      "MaxCycles": 10,
+      "BaselineStart": -200,
+      "BaselineStop": 0
+    },
+    "DefineBins": {
+      "epochStart": "-200",
+      "epochStop": "800",
+      "script": "% Codes are markers; ? = any char; { } lists alternatives; | is or.\n% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.\n% let names a reusable expression (codes or relations); = makes a difference bin.\n\nlet rare = {11,22,33,44,55}\nlet frequent = \"??\" not rare\nlet correct = next(201) within (200,1000)\n\nlet precededbyrare = prev(rare) within (-2000, -100)\nlet precededbyfrequent = prev(frequent) within (-2000, -100)\nlet precededcorrect = prev(correct) within (-2000, -100)\n\nbin 1 \"rare (c), preceded by rare (c)\" rare and correct and precededbyrare and precededcorrect\nbin 2 \"rare (c), preceded by frequent (c)\" rare and correct and precededbyfrequent and precededcorrect\nbin 1 \"frequent (c), preceded by rare (c)\" frequent and correct and precededbyrare and precededcorrect\nbin 2 \"frequent (c), preceded by frequent (c)\" frequent and correct and precededbyfrequent and precededcorrect\n"
+    },
+    "Baseline": {
+      "Start": -100,
+      "Stop": 0
+    }
+  }
+}

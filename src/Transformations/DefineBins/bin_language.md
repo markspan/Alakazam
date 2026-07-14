@@ -65,10 +65,34 @@ anchor, − = before) and explicit about open/closed bounds:
 within (200,1200] ms     % > 200 and <= 1200
 within [-1200,-200) ms   % before the anchor: >= -1200 and < -200
 within (0,300] samples   % sample counts instead of ms
+within [-2,-2] events    % ordinal event count instead of elapsed time
 ```
 
 `any(...)` *requires* a window (there's no natural neighbour to default to);
 `next`/`prev`/`adjacent` treat it as optional.
+
+### A fourth unit: `events`
+
+`ms`/`samples` windows measure elapsed *time*; `events` measures ordinal
+*position* in the event stream instead, counting the candidate event itself
+as 0. `within [-2,-2] events` means "exactly two events back" — the
+relation's own direction (`next`/`prev`) still decides which way to search,
+`events` just changes what the window is measured in.
+
+This matters whenever a time-based window would need to be wide enough to
+absorb some jitter (a variable RT, a self-paced ITI) but that same width then
+risks reaching past the trial you actually meant and into an earlier one.
+Counting events instead sidesteps the jitter entirely, e.g. finding "the
+stimulus that started the immediately preceding trial" in a strict
+stimulus → response → stimulus → response design:
+
+```
+let precededByRare = prev(rare) within [-2,-2] events
+```
+
+whatever the gap in milliseconds happened to be on that particular trial.
+
+
 
 ## 5. Combining terms: `and` / `or` / `not`
 
@@ -316,7 +340,7 @@ codeset     : <code> ( '|' <code> )*                    % pipe form
             | '{' <code> [ , ] <code> … '}'             % braced list
             | <name>                                    % a 'let' alias (any expr, incl. relations)
 code        : <integer> | "<text marker>"               % ? = any char, * = any run
-window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples ]
+window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples | events ]
 comment     : % … end-of-line   |   # … end-of-line
 ```
 
