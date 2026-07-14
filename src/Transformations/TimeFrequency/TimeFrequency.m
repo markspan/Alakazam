@@ -69,6 +69,13 @@ if nargin == 1
         'separator', 'Baseline window for dB correction:', ...
         {'Baseline start (ms)'; 'BaselineStart'}, stored.BaselineStart, ...
         {'Baseline stop (ms)'; 'BaselineStop'}, stored.BaselineStop);
+    if isempty(opts)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        EEG = [];
+        return;
+    end
     TransformSettings.set('TimeFrequency', opts);
 elseif nargin == 2
     opts = varargin{2};

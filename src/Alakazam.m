@@ -153,6 +153,11 @@ classdef Alakazam < handle
             this.PlotsTabGroup = uitabgroup(this.MainGrid);
             this.PlotsTabGroup.Layout.Row = 2;
             this.PlotsTabGroup.Layout.Column = 3;
+            % Keep Workspace.EEG (and the tree's own selection) in sync
+            % when the user switches tabs by clicking a tab header
+            % directly, not just by clicking a tree node -- see
+            % syncActiveDataset for why this matters.
+            this.PlotsTabGroup.SelectionChangedFcn = @(~, e) this.onPlotTabSelected(e);
 
             % TileGrid is a sibling in the exact same cell, toggled via
             % Visible instead of ever both showing at once (see
@@ -498,6 +503,13 @@ classdef Alakazam < handle
     methods
         function this = Alakazam(varargin)
         %ALAKAZAM  Construct and open the application.
+        %   ALAKAZAM() opens with the repository's default workspace
+        %   (DefaultWorkSpace.wksp). ALAKAZAM(workspaceFile) opens with a
+        %   specific workspace instead -- see startAlakazam and
+        %   WorkSpace's own constructor for what WORKSPACEFILE may be (a
+        %   bare name resolved next to DefaultWorkSpace.wksp, or any
+        %   relative/absolute path to a .wksp file).
+        %
         %   Resolves the application roots, makes sure EEGLAB and its plugins
         %   are available, sets up the paths, builds the single main window
         %   (toolbar strip + reserved tree cell + plots tabgroup), creates
@@ -514,7 +526,11 @@ classdef Alakazam < handle
 
             % Create the workspace (this builds the tree into TreeGrid and
             % loads the data).
-            this.Workspace = WorkSpace(this);
+            if isempty(varargin)
+                this.Workspace = WorkSpace(this);
+            else
+                this.Workspace = WorkSpace(this, varargin{1});
+            end
             this.Workspace.open();
             this.MainFigure.Visible = "on";
 
@@ -598,9 +614,21 @@ classdef Alakazam < handle
                 % Apply the transformation to the current dataset.
                 [result.EEG, usedParams] = feval(transformId, this.Workspace.EEG);
 
-                if ishandle(result.EEG)
-                    % The plugin returned a graphics handle, not a dataset: it
-                    % was a pure plot, so there is nothing to persist.
+                if isempty(result.EEG) || ishandle(result.EEG)
+                    % Either the transformation's own options dialog was
+                    % cancelled (result.EEG is [] -- see
+                    % TransformOptionsDialog's own header comment for why
+                    % every transformation using it must return [] on
+                    % Cancel rather than proceeding), or the plugin
+                    % returned a graphics handle instead of a dataset (a
+                    % pure plot). Either way there is nothing to persist,
+                    % and -- unlike an actual failure -- nothing the user
+                    % needs to see an error about. Still reset the
+                    % pointer/focus exactly like the success/failure
+                    % paths below do (previously left stuck on "watch"
+                    % for the pure-plot case).
+                    this.MainFigure.Pointer = "arrow";
+                    this.restoreFocus();
                     return;
                 end
 
@@ -712,8 +740,29 @@ classdef Alakazam < handle
             targetFile = targetNode.UserData;
 
             while ~atLeaf
+                % Both files are stored tree-node paths, not something
+                % just derived from code on disk -- a node can outlive its
+                % file (cache cleared by hand, a workspace copied from
+                % another machine, a branch deleted outside the app), so
+                % this is checked explicitly rather than letting load()
+                % throw a raw "Unable to find file" straight through
+                % onNodeDropped's own try/catch.
+                if exist(targetFile, "file") ~= 2
+                    throw(MException('Alakazam:evaluateDroppedBranch', ...
+                        'The target dataset''s cache file is missing:\n\n    %s', targetFile));
+                end
+                if exist(sourceFile, "file") ~= 2
+                    throw(MException('Alakazam:evaluateDroppedBranch', ...
+                        'The dragged branch''s cache file is missing:\n\n    %s', sourceFile));
+                end
                 targetStruct = load(targetFile, "EEG");
                 sourceStruct = load(sourceFile, "EEG");
+                % TARGETFILE/SOURCEFILE (just verified to exist, above)
+                % always win over whatever EEG.File already is -- see
+                % Alakazam.loadNodeEEG's own note on why the stored field
+                % can be stale (a different machine/username).
+                targetStruct.EEG.File = targetFile;
+                sourceStruct.EEG.File = sourceFile;
 
                 % Call is just the transformation id (see onTransformation); no
                 % parsing needed.
@@ -774,13 +823,10 @@ classdef Alakazam < handle
                 return; % nothing selected
             end
 
-            file = node.UserData;
-            if isempty(file) || exist(file, "file") ~= 2
+            EEG = this.loadNodeEEG(node.UserData, 'list events for this dataset');
+            if isempty(EEG)
                 return;
             end
-
-            loaded = load(file, "EEG");
-            EEG = loaded.EEG;
             titleText = sprintf('Events in "%s"', node.Name);
 
             if ~isfield(EEG, "event") || isempty(EEG.event)
@@ -835,9 +881,11 @@ classdef Alakazam < handle
             end
 
             file = node.UserData;
-            loaded = load(file, "EEG");
-            loaded.EEG.id = newName;
-            EEG = loaded.EEG; % saved to disk under the variable name "EEG"
+            EEG = this.loadNodeEEG(file, 'rename this dataset');
+            if isempty(EEG)
+                return;
+            end
+            EEG.id = newName; % saved to disk under the variable name "EEG"
             save(file, "EEG");
 
             this.Workspace.ActiveTree.renameNode(node.Id, newName);
@@ -1008,40 +1056,272 @@ classdef Alakazam < handle
         end
 
         function onRecalculateNode(this)
-        %ONRECALCULATENODE  Context-menu callback: revisit an existing grand
-        %   average's membership. Reopens GrandAverageDialog pre-filled with
-        %   its current sources/weighting (its name is fixed), lets the
-        %   analyst add/remove subjects or change the weighting, then
-        %   recomputes and re-saves it in place. Only ever reachable for a
-        %   Grand Average node -- the menu item is disabled otherwise (its
-        %   eligibility is baked into the node at creation time, see
-        %   WorkSpaceTree.optsFor).
+        %ONRECALCULATENODE  Context-menu callback: revisit an existing
+        %   node's inputs. Two cases, both only ever reachable when
+        %   eligible (the menu item's eligibility is baked into the node
+        %   at creation time, see WorkSpaceTree.optsFor):
+        %     * a Grand Average node -- reopens GrandAverageDialog
+        %       pre-filled with its current sources/weighting (its name is
+        %       fixed), lets the analyst add/remove subjects or change the
+        %       weighting, then recomputes and re-saves it in place;
+        %     * a node produced by one of WorkSpaceTree.RecalculableTransforms
+        %       -- delegates to recalculateTransformNode, see there.
             node = this.Workspace.ActiveTree.SelectedNodes;
             if isempty(node)
                 return;
             end
 
             file = node.UserData;
-            loaded = load(file, "EEG");
-            if ~isfield(loaded.EEG, "etc") || ~isfield(loaded.EEG.etc, "GrandAverage")
-                return; % not a grand average; nothing to recalculate
+            ownEEG = this.loadNodeEEG(file, 'recalculate this dataset');
+            if isempty(ownEEG)
+                return;
             end
 
-            existingSpec = struct('name', loaded.EEG.id, ...
-                'sources', {loaded.EEG.etc.GrandAverage.sources}, ...
-                'weighted', loaded.EEG.etc.GrandAverage.weighted);
+            if isfield(ownEEG, "etc") && isfield(ownEEG.etc, "GrandAverage")
+                existingSpec = struct('name', ownEEG.id, ...
+                    'sources', {ownEEG.etc.GrandAverage.sources}, ...
+                    'weighted', ownEEG.etc.GrandAverage.weighted);
 
-            [candidateFiles, candidateLabels] = this.findGrandAverageCandidates();
-            spec = GrandAverageDialog(candidateFiles, candidateLabels, existingSpec);
-            if isempty(spec)
-                return; % cancelled
+                [candidateFiles, candidateLabels] = this.findGrandAverageCandidates();
+                spec = GrandAverageDialog(candidateFiles, candidateLabels, existingSpec);
+                if isempty(spec)
+                    return; % cancelled
+                end
+
+                try
+                    this.saveGrandAverage(spec, node);
+                catch err
+                    % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
+                    warndlg(err.message, 'Could not compute grand average');
+                end
+                return;
             end
 
+            this.recalculateTransformNode(node, ownEEG);
+        end
+
+        function recalculateTransformNode(this, node, ownEEG)
+        %RECALCULATETRANSFORMNODE  Reopen NODE's own transformation with an
+        %   editor pre-filled from its stored parameters (OWNEEG.params);
+        %   if the analyst leaves them unchanged, or cancels, nothing
+        %   happens. If they change them, NODE and every one of its
+        %   descendants are recomputed and overwritten IN PLACE (same node
+        %   ids, same files -- unlike a branch drag-drop, which always
+        %   creates new sibling nodes via persistResultNode): the whole
+        %   point of "recalculate" is revising a branch, not duplicating
+        %   it. Only ever reachable for a node whose Call is one of
+        %   WorkSpaceTree.RecalculableTransforms (see optsFor); still
+        %   re-validated here (defence in depth -- a .wksp saved before
+        %   this feature existed, or before a Transformations folder
+        %   cleanup, could otherwise reach here with a stale/foreign Call).
+            transformId = char(string(ownEEG.Call));
+            if isempty(transformId) ...
+                    || ~any(strcmp(transformId, WorkSpaceTree.RecalculableTransforms)) ...
+                    || exist(transformId, "file") ~= 2
+                uialert(this.MainFigure, sprintf( ...
+                    ['"%s" cannot be recalculated with edited parameters -- ' ...
+                     'either it has no editable options, or its transformation ' ...
+                     'file is missing.'], transformId), 'Cannot recalculate', 'Icon', 'warning');
+                return;
+            end
+
+            parentFile = this.Workspace.ActiveTree.parentFile(node.Id);
+            if isempty(parentFile) || exist(parentFile, "file") ~= 2
+                uialert(this.MainFigure, ...
+                    'This node''s input dataset could not be found -- cannot recalculate.', ...
+                    'Cannot recalculate', 'Icon', 'warning');
+                return;
+            end
+
+            % Seed transformId's own dialog with THIS node's stored
+            % parameters -- not the workspace's usual "last used" value,
+            % since editing a specific node should show that node's own
+            % values -- by temporarily standing in for TransformSettings
+            % (every RecalculableTransforms member reads its interactive
+            % seed from there; see e.g. Baseline.m's 'Init' branch), then
+            % restoring whatever was there before on exit so unrelated
+            % future runs of this transform are unaffected by having
+            % edited an older node.
+            previousStored = TransformSettings.get(transformId);
+            TransformSettings.set(transformId, ownEEG.params);
+            restoreStored = onCleanup(@() TransformSettings.set(transformId, previousStored));
+
+            originalDir = cd(this.RepoRoot);
+            restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+            this.MainFigure.Pointer = "watch";
+            restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
+
+            parentLoaded = load(parentFile, "EEG");
             try
-                this.saveGrandAverage(spec, node);
-            catch err
-                % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
-                warndlg(err.message, 'Could not compute grand average');
+                [newEEG, newParams] = feval(transformId, parentLoaded.EEG);
+            catch ME
+                this.restoreFocus();
+                this.showTransformationError(transformId, ME);
+                return;
+            end
+
+            if isempty(newEEG) || ishandle(newEEG)
+                % Cancelled (or a pure-plot transform -- shouldn't occur
+                % for anything in RecalculableTransforms, but stay
+                % consistent with onTransformation's own handling).
+                this.restoreFocus();
+                return;
+            end
+            if ~isstruct(newParams)
+                newParams = struct('Param', newParams);
+            end
+            if isequal(newParams, ownEEG.params)
+                % Nothing actually changed -- don't touch disk, don't
+                % close any open tab, don't recompute descendants for no
+                % reason.
+                this.restoreFocus();
+                return;
+            end
+
+            newEEG.Call   = transformId;
+            newEEG.params = newParams;
+            newEEG.File   = node.UserData; % keep this node's own identity/path
+            newEEG.id     = transformId;
+
+            % Compute the whole downstream branch in memory FIRST -- only
+            % once every descendant recomputes cleanly are any files
+            % actually overwritten, so a failure partway down never
+            % leaves the branch half-updated (some nodes reflecting the
+            % new parameters, others still stale).
+            try
+                plan = [struct('file', node.UserData, 'EEG', newEEG), ...
+                    this.planDescendantRecalc(node.UserData, newEEG)];
+            catch ME
+                this.restoreFocus();
+                this.showTransformationError(transformId, ME);
+                return;
+            end
+
+            for i = 1:numel(plan)
+                EEG = plan(i).EEG; % saved to disk under the variable name "EEG"
+                save(plan(i).file, "EEG");
+                % A currently open tab/tile for this file would otherwise
+                % keep showing its pre-edit content (plotCurrent reuses an
+                % already-open tab rather than rebuilding it) -- closing
+                % it means reselecting the node shows the fresh result,
+                % never a stale one.
+                this.closeTab(plan(i).file);
+            end
+
+            % A Grand Average built from a node in this branch keeps
+            % pointing at whatever that node's file contained when it was
+            % built (saveGrandAverage freezes absolute source paths) --
+            % without this, it would silently go stale the moment any of
+            % its sources got overwritten above, with no indication
+            % anything changed. Runs before Workspace.EEG is reset to
+            % NEWEEG below: refreshing a Grand Average adopts it as the
+            % current dataset in its own right (see saveGrandAverage), so
+            % the edited node needs to be re-asserted as current last.
+            this.recalculateAffectedGrandAverages({plan.file});
+
+            this.Workspace.EEG = newEEG;
+            this.Plotter.plotCurrent();
+            this.restoreFocus();
+        end
+
+        function recalculateAffectedGrandAverages(this, touchedFiles)
+        %RECALCULATEAFFECTEDGRANDAVERAGES  Silently refresh every Grand
+        %   Average built from any file in TOUCHEDFILES (a cell array of
+        %   paths just overwritten by recalculateTransformNode). Reuses
+        %   each affected Grand Average's OWN already-recorded sources
+        %   and weighting -- no dialog, no membership change -- exactly
+        %   what its own "Recalculate" context-menu action would produce
+        %   if the analyst reopened it and pressed OK without touching
+        %   anything. A Grand Average is never itself a valid source of
+        %   another (findGrandAverageCandidates excludes them), so this
+        %   never needs to cascade further than one level.
+            gaNodes = this.Workspace.GrandAveragesTree.allNodes();
+            for i = 1:numel(gaNodes)
+                gaFile = gaNodes(i).UserData;
+                if isempty(gaFile) || exist(gaFile, "file") ~= 2
+                    continue;
+                end
+                loaded = load(gaFile, "EEG");
+                gaEEG = loaded.EEG;
+                if ~isfield(gaEEG, "etc") || ~isfield(gaEEG.etc, "GrandAverage")
+                    continue;
+                end
+                % Case-insensitive on Windows (paths there are
+                % case-insensitive; ismember/strcmp are not -- same
+                % reasoning as toStoredPath's own ispc branch), so a
+                % harmless casing difference between how a source path
+                % was originally recorded and how it comes back from a
+                % fresh dir() scan doesn't silently defeat the match.
+                if ispc
+                    matched = any(cellfun(@(s) any(strcmpi(s, touchedFiles)), gaEEG.etc.GrandAverage.sources));
+                else
+                    matched = any(cellfun(@(s) any(strcmp(s, touchedFiles)), gaEEG.etc.GrandAverage.sources));
+                end
+                if ~matched
+                    continue; % this Grand Average does not draw on anything just recalculated
+                end
+
+                spec = struct('name', gaEEG.id, ...
+                    'sources', {gaEEG.etc.GrandAverage.sources}, ...
+                    'weighted', gaEEG.etc.GrandAverage.weighted);
+                % Same stale-tab risk saveGrandAverage's own plotCurrent
+                % call has (see recalculateTransformNode's own note):
+                % close any open tab for this Grand Average first, so it
+                % gets rebuilt fresh rather than silently reused.
+                this.closeTab(gaFile);
+                try
+                    this.saveGrandAverage(spec, gaNodes(i));
+                catch err
+                    % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
+                    warndlg(sprintf( ...
+                        ['Could not refresh Grand Average "%s" after recalculating ' ...
+                         'an upstream branch:\n\n%s'], gaEEG.id, err.message), ...
+                        'Could not recalculate Grand Average');
+                end
+            end
+        end
+
+        function plan = planDescendantRecalc(this, parentFile, parentEEG)
+        %PLANDESCENDANTRECALC  Pure (no disk writes): recompute every node
+        %   below PARENTFILE against the just-recomputed PARENTEEG, using
+        %   each node's own already-recorded transform id and parameters
+        %   UNCHANGED (only the node the analyst actually edited gets new
+        %   parameters -- everything downstream just re-runs headlessly,
+        %   exactly like evaluateDroppedBranch's own replay). Returns a
+        %   flat struct array of (file, EEG) pairs in an order safe to
+        %   save() top-down (parents before children); throws without
+        %   writing anything if any step fails, so the caller can abandon
+        %   the whole recalculation cleanly rather than saving a
+        %   half-updated branch.
+            plan = struct('file', {}, 'EEG', {});
+            [parentDir, parentName] = fileparts(parentFile);
+            childDir = fullfile(parentDir, parentName);
+            if exist(childDir, "dir") ~= 7
+                return; % leaf: nothing downstream
+            end
+
+            childFiles = dir(fullfile(childDir, '*.mat'));
+            for i = 1:numel(childFiles)
+                childFile = fullfile(childFiles(i).folder, childFiles(i).name);
+                childLoaded = load(childFile, "EEG");
+                childTransformId = char(string(childLoaded.EEG.Call));
+
+                if exist(childTransformId, "file") ~= 2
+                    throw(MException('Alakazam:planDescendantRecalc', ...
+                        ['Stored transformation ''%s'' no longer exists (its .m ' ...
+                         'file is missing from the Transformations folder). ' ...
+                         'Cannot recalculate "%s" and its descendants.'], ...
+                        childTransformId, char(string(childLoaded.EEG.id))));
+                end
+
+                [newChildEEG, ~] = feval(childTransformId, parentEEG, childLoaded.EEG.params);
+                newChildEEG.Call   = childLoaded.EEG.Call;
+                newChildEEG.params = childLoaded.EEG.params;
+                newChildEEG.File   = childFile;
+                newChildEEG.id     = childLoaded.EEG.id;
+
+                plan(end + 1) = struct('file', childFile, 'EEG', newChildEEG); %#ok<AGROW>
+                plan = [plan, this.planDescendantRecalc(childFile, newChildEEG)]; %#ok<AGROW>
             end
         end
 
@@ -1080,7 +1360,20 @@ classdef Alakazam < handle
                 return; % dropped onto empty space/root; no target dataset
             end
 
-            this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+            try
+                this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+            catch ME
+                % Without this, any failure here (a missing cache file, a
+                % transformation whose .m file is gone, or a genuine
+                % incompatibility mid-replay) would propagate uncaught
+                % straight through the uihtml event bridge as a raw stack
+                % trace -- this callback is the top of that chain, same as
+                % onTransformation's own try/catch is for a ribbon-run
+                % transformation.
+                uialert(this.MainFigure, sprintf( ...
+                    'Could not apply the dropped branch to this dataset:\n\n%s', ME.message), ...
+                    'Could not apply branch', 'Icon', 'warning');
+            end
         end
 
         function onTreeRenderError(this, eventData, sourceTree)
@@ -1114,8 +1407,11 @@ classdef Alakazam < handle
         %   transformation) act on whichever of the two trees this
         %   selection came from.
             this.Workspace.ActiveTree = sourceTree;
-            loaded = load(eventData.UserData, "EEG");
-            this.Workspace.EEG = loaded.EEG;
+            EEG = this.loadNodeEEG(eventData.UserData, 'select this dataset');
+            if isempty(EEG)
+                return;
+            end
+            this.Workspace.EEG = EEG;
             this.Plotter.plotCurrent();
         end
 
@@ -1126,9 +1422,53 @@ classdef Alakazam < handle
         %   WorkSpaceTree does not guarantee that ordering. SOURCETREE: see
         %   onNodeDropped.
             this.Workspace.ActiveTree = sourceTree;
-            loaded = load(eventData.UserData, "EEG");
-            this.Workspace.EEG = loaded.EEG;
+            EEG = this.loadNodeEEG(eventData.UserData, 'open this dataset');
+            if isempty(EEG)
+                return;
+            end
+            this.Workspace.EEG = EEG;
             this.Plotter.plotCurrent();
+        end
+
+        function EEG = loadNodeEEG(this, file, action)
+        %LOADNODEEEG  Load a tree node's backing .mat file, or [] (with a
+        %   clear uialert instead of a raw crash) if it is missing or
+        %   unreadable. A tree node can outlive its file -- the cache
+        %   folder cleared by hand, a workspace copied from another
+        %   machine with different paths, a branch deleted outside the
+        %   app -- and every caller here is reached directly from a JS
+        %   tree event, so an uncaught error would otherwise propagate as
+        %   a raw "Unable to find file" stack trace through the uihtml
+        %   event bridge (appdesservices...AbstractModel/
+        %   executeUserCallback) instead of a message the analyst can
+        %   actually act on. ACTION is a short present-tense phrase
+        %   naming what was being attempted, used only in the alert text
+        %   (e.g. 'select this dataset', 'rename this dataset').
+            EEG = [];
+            if isempty(file) || exist(file, "file") ~= 2
+                uialert(this.MainFigure, sprintf( ...
+                    ['Could not %s: its cache file is missing.\n\n    %s\n\n' ...
+                     'It may have been deleted or moved outside Alakazam, or ' ...
+                     'this workspace was copied from another computer.'], ...
+                    action, file), 'File not found', 'Icon', 'warning');
+                return;
+            end
+            try
+                loaded = load(file, "EEG");
+                EEG = loaded.EEG;
+                % FILE (just verified to exist, right here, on THIS
+                % machine) always wins over whatever EEG.File happens to
+                % already be: that field was baked into the .mat at the
+                % moment it was saved, correct only on the machine/
+                % username that created it (see treeTraverse's own note).
+                % Every caller that later re-derives a path from
+                % Workspace.EEG.File (persisting a new result, renaming,
+                % finding an open tab by Tag, ...) needs the real one.
+                EEG.File = file;
+            catch ME
+                uialert(this.MainFigure, sprintf('Could not %s:\n\n%s\n\n    %s', ...
+                    action, ME.message, file), 'Could not load dataset', 'Icon', 'warning');
+            end
         end
 
         function onContextMenuAction(this, eventData, sourceTree)
@@ -1233,8 +1573,70 @@ classdef Alakazam < handle
         %   View's ActivatedFcn, so keyboard/wheel shortcuts keep tracking
         %   whichever tile the user is actually working in once several are
         %   visible at once in Grid/Stack mode -- see activeTileTag,
-        %   dispatchWheel and dispatchKey.
+        %   dispatchWheel and dispatchKey. Also keeps Workspace.EEG in
+        %   sync (see syncActiveDataset) -- clicking inside a tile's own
+        %   content is exactly the same "the user's attention moved to a
+        %   different open dataset" event as clicking a tab header
+        %   (onPlotTabSelected) in Tabs mode.
             this.LastClickedTag = string(tag);
+            this.syncActiveDataset(tag);
+        end
+
+        function onPlotTabSelected(this, eventData)
+        %ONPLOTTABSELECTED  PlotsTabGroup.SelectionChangedFcn: keep
+        %   Workspace.EEG in sync when the user switches tabs by clicking
+        %   a tab header directly, not a tree node -- see
+        %   syncActiveDataset for why this matters.
+            if isempty(eventData.NewValue) || ~isvalid(eventData.NewValue)
+                return;
+            end
+            this.syncActiveDataset(eventData.NewValue.Tag);
+        end
+
+        function syncActiveDataset(this, file)
+        %SYNCACTIVEDATASET  Keep Workspace.EEG, Workspace.ActiveTree and
+        %   the tree's own visual selection in step with FILE (a tab's
+        %   own Tag, which is that dataset's EEG.File) whenever the
+        %   user's attention visibly moves to a different open dataset.
+        %
+        %   Before this existed, Workspace.EEG (the dataset a ribbon
+        %   transformation actually runs on) was only ever updated by
+        %   clicking a TREE node (onSelectionChanged/onNodeDoubleClicked)
+        %   -- switching tabs by clicking a tab header, or clicking a
+        %   different tile's own content in Grid/Stack mode, silently
+        %   left it unchanged. That let Workspace.EEG quietly diverge
+        %   from whatever dataset was actually on screen: running a
+        %   transformation from the ribbon would then apply to whatever
+        %   was last tree-selected, not the one being viewed -- root
+        %   cause of a "path not found" error running ScalpDistribution
+        %   on a visibly-active Grand Average that was not, in fact, the
+        %   tree's own current selection.
+            file = string(file);
+            currentFile = "";
+            if isstruct(this.Workspace.EEG) && isfield(this.Workspace.EEG, 'File')
+                currentFile = string(this.Workspace.EEG.File);
+            end
+            if strcmp(file, "") || strcmp(file, currentFile)
+                return;
+            end
+            try
+                loaded = load(char(file), "EEG");
+            catch
+                return; % the tab's own file is gone/unreadable; leave Workspace.EEG as-is
+            end
+            for tree = [this.Workspace.Tree, this.Workspace.GrandAveragesTree]
+                nodes = tree.allNodes();
+                if isempty(nodes)
+                    continue;
+                end
+                hit = nodes(strcmp({nodes.UserData}, char(file)));
+                if ~isempty(hit)
+                    tree.SelectedNodes = hit(1);
+                    this.Workspace.ActiveTree = tree;
+                    break;
+                end
+            end
+            this.Workspace.EEG = loaded.EEG;
         end
 
         function tag = activeTileTag(this)

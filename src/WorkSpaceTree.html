@@ -1208,7 +1208,7 @@ var AlakazamTree = (() => {
     { action: "listEvents", label: "List events" },
     { separator: true },
     { action: "rename", label: "Rename" },
-    { action: "recalculate", label: "Recalculate", disabled: true },
+    { action: "recalculate", label: "Recalculate" },
     { separator: true },
     { action: "delete", label: "Delete" }
   ];
@@ -1279,7 +1279,8 @@ var AlakazamTree = (() => {
           expanded: n.expanded !== false,
           children: [],
           parent: null,
-          canListEvents: !!n.canListEvents
+          canListEvents: !!n.canListEvents,
+          canRecalculate: !!n.canRecalculate
         });
       }
       this._root.children = [];
@@ -1475,7 +1476,7 @@ var AlakazamTree = (() => {
         const row = document.createElement("div");
         row.className = "alz-menu-item";
         row.textContent = item.label;
-        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents;
+        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate;
         if (disabled) {
           row.classList.add("alz-menu-item-disabled");
         } else {

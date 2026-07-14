@@ -112,6 +112,13 @@ if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
         {'Channel ENOVA threshold (0-1)'; 'ChannelENOVA'}, stored.ChannelENOVA, ...
         'separator', 'Performance:', ...
         {'Use parallel processing'; 'Parallel'}, parallelChoices);
+    if isempty(opts)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        EEG = [];
+        return;
+    end
     TransformSettings.set('AutoGEDAI', opts);
 end
 

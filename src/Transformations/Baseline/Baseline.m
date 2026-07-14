@@ -48,6 +48,13 @@ if strcmp(opts, 'Init')
         'separator' , 'Location:',...
         {'Start'; 'Start'}, stored.Start, ...
         {'Stop'; 'Stop'}, stored.Stop);
+    if isempty(opts)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        EEG = [];
+        return;
+    end
     TransformSettings.set('Baseline', opts);
 end
 

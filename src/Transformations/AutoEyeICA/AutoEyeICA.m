@@ -49,6 +49,13 @@ if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
         'title', 'AutoEyeICA options', ...
         'separator', 'Eye component threshold:', ...
         {'Probability (0-1)'; 'EyeThreshold'}, stored.EyeThreshold);
+    if isempty(opts)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        EEG = [];
+        return;
+    end
     TransformSettings.set('AutoEyeICA', opts);
 end
 

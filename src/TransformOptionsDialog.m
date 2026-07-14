@@ -19,10 +19,17 @@ function settings = TransformOptionsDialog(varargin)
 %   putFirst-style helper), a scalar logical is a checkbox, a numeric
 %   value is a numeric edit field, anything else a text edit field.
 %
-%   Cancelling (or closing the window) returns SETTINGS built from the
-%   ORIGINAL default values, unchanged -- the same contract settingsdlg's
-%   single-output form has (none of its callers ever check for an empty
-%   result), so no call site needs its own cancel handling.
+%   Cancelling (or closing the window) returns SETTINGS = [] (empty).
+%   This deliberately does NOT match settingsdlg's own single-output
+%   contract, which silently returns the pre-fill/default values on
+%   Cancel -- indistinguishable from pressing OK with nothing changed.
+%   Since no caller of settingsdlg ever checked for that (there was no
+%   way to, from a single output arg), clicking Cancel on e.g. Baseline's
+%   options dialog used to run Baseline anyway with default values and
+%   add a tree node the user never asked for. Every call site MUST check
+%   `if isempty(settings) ... end` and abort (return an empty EEG,
+%   handled by Alakazam.onTransformation the same way a cancelled
+%   transformation always is) rather than proceeding.
 %
 %   See also ALAKAZAMSETTINGS, SETTINGSDIALOG (the app's own global-
 %   settings dialog -- schema-driven from AlakazamSettings, a different
@@ -33,14 +40,11 @@ function settings = TransformOptionsDialog(varargin)
 
     [dlgTitle, description, fieldSpecs] = parseArgs(varargin);
 
-    % Original defaults, kept verbatim -- what's returned if the dialog is
-    % cancelled/closed instead of confirmed with OK.
-    settings = struct();
-    for k = 1:numel(fieldSpecs)
-        if strcmp(fieldSpecs(k).kind, 'field')
-            settings.(fieldSpecs(k).name) = defaultValueOf(fieldSpecs(k).default);
-        end
-    end
+    % [] until OK is actually pressed -- Cancel (button or window close)
+    % leaves this as [], the caller's signal to abort. Never pre-filled
+    % from the defaults (that was the bug: see this function's own
+    % header comment).
+    settings = [];
 
     nRows = numel(fieldSpecs);
     rowHeight = repmat({28}, 1, nRows);
@@ -151,6 +155,8 @@ function settings = TransformOptionsDialog(varargin)
     end
 
     function onCancel()
+        % settings is already [] (its initial value, never touched by
+        % anything but onOK) -- nothing to do beyond closing the window.
         delete(fig);
     end
 end
@@ -197,17 +203,5 @@ function [dlgTitle, description, fieldSpecs] = parseArgs(args)
                 'name', name, 'default', args(i + 1)); %#ok<AGROW>
             i = i + 2;
         end
-    end
-end
-
-function v = defaultValueOf(default)
-%DEFAULTVALUEOF  The value a field's DEFAULT represents when the dialog is
-%   cancelled: a dropdown's default is a cell array with the current
-%   choice first (the same convention settingsdlg itself uses), so that
-%   becomes the plain string; everything else is used as-is.
-    if iscell(default)
-        v = char(default{1});
-    else
-        v = default;
     end
 end

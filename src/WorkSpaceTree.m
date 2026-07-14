@@ -63,6 +63,26 @@ classdef WorkSpaceTree < handle
                     % content actually differs.
     end
 
+    properties (Constant)
+        % Transformation ids whose options dialog can be re-seeded with an
+        % arbitrary (rather than just "last used in this workspace")
+        % parameter struct -- see Alakazam.recalculateTransformNode, which
+        % temporarily stands in for TransformSettings to reopen one of
+        % these pre-filled with a specific node's own stored parameters.
+        % Every one of these follows the same [EEG,opts] = Fn(input) /
+        % [EEG,opts] = Fn(input,opts) contract and is already
+        % TransformSettings-wired (see PROJECT_STRUCTURE.md). Deliberately
+        % NOT exhaustive: ReRef/SelectData delegate to EEGLAB's own
+        % pop_reref/pop_select dialogs (no seed parameter), IIRFilter's
+        % dialog is a binary .mlapp (not text-seedable), and Average/
+        % ScalpDistribution take no options at all -- "Recalculate" stays
+        % disabled for nodes produced by any of those (see optsFor), since
+        % offering an edit it cannot actually perform would be worse than
+        % not offering it.
+        RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
+            'Baseline', 'DefineBins', 'Fourier', 'TimeFrequency'}
+    end
+
     methods
         function this = WorkSpaceTree(parent, varargin)
         %WORKSPACETREE  Build the tree inside PARENT (a figure or uipanel).
@@ -192,6 +212,26 @@ classdef WorkSpaceTree < handle
             end
         end
 
+        function file = parentFile(this, id)
+        %PARENTFILE  The cache file of ID's parent node, or '' if ID is a
+        %   root node, unknown, or its parent is unknown. Nodes is a flat
+        %   id -> struct map (see the class header), not a real object
+        %   graph, so this is the only way to find a node's input dataset
+        %   -- used by Alakazam.recalculateTransformNode to re-run a
+        %   transformation against the same input it originally ran
+        %   against.
+            file = '';
+            id = this.resolveId(id);
+            if ~isKey(this.Nodes, id)
+                return;
+            end
+            parentId = this.Nodes(id).parentId;
+            if isempty(parentId) || ~isKey(this.Nodes, parentId)
+                return;
+            end
+            file = this.Nodes(parentId).file;
+        end
+
         function clear(this)
         %CLEAR  Remove every node (used when reopening a workspace).
             this.Nodes = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -248,14 +288,25 @@ classdef WorkSpaceTree < handle
 
         function opts = optsFor(EEG)
         %OPTSFOR  Build an addNode opts struct from a loaded EEG's
-        %   DataFormat/etc.GrandAverage fields. 'List events' only makes
-        %   sense for continuous (non-epoched) data; 'Recalculate' only for
-        %   a Grand Average node -- both are baked into the node once, here,
-        %   rather than toggled reactively on right-click (as the old
-        %   Java context menu did).
+        %   DataFormat/Call/etc.GrandAverage fields. 'List events' only
+        %   makes sense for continuous (non-epoched) data. 'Recalculate' is
+        %   offered for a Grand Average node (revisit its subject list --
+        %   see Alakazam.onRecalculateNode), or for a node produced by one
+        %   of RecalculableTransforms (revisit its parameters and
+        %   recompute it and everything downstream -- see
+        %   Alakazam.recalculateTransformNode); every other node (a raw
+        %   root import, or one produced by a transform with no editable/
+        %   re-seedable dialog, e.g. ReRef/SelectData/IIRFilter/Average/
+        %   ScalpDistribution) leaves it disabled rather than offering an
+        %   edit it cannot actually perform. Both are baked into the node
+        %   once, here, rather than toggled reactively on right-click (as
+        %   the old Java context menu did).
+            isGrandAverage = isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage');
+            isEditableTransform = isfield(EEG, 'Call') && ~isempty(EEG.Call) && ...
+                any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
             opts = struct( ...
                 'canListEvents',  isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'CONTINUOUS'), ...
-                'canRecalculate', isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage'));
+                'canRecalculate', isGrandAverage || isEditableTransform);
         end
     end
 

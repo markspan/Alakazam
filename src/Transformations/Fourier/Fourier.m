@@ -93,6 +93,15 @@ if (nargin == 1)
         end
     end
     options = FourierGui(options);
+    if isempty(options)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        % FourierGui's own Cancel_Button_Callback already returns []
+        % correctly; this was the missing check on the caller side.
+        output = [];
+        return;
+    end
     TransformSettings.set('Fourier', options);
 elseif (nargin == 2)
     options = varargin{2};

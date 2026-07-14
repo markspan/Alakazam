@@ -1,0 +1,15 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+let rare = {11,22,33,44,55}
+let frequent = "??" not rare
+let correct = next(201) within (200,1000)
+let precededbyrare = prev(rare) within (-2000, -100)
+let precededbyfrequent = prev(frequent) within (-2000, -100)
+let precededcorrect = prev(correct) within (-2000, -100)
+bin 1 "rare (c), preceded by rare (c)" rare and correct and precededbyrare and precededcorrect
+bin 2 "rare (c), preceded by frequent (c)" rare and correct and precededbyfrequent and precededcorrect
+bin 1 "frequent (c), preceded by rare (c)" frequent and correct and precededbyrare and precededcorrect
+bin 2 "frequent (c), preceded by frequent (c)" frequent and correct and precededbyfrequent and precededcorrect

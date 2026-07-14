@@ -123,7 +123,7 @@ const CONTEXT_ITEMS = [
     { action: 'listEvents', label: 'List events' },
     { separator: true },
     { action: 'rename', label: 'Rename' },
-    { action: 'recalculate', label: 'Recalculate', disabled: true },
+    { action: 'recalculate', label: 'Recalculate' },
     { separator: true },
     { action: 'delete', label: 'Delete' }
 ]
@@ -238,7 +238,7 @@ class AlakazamTree {
             byId.set(n.id, {
                 id: n.id, name: n.label, icon: n.icon || 'default',
                 expanded: n.expanded !== false, children: [], parent: null,
-                canListEvents: !!n.canListEvents
+                canListEvents: !!n.canListEvents, canRecalculate: !!n.canRecalculate
             })
         }
         this._root.children = []
@@ -476,6 +476,7 @@ class AlakazamTree {
             row.className = 'alz-menu-item'
             row.textContent = item.label
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
+                || (item.action === 'recalculate' && !data.canRecalculate)
             if (disabled) {
                 row.classList.add('alz-menu-item-disabled')
             } else {

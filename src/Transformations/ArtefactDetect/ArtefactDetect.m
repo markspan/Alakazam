@@ -19,6 +19,13 @@ if strcmp(options, 'Init')
         'separator' , 'absolute limits: (mV)',...
         {'Min'; 'Minimum'}, stored.Minimum, ...
         {'Max'; 'Maximum'}, stored.Maximum);
+    if isempty(options)
+        % Cancelled: nothing to persist (leave the remembered settings
+        % untouched) and nothing to run -- Alakazam.onTransformation
+        % treats an empty EEG as "cancelled", not an error.
+        EEG = [];
+        return;
+    end
     TransformSettings.set('ArtefactDetect', options);
 end
 

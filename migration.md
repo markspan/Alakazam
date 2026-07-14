@@ -3809,3 +3809,477 @@ tab view now also has wheel navigation. Verified with
 `test_averageview_wheel.m`: direction/clamping at both ends, and the
 axes title reflects the wheel-selected channel after scrolling.
 `checkcode` clean on `AverageView.m` and `Alakazam.m`.
+
+**Bug fix: `Workspace.EEG` going stale when switching tabs/tiles.** User
+report: running ScalpDistribution while viewing a Grand Average (after
+copying the whole workspace folder tree elsewhere and repointing
+`Edit WorkSpace` at the new location) failed with a raw "The system
+cannot find the path specified" -- which `showTransformationError`
+dressed up as "this dataset is not yet [segmented/averaged/frequency-
+domain]" since it wasn't an `Alakazam:`-prefixed error, even though the
+data genuinely was already an average. The user's own diagnosis nailed
+it: inspecting `Workspace.EEG` while the Grand Average was the dataset
+on screen showed it was NOT the Grand Average at all.
+
+Root cause: `Workspace.EEG` -- "the dataset a ribbon transformation
+actually runs on" -- was previously only ever updated by clicking a TREE
+node (`onSelectionChanged`/`onNodeDoubleClicked`). Neither switching
+tabs by clicking a tab header (`PlotsTabGroup` had no
+`SelectionChangedFcn` at all) nor clicking a different tile's own
+content in Grid/Stack mode (`registerTileClick` only ever updated
+`LastClickedTag`, used purely for keyboard/wheel dispatch) touched it.
+So `Workspace.EEG` could silently drift from whatever was actually being
+viewed on screen; running a transformation from the ribbon would then
+apply to whatever dataset was last *tree*-selected -- in this report,
+some other, unrelated dataset whose own stale path (from before the
+folder copy) is what actually produced the "path not found" error.
+
+Fixed with a new `Alakazam.syncActiveDataset(file)`, called from both:
+- `onPlotTabSelected` (new), wired to `PlotsTabGroup.SelectionChangedFcn`
+  -- fires on a real tab-header click (confirmed directly it does NOT
+  fire on a programmatic `SelectedTab` assignment, only a genuine user
+  click, which is exactly why the functional test below invokes the
+  callback directly rather than just setting `SelectedTab`).
+- `registerTileClick` (existing), extended to also call
+  `syncActiveDataset` alongside its existing `LastClickedTag` update --
+  covers Grid/Stack mode's own "click a different tile" case with the
+  same fix.
+
+`syncActiveDataset` re-`load()`s the tab's own file (a no-op if it's
+already the active dataset), and also looks the file up in both
+`Workspace.Tree` and `Workspace.GrandAveragesTree` (via each tree's
+`allNodes()`, matching on `UserData`) to keep `Workspace.ActiveTree` and
+the tree's own visual `SelectedNodes` in step too -- not just
+`Workspace.EEG` -- so the tree highlight now follows the user around the
+same way switching by tree-click already did. A missing/unreadable file
+is caught and ignored rather than left to propagate a confusing error
+from what looks like an unrelated click.
+
+Verified with `test_syncactivedataset.m` against a real `Alakazam()`
+app: opening two datasets as tabs, then switching back to the first by
+invoking `SelectionChangedFcn` directly confirms `Workspace.EEG`
+resyncs; adding a real tree node and repeating the switch confirms the
+tree's own `SelectedNodes`/`ActiveTree` follow along too; Grid/Stack
+mode's `registerTileClick` is exercised directly; and both the
+already-active no-op and a nonexistent-file case are confirmed not to
+throw or corrupt state. `checkcode` clean on `Alakazam.m`.
+
+**Bug fix: cancelling a transformation's options dialog still added a
+tree node.** User report: "Some of the transformations don't play nice
+on cancel. They then do appear in the tree. A cancel should just return
+cancel, and there should be no item added to the tree. In any case."
+
+Root cause, found in `TransformOptionsDialog.m` (the earlier session's
+own `uiextras.settingsdlg` replacement, already wired into every real
+call site -- `ArtefactDetect`, `AutoEyeICA`, `AutoGEDAI`, `Baseline`,
+`TimeFrequency`): its `onCancel` callback only ever `delete(fig)`d the
+window, never touching the `settings` struct, which had already been
+pre-filled from the CALLER's defaults before the dialog even opened.
+Its own header comment even documented this as deliberate ("the same
+contract settingsdlg's single-output form has"), treating a genuine bug
+in the thing it replaced as a compatibility requirement to preserve.
+Confirmed directly in `uiextras/settingsdlg.m` itself that this really
+is settingsdlg's own behaviour: `Cancel(varargin)` sets `button =
+'cancel'` and deletes the figure, full stop -- it never modifies
+`settings` -- so its single-output call form (`opts = settingsdlg(...)`,
+the only form any of these transformations ever used) always returns
+the pre-fill defaults on Cancel, indistinguishable from OK. None of the
+5 real call sites had any way to detect that (no `button` output was
+ever captured), so clicking Cancel ran the transformation anyway with
+default/last-used values and added a tree node nobody asked for.
+
+Fixed in three layers:
+1. `TransformOptionsDialog.m`: `settings` now starts as `[]` and stays
+   `[]` unless `onOK` runs (which fully repopulates it from the live
+   controls regardless, so the old pre-fill-defaults block was dead
+   weight once Cancel stopped relying on it -- deleted, along with the
+   now-unused `defaultValueOf` helper). Header comment corrected to
+   document the new, actually-correct contract and require every caller
+   to check `isempty(settings)`.
+2. All 5 real call sites (`ArtefactDetect.m`, `AutoEyeICA.m`,
+   `AutoGEDAI.m`, `Baseline.m`, `TimeFrequency.m`) now check
+   `if isempty(opts) ... EEG = []; return; end` immediately after the
+   dialog call, BEFORE `TransformSettings.set(...)` -- so a cancelled
+   dialog also leaves the remembered per-transform settings untouched,
+   not just skips running. `Fourier.m` (a different, GUIDE-based dialog,
+   `FourierGui.m` -- confirmed its own `Cancel_Button_Callback` already
+   correctly sets `handles.options = []`) had the same *caller-side* gap
+   -- `Fourier.m` never checked for that empty result at all, so
+   cancelling would previously fall through into the transform body and
+   crash on `options.FullSpectrum` with a confusing raw error instead of
+   a clean abort. Given the same `if isempty(...) ... return; end` fix.
+3. `Alakazam.onTransformation`: the existing `if ishandle(result.EEG)
+   ... return; end` "pure plot" short-circuit is now `if isempty(...)
+   || ishandle(...) ... return; end`, treating an empty `EEG` result
+   (any transformation cancelling itself) exactly like a pure plot --
+   nothing to persist, no error shown. Also fixed, in passing, since it
+   shares this exact code path: neither branch previously reset
+   `MainFigure.Pointer` back from "watch" or called `restoreFocus()`
+   before returning, so a pure-plot transformation left the cursor stuck
+   on the busy icon; both early-return paths now do.
+
+A duplicate, differently-located `TransformOptionsDialog` I initially
+wrote from scratch (before discovering the real one already existed,
+already integrated, in `src/TransformOptionsDialog.m` from an earlier
+session) was deleted rather than kept alongside it.
+
+Verified with `test_transformcancel.m`: `TransformOptionsDialog` itself
+returns `[]` on Cancel and a real settings struct on OK; then, against a
+real `Alakazam()` app running the real `Baseline` transformation on a
+real epoched dataset, cancelling adds NO tree node, opens NO tab, and
+correctly resets the pointer -- while confirming OK still adds exactly
+one tree node/tab, so the fix didn't break the normal path. `checkcode`
+clean on `TransformOptionsDialog.m`, `Alakazam.m`, and all 6 edited
+transformation files.
+
+## "Recalculate" generalized: edit a node's own parameters, cascade the recompute down its branch
+
+`Recalculate` used to only ever be reachable for a Grand Average node
+(revisit its subject list). Every other node's context menu simply had
+it disabled -- despite each node already carrying everything needed to
+redo it: `EEG.Call` (the transformation id) and `EEG.params` (exactly
+what it ran with), the same provenance `evaluateDroppedBranch` already
+replays when a branch is dragged onto another dataset.
+
+Generalized so `Recalculate` also works for any node produced by a
+transformation with a genuinely re-seedable options dialog: reopen that
+dialog pre-filled with the NODE's own stored parameters (not the
+workspace's usual "last used" value), and if the analyst changes them,
+recompute that node AND every one of its descendants, overwriting them
+IN PLACE (same node ids, same files) rather than creating new sibling
+nodes the way a drag-drop replay does -- the point of "recalculate" is
+revising a branch, not duplicating it.
+
+Not every transformation qualifies. Only `ArtefactDetect`, `AutoEyeICA`,
+`AutoGEDAI`, `Baseline`, `DefineBins`, `Fourier` and `TimeFrequency` (see
+`WorkSpaceTree.RecalculableTransforms`) have a dialog that can be
+re-seeded with an arbitrary parameter struct -- they all read their
+interactive default from `TransformSettings.get(id)`. `ReRef`/
+`SelectData` delegate to EEGLAB's own `pop_reref`/`pop_select` dialogs
+(no seed parameter at all), `IIRFilter`'s dialog is a binary `.mlapp`
+(not text-seedable), and `Average`/`ScalpDistribution` take no options
+at all. `WorkSpaceTree.optsFor` now bakes `canRecalculate` in for a node
+from either of these two families of eligibility (Grand Average, or a
+`Call` in `RecalculableTransforms`) -- everything else, including a raw
+root import, keeps the menu item disabled: offering an edit the app
+cannot actually apply would be worse than not offering it at all.
+
+Design, in `Alakazam.m`:
+- `onRecalculateNode` now branches on the loaded node's own `EEG`: the
+  existing Grand-Average path is untouched; everything else goes to the
+  new `recalculateTransformNode(node, ownEEG)`.
+- `recalculateTransformNode` re-validates eligibility itself (defence in
+  depth -- a `.wksp` saved before this feature existed, or before a
+  Transformations folder cleanup, could otherwise reach here with a
+  stale/foreign `Call`), finds the node's parent file via the new
+  `WorkSpaceTree.parentFile(id)` (Nodes is a flat id -> struct map, the
+  only way to walk to a parent), then seeds the transform's own dialog
+  with this node's stored params by temporarily standing in for
+  `TransformSettings` -- `TransformSettings.set(id, ownEEG.params)`
+  before calling `feval(transformId, parentEEG)` the normal 1-arg
+  ("Init") way, restoring whatever was there before via `onCleanup` on
+  exit. This reuses every qualifying transform's existing dialog code
+  completely unchanged; no per-transform edits were needed.
+- If the result is empty (cancelled) or the new params `isequal` the old
+  ones, nothing happens -- no disk write, no descendant recompute, no
+  tab closed. This is a real no-op, not just "re-save the same thing".
+- Otherwise, the whole downstream branch is computed in memory FIRST
+  (`planDescendantRecalc`, a pure function -- no disk writes, throws
+  without saving anything if any step fails) before a single file is
+  overwritten: a failure partway down a branch must never leave it
+  half-updated, some nodes reflecting the new parameters and others
+  still stale. Only once the full plan succeeds does a loop `save()` each
+  file in parent-then-children order. Each descendant re-`feval`s its
+  OWN already-recorded transform id and parameters UNCHANGED (only the
+  node the analyst actually edited gets new parameters -- everything
+  downstream just re-runs headlessly, exactly like
+  `evaluateDroppedBranch`'s own replay).
+- Every file that gets overwritten also has `closeTab(file)` called on
+  it: `AlakazamPlotter.plotCurrent` reuses an already-open tab for a
+  given file rather than rebuilding it, so a stale open tab would
+  otherwise keep showing pre-edit data forever. The edited node itself
+  is then replotted immediately (`Workspace.EEG` + `plotCurrent()`), so
+  the analyst sees the fresh result without having to reselect it; a
+  descendant's tab, if one was open, is simply left closed -- reselecting
+  its tree node shows the (already recomputed) fresh result.
+- A Grand Average built from a node further down an edited branch keeps
+  pointing at whatever that node's file contained when it was built --
+  recalculating a branch does not cascade into any Grand Average, the
+  same way editing upstream data never automatically has; revisit it
+  separately with its own (pre-existing) Recalculate action if needed.
+
+Verified with `test_recalculate.m`: `WorkSpaceTree.optsFor` eligibility
+for a Baseline-produced node, a SelectData-produced node, a raw root
+import and a Grand Average; `parentFile` resolution including root-node
+and unknown-id edge cases; then, end to end against a real `Alakazam()`
+app with an on-disk root -> Baseline -> ArtefactDetect chain: editing
+the Baseline node's Start/Stop recomputes it AND independently
+recomputes the ArtefactDetect descendant against the new upstream data
+(both checked against an independently-recomputed expected result, not
+just "did the data change"), the descendant's own parameters stay
+untouched, no new tree nodes appear, the edited node's tab shows the
+fresh result immediately and the descendant's stale tab is closed;
+re-running with unchanged values or Cancel is confirmed to touch nothing
+on disk; and a synthetic ineligible (`SelectData`) node is confirmed
+refused safely via a direct call, bypassing the (already-disabled) menu
+gate. `checkcode` clean on `Alakazam.m` and `WorkSpaceTree.m`.
+
+While building the test, confirmed directly (a MATLAB version/API detail
+worth recording since it is easy to get wrong from memory) that a
+numeric edit field's `Type` property is `'uinumericeditfield'`, not the
+more guessable `'uieditfieldnumeric'` -- and that a fixed-delay timer
+probing a `TransformOptionsDialog` for its OK/Cancel button can fire
+before the button row finishes constructing (the dialog's figure and
+early fields are already live at that point, which is what makes the
+race easy to miss); the test's dialog-interaction helper polls for the
+button to exist rather than checking once.
+
+## Two live bugs reported interactively, both fixed
+
+The Recalculate work above was only ever exercised through headless
+MATLAB tests (`app.onContextMenuAction(...)` called directly) -- which,
+it turns out, was hiding a real bug in the actual UI. Both of the
+following were caught by trying the app interactively, not by any test.
+
+**"Recalculate" showed greyed out even on an eligible node.** The JS
+side's context menu never actually read `canRecalculate` at all:
+- `alakazam-tree.js`'s `CONTEXT_ITEMS` template hardcoded
+  `{ action: 'recalculate', label: 'Recalculate', disabled: true }` --
+  unlike `listEvents`, there was no per-node override clause for it in
+  `_openMenu`'s `disabled` computation at all.
+- Worse, `setNodes`'s per-node object (what `_openMenu` actually reads as
+  `data`) only ever copied `canListEvents: !!n.canListEvents` off the
+  incoming node -- `canRecalculate` was silently dropped during the
+  MATLAB -> JS mapping, so even fixing the first point alone would not
+  have been enough.
+
+This means Recalculate had likely never actually been clickable in the
+live UI for ANY node, including a Grand Average -- the MATLAB-side
+implementation was correct and heavily tested, but nothing ever reached
+it through a real right-click, only through tests that called
+`onContextMenuAction` directly and skip the JS menu entirely. Fixed in
+three places, in both `webtree/src/alakazam-tree.js` (the source) and
+`src/WorkSpaceTree.html` (the built artifact -- hand-synced, no Node.js
+available in this environment to rebuild, see `webtree/README.md`):
+dropped the template's hardcoded `disabled: true`; added
+`canRecalculate: !!n.canRecalculate` to the per-node object `setNodes`
+builds; added `|| (item.action === 'recalculate' && !data.canRecalculate)`
+to `_openMenu`'s `disabled` computation, mirroring the existing
+`listEvents`/`canListEvents` pattern exactly.
+
+**Selecting a tree node whose backing `.mat` file had gone missing
+crashed the app outright** -- a raw "Unable to find file" error
+propagating up through `Alakazam/onSelectionChanged`'s unguarded
+`load(eventData.UserData, "EEG")`, through `WorkSpaceTree/onEvent`, and
+out through the uihtml event bridge
+(`appdesservices...AbstractModel/executeUserCallback`) as an unreadable
+low-level MATLAB error instead of anything actionable. A tree node can
+outlive its file: a cache folder cleared by hand, a `.wksp` copied from
+another computer with different paths, a branch deleted outside the app.
+
+`onListEvents` already guarded against this (`isempty(file) ||
+exist(file,"file")~=2`, silently returning); `onSelectionChanged` and
+every other node-file load never did. Fixed by adding one shared
+`Alakazam.loadNodeEEG(file, action)`: returns the loaded `EEG`, or `[]`
+after a clear `uialert` ("Could not %s: its cache file is missing...")
+if the file is missing or fails to load -- ACTION is a short phrase used
+only in the alert text ('select this dataset', 'rename this dataset', ...).
+Wired into `onSelectionChanged`, `onNodeDoubleClicked`, `onRenameNode`,
+`onRecalculateNode`'s own initial load, and `onListEvents` (upgraded
+from a silent no-op to the same clear alert, for consistency). Every
+caller now checks `if isempty(EEG) ... return; end` and leaves
+`Workspace.EEG`/the tree exactly as they were.
+
+The same crash CLASS existed via drag-drop too, just never reported:
+`onNodeDropped` called `evaluateDroppedBranch` with no try/catch at all,
+so a missing target/source file (or the pre-existing "stored
+transformation no longer exists" `MException`) would have crashed
+exactly the same way. `evaluateDroppedBranch` now checks both
+`targetFile`/`sourceFile` exist before each `load` in its replay loop,
+throwing a clear `MException` if not (consistent with its existing
+missing-transformation check); `onNodeDropped` now wraps its call in
+try/catch, showing a `uialert` on any failure instead of letting it
+propagate.
+
+Verified with two new scratchpad tests. `test_missing_file.m`: a real
+`Alakazam()` app with a tree node whose `UserData` points at a file that
+genuinely does not exist -- `loadNodeEEG` itself, `onSelectionChanged`,
+`onNodeDoubleClicked`, both context-menu actions, and `onNodeDropped`
+(a fabricated drag-drop event) are all confirmed to complete without
+throwing and to leave `Workspace.EEG` untouched, where a raw crash used
+to propagate. `test_recalculate.m` re-run as a regression check since
+`onRecalculateNode` was touched again -- still fully passing. `checkcode`
+clean on `Alakazam.m`.
+
+## Root cause of the missing-file crash: a tree node's file came from EEG.File, not from where it actually was
+
+The missing-file crash above turned out to have a real cause, not just a
+missing guard: a workspace built on one machine (a work PC, Windows
+username "P154492") still tried to load
+`C:\Users\P154492\...\Cache\...\Baseline....mat` when reopened on another
+(home, username "mmspa") -- even though the workspace's own `.wksp`
+Directories were correctly `~`-relative and resolved to the right
+`mmspa`-rooted `CacheDirectory` (`toStoredPath`/`fromStoredPath`, see the
+earlier "Convert WorkSpace .wksp files..." section, were already doing
+their job correctly).
+
+The actual bug was in `WorkSpace/treeTraverse.m`: it lists the real
+`.mat` files under the (correctly resolved) `CacheDirectory` with `dir`,
+but then handed each tree node `data.EEG.File` -- a field baked INTO the
+`.mat` at the moment `persistResultNode`/`saveGrandAverage`/etc. first
+saved it, correct only on the machine/username that created it -- as
+the node's `UserData`, instead of the file's own real, just-verified
+location (`fullfile(file.folder, file.name)`). Every subsequent load
+(select, rename, recalculate, ...) then tried that stale absolute path
+verbatim. Since a workspace's files keep the same structure RELATIVE to
+its own Cache directory regardless of which computer it's opened on,
+deriving the node's path from where it was actually just found on disk
+(not from a value stored inside the file) is what makes the tree itself
+portable, matching how `RawDirectory`/`CacheDirectory`/`ExportsDirectory`
+were already made portable.
+
+Fixed in two places:
+- `treeTraverse.m`: `addNode` is now given `fullfile(file.folder,
+  file.name)`, not `data.EEG.File`.
+- `Alakazam.loadNodeEEG` (the shared single-node load helper from the
+  crash fix above): now stamps `EEG.File = file` (the path it was just
+  loaded from) unconditionally after `load()`, as a second line of
+  defence for any node still carrying a stale `EEG.File` from before
+  this fix (an already-open tree from an old session, or a tree rebuilt
+  by an older Alakazam version).
+- `evaluateDroppedBranch`: the same stamping, on `targetStruct.EEG.File`/
+  `sourceStruct.EEG.File`, right after loading -- it previously passed
+  `targetStruct.EEG.File` straight into `persistResultNode` (deriving the
+  new node's sibling-folder location from it), the same stale-path risk
+  via drag-drop instead of selection.
+
+## `startAlakazam`/`Alakazam` can now open a specific workspace directly
+
+Requested alongside the fix above, for the same underlying situation
+(switching computers/projects): `startAlakazam(workspaceFile)` /
+`Alakazam(workspaceFile)` opens with WORKSPACEFILE instead of always
+reading the repository's `DefaultWorkSpace.wksp`. A bare filename (no
+path separator, e.g. `"p300.wksp"`) resolves next to
+`DefaultWorkSpace.wksp` under the repository root; a relative or
+absolute path is used as given -- letting an analyst always launch
+straight into a specific project's workspace without going through "Open
+WorkSpace"'s interactive file picker every time.
+
+`WorkSpace`'s constructor gained a matching `nargin == 2` form (myParent
++ an explicit workspace file/name), sharing the exact same
+read-then-fall-back-to-RepoRoot-defaults logic the existing `nargin ==
+1` (default workspace) form already had -- the difference is only which
+file gets read. Took the opportunity to fix the pre-existing inconsistent
+indentation in this constructor's nested `if`/`try` structure while
+touching it (purely cosmetic, no behaviour change -- `checkcode` still
+flags the `try`/`end` keyword-alignment as a stylistic nit, which traces
+to a separate, pre-existing bug in the SAME constructor: the
+per-transformation `TransformSettings.loadFrom(...)` block is
+mis-nested inside the `catch` body rather than after the whole
+`try`/`catch`, so it currently only ever runs on the fallback-defaults
+path, never on a normal successful read -- flagged as a follow-up task
+rather than fixed here, since it is unrelated to what was actually
+asked for in this pass and deserves its own verification).
+
+Verified with `test_portable_paths.m`: a `.mat` file whose own `EEG.File`
+field points at a fabricated `C:\Users\P154492\...` path is placed in a
+temp cache folder and traversed with `WorkSpace.treeTraverse` directly --
+confirmed the resulting node's file is the real scanned path, not the
+stale one; `Alakazam.loadNodeEEG` independently confirmed to re-stamp
+`EEG.File` to the real path on load; `Alakazam(fullPathToWksp)` confirmed
+to adopt that workspace's own directories; `Alakazam(bareName)` confirmed
+to resolve and load a same-named `.wksp` placed directly under RepoRoot
+(created and removed via `onCleanup` for the test, never left behind --
+confirmed with `git status` afterward). `checkcode` clean on
+`Alakazam.m`, `treeTraverse.m` and `startAlakazam.m`; `WorkSpace.m` has
+only the pre-existing, now-explained `try`/`end` alignment nit.
+
+## Fixed the `try`/`end` alignment nit itself: TransformSettings was never actually restored on a normal open
+
+Went back and fixed the underlying bug the nit traced to (previously
+flagged as a follow-up, fixed on request): in `WorkSpace`'s constructor,
+the `TransformSettings.loadFrom(...)`/`.reset()` block was nested INSIDE
+the `catch` body of the `try`/`catch` that reads the workspace file, not
+after the whole construct. MATLAB's `try`/`catch` has one closing `end`
+for both branches, easy to misread as two separate blocks; the effect
+was that a workspace's remembered per-transformation options (last-used
+Baseline/ArtefactDetect/... parameters) were silently never restored on
+a normal, successful open, only on the fallback-defaults (missing/broken
+file) path.
+
+Moved the block to run after the try/catch (using the same
+`exist('DIRS','var')` check it already had to tell success from
+failure). Fixing this exposed a second, genuine bug hiding in the same
+few lines: with the block properly closed off, the OUTER
+`if/elseif/else` (`nargin==1||2||4` / `elseif nargin==4` / `else`)
+needed exactly one fewer closing `end` than before -- the original code
+had relied on `elseif` silently binding to the wrong (inner, `nargin==1`)
+`if` rather than the intended outer one, because that inner `if` was
+never given its own explicit close. Properly closing the inner `if`
+(needed for the new `nargin==2` branch added earlier) shifted `elseif`
+onto the outer `if`, which then had one extra `end` left over before its
+own `else` -- a genuine parse error, caught immediately by `checkcode`
+rather than shipped. Removed the stray `end`.
+
+Verified with `test_transformsettings_restore.m`: builds a custom `.wksp`
+with a `TransformSettings.Baseline` entry, opens it via
+`Alakazam(customWksp)`, and confirms `TransformSettings.get('Baseline')`
+actually returns the stored value afterward (poisoning the store to empty
+first, so a stale pass from leftover session state can't be mistaken for
+the fix working). `checkcode` clean on `WorkSpace.m`.
+
+## Recalculate now cascades into any Grand Average built from the edited branch
+
+Closes the gap `recalculateTransformNode`'s own doc comment used to
+name explicitly ("a Grand Average built from a node further down this
+branch... does not cascade... revisit it separately"): a Grand Average's
+`sources` are frozen absolute paths, recorded once when it was built
+(`GrandAverage.m`/`saveGrandAverage`) -- editing an upstream node used to
+leave any Grand Average built from something in that branch silently
+pointing at now-outdated data, with no indication anything had changed.
+
+New `Alakazam.recalculateAffectedGrandAverages(touchedFiles)`, called
+from `recalculateTransformNode` right after its main plan-save loop:
+walks every node in `Workspace.GrandAveragesTree`, and for any Grand
+Average whose own `etc.GrandAverage.sources` intersects `touchedFiles`
+(the full set of files the just-completed recalculation overwrote,
+`{plan.file}`), silently re-runs it -- reusing its own already-recorded
+sources and weighting unchanged (no dialog, no membership change),
+exactly what its own "Recalculate" context-menu action would produce if
+reopened and confirmed without touching anything. The source-path
+comparison is case-insensitive on Windows (`ispc` branch, mirroring
+`toStoredPath`'s own reasoning: paths there are case-insensitive but
+`strcmp`/`ismember` are not). A Grand Average is never itself a valid
+source of another (`findGrandAverageCandidates` excludes them), so this
+never needs more than one cascade level. `recalculateTransformNode`
+re-asserts the originally-edited node as `Workspace.EEG`/the current tab
+afterward, since refreshing a Grand Average adopts it as current in its
+own right (same as running it manually would).
+
+**A real near-miss while testing this**, worth recording since it could
+recur: `saveGrandAverage` (and therefore this cascade) always saves to
+`Workspace.CacheDirectory/GrandAverages`, regardless of where the node
+actually lives -- unlike everywhere else recalculation touches, which
+derives paths from the node's own file. A first test draft called plain
+`Alakazam()`, which opens the repository's real default workspace; the
+cascade under test then wrote a real `TestGA.mat` into the real
+`Data/Cache/GrandAverages/` folder. Caught immediately (the file's own
+`Access`/`Modify`/`Birth` timestamps matched the test run to the minute,
+and a `find -newermt` sweep of `Data/` confirmed nothing else, including
+the actual project data under `Data/p300/`, had been touched) and
+deleted. Rewrote the test to construct `Alakazam(customWksp)` against an
+isolated temp Raw/Cache/Exports tree throughout (the same pattern
+`test_portable_paths.m` already established) -- necessary specifically
+because this is the one code path that reaches into the real workspace's
+cache directory regardless of test fixture locations; every earlier test
+this session was already safe since none of them exercised anything
+Grand-Average-related.
+
+Verified with `test_recalculate_grandaverage.m` (isolated workspace
+throughout): a two-subject Grand Average built from a branch's Average
+output; recalculating the branch's Baseline node with changed parameters
+is confirmed to refresh the Grand Average automatically, with its data
+matching an independent recompute against the new upstream result (not
+just "did it change"); a second, unrelated Grand Average sharing no
+sources with the recalculated branch is confirmed to be left completely
+untouched. `checkcode` clean on `Alakazam.m`.
