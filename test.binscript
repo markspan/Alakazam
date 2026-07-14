@@ -14,8 +14,8 @@ let precededByFrequent = prev(frequent) within [-2,-1] events
 % jitter -- one event back from the current stimulus.
 let precededCorrect = prev(201) within [-1,-1] events
 %
-bin 1 "rare (c), preceded by rare (c)"     rare and correct and precededByRare and precededCorrect
-bin 2 "rare (c), preceded by frequent (c)" rare and correct and precededByFrequent and precededCorrect
+bin 1 "rare (c), preceded by rare (c)"         rare and correct and precededByRare and precededCorrect
+bin 2 "rare (c), preceded by frequent (c)"     rare and correct and precededByFrequent and precededCorrect
 bin 3 "frequent (c), preceded by rare (c)"     frequent and correct and precededByRare and precededCorrect
 bin 4 "frequent (c), preceded by frequent (c)" frequent and correct and precededByFrequent and precededCorrect
 bin 5 "rare" rare

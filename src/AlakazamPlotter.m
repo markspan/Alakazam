@@ -116,9 +116,21 @@ classdef AlakazamPlotter < handle
             % now that the view is in its final visible location, fixes the
             % size for good.
             drawnow;
-            view = getappdata(newTab, "SignalView");
-            if ~isempty(view) && isvalid(view)
-                view.redraw();
+            % drawnow yields to the event queue -- a nearly-simultaneous
+            % tree selection/recalculate elsewhere (e.g. Recalculate
+            % closing and reopening several tabs in quick succession) can
+            % process during this exact yield and delete NEWTAB out from
+            % under this call before it resumes, confirmed via a live
+            % "Value must be a handle" crash right here. Everything up to
+            % this point already succeeded against the same NEWTAB, so
+            % only this post-construction resize step -- purely a visual
+            % nicety, see the comment above -- needs to become a no-op
+            % rather than crash if that happened.
+            if isvalid(newTab)
+                view = getappdata(newTab, "SignalView");
+                if ~isempty(view) && isvalid(view)
+                    view.redraw();
+                end
             end
         end
     end
