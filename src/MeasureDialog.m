@@ -24,28 +24,36 @@ function windows = MeasureDialog(chanlocs, priorWindows)
 %   the same "empty means cancel" contract GrandAverageDialog/
 %   TransformOptionsDialog use.
 
-    MEASURE_CHOICES  = {'Mean Amplitude', 'Peak'};
+    MEASURE_CHOICES  = {'Mean Amplitude', 'Peak', 'Peak Area'};
     POLARITY_CHOICES = {'Positive', 'Negative'};
     COLUMN_NAMES     = {'Label', 'Start (ms)', 'Stop (ms)', 'Measure', 'Polarity', ...
-        'Reference channel', 'Channels'};
-    COLUMN_WIDTHS    = {110, 80, 80, 120, 85, 130, 150};
+        'Width (ms)', 'Reference channel', 'Channels'};
+    % Proportional ('Nx') widths, not fixed pixels, so the columns share
+    % and fill the table's width and grow/shrink with the window (the
+    % table itself already fills its '1x' grid row). Weights roughly keep
+    % the earlier readable proportions (Label/Measure/Reference/Channels
+    % wider than the numeric ms fields).
+    COLUMN_WIDTHS    = {'3x', '2x', '2x', '3x', '2x', '2x', '3x', '4x'};
 
     windows = [];  % returned only on OK; stays [] on Cancel
     allLabels = string({chanlocs.labels});
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
-    fig = uifigure('Name', 'Measure', 'Position', [100 100 780 420]);
+    fig = uifigure('Name', 'Measure', 'Position', [100 100 860 420]);
     outer = uigridlayout(fig, [4 1], 'RowHeight', {'fit', '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
         'Define one or more measurement windows. "Channels" blank = every channel, ' ...
-        'or a comma-separated list (e.g. Pz, Cz). "Peak" always exports both an ' ...
-        'amplitude and a latency value; "Reference channel" locks every selected ' ...
-        'channel''s readout to that one channel''s own found latency.'], ...
+        'or a comma-separated list (e.g. Pz, Cz). "Peak" exports an amplitude and a ' ...
+        'latency; "Peak Area" finds the peak, then exports the signed area over a ' ...
+        'band "Width (ms)" wide centred on it, plus the latency. "Reference channel" ' ...
+        '(Peak / Peak Area) locks every selected channel''s read-out to that one ' ...
+        'channel''s own found peak latency.'], ...
         'WordWrap', 'on');
 
-    table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 7), ...
-        'ColumnFormat', {'char', 'numeric', 'numeric', MEASURE_CHOICES, POLARITY_CHOICES, 'char', 'char'}, ...
+    table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 8), ...
+        'ColumnFormat', {'char', 'numeric', 'numeric', MEASURE_CHOICES, POLARITY_CHOICES, ...
+            'numeric', 'char', 'char'}, ...
         'ColumnWidth', COLUMN_WIDTHS, 'Data', rowsFromWindows(priorWindows));
     table.Layout.Row = 2;
     table.CellSelectionCallback = @(~, event) onCellSelected(event);
@@ -79,7 +87,7 @@ function windows = MeasureDialog(chanlocs, priorWindows)
     end
 
     function addRow()
-        newRow = {'New Window', 0, 500, MEASURE_CHOICES{1}, POLARITY_CHOICES{1}, '', ''};
+        newRow = {'New Window', 0, 500, MEASURE_CHOICES{1}, POLARITY_CHOICES{1}, 100, '', ''};
         table.Data = [table.Data; newRow];
     end
 
@@ -151,12 +159,19 @@ end
 % ======================================================================= %
 function data = rowsFromWindows(priorWindows)
 %ROWSFROMWINDOWS  PRIORWINDOWS (a cell array of window structs, or {}) as
-%   a uitable-compatible cell array of rows, one row per window.
-    data = cell(numel(priorWindows), 7);
+%   a uitable-compatible cell array of rows, one row per window. A window
+%   with no .width (e.g. a setting stored before Peak Area existed)
+%   defaults to 100 ms, so the column is never left empty.
+    data = cell(numel(priorWindows), 8);
     for i = 1:numel(priorWindows)
         w = priorWindows{i};
-        data(i, :) = {w.label, w.start, w.stop, w.measure, w.polarity, w.refChannel, ...
-            strjoin(cellstr(w.channels), ', ')};
+        if isfield(w, 'width') && ~isempty(w.width) && isnumeric(w.width)
+            width = w.width;
+        else
+            width = 100;
+        end
+        data(i, :) = {w.label, w.start, w.stop, w.measure, w.polarity, width, ...
+            w.refChannel, strjoin(cellstr(w.channels), ', ')};
     end
 end
 
@@ -190,13 +205,30 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
             return;
         end
 
-        [channels, chanErr] = parseChannelSpec(data{r, 7}, allLabels);
+        measure = char(string(data{r, 4}));
+
+        % Width (ms) is only required for a Peak Area window (the band it
+        % integrates over); for the other measures it is carried through
+        % unvalidated, so a value left in the cell from an earlier Peak
+        % Area edit does no harm.
+        width = data{r, 6};
+        if strcmpi(measure, 'Peak Area')
+            if ~isnumeric(width) || isnan(width) || width <= 0
+                errMsg = sprintf('Window "%s" is a Peak Area measure, so it needs a positive Width (ms).', label);
+                return;
+            end
+        end
+        if ~isnumeric(width) || isnan(width)
+            width = 100; % keep the stored field numeric even for non-area rows
+        end
+
+        [channels, chanErr] = parseChannelSpec(data{r, 8}, allLabels);
         if ~isempty(chanErr)
             errMsg = sprintf('Window "%s": %s', label, chanErr);
             return;
         end
 
-        refChannel = strtrim(char(string(data{r, 6})));
+        refChannel = strtrim(char(string(data{r, 7})));
         if ~isempty(refChannel) && ~any(strcmpi(allLabels, refChannel))
             errMsg = sprintf('Window "%s" names a reference channel ("%s") not in this dataset.', ...
                 label, refChannel);
@@ -204,7 +236,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
         end
 
         windows{r} = struct('label', label, 'start', double(startMs), 'stop', double(stopMs), ...
-            'measure', char(string(data{r, 4})), 'polarity', char(string(data{r, 5})), ...
+            'measure', measure, 'polarity', char(string(data{r, 5})), 'width', double(width), ...
             'refChannel', refChannel, 'channels', {channels});
     end
 end
@@ -260,8 +292,8 @@ function writeMeasuresFile(filePath, data)
     for i = 1:size(data, 1)
         rows{i} = struct('label', char(string(data{i, 1})), 'start', data{i, 2}, ...
             'stop', data{i, 3}, 'measure', char(string(data{i, 4})), ...
-            'polarity', char(string(data{i, 5})), 'refChannel', char(string(data{i, 6})), ...
-            'channels', char(string(data{i, 7})));
+            'polarity', char(string(data{i, 5})), 'width', data{i, 6}, ...
+            'refChannel', char(string(data{i, 7})), 'channels', char(string(data{i, 8})));
     end
     file = struct('alakazamMeasures', true, 'version', 1, 'rows', {rows});
     % ConvertInfAndNaN=false: see Alakazam.onSaveTemplate's own note --
@@ -291,9 +323,17 @@ function data = readMeasuresFile(filePath)
             'This does not look like a saved Measure window file.'));
     end
     n = numel(raw.rows);
-    data = cell(n, 7);
+    data = cell(n, 8);
     for i = 1:n
         r = raw.rows(i);
-        data(i, :) = {r.label, r.start, r.stop, r.measure, r.polarity, r.refChannel, r.channels};
+        % Tolerate a file saved before the Width column existed: default
+        % its width to 100 ms rather than failing to load.
+        if isfield(r, 'width') && ~isempty(r.width) && isnumeric(r.width)
+            width = r.width;
+        else
+            width = 100;
+        end
+        data(i, :) = {r.label, r.start, r.stop, r.measure, r.polarity, width, ...
+            r.refChannel, r.channels};
     end
 end

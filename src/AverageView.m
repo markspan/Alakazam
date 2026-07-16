@@ -144,6 +144,10 @@ classdef AverageView < handle
                 names(end + 1)   = allNames(i); %#ok<AGROW>
                 ymin = min(ymin, min(lo, [], "omitnan"));
                 ymax = max(ymax, max(hi, [], "omitnan"));
+
+                % Overlay this series' Measure annotations for the shown
+                % channel (a no-op unless this dataset is a Measure result).
+                this.drawMeasurements(ax, s, ch, colour, meanCh);
             end
 
             first = this.Series{1};
@@ -252,6 +256,89 @@ classdef AverageView < handle
             end
         end
 
+        function drawMeasurements(this, ax, s, ch, colour, meanCh)
+        %DRAWMEASUREMENTS  Overlay the Measure results carried by series S
+        %   (see prepare) onto the shown channel CH's line, in the series'
+        %   own colour so each annotation reads as belonging to its bin:
+        %     * Peak         -- a dot at (latency, amplitude) + a label.
+        %     * Peak Area    -- the integrated band shaded under the curve
+        %                       (peak_latency +/- width/2) + a label.
+        %     * Mean Amplitude -- a level line at the mean, spanning the
+        %                       measurement window, + a label.
+        %   Only the window rows that name the shown channel are drawn, so
+        %   stepping electrodes moves the annotations with the data. All
+        %   annotation objects are HandleVisibility 'off' so they never
+        %   leak into the legend (which is built from the mean-line handles
+        %   only). A no-op for a series with no measurements (any non-Measure
+        %   dataset).
+            if ~isfield(s, 'measurements') || isempty(s.measurements)
+                return;
+            end
+            chLabel = s.labels{ch};
+            b = s.bin;
+            t = reshape(s.times, 1, []);
+            for w = 1:numel(s.measurements)
+                win = s.measurements{w};
+                c = find(strcmpi(win.channels, chLabel), 1);
+                if isempty(c) || b > size(win.amplitude, 2)
+                    continue;
+                end
+                switch lower(strtrim(char(string(win.measure))))
+                    case 'mean amplitude'
+                        amp = win.amplitude(c, b);
+                        if isnan(amp); continue; end
+                        plot(ax, [win.start, win.stop], [amp, amp], 'Color', colour, ...
+                            'LineWidth', 2, 'HandleVisibility', 'off', 'Tag', 'MeasureAnnotation');
+                        this.measureLabel(ax, win.start, amp, win.label, colour);
+
+                    case 'peak'
+                        lat = win.latency(c, b);
+                        amp = win.amplitude(c, b);
+                        if isnan(lat) || isnan(amp); continue; end
+                        plot(ax, lat, amp, 'o', 'MarkerFaceColor', colour, ...
+                            'MarkerEdgeColor', 'k', 'MarkerSize', 6, 'HandleVisibility', 'off', ...
+                            'Tag', 'MeasureAnnotation');
+                        this.measureLabel(ax, lat, amp, win.label, colour);
+
+                    case 'peak area'
+                        lat = win.latency(c, b);
+                        if isnan(lat) || ~isfield(win, 'width') || isempty(win.width) || isnan(win.width)
+                            continue;
+                        end
+                        half = win.width / 2;
+                        mask = t >= (lat - half) & t <= (lat + half);
+                        tb = t(mask);
+                        yb = meanCh(mask);
+                        valid = ~isnan(yb);
+                        tb = tb(valid);
+                        yb = yb(valid);
+                        if numel(tb) < 2; continue; end
+                        % Fill between the curve and the 0-uV baseline over
+                        % the band -- the actual integrated area.
+                        patch(ax, [tb, fliplr(tb)], [yb, zeros(1, numel(yb))], colour, ...
+                            'EdgeColor', 'none', 'FaceAlpha', 0.25, 'HandleVisibility', 'off', ...
+                            'Tag', 'MeasureAnnotation');
+                        % Anchor the label at the peak apex (nearest sample
+                        % to the found latency).
+                        [~, pk] = min(abs(t - lat));
+                        this.measureLabel(ax, lat, meanCh(pk), win.label, colour);
+                end
+            end
+        end
+
+        function measureLabel(~, ax, x, y, label, colour)
+        %MEASURELABEL  A small, legend-invisible text tag for one measure
+        %   annotation, offset just right of its anchor point. Interpreter
+        %   'none' so a label with underscores/brackets renders literally.
+            if isnan(x) || isnan(y)
+                return;
+            end
+            text(ax, x, y, ['  ' char(string(label))], 'Color', colour, ...
+                'FontSize', 8, 'FontWeight', 'bold', 'VerticalAlignment', 'middle', ...
+                'HorizontalAlignment', 'left', 'Clipping', 'on', ...
+                'Interpreter', 'none', 'HandleVisibility', 'off', 'Tag', 'MeasureAnnotation');
+        end
+
         function buildCheckboxes(this, names)
         %BUILDCHECKBOXES  One tickbox per series, stacked down the right-hand
         %   grid strip (this.CheckboxGrid), reflecting (and toggling)
@@ -282,9 +369,14 @@ classdef AverageView < handle
         function series = prepare(~, eeg)
         %PREPARE  Expand an averaged dataset into one plot series per line:
         %   one per bin for a bin-aware average, otherwise a single series.
+        %   Each series also carries its own bin index and the dataset's
+        %   EEG.measurements (empty unless this is a Measure result), so
+        %   drawMeasurements can annotate the right line for the right bin
+        %   even when several datasets are overlaid on one axes.
             labels = {eeg.chanlocs.labels};
             if isfield(eeg, "id") && ~isempty(eeg.id); id = char(string(eeg.id)); else; id = ""; end
             file = char(string(eeg.File));   % unique per dataset; id is not
+            if isfield(eeg, "measurements"); meas = eeg.measurements; else; meas = {}; end
             series = {};
 
             isBinned = ndims(eeg.data) == 3 && isfield(eeg, "bindesc") ...
@@ -307,6 +399,8 @@ classdef AverageView < handle
                     s.data   = eeg.data(:, :, b);
                     s.stErr  = eeg.stErr(:, :, b);
                     s.labels = labels;
+                    s.bin    = b;
+                    s.measurements = meas;
                     series{end + 1} = s; %#ok<AGROW>
                 end
             else
@@ -321,6 +415,8 @@ classdef AverageView < handle
                     s.stErr = zeros(size(s.data));
                 end
                 s.labels = labels;
+                s.bin    = 1;
+                s.measurements = meas;
                 series{end + 1} = s;
             end
         end

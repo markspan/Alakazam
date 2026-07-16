@@ -50,7 +50,7 @@ function writeEntry(fid, entry)
         windowField = csvField(win.label);
         startField  = sprintf('%.6g', win.start);
         stopField   = sprintf('%.6g', win.stop);
-        isPeak      = strcmpi(win.measure, 'Peak');
+        measure     = lower(strtrim(char(string(win.measure))));
         nBins       = size(win.amplitude, 2);
 
         for b = 1:nBins
@@ -58,18 +58,35 @@ function writeEntry(fid, entry)
             for c = 1:numel(win.channels)
                 chField = csvField(win.channels{c});
                 prefix = sprintf('%s,%s,%s,%s,%s,', datasetField, typeField, binField, chField, windowField);
-                if isPeak
-                    fprintf(fid, '%speak_amplitude,%s,%s,%s\n', prefix, startField, stopField, ...
-                        numField(win.amplitude(c, b)));
-                    fprintf(fid, '%speak_latency,%s,%s,%s\n', prefix, startField, stopField, ...
-                        numField(win.latency(c, b)));
-                else
-                    fprintf(fid, '%smean_amplitude,%s,%s,%s\n', prefix, startField, stopField, ...
-                        numField(win.amplitude(c, b)));
+                % One measure_type row per value a window produces, so the
+                % single `value` column stays uniformly numeric: Mean
+                % Amplitude -> one row; Peak -> amplitude + latency; Peak
+                % Area -> area + amplitude + latency (the located peak's own
+                % value and time, alongside the integral). start/stop stay
+                % the window's own search range for every measure -- for
+                % Peak Area the integration band is width-ms centred on
+                % peak_latency, recoverable from that latency plus the
+                % window's own Width.
+                switch measure
+                    case 'peak'
+                        writeRow(fid, prefix, 'peak_amplitude', startField, stopField, win.amplitude(c, b));
+                        writeRow(fid, prefix, 'peak_latency',   startField, stopField, win.latency(c, b));
+                    case 'peak area'
+                        writeRow(fid, prefix, 'peak_area',      startField, stopField, win.area(c, b));
+                        writeRow(fid, prefix, 'peak_amplitude', startField, stopField, win.amplitude(c, b));
+                        writeRow(fid, prefix, 'peak_latency',   startField, stopField, win.latency(c, b));
+                    otherwise % Mean Amplitude
+                        writeRow(fid, prefix, 'mean_amplitude', startField, stopField, win.amplitude(c, b));
                 end
             end
         end
     end
+end
+
+function writeRow(fid, prefix, measureType, startField, stopField, value)
+%WRITEROW  One long-format CSV data row: PREFIX already carries the
+%   dataset/type/bin/channel/window fields (comma-terminated).
+    fprintf(fid, '%s%s,%s,%s,%s\n', prefix, measureType, startField, stopField, numField(value));
 end
 
 function label = binLabel(EEG, b)

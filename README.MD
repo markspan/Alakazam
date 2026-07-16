@@ -187,7 +187,7 @@ The current library:
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
-| `Measure` | Quantifies ERP components in named time windows -- mean amplitude, or peak amplitude + latency (optionally locked to one reference channel's own found latency) -- on a subject Average or a Grand Average. See [Measurement export](#measurement-export). |
+| `Measure` | Quantifies ERP components in named time windows -- mean amplitude, peak amplitude + latency, or peak area (the signed area of a band centred on the peak), optionally locked to one reference channel's found peak -- on a subject Average or a Grand Average. See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference and [Measurement export](#measurement-export). |
 
 Grand averaging (combining several subjects' `Average` results into one) is
 a separate mechanism, not a transformation plugin: it has its own ribbon tab
@@ -214,11 +214,14 @@ The **Measurements** ribbon tab's **Export Measurements...** walks the whole
 workspace (every subject branch and every Grand Average, in either tree) for
 a Measure result and writes one long-format, R-compatible CSV: one row per
 dataset x window x bin x channel x measure type (`mean_amplitude`,
-`peak_amplitude`, or `peak_latency` -- a "Peak" window contributes both of
-the latter as separate rows, so the CSV's own `value` column stays uniformly
-numeric). The same bulk-export-everything idea as **Export Grand
-Averages...** (see [`exportGrandAveragesCSV.m`](src/exportGrandAveragesCSV.m)),
-implemented in [`exportMeasurementsCSV.m`](src/exportMeasurementsCSV.m).
+`peak_amplitude`, `peak_latency`, or `peak_area` -- a "Peak" window
+contributes amplitude + latency and a "Peak Area" window area + latency, each
+as separate rows, so the CSV's own `value` column stays uniformly numeric).
+The same bulk-export-everything idea as **Export Grand Averages...** (see
+[`exportGrandAveragesCSV.m`](src/exportGrandAveragesCSV.m)), implemented in
+[`exportMeasurementsCSV.m`](src/exportMeasurementsCSV.m). The full window/
+measure reference, with worked examples, is
+[`measure.md`](src/Transformations/Measure/measure.md).
 
 ![ScreenshotERP](Screenshots/ERP.jpg)
 
