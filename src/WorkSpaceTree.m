@@ -3,8 +3,9 @@ classdef WorkSpaceTree < handle
 %   WorkSpaceTree wraps a self-contained uihtml page (WorkSpaceTree.html,
 %   built from src/webtree/ -- see src/webtree/README.md) that renders a
 %   drag-and-drop tree via yy-tree, with per-node icons, a context menu
-%   (List events / Rename / Recalculate / Delete), double-click detection
-%   and always-revert drop semantics: dropping one node onto another never
+%   (List events / Rename / Recalculate / Apply to All Raw Files / Delete),
+%   double-click detection and always-revert drop semantics: dropping one
+%   node onto another never
 %   moves it, it always means "apply this branch's transformations to the
 %   dropped-on dataset" (see src/webtree/README.md). uiextras.jTree was
 %   Java-Swing-based and could
@@ -13,7 +14,8 @@ classdef WorkSpaceTree < handle
 %   web-native replacement, not just a port.
 %
 %   The MATLAB-side node model is a flat id -> struct map (id, label,
-%   parentId, icon, file, canListEvents, canRecalculate, isRoot); the whole
+%   parentId, icon, file, canListEvents, canRecalculate, canApplyToAll,
+%   isRoot); the whole
 %   set is pushed to the JS side as one Data snapshot on every change (via
 %   uihtml's Data property). Callback function handles
 %   (SelectionChangedFcn, NodeDroppedFcn, NodeDoubleClickedFcn,
@@ -80,7 +82,7 @@ classdef WorkSpaceTree < handle
         % offering an edit it cannot actually perform would be worse than
         % not offering it.
         RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
-            'Baseline', 'DefineBins', 'Fourier', 'TimeFrequency'}
+            'Baseline', 'DefineBins', 'Fourier', 'Measure', 'TimeFrequency'}
     end
 
     methods
@@ -129,10 +131,11 @@ classdef WorkSpaceTree < handle
         %ADDNODE  Add a node, returning its struct(Id,Name,UserData,IsRoot).
         %   PARENTID is another node's Id, or '' for a top-level node. OPTS
         %   is a struct with optional fields canListEvents, canRecalculate,
-        %   isRoot (all default false).
+        %   canApplyToAll, isRoot (all default false).
             if nargin < 6; opts = struct(); end
             if ~isfield(opts, 'canListEvents');  opts.canListEvents  = false; end
             if ~isfield(opts, 'canRecalculate'); opts.canRecalculate = false; end
+            if ~isfield(opts, 'canApplyToAll');  opts.canApplyToAll  = false; end
             if ~isfield(opts, 'isRoot');         opts.isRoot         = false; end
 
             id = sprintf('n%d', this.NextId);
@@ -141,6 +144,7 @@ classdef WorkSpaceTree < handle
                 'parentId', char(parentId), 'icon', char(icon), 'file', char(file), ...
                 'canListEvents', logical(opts.canListEvents), ...
                 'canRecalculate', logical(opts.canRecalculate), ...
+                'canApplyToAll', logical(opts.canApplyToAll), ...
                 'isRoot', logical(opts.isRoot));
             this.push();
             node = this.nodeStruct(id);
@@ -232,6 +236,28 @@ classdef WorkSpaceTree < handle
             file = this.Nodes(parentId).file;
         end
 
+        function node = rootOf(this, id)
+        %ROOTOF  The root ancestor of ID, walking parentId links up through
+        %   the flat id->struct map (see the class header) -- [] if ID is
+        %   unknown. Used by Alakazam.onApplyToAllRawFiles to find (and
+        %   then exclude) the raw file a branch already descends from, so
+        %   "apply to all" never re-applies a branch onto its own source
+        %   recording.
+            id = this.resolveId(id);
+            if ~isKey(this.Nodes, id)
+                node = [];
+                return;
+            end
+            while true
+                parentId = this.Nodes(id).parentId;
+                if isempty(parentId) || ~isKey(this.Nodes, parentId)
+                    break;
+                end
+                id = parentId;
+            end
+            node = this.nodeStruct(id);
+        end
+
         function clear(this)
         %CLEAR  Remove every node (used when reopening a workspace).
             this.Nodes = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -300,7 +326,12 @@ classdef WorkSpaceTree < handle
         %   ScalpDistribution) leaves it disabled rather than offering an
         %   edit it cannot actually perform. Both are baked into the node
         %   once, here, rather than toggled reactively on right-click (as
-        %   the old Java context menu did).
+        %   the old Java context menu did). Does NOT set canApplyToAll:
+        %   unlike the other two flags, that one depends on which tree the
+        %   node is being added to (only Workspace.Tree, never
+        %   Workspace.GrandAveragesTree), which this EEG-only function has
+        %   no way to know -- see Alakazam.persistResultNode, which sets it
+        %   itself after calling this.
             isGrandAverage = isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage');
             isEditableTransform = isfield(EEG, 'Call') && ~isempty(EEG.Call) && ...
                 any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
@@ -381,7 +412,7 @@ classdef WorkSpaceTree < handle
                 end
                 nodes{i} = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
                     'parentId', parentId, 'canListEvents', n.canListEvents, ...
-                    'canRecalculate', n.canRecalculate);
+                    'canRecalculate', n.canRecalculate, 'canApplyToAll', n.canApplyToAll);
             end
             selId = this.SelectedId;
             if isempty(selId); selId = []; end

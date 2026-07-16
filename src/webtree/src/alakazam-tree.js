@@ -124,6 +124,10 @@ const CONTEXT_ITEMS = [
     { separator: true },
     { action: 'rename', label: 'Rename' },
     { action: 'recalculate', label: 'Recalculate' },
+    { action: 'applyToAll', label: 'Apply to All Raw Files...' },
+    { separator: true },
+    { action: 'saveTemplate', label: 'Save Template...' },
+    { action: 'applyTemplate', label: 'Apply Template...' },
     { separator: true },
     { action: 'delete', label: 'Delete' }
 ]
@@ -238,7 +242,8 @@ class AlakazamTree {
             byId.set(n.id, {
                 id: n.id, name: n.label, icon: n.icon || 'default',
                 expanded: n.expanded !== false, children: [], parent: null,
-                canListEvents: !!n.canListEvents, canRecalculate: !!n.canRecalculate
+                canListEvents: !!n.canListEvents, canRecalculate: !!n.canRecalculate,
+                canApplyToAll: !!n.canApplyToAll
             })
         }
         this._root.children = []
@@ -475,8 +480,16 @@ class AlakazamTree {
             const row = document.createElement('div')
             row.className = 'alz-menu-item'
             row.textContent = item.label
+            // 'saveTemplate' reuses canApplyToAll: same eligibility as "Apply
+            // to All Raw Files" (a non-root branch in the Data & Analyses
+            // tree) -- both act on "this branch" as a structural unit, see
+            // Alakazam.persistResultNode. 'applyTemplate' has no data-driven
+            // eligibility at all: it is valid for any node whatsoever (like
+            // rename/delete), so it is never disabled here.
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
                 || (item.action === 'recalculate' && !data.canRecalculate)
+                || (item.action === 'applyToAll' && !data.canApplyToAll)
+                || (item.action === 'saveTemplate' && !data.canApplyToAll)
             if (disabled) {
                 row.classList.add('alz-menu-item-disabled')
             } else {

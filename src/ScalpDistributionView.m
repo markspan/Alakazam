@@ -48,6 +48,12 @@ classdef ScalpDistributionView < handle
         BinIndices      % original EEG.data 3rd-dim index for each drawn tile
         TimeLabel       % "t = ... ms" readout above the slider
         Slider          % uislider spanning EEG.times(1):EEG.times(end)
+        PlayButton      % uibutton, just left of the slider -- see onPlay
+    end
+
+    properties (Constant, Access = private)
+        PlayMaxFrames    = 60    % subsample above this many samples in range, for a snappy animation on high-rate data
+        PlayFrameSeconds = 0.04  % target pause between frames (on top of each frame's own render time)
     end
 
     methods
@@ -119,9 +125,23 @@ classdef ScalpDistributionView < handle
             sliderMin = roundTo5(eeg.times(1));
             sliderMax = roundTo5(eeg.times(end));
 
-            this.Slider = uislider(this.Grid, "Limits", [sliderMin, sliderMax]);
-            this.Slider.Layout.Row = nRows + 2;
-            this.Slider.Layout.Column = this.spanColumns(nCols + 1);
+            % The Play button sits just left of the slider, in its own
+            % narrow fixed-width column -- a nested 2-column grid inside
+            % this one cell (rather than adding a column to this.Grid
+            % itself) so the tile/colorbar columns above, and the
+            % TimeLabel row's own span, are untouched.
+            sliderRow = uigridlayout(this.Grid, [1, 2], ...
+                "ColumnWidth", {28, '1x'}, "Padding", [0 0 0 0], "ColumnSpacing", 4);
+            sliderRow.Layout.Row = nRows + 2;
+            sliderRow.Layout.Column = this.spanColumns(nCols + 1);
+
+            this.PlayButton = uibutton(sliderRow, "Text", char(9654), ... % U+25B6 "black right-pointing triangle"
+                "Tooltip", "Play through the time range once", ...
+                "ButtonPushedFcn", @(~, ~) this.onPlay());
+            this.PlayButton.Layout.Column = 1;
+
+            this.Slider = uislider(sliderRow, "Limits", [sliderMin, sliderMax]);
+            this.Slider.Layout.Column = 2;
             % uislider's own default MajorTicks/MajorTickLabels are 5
             % evenly-spaced raw fractions of Limits -- pretty-print
             % instead: round tick values to whole ms, labelled to match.
@@ -232,6 +252,82 @@ classdef ScalpDistributionView < handle
         %   convention) and redraw at the dragged/released time.
             this.notifyActivated();
             this.redraw(t);
+        end
+
+        function onPlay(this)
+        %ONPLAY  Play button callback: animate through the slider's whole
+        %   [Limits(1), Limits(2)] range once, from the start, moving the
+        %   slider and redrawing one frame at a time. A plain synchronous
+        %   pause/drawnow loop, not a timer object -- this is a short,
+        %   bounded "play once" animation with no need to keep running in
+        %   the background once the callback returns, so there is no
+        %   separate object lifetime to start/stop/clean up on tab close
+        %   (unlike a timer, which would keep firing after the tab/figure
+        %   is gone unless something explicitly stopped it first). If the
+        %   tab is closed mid-animation, the isvalid guard below just ends
+        %   the loop on its next iteration; drawnow (which processes
+        %   pending callbacks, not just graphics) is what lets that
+        %   Close happen at all while this loop is running.
+        %
+        %   Subsamples to at most PlayMaxFrames evenly-spaced samples
+        %   across the range (a several-hundred-sample epoch at a high
+        %   sample rate would otherwise mean hundreds of real topography
+        %   redraws -- each a genuine EEGLAB-style interpolated render,
+        %   not a cheap line redraw -- making "once" take far longer than
+        %   a quick, watchable pass).
+        %
+        %   Restores the slider (and the drawn topography) to wherever it
+        %   was before playing, once the animation ends by any path -- see
+        %   restoreSliderValue -- so Play previews the whole range as a
+        %   one-off without permanently losing your place.
+            this.notifyActivated();
+            eeg = this.EEG;
+            startT = this.Slider.Value;
+            inRange = find(eeg.times >= this.Slider.Limits(1) & eeg.times <= this.Slider.Limits(2));
+            if numel(inRange) > this.PlayMaxFrames
+                inRange = inRange(round(linspace(1, numel(inRange), this.PlayMaxFrames)));
+            end
+            if isempty(inRange)
+                return;
+            end
+
+            this.PlayButton.Enable = "off";
+            restoreButton   = onCleanup(@() this.reenablePlayButton());
+            restorePosition = onCleanup(@() this.restoreSliderValue(startT));
+
+            for idx = inRange
+                if ~isvalid(this.Slider)
+                    return; % the tab was closed mid-animation
+                end
+                t = eeg.times(idx);
+                this.Slider.Value = min(max(t, this.Slider.Limits(1)), this.Slider.Limits(2));
+                this.redraw(t);
+                drawnow;
+                pause(this.PlayFrameSeconds);
+            end
+        end
+
+        function restoreSliderValue(this, t)
+        %RESTORESLIDERVALUE  onPlay's onCleanup target: put the slider
+        %   (and the drawn topography) back to T -- wherever it was before
+        %   Play was pressed -- once the animation ends, by any path.
+        %   Guarded the same way as reenablePlayButton, since the slider
+        %   may no longer exist if the tab was closed mid-animation.
+            if isvalid(this.Slider)
+                this.Slider.Value = t;
+                this.redraw(t);
+            end
+        end
+
+        function reenablePlayButton(this)
+        %REENABLEPLAYBUTTON  onPlay's onCleanup target: re-enable the Play
+        %   button once the animation loop ends, by any path (ran to
+        %   completion, or returned early because the tab was closed).
+        %   Guarded the same way, since the button itself may no longer
+        %   exist in that second case.
+            if isvalid(this.PlayButton)
+                this.PlayButton.Enable = "on";
+            end
         end
     end
 

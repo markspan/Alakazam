@@ -32,7 +32,15 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   Averages" tree holds combined results, which don't belong nested under any
   single subject. Applying a transformation to the selected dataset creates
   a new child node; dragging a processed branch onto another dataset
-  re-applies the same chain of steps to it.
+  re-applies the same chain of steps to it. A branch's right-click menu also
+  offers **Apply to All Raw Files...**, which does the same to every other
+  raw recording already in the workspace in one action, rather than
+  dragging onto each one by hand. **Save Template...** exports that same
+  branch as a portable `.alztemplate` file (a plain JSON list of steps,
+  independent of this workspace's own cache files); **Apply Template...**,
+  available on any node, replays a saved template's steps onto it -- the
+  same recipe applied later, in another workspace, or after Alakazam has
+  been restarted.
 - **Format support.** BrainVision (`.vhdr`, via the bva-io EEGLAB plugin),
   EEGLAB `.set`, and previously-saved Alakazam `.mat` sessions. Each raw file
   is cached to `.mat` on first read and only re-parsed if the raw file is
@@ -179,12 +187,38 @@ The current library:
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
+| `Measure` | Quantifies ERP components in named time windows -- mean amplitude, or peak amplitude + latency (optionally locked to one reference channel's own found latency) -- on a subject Average or a Grand Average. See [Measurement export](#measurement-export). |
 
 Grand averaging (combining several subjects' `Average` results into one) is
 a separate mechanism, not a transformation plugin: it has its own ribbon tab
 and dialog (`GrandAverage.m`/`GrandAverageDialog.m`) and lands in the
 "Grand Averages" tree rather than nested under any one subject's branch
 (see [Key features](#key-features)).
+
+## Measurement export
+
+`Measure` turns a window on a waveform into a number: define one or more
+named windows (a table editor, add/remove rows) and it computes each one's
+value per bin and channel, stored on the result as `EEG.measurements`. The
+dialog's own **Save.../Load...** (matching `DefineBins`' own Save/Load pair)
+saves the table's current rows to a portable `.alzmeasures` JSON file, so a
+window set can be reused across dialogs, workspaces, or shared with a
+colleague, independent of any one dataset's Recalculate history. Because it
+is an ordinary transformation, a whole
+`raw -> filter -> epoch -> baseline -> artefact-reject -> average -> measure`
+pipeline can be defined once and replayed across a study with Apply to All
+Raw Files or a saved template (see [Key features](#key-features)) -- no need
+to re-run Measure by hand on every subject.
+
+The **Measurements** ribbon tab's **Export Measurements...** walks the whole
+workspace (every subject branch and every Grand Average, in either tree) for
+a Measure result and writes one long-format, R-compatible CSV: one row per
+dataset x window x bin x channel x measure type (`mean_amplitude`,
+`peak_amplitude`, or `peak_latency` -- a "Peak" window contributes both of
+the latter as separate rows, so the CSV's own `value` column stays uniformly
+numeric). The same bulk-export-everything idea as **Export Grand
+Averages...** (see [`exportGrandAveragesCSV.m`](src/exportGrandAveragesCSV.m)),
+implemented in [`exportMeasurementsCSV.m`](src/exportMeasurementsCSV.m).
 
 ![ScreenshotERP](Screenshots/ERP.jpg)
 

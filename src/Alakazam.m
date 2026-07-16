@@ -235,9 +235,18 @@ classdef Alakazam < handle
             % (Transformations/<transformId>/*.json's Icon), scaled down
             % for the tree row -- see WorkSpaceTree.iconForResult.
             transRoot = fullfile(this.RootDir, 'Transformations');
+            % 'Apply to All Raw Files' only makes sense for a branch living
+            % in the Data & Analyses tree (a chain rooted in one raw
+            % recording, replayable onto others) -- never for a node added
+            % under a Grand Average (see this method's own header comment:
+            % running a transformation on a selected grand average adds its
+            % result into GrandAveragesTree instead). WorkSpaceTree.optsFor
+            % cannot compute this itself, since it only sees the EEG, not
+            % which tree it is headed for.
+            opts = WorkSpaceTree.optsFor(resultEEG);
+            opts.canApplyToAll = isequal(this.Workspace.ActiveTree, this.Workspace.Tree);
             newNode = this.Workspace.ActiveTree.addNode(resultEEG.id, parentTreeNode.Id, ...
-                WorkSpaceTree.iconForResult(resultEEG, transRoot), resultEEG.File, ...
-                WorkSpaceTree.optsFor(resultEEG));
+                WorkSpaceTree.iconForResult(resultEEG, transRoot), resultEEG.File, opts);
             this.Workspace.ActiveTree.SelectedNodes = newNode;
 
             % Persist to disk under the variable name "EEG" and adopt it as the
@@ -245,6 +254,137 @@ classdef Alakazam < handle
             EEG = resultEEG; % saved to disk under the variable name "EEG"
             save(resultEEG.File, "EEG");
             this.Workspace.EEG = resultEEG;
+        end
+
+        function steps = collectBranchSteps(~, sourceFile)
+        %COLLECTBRANCHSTEPS  Walk the branch rooted at SOURCEFILE (a node's
+        %   own cache file) down through its single-chain descendants,
+        %   collecting each step's (transformId, params) in order --
+        %   SOURCEFILE's own step first. Pure (no disk writes, no dependence
+        %   on the tree/UI): used by onSaveTemplate to turn a live branch
+        %   into a portable template file.
+        %
+        %   Same child-folder convention as persistResultNode/
+        %   evaluateDroppedBranch (a node's descendants live in a folder
+        %   named after its own file stem, sibling to it). A branch that
+        %   forks (more than one child under some node) only follows the
+        %   first child found -- matching evaluateDroppedBranch's own
+        %   existing single-chain assumption; dragging a forked branch is
+        %   not really supported today either.
+            steps = struct('transformId', {}, 'params', {});
+            file = sourceFile;
+            atLeaf = false;
+            while ~atLeaf
+                if exist(file, "file") ~= 2
+                    throw(MException('Alakazam:collectBranchSteps', ...
+                        'A step''s cache file is missing:\n\n    %s', file));
+                end
+                loaded = load(file, "EEG");
+                steps(end + 1) = struct('transformId', char(string(loaded.EEG.Call)), ...
+                    'params', loaded.EEG.params); %#ok<AGROW>
+
+                [dirPart, namePart] = fileparts(file);
+                childDir = fullfile(dirPart, namePart);
+                if exist(childDir, "dir")
+                    childMat = dir(fullfile(childDir, '*.mat'));
+                    file = fullfile(childDir, childMat(1).name);
+                else
+                    atLeaf = true;
+                end
+            end
+        end
+
+        function p = templateParams(~, p)
+        %TEMPLATEPARAMS  PARAMS as saved into a template file (see
+        %   onSaveTemplate): drops any field that is purely a compiled
+        %   cache derived from another field also present, so applying the
+        %   template later re-derives it fresh instead of depending on the
+        %   cache surviving a jsonencode/jsondecode round trip with its
+        %   exact original MATLAB types intact.
+        %
+        %   Today this only ever matches DefineBins: .bins is a compiled
+        %   expression tree derived entirely from .script (DefineBins.m's
+        %   own "script mode" branch already re-parses from .script alone
+        %   whenever .bins is absent -- see its nargin==2 dispatch), so
+        %   dropping .bins here makes DefineBins take that same code path
+        %   on Apply Template. Concretely, .bins' nested 'codes' fields are
+        %   `string` arrays in DefineBins' own native output, but decode
+        %   from JSON as a `cell` array of char (or, for a single-code
+        %   matcher, a bare char row vector) -- both harmless for
+        %   DefineBins' evaluator (matchCode normalises either shape), but
+        %   only after that normalisation was added specifically because a
+        %   bare-char single-code matcher silently matched nothing at all
+        %   pre-fix, turning every next()/prev() relation using it into an
+        %   unbounded full-recording scan. Re-parsing the original script
+        %   text sidesteps the whole class of such shape mismatches, not
+        %   just the ones already found -- keeping matchCode's own
+        %   normalisation too is still worthwhile defence in depth (a
+        %   hand-edited template, or a future transform with a similar
+        %   compiled-plan field, would not otherwise benefit from this).
+        %   No other current transformation's params has this "editable
+        %   source text plus a separately compiled plan" shape (the rest
+        %   are flat settings structs, or -- ReRef/SelectData -- a single
+        %   EEGLAB history command string with nothing compiled to keep in
+        %   sync), so this only ever fires for DefineBins in practice.
+            if isstruct(p) && isfield(p, 'script') && isfield(p, 'bins')
+                p = rmfield(p, 'bins');
+            end
+        end
+
+        function newNode = applyStepToTarget(this, transformId, params, targetNode)
+        %APPLYSTEPTOTARGET  Replay one recorded transformation step
+        %   (TRANSFORMID, PARAMS) onto TARGETNODE, persisting the result as
+        %   a new child node and returning it (so a caller can chain
+        %   further steps onto it in turn -- see onApplyTemplate). Used
+        %   only by onApplyTemplate: evaluateDroppedBranch has its own,
+        %   data-dependent overlay special case (see isOverlayableAverage)
+        %   that a template -- a recipe of (transformId, params) pairs with
+        %   no live source EEG to compare shapes against -- cannot
+        %   participate in, so this is a deliberately separate, simpler
+        %   apply-one-step primitive rather than a shared one.
+            targetFile = targetNode.UserData;
+            if exist(targetFile, "file") ~= 2
+                throw(MException('Alakazam:applyStepToTarget', ...
+                    'The target dataset''s cache file is missing:\n\n    %s', targetFile));
+            end
+            if exist(transformId, "file") ~= 2
+                throw(MException('Alakazam:applyStepToTarget', ...
+                    ['Stored transformation ''%s'' no longer exists (its .m file ' ...
+                     'is missing from the Transformations folder). Cannot apply ' ...
+                     'this step.'], transformId));
+            end
+
+            targetLoaded = load(targetFile, "EEG");
+            targetEEG = targetLoaded.EEG;
+            targetEEG.File = targetFile; % see loadNodeEEG's own note on why this wins over the stored field
+
+            [result.EEG, ~] = feval(transformId, targetEEG, params);
+            result.EEG.Call   = transformId;
+            result.EEG.params = params;
+
+            [~, newNode] = this.persistResultNode(result.EEG, targetFile, '', transformId, targetNode);
+        end
+
+        function steps = readTemplate(~, file)
+        %READTEMPLATE  Parse a saved template file (see onSaveTemplate)
+        %   into a struct array of (transformId, params) steps, in order.
+        %   Throws a friendly error if FILE is missing, unreadable, or not
+        %   a recognisable Alakazam template.
+            if exist(file, "file") ~= 2
+                throw(MException('Alakazam:readTemplate', 'File not found:\n\n    %s', file));
+            end
+            raw = jsondecode(fileread(file));
+            if ~isstruct(raw) || ~isfield(raw, 'alakazamTemplate') ...
+                    || ~isequal(raw.alakazamTemplate, true) || ~isfield(raw, 'steps')
+                throw(MException('Alakazam:readTemplate', ...
+                    'This does not look like an Alakazam template file.'));
+            end
+
+            steps = struct('transformId', {}, 'params', {});
+            for k = 1:numel(raw.steps)
+                rawStep = raw.steps(k);
+                steps(k) = struct('transformId', char(rawStep.transformId), 'params', rawStep.params);
+            end
         end
 
         function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
@@ -298,6 +438,51 @@ classdef Alakazam < handle
                 files{end + 1}  = file; %#ok<AGROW>
                 labels{end + 1} = sprintf('%s (%s)', candidate.id, ...
                     strjoin({candidate.bindesc.label}, ', ')); %#ok<AGROW>
+            end
+        end
+
+        function entries = collectMeasurementEntries(this)
+        %COLLECTMEASUREMENTENTRIES  Every dataset in either tree carrying a
+        %   Measure result, as a struct array with .subject, .datasetType
+        %   ('subject'/'grand_average'), and .EEG (already loaded) -- see
+        %   Alakazam.onExportMeasurements/exportMeasurementsCSV. Loads
+        %   every node's own .mat to check for EEG.measurements, the same
+        %   "load and check" approach findGrandAverageCandidates uses (for
+        %   DataFormat there, EEG.measurements here).
+            entries = struct('subject', {}, 'datasetType', {}, 'EEG', {});
+
+            dataNodes = this.Workspace.Tree.allNodes();
+            for i = 1:numel(dataNodes)
+                node = dataNodes(i);
+                if exist(node.UserData, "file") ~= 2
+                    continue; % a node can outlive its file -- see loadNodeEEG's own note
+                end
+                loaded = load(node.UserData, "EEG");
+                if ~isfield(loaded.EEG, "measurements")
+                    continue;
+                end
+                subjectNode = this.Workspace.Tree.rootOf(node.Id);
+                if isempty(subjectNode)
+                    subject = node.Name; % defensive fallback; rootOf should always find at least node itself
+                else
+                    subject = subjectNode.Name;
+                end
+                entries(end + 1) = struct('subject', subject, 'datasetType', 'subject', ...
+                    'EEG', loaded.EEG); %#ok<AGROW>
+            end
+
+            gaNodes = this.Workspace.GrandAveragesTree.allNodes();
+            for i = 1:numel(gaNodes)
+                node = gaNodes(i);
+                if exist(node.UserData, "file") ~= 2
+                    continue;
+                end
+                loaded = load(node.UserData, "EEG");
+                if ~isfield(loaded.EEG, "measurements")
+                    continue;
+                end
+                entries(end + 1) = struct('subject', node.Name, 'datasetType', 'grand_average', ...
+                    'EEG', loaded.EEG); %#ok<AGROW>
             end
         end
 
@@ -1055,6 +1240,56 @@ classdef Alakazam < handle
                 'Export complete');
         end
 
+        function onExportMeasurements(this)
+        %ONEXPORTMEASUREMENTS  Ribbon callback (Measurements tab): export
+        %   every Measure result in the workspace -- in EITHER tree, a
+        %   subject's own branch or a Grand Average's -- to one long-
+        %   format, R-compatible CSV (see exportMeasurementsCSV). Same
+        %   "one button, everything I've computed" bulk-export idea as
+        %   onExportGrandAverages.
+        %
+        %   Loads every node in both trees to check for EEG.measurements
+        %   (a Measure result), same "load and check" pattern
+        %   findGrandAverageCandidates already uses. For a Data & Analyses
+        %   node, the exported "subject" is its own root ancestor's name
+        %   (Workspace.Tree.rootOf, built for Apply to All Raw Files/Save
+        %   Template) -- the raw recording the branch descends from, not
+        %   the Measure node's own generic "Measure..." tree label; a
+        %   Grand Average node uses its own name directly (it has no
+        %   root/raw-file ancestor the same way).
+            entries = this.collectMeasurementEntries();
+            if isempty(entries)
+                % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+                msgbox(['There are no Measure results to export yet. Run the Measure ' ...
+                    'transformation on an Average or Grand Average first.'], 'Nothing to export');
+                return;
+            end
+
+            exportsDir = this.Workspace.ExportsDirectory;
+            if isempty(exportsDir) || ~isfolder(exportsDir)
+                exportsDir = pwd;
+            end
+            [fileName, pathName] = uiputfile('*.csv', 'Export Measurements', ...
+                fullfile(exportsDir, 'measurements.csv'));
+            if isequal(fileName, 0)
+                return; % cancelled
+            end
+            targetFile = fullfile(pathName, fileName);
+
+            this.MainFigure.Pointer = 'watch';
+            restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
+            try
+                exportMeasurementsCSV(entries, targetFile);
+            catch err
+                % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
+                warndlg(err.message, 'Could not export Measurements');
+                return;
+            end
+            % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+            msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s', numel(entries), targetFile), ...
+                'Export complete');
+        end
+
         function onRecalculateNode(this)
         %ONRECALCULATENODE  Context-menu callback: revisit an existing
         %   node's inputs. Two cases, both only ever reachable when
@@ -1488,9 +1723,256 @@ classdef Alakazam < handle
                     this.onRenameNode();
                 case 'recalculate'
                     this.onRecalculateNode();
+                case 'applyToAll'
+                    this.onApplyToAllRawFiles();
+                case 'saveTemplate'
+                    this.onSaveTemplate();
+                case 'applyTemplate'
+                    this.onApplyTemplate();
                 case 'delete'
                     this.onDeleteNode();
             end
+        end
+
+        function onApplyToAllRawFiles(this)
+        %ONAPPLYTOALLRAWFILES  Context-menu callback: re-apply the selected
+        %   branch (a chain of transformations already run on one raw
+        %   recording) onto every OTHER raw recording (root node) currently
+        %   in the Data & Analyses tree, in one action -- exactly what
+        %   dragging that branch onto each one individually would do (see
+        %   evaluateDroppedBranch), without doing it by hand once per
+        %   subject. Only ever reachable for a non-root node in
+        %   Workspace.Tree (the context menu item's own eligibility is
+        %   baked into the node at creation time, see persistResultNode,
+        %   exactly like List events/Recalculate); re-validated here too,
+        %   defence in depth for a .wksp saved before this feature existed.
+        %
+        %   The branch's own root (the raw file it was originally built on)
+        %   is excluded from the targets -- re-applying a branch to the very
+        %   recording it already came from would just clone it as a
+        %   redundant sibling of itself.
+            node = this.Workspace.ActiveTree.SelectedNodes;
+            if isempty(node) || node.IsRoot || ~isequal(this.Workspace.ActiveTree, this.Workspace.Tree)
+                return;
+            end
+
+            sourceFile = node.UserData;
+            sourceRoot = this.Workspace.Tree.rootOf(node.Id);
+
+            targets = this.Workspace.Tree.allNodes();
+            targets = targets([targets.IsRoot]);
+            if ~isempty(sourceRoot)
+                targets = targets(~strcmp({targets.Id}, sourceRoot.Id));
+            end
+
+            if isempty(targets)
+                % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+                msgbox(['There are no other raw files in this workspace to apply ' ...
+                    'this branch to.'], 'Nothing to apply to');
+                return;
+            end
+
+            % LEGACY-JAVA-GUI: questdlg, see the note near onDeleteNode.
+            answer = questdlg(sprintf( ...
+                ['Apply "%s" (and everything below it) to all %d other raw ' ...
+                 'file(s) in this workspace?'], node.Name, numel(targets)), ...
+                'Apply to All Raw Files', 'Apply', 'Cancel', 'Cancel');
+            if ~strcmp(answer, 'Apply')
+                return;
+            end
+
+            % Run from the repository root (historic behaviour): individual
+            % plugins may resolve resources relative to it -- same as
+            % onTransformation/onNodeDropped.
+            originalDir = cd(this.RepoRoot);
+            restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+            this.MainFigure.Pointer = "watch";
+            restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
+
+            % One target's failure (a genuine incompatibility, e.g. a
+            % subject whose recording lacks a channel/event type this
+            % branch's chain depends on) should not abort the whole batch --
+            % every other target still gets the branch applied, and the
+            % analyst sees exactly which ones did not at the end.
+            failed = strings(1, 0); % row, not column -- cellstr(failed) below must
+                                     % concatenate horizontally with the other message lines
+            for k = 1:numel(targets)
+                try
+                    this.evaluateDroppedBranch(sourceFile, targets(k));
+                catch ME
+                    failed(end + 1) = sprintf("%s: %s", targets(k).Name, ME.message); %#ok<AGROW>
+                end
+            end
+
+            this.restoreFocus();
+            succeeded = numel(targets) - numel(failed);
+            if isempty(failed)
+                % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+                msgbox(sprintf('Applied "%s" to %d raw file(s).', node.Name, succeeded), ...
+                    'Apply to All Raw Files complete');
+            else
+                message = [{sprintf('Applied "%s" to %d of %d raw file(s). Failed on:', ...
+                    node.Name, succeeded, numel(targets))}, {''}, cellstr(failed)];
+                uialert(this.MainFigure, message, 'Some raw files could not be updated', ...
+                    'Icon', 'warning');
+            end
+        end
+
+        function onSaveTemplate(this)
+        %ONSAVETEMPLATE  Context-menu callback: save the selected branch
+        %   (its own transformation plus every step below it -- the exact
+        %   same scope dragging this node onto another dataset, or "Apply
+        %   to All Raw Files", would replay) as a reusable template file on
+        %   disk: a plain JSON list of (transformId, params) steps,
+        %   decoupled from this workspace's own cache files, so it can be
+        %   applied later -- to a dataset in a different workspace, or
+        %   after Alakazam has been restarted -- via "Apply Template..."
+        %   (see onApplyTemplate).
+        %
+        %   Reuses canApplyToAll's eligibility (a non-root node in
+        %   Workspace.Tree, see persistResultNode): a template most
+        %   naturally describes "how to process a raw recording", which is
+        %   what a subject's own analysis branch captures; re-validated
+        %   here too, defence in depth.
+            node = this.Workspace.ActiveTree.SelectedNodes;
+            if isempty(node) || node.IsRoot || ~isequal(this.Workspace.ActiveTree, this.Workspace.Tree)
+                return;
+            end
+
+            try
+                steps = this.collectBranchSteps(node.UserData);
+            catch ME
+                uialert(this.MainFigure, sprintf('Could not read this branch:\n\n%s', ME.message), ...
+                    'Could not save template', 'Icon', 'warning');
+                return;
+            end
+
+            % The {arrayfun(...)} wrapping (not a bare struct array) is
+            % deliberate: jsonencode collapses a 1-element struct array to a
+            % bare JSON object instead of a single-element array (the same
+            % gotcha WorkSpaceTree.buildData's own header comment documents
+            % for the JS tree push) -- a cell array sidesteps it, so a
+            % one-step template still round-trips through readTemplate as a
+            % one-element list, not a bare object. Each step's params goes
+            % through templateParams first, so a step with a derivable
+            % compiled cache (currently just DefineBins' .bins, derivable
+            % from .script) is re-derived on apply instead of trusting the
+            % cache to survive jsonencode/jsondecode with its original
+            % MATLAB types intact.
+            template = struct( ...
+                'alakazamTemplate', true, ...
+                'version', 1, ...
+                'name', node.Name, ...
+                'steps', {arrayfun(@(s) struct('transformId', s.transformId, ...
+                    'params', this.templateParams(s.params)), steps, 'UniformOutput', false)});
+
+            exportsDir = this.Workspace.ExportsDirectory;
+            if isempty(exportsDir) || ~isfolder(exportsDir)
+                exportsDir = pwd;
+            end
+            defaultFile = fullfile(exportsDir, [char(matlab.lang.makeValidName(node.Name)) '.alztemplate']);
+            [fileName, pathName] = uiputfile({'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, ...
+                'Save Template', defaultFile);
+            if isequal(fileName, 0)
+                return; % cancelled
+            end
+
+            try
+                % ConvertInfAndNaN=false: the default (true) silently turns
+                % NaN into JSON null, which jsondecode then reads back as []
+                % (empty), not NaN -- a params field that happens to be NaN
+                % (a real, if currently unused, sentinel value some
+                % transform could reasonably store) would otherwise change
+                % meaning across a save/apply round trip with no error at
+                % all. false instead writes/reads MATLAB's own NaN/Infinity/
+                % -Infinity tokens, which is not standard JSON but round-
+                % trips exactly through this file's only two readers/
+                % writers of it (this method and readTemplate).
+                json = jsonencode(template, 'PrettyPrint', true, 'ConvertInfAndNaN', false);
+                fid = fopen(fullfile(pathName, fileName), 'w');
+                if fid < 0
+                    throw(MException('Alakazam:onSaveTemplate', 'Could not open the file for writing.'));
+                end
+                closeFile = onCleanup(@() fclose(fid));
+                fwrite(fid, json, 'char');
+            catch ME
+                uialert(this.MainFigure, sprintf('Could not save the template:\n\n%s', ME.message), ...
+                    'Could not save template', 'Icon', 'warning');
+                return;
+            end
+
+            % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+            msgbox(sprintf('Saved template "%s" (%d step(s)) to:\n%s', node.Name, numel(steps), ...
+                fullfile(pathName, fileName)), 'Template saved');
+        end
+
+        function onApplyTemplate(this)
+        %ONAPPLYTEMPLATE  Context-menu callback: apply a previously saved
+        %   template (see onSaveTemplate) to the selected node -- replaying
+        %   its saved sequence of (transformId, params) steps in order,
+        %   exactly as if each had been run interactively from the ribbon.
+        %   Available on ANY node (root or not, in either tree): the common
+        %   case is running a whole saved pipeline on a freshly imported
+        %   raw recording in one action, but applying a partial template on
+        %   top of an already-processed node (or even a Grand Average) is
+        %   equally valid -- there is nothing tree- or root-specific about
+        %   "replay these steps here", unlike Save Template/Apply to All
+        %   Raw Files, which both act on "this branch" as a structural unit.
+            node = this.Workspace.ActiveTree.SelectedNodes;
+            if isempty(node)
+                return;
+            end
+
+            exportsDir = this.Workspace.ExportsDirectory;
+            if isempty(exportsDir) || ~isfolder(exportsDir)
+                exportsDir = pwd;
+            end
+            [fileName, pathName] = uigetfile({'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, ...
+                'Apply Template', exportsDir);
+            if isequal(fileName, 0)
+                return; % cancelled
+            end
+
+            try
+                steps = this.readTemplate(fullfile(pathName, fileName));
+            catch ME
+                uialert(this.MainFigure, sprintf('Could not read this template:\n\n%s', ME.message), ...
+                    'Could not apply template', 'Icon', 'warning');
+                return;
+            end
+            if isempty(steps)
+                uialert(this.MainFigure, 'This template file has no steps to apply.', ...
+                    'Could not apply template', 'Icon', 'warning');
+                return;
+            end
+
+            % Run from the repository root (historic behaviour): individual
+            % plugins may resolve resources relative to it -- same as
+            % onTransformation/onNodeDropped/onApplyToAllRawFiles.
+            originalDir = cd(this.RepoRoot);
+            restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+            this.MainFigure.Pointer = "watch";
+            restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
+
+            applied = 0;
+            try
+                for k = 1:numel(steps)
+                    node = this.applyStepToTarget(steps(k).transformId, steps(k).params, node);
+                    applied = applied + 1;
+                end
+            catch ME
+                this.restoreFocus();
+                uialert(this.MainFigure, sprintf( ...
+                    ['Applied %d of %d step(s) before this one failed:\n\n%s\n\n' ...
+                     'The steps that succeeded are still in the tree.'], ...
+                    applied, numel(steps), ME.message), 'Could not apply template', 'Icon', 'warning');
+                return;
+            end
+
+            this.restoreFocus();
+            % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
+            msgbox(sprintf('Applied template "%s" (%d step(s)).', fileName, applied), ...
+                'Template applied');
         end
 
         function onRibbonAction(this, id)
@@ -1513,6 +1995,8 @@ classdef Alakazam < handle
                     this.onDefineGrandAverage();
                 case 'exportGrandAverages'
                     this.onExportGrandAverages();
+                case 'exportMeasurements'
+                    this.onExportMeasurements();
                 case 'viewTabs'
                     this.setPlotsViewMode("tabs");
                 case 'viewGrid'

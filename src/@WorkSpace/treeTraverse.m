@@ -61,11 +61,26 @@ function treeTraverse(this, id, branchDir, currentParentNode)
             % type if no matching transformation icon exists -- see
             % WorkSpaceTree.iconForResult) and with List events/Recalculate
             % eligibility baked in from the loaded EEG (see
-            % WorkSpaceTree.optsFor).
+            % WorkSpaceTree.optsFor). canApplyToAll is unconditionally true
+            % here (unlike Alakazam.persistResultNode, which computes it
+            % from the currently active tree): treeTraverse only ever adds
+            % nodes to this.Tree (see loadBVAFile.m/loadMATFile.m/
+            % loadSETFile.m, its only three callers -- GrandAveragesTree is
+            % populated by loadGrandAverages.m instead, never this
+            % function), so every node it rebuilds from disk is, by
+            % construction, a non-root branch node in the Data & Analyses
+            % tree -- exactly Save Template/Apply to All Raw Files'
+            % eligibility. Without this, every node from a REOPENED
+            % workspace (i.e. everything except nodes created fresh in the
+            % current session) silently fell back to addNode's own
+            % canApplyToAll default of false, leaving both context-menu
+            % items permanently disabled for a workspace's entire existing
+            % history.
             transRoot = fullfile(this.Parent.RootDir, 'Transformations');
+            opts = WorkSpaceTree.optsFor(data.EEG);
+            opts.canApplyToAll = true;
             newNode = this.Tree.addNode(data.EEG.id, currentParentNode.Id, ...
-                WorkSpaceTree.iconForResult(data.EEG, transRoot), actualFile, ...
-                WorkSpaceTree.optsFor(data.EEG));
+                WorkSpaceTree.iconForResult(data.EEG, transRoot), actualFile, opts);
 
             % Extract the file name without the extension for recursion.
             [~, name, ~] = fileparts(file.name);

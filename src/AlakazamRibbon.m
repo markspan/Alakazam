@@ -122,12 +122,17 @@ classdef AlakazamRibbon < handle
             grandAverageGroups = { ...
                 struct('title', 'Group Averages', 'items', {this.grandAverageItems(iconsDir)})};
 
+            measurementsGroups = { ...
+                struct('title', 'Batch Export', 'items', {this.measurementsItems(iconsDir)})};
+
             tabs = { ...
                 struct('id', 'home', 'title', 'Alakazam', 'groups', {homeGroups}), ...
                 struct('id', 'tools', 'title', 'Tools', ...
                     'groups', {this.transformationGroups(transRoot)}), ...
                 struct('id', 'grandAverage', 'title', 'Grand Average', ...
-                    'groups', {grandAverageGroups})};
+                    'groups', {grandAverageGroups}), ...
+                struct('id', 'measurements', 'title', 'Measurements', ...
+                    'groups', {measurementsGroups})};
         end
 
         function items = workspaceItems(this, iconsDir)
@@ -207,6 +212,24 @@ classdef AlakazamRibbon < handle
                 struct('id', 'exportGrandAverages', 'label', 'Export Grand Averages...', ...
                 'tooltip', 'Export every Grand Average to one R-compatible, long-format CSV', ...
                 'icon', exportIcon)};
+        end
+
+        function items = measurementsItems(this, iconsDir)
+        %MEASUREMENTSITEMS  "Export Measurements..." batch exporter -- walks
+        %   every dataset in the workspace (both trees) carrying a Measure
+        %   result (see Alakazam.onExportMeasurements) and writes one
+        %   R-compatible, long-format CSV, the same "batch export
+        %   everything I've computed" idea grandAverageItems' own Export
+        %   Grand Averages already implements. Not part of the auto-
+        %   discovered Tools tab: like Grand Average's own actions, this is
+        %   a workspace-wide action, not something run on one selected
+        %   dataset. Icon: a small ruler-tick table with the same export
+        %   arrow ExportGrandAverages.svg uses, so the two batch-export
+        %   buttons read as a matched pair.
+            icon = this.encodeSvgFile(fullfile(iconsDir, 'ExportMeasurements.svg'));
+            items = {struct('id', 'exportMeasurements', 'label', 'Export Measurements...', ...
+                'tooltip', 'Export every Measure result to one R-compatible, long-format CSV', ...
+                'icon', icon)};
         end
 
         function groups = transformationGroups(this, transRoot)
