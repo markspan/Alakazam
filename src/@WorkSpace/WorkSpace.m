@@ -1,4 +1,7 @@
 classdef WorkSpace < handle
+% Unit tests for WorkSpace class
+% These tests use MATLAB's built-in unittest framework.
+% They are lightweight and do not require external files.
     % WorkSpace Class:
     % Alakazam
     % Functions pertaining to directories used.
