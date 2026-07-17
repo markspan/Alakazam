@@ -181,6 +181,12 @@ classdef AlakazamPlotter < handle
                 view = SpectralMeasureView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "SpectralMeasureView", view);
+            elseif strcmpi(eeg.id, "CoherenceMap")
+                % Also EPOCHED, but carries EEG.coherence for a per-channel
+                % time x frequency coherence-to-reference heatmap.
+                view = CoherenceView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "CoherenceView", view);
             elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1

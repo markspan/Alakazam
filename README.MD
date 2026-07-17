@@ -261,6 +261,11 @@ exact), and reports:
   reveal tagging responses in Dimigen et al. (2025) (see
   [References](#references)).
 
+For the time-resolved picture, the **Coherence Map** transform draws the
+coherence between each channel and a reference (photodiode) as a per-channel
+**time x frequency heatmap** -- the plot the RIFT figures show (Dimigen et al.,
+2025) -- using either a Morlet wavelet or a fixed-window STFT decomposition.
+
 The reference is optional (not every recording has a photodiode), so power /
 SNR / phase-locking are always available and coherence is added when a
 reference is set. Results export to one long-format, R-compatible CSV via the
