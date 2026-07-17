@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Sustained centro-parietal positivity beginning around 400 ms and extending for several hundred milliseconds (measured here at Pz), building on and outlasting the P300.",
+    "meaning": "Reflects sustained, motivated attention to emotionally and motivationally salient stimuli, and is widely used as an index of emotional engagement and emotion regulation.",
+    "task": "Affective picture viewing (for example IAPS), emotion regulation and reappraisal, and processing of emotional words or faces."
+  },
+  "rows": [
+    {
+      "label": "LPP",
+      "start": 400,
+      "stop": 800,
+      "measure": "Mean Amplitude",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Pz"
+    }
+  ]
+}

@@ -303,7 +303,7 @@ classdef ScalpDistributionView < handle
                 this.Slider.Value = min(max(t, this.Slider.Limits(1)), this.Slider.Limits(2));
                 this.redraw(t);
                 drawnow;
-                pause(this.PlayFrameSeconds);
+                %pause(this.PlayFrameSeconds);
             end
         end
 

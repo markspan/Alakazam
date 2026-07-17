@@ -60,21 +60,31 @@ function writeEntry(fid, entry)
                 prefix = sprintf('%s,%s,%s,%s,%s,', datasetField, typeField, binField, chField, windowField);
                 % One measure_type row per value a window produces, so the
                 % single `value` column stays uniformly numeric: Mean
-                % Amplitude -> one row; Peak -> amplitude + latency; Peak
-                % Area -> area + amplitude + latency (the located peak's own
-                % value and time, alongside the integral). start/stop stay
-                % the window's own search range for every measure -- for
-                % Peak Area the integration band is width-ms centred on
-                % peak_latency, recoverable from that latency plus the
-                % window's own Width.
+                % Amplitude -> one row; Peak -> amplitude + latency; Area ->
+                % an area_<mode> row (mode = signed/rectified/positive/
+                % negative), plus, when the area is a peak-locked band, the
+                % located peak's own amplitude + latency; the fractional-
+                % latency measures -> one latency row. start/stop stay the
+                % window's own search range for every measure -- for a band
+                % Area the integration span is width-ms centred on
+                % peak_latency, and a fractional latency's fraction is the
+                % window's own Fraction, both recoverable from the window
+                % definition.
                 switch measure
                     case 'peak'
                         writeRow(fid, prefix, 'peak_amplitude', startField, stopField, win.amplitude(c, b));
                         writeRow(fid, prefix, 'peak_latency',   startField, stopField, win.latency(c, b));
-                    case 'peak area'
-                        writeRow(fid, prefix, 'peak_area',      startField, stopField, win.area(c, b));
-                        writeRow(fid, prefix, 'peak_amplitude', startField, stopField, win.amplitude(c, b));
-                        writeRow(fid, prefix, 'peak_latency',   startField, stopField, win.latency(c, b));
+                    case {'area', 'integral', 'peak area'}
+                        [mode, isBand] = areaModeScope(win, measure);
+                        writeRow(fid, prefix, ['area_' mode], startField, stopField, win.area(c, b));
+                        if isBand
+                            writeRow(fid, prefix, 'peak_amplitude', startField, stopField, win.amplitude(c, b));
+                            writeRow(fid, prefix, 'peak_latency',   startField, stopField, win.latency(c, b));
+                        end
+                    case 'fractional peak latency'
+                        writeRow(fid, prefix, 'fractional_peak_latency', startField, stopField, win.latency(c, b));
+                    case 'fractional area latency'
+                        writeRow(fid, prefix, 'fractional_area_latency', startField, stopField, win.latency(c, b));
                     otherwise % Mean Amplitude
                         writeRow(fid, prefix, 'mean_amplitude', startField, stopField, win.amplitude(c, b));
                 end
@@ -87,6 +97,26 @@ function writeRow(fid, prefix, measureType, startField, stopField, value)
 %WRITEROW  One long-format CSV data row: PREFIX already carries the
 %   dataset/type/bin/channel/window fields (comma-terminated).
     fprintf(fid, '%s%s,%s,%s,%s\n', prefix, measureType, startField, stopField, numField(value));
+end
+
+function [mode, isBand] = areaModeScope(win, measureName)
+%AREAMODESCOPE  A window's area mode ('signed'/'rectified'/'positive'/
+%   'negative', default 'signed') and whether its scope is a peak-locked
+%   band. Tolerates a measurement stored before the Area family was unified
+%   into one measure (Peak Area -> band, Integral -> whole window), which
+%   carries no areaMode/scope field.
+    mode = 'signed';
+    if isfield(win, 'areaMode') && ~isempty(win.areaMode)
+        cand = lower(strtrim(char(string(win.areaMode))));
+        if ismember(cand, {'signed', 'rectified', 'positive', 'negative'})
+            mode = cand;
+        end
+    end
+    if isfield(win, 'scope') && ~isempty(win.scope)
+        isBand = strcmpi(strtrim(char(string(win.scope))), 'band');
+    else
+        isBand = strcmp(measureName, 'peak area');
+    end
 end
 
 function label = binLabel(EEG, b)

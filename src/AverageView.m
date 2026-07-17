@@ -261,8 +261,10 @@ classdef AverageView < handle
         %   (see prepare) onto the shown channel CH's line, in the series'
         %   own colour so each annotation reads as belonging to its bin:
         %     * Peak         -- a dot at (latency, amplitude) + a label.
-        %     * Peak Area    -- the integrated band shaded under the curve
-        %                       (peak_latency +/- width/2) + a label.
+        %     * Area         -- the integrated region shaded under the curve:
+        %                       a peak-locked band (peak_latency +/- width/2)
+        %                       or the whole window, clipped to the measure's
+        %                       polarity mode, + a label.
         %     * Mean Amplitude -- a level line at the mean, spanning the
         %                       measurement window, + a label.
         %   Only the window rows that name the shown channel are drawn, so
@@ -300,28 +302,84 @@ classdef AverageView < handle
                             'Tag', 'MeasureAnnotation');
                         this.measureLabel(ax, lat, amp, win.label, colour);
 
-                    case 'peak area'
-                        lat = win.latency(c, b);
-                        if isnan(lat) || ~isfield(win, 'width') || isempty(win.width) || isnan(win.width)
-                            continue;
+                    case {'area', 'peak area', 'integral'}
+                        % Shade the integrated region under the curve. A
+                        % peak-locked band (scope 'band') spans width/2 each
+                        % side of the found peak; a whole-window area (scope
+                        % 'window') spans [start, stop]. The fill is clipped
+                        % to the contributing polarity so it reads as the
+                        % measure: positive keeps only y > 0, negative only
+                        % y < 0, signed/rectified keep the whole curve.
+                        [isBand, mode] = this.areaScopeMode(win, ...
+                            lower(strtrim(char(string(win.measure)))));
+                        if isBand
+                            lat = win.latency(c, b);
+                            if isnan(lat) || ~isfield(win, 'width') || isempty(win.width) ...
+                                    || isnan(win.width) || win.width <= 0
+                                continue;
+                            end
+                            half = win.width / 2;
+                            mask = t >= (lat - half) & t <= (lat + half);
+                            anchorT = lat;
+                        else
+                            mask = t >= win.start & t <= win.stop;
+                            anchorT = (win.start + win.stop) / 2;
                         end
-                        half = win.width / 2;
-                        mask = t >= (lat - half) & t <= (lat + half);
                         tb = t(mask);
                         yb = meanCh(mask);
                         valid = ~isnan(yb);
                         tb = tb(valid);
                         yb = yb(valid);
                         if numel(tb) < 2; continue; end
-                        % Fill between the curve and the 0-uV baseline over
-                        % the band -- the actual integrated area.
-                        patch(ax, [tb, fliplr(tb)], [yb, zeros(1, numel(yb))], colour, ...
+                        switch mode
+                            case 'positive'; yfill = max(yb, 0);
+                            case 'negative'; yfill = min(yb, 0);
+                            otherwise;       yfill = yb;   % signed, rectified
+                        end
+                        patch(ax, [tb, fliplr(tb)], [yfill, zeros(1, numel(yfill))], colour, ...
                             'EdgeColor', 'none', 'FaceAlpha', 0.25, 'HandleVisibility', 'off', ...
                             'Tag', 'MeasureAnnotation');
-                        % Anchor the label at the peak apex (nearest sample
-                        % to the found latency).
-                        [~, pk] = min(abs(t - lat));
-                        this.measureLabel(ax, lat, meanCh(pk), win.label, colour);
+                        [~, ai] = min(abs(t - anchorT));
+                        this.measureLabel(ax, anchorT, meanCh(ai), win.label, colour);
+
+                    case {'fractional peak latency', 'fractional area latency'}
+                        % Mark the located latency: a dashed drop line from
+                        % the curve to the 0-uV baseline, a dot on the curve,
+                        % and the label.
+                        lat = win.latency(c, b);
+                        if isnan(lat); continue; end
+                        yv = interp1(t, meanCh, lat, 'linear', NaN);
+                        if isnan(yv)
+                            [~, ni] = min(abs(t - lat));
+                            yv = meanCh(ni);
+                        end
+                        plot(ax, [lat, lat], [0, yv], '--', 'Color', colour, ...
+                            'LineWidth', 1.2, 'HandleVisibility', 'off', 'Tag', 'MeasureAnnotation');
+                        plot(ax, lat, yv, 'o', 'MarkerFaceColor', colour, ...
+                            'MarkerEdgeColor', 'k', 'MarkerSize', 5, 'HandleVisibility', 'off', ...
+                            'Tag', 'MeasureAnnotation');
+                        this.measureLabel(ax, lat, yv, win.label, colour);
+                end
+            end
+        end
+
+        function [isBand, mode] = areaScopeMode(~, win, measureName)
+        %AREASCOPEMODE  Whether an Area window shades a peak-locked band
+        %   (true) or its whole [start, stop] window (false), and its area
+        %   mode ('signed'/'rectified'/'positive'/'negative', default
+        %   'signed'). Tolerates a measurement stored before the Area family
+        %   was unified (Peak Area -> band, Integral -> window; no scope or
+        %   areaMode field).
+            if isfield(win, 'scope') && ~isempty(win.scope)
+                isBand = strcmpi(strtrim(char(string(win.scope))), 'band');
+            else
+                isBand = strcmp(measureName, 'peak area');
+            end
+            mode = 'signed';
+            if isfield(win, 'areaMode') && ~isempty(win.areaMode)
+                cand = lower(strtrim(char(string(win.areaMode))));
+                if ismember(cand, {'signed', 'rectified', 'positive', 'negative'})
+                    mode = cand;
                 end
             end
         end

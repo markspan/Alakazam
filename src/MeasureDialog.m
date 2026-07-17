@@ -7,56 +7,64 @@ function windows = MeasureDialog(chanlocs, priorWindows)
 %   CHANLOCS is the target dataset's own EEG.chanlocs, used only to
 %   validate typed channel/reference-channel labels immediately (a
 %   friendly error naming the bad label(s), rather than waiting until
-%   Measure actually runs -- Measure.m's own resolveChannelList repeats
-%   this validation at replay time too, since a saved window definition
-%   can end up applied to a dataset whose channels differ from whatever
-%   was validated here). PRIORWINDOWS (a cell array in the same shape
-%   this function returns, or {} on first use) pre-fills the table --
-%   passed in by Measure.m from TransformSettings (a fresh interactive
+%   Measure actually runs -- the shared measureChannelSpecs parser
+%   repeats this validation at replay time too, since a saved window
+%   definition can end up applied to a dataset whose channels differ from
+%   whatever was validated here). PRIORWINDOWS (a cell array in the same
+%   shape this function returns, or {} on first use) pre-fills the table
+%   -- passed in by Measure.m from TransformSettings (a fresh interactive
 %   run) or by Alakazam.recalculateTransformNode (editing one specific
 %   node's own stored windows), matching DefineBins' own promptForScript/
 %   GrandAverageDialog's own PREFILLSPEC pattern.
 %
 %   Returns a 1xN cell array of scalar structs (.label, .start, .stop,
-%   .measure, .polarity, .refChannel, .channels -- see Measure.m's own
-%   header comment for why a cell array, never a struct array, and why
-%   .channels is always a cellstr), or [] if the dialog was cancelled --
-%   the same "empty means cancel" contract GrandAverageDialog/
-%   TransformOptionsDialog use.
+%   .measure, .polarity, .width, .localPoints, .fraction, .areaMode,
+%   .baseline, .refChannel, .channels -- see Measure.m's own header
+%   comment for why a cell array, never a struct array), or [] if the
+%   dialog was cancelled -- the same "empty means cancel" contract
+%   GrandAverageDialog/TransformOptionsDialog use.
 
-    MEASURE_CHOICES  = {'Mean Amplitude', 'Peak', 'Peak Area'};
-    POLARITY_CHOICES = {'Positive', 'Negative'};
+    MEASURE_CHOICES   = {'Mean Amplitude', 'Peak', 'Area', ...
+        'Fractional Peak Latency', 'Fractional Area Latency'};
+    POLARITY_CHOICES  = {'Positive', 'Negative'};
+    AREA_MODE_CHOICES = {'Signed', 'Rectified', 'Positive', 'Negative'};
     COLUMN_NAMES     = {'Label', 'Start (ms)', 'Stop (ms)', 'Measure', 'Polarity', ...
-        'Width (ms)', 'Reference channel', 'Channels'};
+        'Width (ms)', 'Local pts', 'Fraction', 'Area mode', 'Baseline (ms)', ...
+        'Reference channel', 'Channels'};
     % Proportional ('Nx') widths, not fixed pixels, so the columns share
     % and fill the table's width and grow/shrink with the window (the
     % table itself already fills its '1x' grid row). Weights roughly keep
     % the earlier readable proportions (Label/Measure/Reference/Channels
-    % wider than the numeric ms fields).
-    COLUMN_WIDTHS    = {'3x', '2x', '2x', '3x', '2x', '2x', '3x', '4x'};
+    % wider than the numeric fields).
+    COLUMN_WIDTHS    = {'3x', '2x', '2x', '4x', '2x', '2x', '2x', '2x', '2x', '2x', '3x', '4x'};
 
     windows = [];  % returned only on OK; stays [] on Cancel
     allLabels = string({chanlocs.labels});
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
-    fig = uifigure('Name', 'Measure', 'Position', [100 100 860 420]);
+    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 440]);
     outer = uigridlayout(fig, [4 1], 'RowHeight', {'fit', '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
-        'Define one or more measurement windows. "Channels" blank = every channel, ' ...
-        'or a comma-separated list (e.g. Pz, Cz). "Peak" exports an amplitude and a ' ...
-        'latency; "Peak Area" finds the peak, then exports the signed area over a ' ...
-        'band "Width (ms)" wide centred on it, plus the latency. "Reference channel" ' ...
-        '(Peak / Peak Area) locks every selected channel''s read-out to that one ' ...
-        'channel''s own found peak latency.'], ...
+        'Define one or more measurement windows over the Start-Stop range. Measures: ' ...
+        'Mean Amplitude; Peak (amplitude + latency); Area (its "Area mode" -- Signed / ' ...
+        'Rectified / Positive / Negative -- over the whole window when "Width" is 0, or over a ' ...
+        '"Width" ms band centred on the peak when Width > 0); Fractional Peak / Area Latency ' ...
+        '(the "Fraction", 0-1, e.g. 0.5 for the 50% latency). "Local pts" 0 = absolute peak, ' ...
+        'N = the most extreme local peak. "Baseline (ms)" (e.g. "-100 0") is subtracted before ' ...
+        'measuring; blank = none. "Channels" blank = every channel, a list = each separately, ' ...
+        'braces pool into one virtual channel ("{Pz POz CPz}" = their mean). "Reference ' ...
+        'channel" (Peak / peak-band Area) locks every channel to one found peak latency.'], ...
         'WordWrap', 'on');
 
-    table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 8), ...
+    table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 12), ...
         'ColumnFormat', {'char', 'numeric', 'numeric', MEASURE_CHOICES, POLARITY_CHOICES, ...
-            'numeric', 'char', 'char'}, ...
+            'numeric', 'numeric', 'numeric', AREA_MODE_CHOICES, 'char', 'char', 'char'}, ...
         'ColumnWidth', COLUMN_WIDTHS, 'Data', rowsFromWindows(priorWindows));
     table.Layout.Row = 2;
     table.CellSelectionCallback = @(~, event) onCellSelected(event);
+    table.CellEditCallback = @(~, event) onCellEdit(event);
+    applyGreying();
 
     rowButtons = uigridlayout(outer, [1, 3], 'ColumnWidth', {110, 130, '1x'}, 'Padding', [0 0 0 0]);
     rowButtons.Layout.Row = 3;
@@ -86,9 +94,41 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         end
     end
 
+    function onCellEdit(event)
+        % Changing a row's Measure changes which parameter cells apply, so
+        % re-grey. (Cheap enough to just re-grey on any edit, but only the
+        % Measure column can change relevance.)
+        if ~isempty(event.Indices) && event.Indices(2) == 4
+            applyGreying();
+        end
+    end
+
+    function applyGreying()
+        % Grey the parameter cells each row's Measure does not use, so a
+        % row visibly shows only the parameters that apply to it (the
+        % values stay, and are simply ignored by Measure.m -- see its own
+        % header). Recomputed from scratch each call (removeStyle clears
+        % all, then one addStyle over every irrelevant cell), so it stays
+        % correct after adds/removes/loads that renumber rows.
+        removeStyle(table);
+        data = table.Data;
+        greyCells = zeros(0, 2);
+        for r = 1:size(data, 1)
+            for cix = irrelevantParamCols(char(string(data{r, 4})))
+                greyCells(end + 1, :) = [r, cix]; %#ok<AGROW>
+            end
+        end
+        if ~isempty(greyCells)
+            addStyle(table, uistyle('BackgroundColor', [0.94 0.94 0.94], 'FontColor', [0.6 0.6 0.6]), ...
+                'cell', greyCells);
+        end
+    end
+
     function addRow()
-        newRow = {'New Window', 0, 500, MEASURE_CHOICES{1}, POLARITY_CHOICES{1}, 100, '', ''};
+        newRow = {'New Window', 0, 500, MEASURE_CHOICES{1}, POLARITY_CHOICES{1}, ...
+            0, 0, 0.5, AREA_MODE_CHOICES{1}, '', '', ''};
         table.Data = [table.Data; newRow];
+        applyGreying();
     end
 
     function removeSelectedRow()
@@ -98,6 +138,7 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         end
         table.Data(selectedRow, :) = [];
         selectedRow = 0;
+        applyGreying();
     end
 
     function onOK()
@@ -133,7 +174,7 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         % ever receive an EEG struct, never the app), so it follows
         % DefineBins' own dialog -- the one other transform-level dialog
         % with a Save/Load pair -- which resolves this the same way.
-        [file, path] = uiextras.uiputfile2('*.alzmeasures', 'Save measurement windows as');
+        [file, path] = uiextras.uiputfile2('*.alm', 'Save measurement windows as');
         if isequal(file, 0); return; end
         try
             writeMeasuresFile(fullfile(path, file), table.Data);
@@ -143,15 +184,37 @@ function windows = MeasureDialog(chanlocs, priorWindows)
     end
 
     function onLoadMeasures()
-        [file, path] = uiextras.uigetfile2('*.alzmeasures', 'Load measurement windows');
+        [file, path] = uiextras.uigetfile2('*.alm', 'Load measurement windows');
         if isequal(file, 0); return; end
         try
             table.Data = readMeasuresFile(fullfile(path, file));
             selectedRow = 0;
+            applyGreying();
         catch err
             uialert(fig, err.message, 'Load failed');
         end
     end
+end
+
+function cols = irrelevantParamCols(measure)
+%IRRELEVANTPARAMCOLS  Which of the "sometimes" parameter columns
+%   ([5..11] = Polarity, Width, Local pts, Fraction, Area mode, Baseline,
+%   Reference) a MEASURE does NOT use, so applyGreying can grey them.
+%   Label/Start/Stop/Measure/Channels (1-4,12) are always relevant, and so
+%   is Baseline (10, every measure honours it). Keep in step with
+%   Measure.m's computeWindow. Area's Width/Polarity/Local pts/Reference
+%   matter only for its peak-band scope, but greying is per-measure (it
+%   cannot see the Width value), so they stay shown for Area.
+    switch lower(strtrim(measure))
+        case 'mean amplitude';          relevant = 10;              % baseline
+        case 'peak';                    relevant = [5 7 10 11];     % polarity, local pts, baseline, reference
+        case {'area', 'peak area', 'integral'}
+                                        relevant = [5 6 7 9 10 11]; % + width, area mode
+        case 'fractional peak latency'; relevant = [5 7 8 10];      % polarity, local pts, fraction, baseline
+        case 'fractional area latency'; relevant = [8 10];          % fraction, baseline
+        otherwise;                      relevant = 5:11;            % unknown -> grey nothing
+    end
+    cols = setdiff(5:11, relevant);
 end
 
 % ======================================================================= %
@@ -159,19 +222,79 @@ end
 % ======================================================================= %
 function data = rowsFromWindows(priorWindows)
 %ROWSFROMWINDOWS  PRIORWINDOWS (a cell array of window structs, or {}) as
-%   a uitable-compatible cell array of rows, one row per window. A window
-%   with no .width (e.g. a setting stored before Peak Area existed)
-%   defaults to 100 ms, so the column is never left empty.
-    data = cell(numel(priorWindows), 8);
+%   a uitable-compatible cell array of rows, one row per window. Fields
+%   absent from a window stored before they existed default so the columns
+%   are never empty, and the pre-unification Peak Area / Integral measures
+%   are migrated to Area (see migrateMeasureWidth) so the Measure dropdown
+%   never shows a value it no longer offers.
+    data = cell(numel(priorWindows), 12);
     for i = 1:numel(priorWindows)
         w = priorWindows{i};
-        if isfield(w, 'width') && ~isempty(w.width) && isnumeric(w.width)
-            width = w.width;
-        else
-            width = 100;
+        [measure, width] = migrateMeasureWidth(char(string(w.measure)), numField(w, 'width', 0));
+        data(i, :) = {w.label, w.start, w.stop, measure, w.polarity, width, ...
+            numField(w, 'localPoints', 0), numField(w, 'fraction', 0.5), ...
+            normAreaMode(w), baselineText(w), w.refChannel, channelsText(w.channels)};
+    end
+end
+
+function [measure, width] = migrateMeasureWidth(measure, width)
+%MIGRATEMEASUREWIDTH  Fold the pre-unification measure names into Area:
+%   Integral -> Area over the whole window (Width 0); Peak Area -> Area
+%   over its peak band (Width kept). Any other name passes through. Keeps
+%   old .alm files and stored settings loadable into the unified dropdown.
+    if strcmpi(measure, 'Integral')
+        measure = 'Area';
+        width = 0;
+    elseif strcmpi(measure, 'Peak Area')
+        measure = 'Area';
+    end
+end
+
+function s = normAreaMode(w)
+%NORMAREAMODE  A window/row's area mode as one of the dropdown's exact
+%   choices (default 'Signed'), so the uitable cell always holds a valid
+%   value.
+    s = 'Signed';
+    if isfield(w, 'areaMode') && ~isempty(w.areaMode)
+        switch lower(strtrim(char(string(w.areaMode))))
+            case 'signed';    s = 'Signed';
+            case 'rectified'; s = 'Rectified';
+            case 'positive';  s = 'Positive';
+            case 'negative';  s = 'Negative';
         end
-        data(i, :) = {w.label, w.start, w.stop, w.measure, w.polarity, width, ...
-            w.refChannel, strjoin(cellstr(w.channels), ', ')};
+    end
+end
+
+function txt = baselineText(w)
+%BASELINETEXT  A window/row's baseline as display text ("" if none).
+    if isfield(w, 'baseline') && ~isempty(w.baseline)
+        txt = char(string(w.baseline));
+    else
+        txt = '';
+    end
+end
+
+function txt = channelsText(channels)
+%CHANNELSTEXT  A window's Channels field as display text for the table
+%   cell: the raw text new windows store, or a comma-joined list for the
+%   old cellstr form a window may carry from before pooling existed.
+    if isempty(channels)
+        txt = '';
+    elseif iscell(channels)
+        txt = strjoin(channels, ', ');
+    elseif isstring(channels)
+        txt = char(strjoin(channels, ', '));
+    else
+        txt = char(channels);
+    end
+end
+
+function v = numField(w, name, default)
+%NUMFIELD  W.(NAME) if present, non-empty and numeric, else DEFAULT.
+    if isfield(w, name) && ~isempty(w.(name)) && isnumeric(w.(name))
+        v = w.(name);
+    else
+        v = default;
     end
 end
 
@@ -207,28 +330,71 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
 
         measure = char(string(data{r, 4}));
 
-        % Width (ms) is only required for a Peak Area window (the band it
-        % integrates over); for the other measures it is carried through
-        % unvalidated, so a value left in the cell from an earlier Peak
-        % Area edit does no harm.
+        % Width (ms): for Area it is the scope switch (0/blank = whole
+        % window, > 0 = a peak-locked band that wide) and needs no
+        % validation; for the other measures it is unused. Blank defaults
+        % to 0 so the column stays numeric.
         width = data{r, 6};
-        if strcmpi(measure, 'Peak Area')
-            if ~isnumeric(width) || isnan(width) || width <= 0
-                errMsg = sprintf('Window "%s" is a Peak Area measure, so it needs a positive Width (ms).', label);
+        if ~isnumeric(width) || isnan(width)
+            width = 0;
+        end
+
+        % Local pts: a non-negative whole number (0 = absolute peak). Only
+        % the peak-locating measures use it, and irrelevant cells are
+        % greyed; an empty/blank cell defaults to 0 rather than erroring,
+        % so a greyed value never blocks OK. A clearly-bad value (negative
+        % or fractional) is still caught.
+        localPoints = data{r, 7};
+        if isnumeric(localPoints) && ~isnan(localPoints)
+            if localPoints < 0 || mod(localPoints, 1) ~= 0
+                errMsg = sprintf('Window "%s": "Local pts" must be a whole number >= 0 (0 = absolute peak).', label);
+                return;
+            end
+        else
+            localPoints = 0;
+        end
+
+        % Fraction: required in (0,1) for the two fractional-latency
+        % measures; carried through unvalidated otherwise.
+        fraction = data{r, 8};
+        isFractional = any(strcmpi(measure, {'Fractional Peak Latency', 'Fractional Area Latency'}));
+        if isFractional && (~isnumeric(fraction) || isnan(fraction) || fraction <= 0 || fraction >= 1)
+            errMsg = sprintf('Window "%s" is a %s measure, so it needs a Fraction strictly between 0 and 1 (e.g. 0.5).', ...
+                label, measure);
+            return;
+        end
+        if ~isnumeric(fraction) || isnan(fraction)
+            fraction = 0.5; % keep the stored field numeric even for non-fractional rows
+        end
+
+        areaMode = char(string(data{r, 9}));   % dropdown, always a valid choice
+
+        % Baseline (ms): blank, or exactly two numbers (e.g. "-100 0")
+        % subtracted before measuring. Applies to any measure, so it is
+        % validated for every row.
+        baseline = strtrim(char(string(data{r, 10})));
+        if ~isempty(baseline)
+            nums = str2double(strtrim(strsplit(baseline, {',', ' '})));
+            if sum(~isnan(nums)) ~= 2
+                errMsg = sprintf('Window "%s": Baseline must be two numbers (e.g. "-100 0") or blank.', label);
                 return;
             end
         end
-        if ~isnumeric(width) || isnan(width)
-            width = 100; % keep the stored field numeric even for non-area rows
-        end
 
-        [channels, chanErr] = parseChannelSpec(data{r, 8}, allLabels);
-        if ~isempty(chanErr)
-            errMsg = sprintf('Window "%s": %s', label, chanErr);
+        % Channels: the raw text is stored as-is on the window (so pools
+        % survive round-trips as text -- see measureChannelSpecs, the
+        % shared parser); validate it here by parsing, surfacing the
+        % parser's own friendly error (unknown channel, unbalanced brace)
+        % which already names the window.
+        chText = strtrim(char(string(data{r, 12})));
+        try
+            measureChannelSpecs(chText, allLabels, label);
+        catch ME
+            errMsg = ME.message;
             return;
         end
 
-        refChannel = strtrim(char(string(data{r, 7})));
+        refChannel = strtrim(char(string(data{r, 11})));
         if ~isempty(refChannel) && ~any(strcmpi(allLabels, refChannel))
             errMsg = sprintf('Window "%s" names a reference channel ("%s") not in this dataset.', ...
                 label, refChannel);
@@ -237,40 +403,8 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
 
         windows{r} = struct('label', label, 'start', double(startMs), 'stop', double(stopMs), ...
             'measure', measure, 'polarity', char(string(data{r, 5})), 'width', double(width), ...
-            'refChannel', refChannel, 'channels', {channels});
-    end
-end
-
-function [channels, errMsg] = parseChannelSpec(spec, allLabels)
-%PARSECHANNELSPEC  A table cell's typed "Channels" text (comma/space-
-%   separated labels, or blank for "every channel") parsed into a cellstr
-%   in ALLLABELS' own canonical casing -- ALWAYS a cellstr, even for one
-%   channel or none (see Measure.m's own header comment on why a bare
-%   char is never used for a list-shaped field). ERRMSG names any
-%   requested label not found in ALLLABELS, case-insensitively matched.
-    text = strtrim(char(string(spec)));
-    if isempty(text)
-        channels = {};
-        errMsg = '';
-        return;
-    end
-    parts = strtrim(strsplit(text, {',', ' '}));
-    parts = parts(~cellfun(@isempty, parts)); % collapse repeated separators/whitespace
-
-    channels = cell(1, numel(parts));
-    missing = {};
-    for i = 1:numel(parts)
-        match = find(strcmpi(allLabels, parts{i}), 1);
-        if isempty(match)
-            missing{end + 1} = parts{i}; %#ok<AGROW>
-        else
-            channels{i} = char(allLabels(match));
-        end
-    end
-    if isempty(missing)
-        errMsg = '';
-    else
-        errMsg = sprintf('names channel(s) not in this dataset: %s.', strjoin(missing, ', '));
+            'localPoints', double(localPoints), 'fraction', double(fraction), ...
+            'areaMode', areaMode, 'baseline', baseline, 'refChannel', refChannel, 'channels', chText);
     end
 end
 
@@ -293,7 +427,9 @@ function writeMeasuresFile(filePath, data)
         rows{i} = struct('label', char(string(data{i, 1})), 'start', data{i, 2}, ...
             'stop', data{i, 3}, 'measure', char(string(data{i, 4})), ...
             'polarity', char(string(data{i, 5})), 'width', data{i, 6}, ...
-            'refChannel', char(string(data{i, 7})), 'channels', char(string(data{i, 8})));
+            'localPoints', data{i, 7}, 'fraction', data{i, 8}, ...
+            'areaMode', char(string(data{i, 9})), 'baseline', char(string(data{i, 10})), ...
+            'refChannel', char(string(data{i, 11})), 'channels', char(string(data{i, 12})));
     end
     file = struct('alakazamMeasures', true, 'version', 1, 'rows', {rows});
     % ConvertInfAndNaN=false: see Alakazam.onSaveTemplate's own note --
@@ -323,17 +459,25 @@ function data = readMeasuresFile(filePath)
             'This does not look like a saved Measure window file.'));
     end
     n = numel(raw.rows);
-    data = cell(n, 8);
+    data = cell(n, 12);
     for i = 1:n
         r = raw.rows(i);
-        % Tolerate a file saved before the Width column existed: default
-        % its width to 100 ms rather than failing to load.
-        if isfield(r, 'width') && ~isempty(r.width) && isnumeric(r.width)
-            width = r.width;
-        else
-            width = 100;
-        end
-        data(i, :) = {r.label, r.start, r.stop, r.measure, r.polarity, width, ...
-            r.refChannel, r.channels};
+        % Tolerate a file saved before columns were added (default each),
+        % and migrate the pre-unification Peak Area / Integral measures to
+        % Area so they load into the current dropdown.
+        [measure, width] = migrateMeasureWidth(char(string(r.measure)), rowNum(r, 'width', 0));
+        data(i, :) = {r.label, r.start, r.stop, measure, r.polarity, width, ...
+            rowNum(r, 'localPoints', 0), rowNum(r, 'fraction', 0.5), ...
+            normAreaMode(r), baselineText(r), r.refChannel, r.channels};
+    end
+end
+
+function v = rowNum(r, name, default)
+%ROWNUM  R.(NAME) if present, non-empty and numeric, else DEFAULT -- used
+%   when loading a .alm file that predates a numeric column.
+    if isfield(r, name) && ~isempty(r.(name)) && isnumeric(r.(name))
+        v = r.(name);
+    else
+        v = default;
     end
 end

@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Negative deflection peaking around 130 to 200 ms over lateral occipitotemporal sites (P7/P8, PO7/PO8; measured here at PO8), typically larger over the right hemisphere.",
+    "meaning": "Reflects the structural encoding of faces and other categories of visual expertise. It is enlarged and delayed for inverted relative to upright faces (the face inversion effect).",
+    "task": "Face perception paradigms: faces versus objects, upright versus inverted faces, and viewing of facial identity or expression."
+  },
+  "rows": [
+    {
+      "label": "N170",
+      "start": 130,
+      "stop": 200,
+      "measure": "Peak",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "PO8"
+    }
+  ]
+}

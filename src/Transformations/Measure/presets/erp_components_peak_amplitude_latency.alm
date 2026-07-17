@@ -1,0 +1,79 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "summary": "The same four-component battery scored as local peak amplitude and latency, with a two-point local-peak neighbourhood to guard against window-edge and noise artefacts. Use when peak latency is of interest; prefer mean amplitude (see erp_components_mean_amplitude) for amplitude comparisons across conditions.",
+    "components": {
+      "P2": {
+        "morphology": "Positive deflection around 150 to 250 ms, fronto-central maximum (Cz).",
+        "meaning": "Early stimulus classification and feature detection, perceptual salience, and attention to target features.",
+        "task": "Target and feature detection, feature-based attention, repetition and priming."
+      },
+      "P300": {
+        "morphology": "Large centro-parietal positivity around 300 to 600 ms (Pz); the classic P3b, with a fronto-central P3a to novel distractors.",
+        "meaning": "Context updating in working memory and allocation of attentional resources; amplitude scales with salience and rarity, latency with evaluation time.",
+        "task": "Oddball paradigms, memory-updating and dual-task workload designs."
+      },
+      "N400": {
+        "morphology": "Centro-parietal negativity around 300 to 500 ms, peaking near 400 ms (Cz), slightly right-posterior.",
+        "meaning": "Semantic processing and the ease of contextual integration; larger for incongruent, unexpected or unprimed items.",
+        "task": "Sentence reading with semantic violations, semantic priming, and picture-word matching."
+      },
+      "MMN": {
+        "morphology": "Fronto-central negativity around 150 to 250 ms (Fz), seen in the deviant-minus-standard difference wave; inverts at the mastoids.",
+        "meaning": "Pre-attentive, automatic auditory deviance detection and echoic sensory memory (a prediction-error signal).",
+        "task": "Passive auditory oddball and roving-standard paradigms."
+      }
+    }
+  },
+  "rows": [
+    {
+      "label": "P2",
+      "start": 150,
+      "stop": 250,
+      "measure": "Peak",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Cz"
+    },
+    {
+      "label": "P300",
+      "start": 300,
+      "stop": 600,
+      "measure": "Peak",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Pz"
+    },
+    {
+      "label": "N400",
+      "start": 300,
+      "stop": 500,
+      "measure": "Peak",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Cz"
+    },
+    {
+      "label": "MMN",
+      "start": 150,
+      "stop": 250,
+      "measure": "Peak",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Fz"
+    }
+  ]
+}

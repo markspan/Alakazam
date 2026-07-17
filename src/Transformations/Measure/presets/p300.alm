@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Large positive deflection between roughly 300 and 600 ms with a centro-parietal maximum (measured here at Pz). The classic P3b; a distinct fronto-central P3a is elicited by novel distractors.",
+    "meaning": "Reflects context updating in working memory and the allocation of attentional resources to stimulus evaluation. Amplitude grows with stimulus salience and rarity; latency tracks evaluation and categorisation time.",
+    "task": "Oddball paradigms (rare targets among frequent standards), memory-updating and dual-task workload designs."
+  },
+  "rows": [
+    {
+      "label": "P300",
+      "start": 300,
+      "stop": 600,
+      "measure": "Mean Amplitude",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Pz"
+    }
+  ]
+}

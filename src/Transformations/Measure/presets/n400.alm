@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Centro-parietal negativity between about 300 and 500 ms, peaking near 400 ms (measured here at Cz), typically slightly right-lateralised and posterior.",
+    "meaning": "Indexes semantic processing and the ease of integrating an item into its context. Amplitude is larger for semantically incongruent, unexpected or unprimed items.",
+    "task": "Sentence reading with semantic violations, semantic priming, and picture-word or word-word matching."
+  },
+  "rows": [
+    {
+      "label": "N400",
+      "start": 300,
+      "stop": 500,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Cz"
+    }
+  ]
+}
