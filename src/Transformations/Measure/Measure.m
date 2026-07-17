@@ -39,9 +39,16 @@ function [EEG, options] = Measure(input, opts)
 %   own mean over it is subtracted before the measure is taken (matters
 %   most for the area measures, which a DC offset inflates).
 %
-%   Passes EEG.data/EEG.times/etc. through completely unchanged -- this is
-%   a read-only quantification step, not a signal-processing one. Adds
-%   EEG.measurements: a 1xN cell array (N = number of windows, never a
+%   Optionally derives new channels first from a block of "let" statements
+%   (options.derivations, e.g. "let LRP = C3 - C4"): each is appended to
+%   EEG.data/EEG.chanlocs (marked .type = 'derived') so it can be measured
+%   here AND shows up downstream on the ERP plot and in grand averages, and
+%   can be named in any window's Channels/Reference cell. A difference
+%   channel has no scalp position, so ScalpDistribution drops it from the
+%   head map automatically. See measureDerivations.m. Apart from those
+%   opt-in derived channels, EEG.data/EEG.times/etc. pass through unchanged.
+%
+%   Adds EEG.measurements: a 1xN cell array (N = number of windows, never a
 %   struct array -- see the note on WINDOWS below) of scalar structs:
 %       .label, .start, .stop, .measure, .polarity, .width, .localPoints,
 %       .fraction, .areaMode, .baseline, .refChannel, .channels
@@ -111,7 +118,11 @@ if interactive
     else
         priorWindows = stored.windows;
     end
-    windows = MeasureDialog(input.chanlocs, priorWindows);
+    priorDerivations = '';
+    if isstruct(stored) && isfield(stored, 'derivations')
+        priorDerivations = stored.derivations;
+    end
+    [windows, derivations] = MeasureDialog(input.chanlocs, priorWindows, priorDerivations);
     if isempty(windows)
         % Cancelled: nothing to persist and nothing to run -- see
         % TransformOptionsDialog's own header comment for why every
@@ -119,7 +130,7 @@ if interactive
         EEG = [];
         return;
     end
-    options = struct('windows', {windows});
+    options = struct('windows', {windows}, 'derivations', derivations);
     TransformSettings.set('Measure', options);
 else
     if ~isstruct(opts) || ~isfield(opts, 'windows')
@@ -129,6 +140,10 @@ else
     end
     windows = opts.windows;
     options = opts;
+    derivations = '';
+    if isfield(opts, 'derivations')
+        derivations = opts.derivations;
+    end
 end
 
 if isempty(windows)
@@ -136,6 +151,14 @@ if isempty(windows)
         ['No measurement windows are defined, so there is nothing for Measure to do. Add ' ...
          'at least one window (a name, a start/stop time, and a measure type).']));
 end
+
+%% Derived channels: evaluate any "let" statements and append them to EEG
+% (channels x samples[ x bins]) before measuring, so a derivation like
+% "let LRP = C3 - C4" is both measurable here and visible downstream (the
+% ERP line plot, grand averages). measureDerivations is a no-op when the
+% block is empty, and idempotent, so replay/Recalculate replaces rather
+% than accumulates the derived channels. See measureDerivations.m.
+EEG = measureDerivations(EEG, derivations);
 
 %% Compute
 allLabels = string({EEG.chanlocs.labels});

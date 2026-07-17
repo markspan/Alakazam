@@ -187,7 +187,7 @@ The current library:
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
-| `Measure` | Quantifies ERP components in named time windows -- mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency) -- on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference and [Measurement export](#measurement-export). |
+| `Measure` | Quantifies ERP components in named time windows -- mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency) -- on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference and [Measurement export](#measurement-export). |
 
 Grand averaging (combining several subjects' `Average` results into one) is
 a separate mechanism, not a transformation plugin: it has its own ribbon tab
@@ -232,6 +232,146 @@ measure reference, with worked examples, is
 ![ScreenshotEpoched](Screenshots/Epoched.jpg)
 
 ![ScreenshotTF](Screenshots/TimeFrequency.jpg)
+
+## How-to walkthroughs
+
+Three worked pipelines. Each is an ordinary chain of transformations, so once
+built on one recording it replays across a whole study in one click with **Apply
+to All Raw Files** (a branch's right-click menu) or a saved template. The marker
+codes below (`"S2?"`, `"201"`, ...) are placeholders: substitute the ones your
+recording actually used. Ready-made measurement windows live in
+[`presets/`](src/Transformations/Measure/presets) (the Measure dialog's
+**Load...** button); the full measure reference is
+[`measure.md`](src/Transformations/Measure/measure.md).
+
+The examples lean on the [`DefineBins`](src/Transformations/DefineBins) language,
+which is worth knowing a little of, because it is what makes each design precise:
+
+- **`let name = ...`** names a code or relation once so bins stay readable.
+- **Wildcards and sets**: `"S2?"` matches any `S2x` marker; `a|b` or `{a b}` is a
+  set of alternatives.
+- **Relations**: `next(code) within (lo,hi] ms` (also `prev`, `adjacent`, `any`)
+  constrains a neighbouring event; the window is signed and gates reaction time.
+- **`... rt within (lo,hi] ms`** keeps a match only if its RT is in range.
+- **`... timelock <relation>`** re-centres the epoch on a neighbour (e.g. the
+  response) instead of the anchor: this is how a bin defined on the *stimulus*
+  becomes *response-locked* (used by the LRP below).
+- **Combination bins** take coefficients: `bin 3 = 0.5 bin 2 - 0.5 bin 1`.
+
+### How to do a P300 analysis (oddball)
+
+The P300 is a large centro-parietal positivity, 300 to 600 ms, to rare target
+stimuli. Stimulus-locked.
+
+1. **Filter** the raw recording (`IIRFilter`, e.g. 0.1 to 30 Hz).
+2. **DefineBins**, splitting rare targets from frequent standards and adding the
+   oddball difference wave. Here the rare bin also requires the participant to
+   have actually responded, in a plausible RT window, so misses and slow lapses
+   are excluded; the epoch stays **stimulus-locked** (no `timelock`, the
+   deliberate contrast with the LRP below):
+
+   ```
+   epoch [-200,800] ms
+   let responded = next("201") within (200,1200] ms
+   bin 1 "Rare"       : "S2?" and responded
+   bin 2 "Frequent"   : "S1?"
+   bin 3 "Rare-Freq"  = bin 1 - bin 2
+   ```
+
+   `"S2?"` is any rare-target marker and `"S1?"` any frequent one (wildcards);
+   `responded` names "a button press 200 to 1200 ms after the stimulus".
+3. **Baseline** to the pre-stimulus interval (-200 to 0 ms), then
+   **ArtefactDetect** to reject bad trials.
+4. **Average**.
+5. **Measure**: Load the `p300` preset (Pz, 300 to 600 ms, mean amplitude), or
+   the `erp_components_mean_amplitude` battery. Read the `Rare` bin for the P300
+   itself, and the `Rare-Freq` bin for the oddball effect.
+6. **Grand Average** across subjects, then **Export Measurements...** (the
+   **Measurements** ribbon tab) for one long-format CSV.
+
+### How to do an LRP analysis (response-locked)
+
+The lateralised readiness potential is the motor-cortex difference between the
+hands, building up before the response. It is a **double subtraction**:
+contralateral minus ipsilateral, averaged over left- and right-hand responses.
+Response-locked.
+
+1. **Filter** the raw recording.
+2. **DefineBins**. This is the crux, and it shows off the language. Each bin is
+   *defined on the imperative stimulus* (which holds the trial's condition), but
+   `timelock`-ed onto the button press so the epoch is **response-locked** (time
+   0 = the press). Split by the hand actually used, then form the coefficiented
+   combination bin for the double subtraction:
+
+   ```
+   epoch [-800,200] ms
+   let leftPress  = next("201") within (150,1500] ms
+   let rightPress = next("202") within (150,1500] ms
+   bin 1 "Left-hand"  : "S1?" and leftPress   timelock leftPress
+   bin 2 "Right-hand" : "S1?" and rightPress  timelock rightPress
+   bin 3 "LRP"        = 0.5 bin 2 - 0.5 bin 1
+   ```
+
+   Reading it: `"S1?"` is any imperative stimulus (the condition the bin holds);
+   `leftPress` / `rightPress` name the left (`"201"`) and right (`"202"`) button
+   presses once, gated to a 150 to 1500 ms RT window so anticipations and misses
+   drop out; `and leftPress` keeps only stimuli followed by that press;
+   `timelock leftPress` then re-centres each epoch on the press even though the
+   bin is anchored at the stimulus. `next(...)` picks the nearest following
+   press, so as long as trials are seconds apart it is the trial's own response.
+   Bins 1 and 2 therefore contain the left- and right-hand trials, response-
+   locked; `bin 3` is the double subtraction.
+3. **Average**.
+4. **Measure**: define the motor difference as a derived channel in the
+   **Derived channels** field, and measure it on the `LRP` bin:
+
+   ```
+   let LRP = C3 - C4
+   ```
+
+   with one window (Load the `lrp` preset as a starting point, then set its
+   Channels to `LRP`): -100 to 0 ms, mean amplitude, channel `LRP`. Read the
+   `LRP` bin (bin 3). This appends an `LRP` channel to the dataset, so it also
+   shows on the ERP plot. (Why `0.5 bin 2 - 0.5 bin 1` on `C3 - C4` is exactly
+   the LRP: on `C3 - C4`, a right-hand response gives contra minus ipsi and a
+   left-hand response its negation, so half their difference is the mean over
+   hands of contra minus ipsi.) LRP **amplitude** is straightforward this way;
+   LRP **onset latency** wants a jackknife across subjects, which is not yet
+   built in.
+
+### How to do an MMN analysis (passive auditory oddball)
+
+The mismatch negativity is a fronto-central negativity, 150 to 250 ms, seen in
+the deviant-minus-standard difference wave. Stimulus-locked, attention not
+required.
+
+1. **Filter** the raw recording (a low-pass around 20 to 30 Hz is common for
+   MMN).
+2. **DefineBins**, forming the deviant-minus-standard difference wave (the MMN is
+   defined on this difference, not the raw deviant). For a cleaner contrast, the
+   control standard here is not just any standard but the one **immediately
+   before each deviant**, via `adjacent`, which matches adaptation and serial
+   position between the two bins. MMN is passive, so there is no response and no
+   `timelock`:
+
+   ```
+   epoch [-100,400] ms
+   let standard = "S1"
+   let deviant  = "S2"
+   bin 1 "Deviant"        : deviant
+   bin 2 "Std before dev" : standard and adjacent(deviant)
+   bin 3 "MMN"            = bin 1 - bin 2
+   ```
+
+   `adjacent(deviant)` is true when the event's immediately following event is a
+   deviant, so `bin 2` collects exactly the standards that directly precede a
+   deviant.
+3. **Baseline** to the pre-stimulus interval (-100 to 0 ms), then
+   **ArtefactDetect**.
+4. **Average**.
+5. **Measure**: Load the `mmn` preset (Fz, 150 to 250 ms, mean amplitude,
+   negative), and read the `MMN` difference bin (bin 3) at Fz.
+6. **Grand Average**, then **Export Measurements...**.
 
 ## References
 

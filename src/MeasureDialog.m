@@ -1,8 +1,9 @@
-function windows = MeasureDialog(chanlocs, priorWindows)
+function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDerivations)
 %MEASUREDIALOG  Modal editor for Measure's window definitions: an
 %   editable table (Add/Remove-row buttons), one row per measurement
 %   window (name, start/stop ms, measure type, polarity, optional
-%   reference channel, channel selection).
+%   reference channel, channel selection), plus a "let" field for derived
+%   channels.
 %
 %   CHANLOCS is the target dataset's own EEG.chanlocs, used only to
 %   validate typed channel/reference-channel labels immediately (a
@@ -15,14 +16,21 @@ function windows = MeasureDialog(chanlocs, priorWindows)
 %   -- passed in by Measure.m from TransformSettings (a fresh interactive
 %   run) or by Alakazam.recalculateTransformNode (editing one specific
 %   node's own stored windows), matching DefineBins' own promptForScript/
-%   GrandAverageDialog's own PREFILLSPEC pattern.
+%   GrandAverageDialog's own PREFILLSPEC pattern. PRIORDERIVATIONS (a char
+%   block, or '' on first use) pre-fills the derived-channels field.
 %
-%   Returns a 1xN cell array of scalar structs (.label, .start, .stop,
-%   .measure, .polarity, .width, .localPoints, .fraction, .areaMode,
-%   .baseline, .refChannel, .channels -- see Measure.m's own header
-%   comment for why a cell array, never a struct array), or [] if the
-%   dialog was cancelled -- the same "empty means cancel" contract
-%   GrandAverageDialog/TransformOptionsDialog use.
+%   Returns WINDOWS, a 1xN cell array of scalar structs (.label, .start,
+%   .stop, .measure, .polarity, .width, .localPoints, .fraction, .areaMode,
+%   .baseline, .refChannel, .channels -- see Measure.m's own header comment
+%   for why a cell array, never a struct array), and DERIVATIONS, the
+%   derived-channels "let" text (see measureDerivations.m); or [] and '' if
+%   the dialog was cancelled -- the same "empty means cancel" contract
+%   GrandAverageDialog/TransformOptionsDialog use. Derived-channel names are
+%   valid channel references in the table, so they are validated together at
+%   OK time (a name may be measured only if its own let statement parses).
+    if nargin < 3
+        priorDerivations = '';
+    end
 
     MEASURE_CHOICES   = {'Mean Amplitude', 'Peak', 'Area', ...
         'Fractional Peak Latency', 'Fractional Area Latency'};
@@ -38,12 +46,13 @@ function windows = MeasureDialog(chanlocs, priorWindows)
     % wider than the numeric fields).
     COLUMN_WIDTHS    = {'3x', '2x', '2x', '4x', '2x', '2x', '2x', '2x', '2x', '2x', '3x', '4x'};
 
-    windows = [];  % returned only on OK; stays [] on Cancel
+    windows = [];       % returned only on OK; stays [] on Cancel
+    derivations = '';   % the "let" block; set on OK, stays '' on Cancel
     allLabels = string({chanlocs.labels});
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
-    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 440]);
-    outer = uigridlayout(fig, [4 1], 'RowHeight', {'fit', '1x', 'fit', 44});
+    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 510]);
+    outer = uigridlayout(fig, [5 1], 'RowHeight', {'fit', 66, '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
         'Define one or more measurement windows over the Start-Stop range. Measures: ' ...
@@ -57,17 +66,31 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         'channel" (Peak / peak-band Area) locks every channel to one found peak latency.'], ...
         'WordWrap', 'on');
 
+    % Derived channels: a block of "let" statements (see measureDerivations).
+    % Each defines a new channel by an elementwise formula over existing (or
+    % earlier-derived) channels, usable by name in any Channels/Reference
+    % cell -- e.g. "let LRP = C3 - C4" for the lateralised readiness
+    % potential's motor difference. Appended to the dataset, so they also
+    % show on the ERP plot and in grand averages.
+    derivGrid = uigridlayout(outer, [1 2], 'ColumnWidth', {250, '1x'}, ...
+        'Padding', [0 0 0 0], 'ColumnSpacing', 6);
+    derivGrid.Layout.Row = 2;
+    uilabel(derivGrid, 'Text', sprintf(['Derived channels (optional), one "let" per line,\n' ...
+        'usable by name in Channels/Reference:\ne.g.  let LRP = C3 - C4']), ...
+        'WordWrap', 'on', 'VerticalAlignment', 'top');
+    derivArea = uitextarea(derivGrid, 'Value', linesFromText(priorDerivations));
+
     table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 12), ...
         'ColumnFormat', {'char', 'numeric', 'numeric', MEASURE_CHOICES, POLARITY_CHOICES, ...
             'numeric', 'numeric', 'numeric', AREA_MODE_CHOICES, 'char', 'char', 'char'}, ...
         'ColumnWidth', COLUMN_WIDTHS, 'Data', rowsFromWindows(priorWindows));
-    table.Layout.Row = 2;
+    table.Layout.Row = 3;
     table.CellSelectionCallback = @(~, event) onCellSelected(event);
     table.CellEditCallback = @(~, event) onCellEdit(event);
     applyGreying();
 
     rowButtons = uigridlayout(outer, [1, 3], 'ColumnWidth', {110, 130, '1x'}, 'Padding', [0 0 0 0]);
-    rowButtons.Layout.Row = 3;
+    rowButtons.Layout.Row = 4;
     uibutton(rowButtons, 'Text', 'Add Window', 'ButtonPushedFcn', @(~, ~) addRow());
     uibutton(rowButtons, 'Text', 'Remove Selected', 'ButtonPushedFcn', @(~, ~) removeSelectedRow());
 
@@ -75,7 +98,7 @@ function windows = MeasureDialog(chanlocs, priorWindows)
     % layout DefineBins' own dialog uses for its Save.../Load... +
     % Cancel/OK row.
     buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {90, 90, '1x', 90, 90}, 'Padding', [8 6 8 6]);
-    buttons.Layout.Row = 4;
+    buttons.Layout.Row = 5;
     saveBtn = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~, ~) onSaveMeasures());
     saveBtn.Layout.Column = 1;
     loadBtn = uibutton(buttons, 'Text', 'Load...', 'ButtonPushedFcn', @(~, ~) onLoadMeasures());
@@ -147,14 +170,39 @@ function windows = MeasureDialog(chanlocs, priorWindows)
             uialert(fig, 'Add at least one measurement window.', 'No windows defined');
             return;
         end
-        [built, errMsg] = windowsFromRows(data, allLabels);
+        % Validate the derived-channel block first (by running it on a tiny
+        % dummy dataset built from this dataset's channels, so it parses
+        % exactly as it will at measure time), and fold the derived names
+        % into the label set the window rows are validated against, so a
+        % window may name a channel that a "let" statement defines.
+        derivText = textFromLines(derivArea.Value);
+        try
+            [~, derivedNames] = measureDerivations(dummyEEG(), derivText);
+        catch err
+            uialert(fig, err.message, 'Check the derived channels');
+            return;
+        end
+        augLabels = allLabels;
+        if ~isempty(derivedNames)
+            augLabels = [allLabels, string(derivedNames)];
+        end
+        [built, errMsg] = windowsFromRows(data, augLabels);
         if ~isempty(errMsg)
             uialert(fig, errMsg, 'Check the window definitions');
             return;
         end
         windows = built;
+        derivations = derivText;
         uiresume(fig);
         delete(fig);
+    end
+
+    function eeg = dummyEEG()
+        % A minimal averaged dataset (this dataset's channels, two dummy
+        % samples) so measureDerivations can parse/evaluate the let block at
+        % OK time without needing the real data.
+        eeg = struct('chanlocs', chanlocs, 'data', zeros(numel(chanlocs), 2), ...
+            'nbchan', numel(chanlocs));
     end
 
     function onCancel()
@@ -177,7 +225,7 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         [file, path] = uiextras.uiputfile2('*.alm', 'Save measurement windows as');
         if isequal(file, 0); return; end
         try
-            writeMeasuresFile(fullfile(path, file), table.Data);
+            writeMeasuresFile(fullfile(path, file), table.Data, textFromLines(derivArea.Value));
         catch err
             uialert(fig, err.message, 'Save failed');
         end
@@ -187,7 +235,9 @@ function windows = MeasureDialog(chanlocs, priorWindows)
         [file, path] = uiextras.uigetfile2('*.alm', 'Load measurement windows');
         if isequal(file, 0); return; end
         try
-            table.Data = readMeasuresFile(fullfile(path, file));
+            [loadedData, loadedDerivations] = readMeasuresFile(fullfile(path, file));
+            table.Data = loadedData;
+            derivArea.Value = linesFromText(loadedDerivations);
             selectedRow = 0;
             applyGreying();
         catch err
@@ -411,17 +461,18 @@ end
 % ======================================================================= %
 %  Save.../Load... file I/O
 % ======================================================================= %
-function writeMeasuresFile(filePath, data)
+function writeMeasuresFile(filePath, data, derivations)
 %WRITEMEASURESFILE  Save DATA (the table's own row-per-window cell array,
-%   as-is -- see onSaveMeasures for why unvalidated) as a small JSON file.
-%   ROWS is deliberately a 1xN CELL array of scalar structs, never a
-%   struct array: jsonencode collapses a 1-element struct array embedded
-%   in another struct's field to a bare JSON object instead of a single-
-%   element array -- the same gotcha Measure.m's own header comment
-%   documents for .windows, and worked around in Alakazam.onSaveTemplate
-%   -- which would otherwise silently break loading a one-window file
-%   back. A single fwrite, not fprintf: the JSON text is already fully
-%   formatted, so there is no format-string/argument split to make.
+%   as-is -- see onSaveMeasures for why unvalidated) plus the DERIVATIONS
+%   "let" block as a small JSON file. ROWS is deliberately a 1xN CELL array
+%   of scalar structs, never a struct array: jsonencode collapses a
+%   1-element struct array embedded in another struct's field to a bare JSON
+%   object instead of a single-element array -- the same gotcha Measure.m's
+%   own header comment documents for .windows, and worked around in
+%   Alakazam.onSaveTemplate -- which would otherwise silently break loading
+%   a one-window file back. A single fwrite, not fprintf: the JSON text is
+%   already fully formatted, so there is no format-string/argument split to
+%   make.
     rows = cell(1, size(data, 1));
     for i = 1:size(data, 1)
         rows{i} = struct('label', char(string(data{i, 1})), 'start', data{i, 2}, ...
@@ -431,7 +482,8 @@ function writeMeasuresFile(filePath, data)
             'areaMode', char(string(data{i, 9})), 'baseline', char(string(data{i, 10})), ...
             'refChannel', char(string(data{i, 11})), 'channels', char(string(data{i, 12})));
     end
-    file = struct('alakazamMeasures', true, 'version', 1, 'rows', {rows});
+    file = struct('alakazamMeasures', true, 'version', 1, ...
+        'derivations', char(string(derivations)), 'rows', {rows});
     % ConvertInfAndNaN=false: see Alakazam.onSaveTemplate's own note --
     % the default (true) silently turns NaN into JSON null, which
     % jsondecode then reads back as [] (empty), not NaN.
@@ -448,15 +500,20 @@ function writeMeasuresFile(filePath, data)
     fwrite(fid, json, 'char');
 end
 
-function data = readMeasuresFile(filePath)
+function [data, derivations] = readMeasuresFile(filePath)
 %READMEASURESFILE  Inverse of writeMeasuresFile: a uitable-compatible
-%   cell array of rows. Throws a friendly error if FILEPATH is not a
+%   cell array of rows, plus the file's derived-channels "let" block ('' if
+%   the file predates it). Throws a friendly error if FILEPATH is not a
 %   recognisable saved-measures file.
     raw = jsondecode(fileread(filePath));
     if ~isstruct(raw) || ~isfield(raw, 'alakazamMeasures') ...
             || ~isequal(raw.alakazamMeasures, true) || ~isfield(raw, 'rows')
         throw(MException('Alakazam:MeasureDialog', ...
             'This does not look like a saved Measure window file.'));
+    end
+    derivations = '';
+    if isfield(raw, 'derivations') && ~isempty(raw.derivations)
+        derivations = char(string(raw.derivations));
     end
     n = numel(raw.rows);
     data = cell(n, 12);
@@ -470,6 +527,23 @@ function data = readMeasuresFile(filePath)
             rowNum(r, 'localPoints', 0), rowNum(r, 'fraction', 0.5), ...
             normAreaMode(r), baselineText(r), r.refChannel, r.channels};
     end
+end
+
+function lines = linesFromText(text)
+%LINESFROMTEXT  A char block (possibly '') to a cellstr for a uitextarea's
+%   Value (one entry per line; {''} for empty, never {} which a uitextarea
+%   rejects).
+    if isempty(char(string(text)))
+        lines = {''};
+    else
+        lines = cellstr(splitlines(string(text)));
+    end
+end
+
+function text = textFromLines(value)
+%TEXTFROMLINES  A uitextarea's Value (cellstr, one per line) back to a
+%   single newline-joined char block.
+    text = char(strjoin(string(value), newline));
 end
 
 function v = rowNum(r, name, default)

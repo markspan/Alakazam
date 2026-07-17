@@ -1,0 +1,26 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Slow negative-going potential over motor cortex (C3/C4), larger contralateral to the responding hand. It builds up over the few hundred ms before the response and is maximal around it.",
+    "meaning": "Indexes motor preparation and response selection: the differential activation of the motor cortices controlling the two hands, including covert or partial activation of the incorrect hand. The onset latency of the LRP times response selection.",
+    "task": "Two-choice speeded reaction-time tasks with left- and right-hand responses (flanker, Simon and similar choice-RT designs).",
+    "note": "Assumes response-locked averages (time 0 = the response), so the window sits at negative times just before the response. This preset measures the raw motor sites C3 and C4 (both must be present) over the pre-response interval. The LRP proper is a double subtraction, contralateral minus ipsilateral averaged across left- and right-hand responses: define the channel difference with a derivation (let LRP = C3 - C4), split the response-locked epochs into left- and right-hand bins in DefineBins, form the combination bin (0.5 binRight - 0.5 binLeft), and measure it on the derived LRP channel."
+  },
+  "rows": [
+    {
+      "label": "LRP",
+      "start": -100,
+      "stop": 0,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 0,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "areaMode": "Signed",
+      "baseline": "",
+      "refChannel": "",
+      "channels": "C3, C4"
+    }
+  ]
+}

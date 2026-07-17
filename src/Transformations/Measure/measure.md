@@ -15,7 +15,10 @@ latency**. The dialog greys the parameter cells a row's chosen measure does not
 use, so each row shows only what applies to it.
 
 Any window can also carry an optional **baseline**: a pre-window interval whose
-mean is subtracted from the waveform before the measure is taken.
+mean is subtracted from the waveform before the measure is taken. You can also
+define **derived channels** with `let` statements (e.g. `let LRP = C3 - C4`) and
+measure those like any electrode; see
+[Derived channels](#derived-channels-let-statements).
 
 `Measure` runs on an **averaged** dataset only: a subject `Average` or a
 `Grand Average`. Run `Average` (or Grand Average, for a group waveform) first;
@@ -306,6 +309,44 @@ waveform exactly as it would be on a single electrode, so pooling works with
 every measure (mean, peak, area, fractional latency, …) and with a reference
 channel.
 
+### Derived channels (`let` statements)
+
+Pooling only averages. To combine channels any other way, define a **derived
+channel** in the dialog's **Derived channels** field, one `let` statement per
+line:
+
+```
+let LRP     = C3 - C4
+let RMSfront = sqrt((Fz*Fz + Cz*Cz) / 2)
+```
+
+Each `let` creates a new channel from an elementwise formula over existing
+channels (and earlier-derived ones), which you can then name in any window's
+**Channels** or **Reference channel** cell, exactly like a real electrode. The
+formula language is deliberately small and is parsed, never run as code (a
+saved `.alm` is shared and loaded from disk): channel names, `+ - * /`,
+parentheses, unary `-`, the elementwise functions `abs` and `sqrt`, and numeric
+literals. Blank lines and text after `%` are ignored.
+
+Unlike pooling, a derived channel is **appended to the dataset**, so it also
+appears on the ERP line plot and flows into grand averages, not just the
+measurements. Two consequences worth knowing:
+
+- A derived channel has **no scalp location** (what is the position of
+  `C3 - C4`?), so it is correctly left off the ScalpDistribution head map while
+  showing on the time-series plot.
+- To get a derived channel into a **grand average**, apply the same `let` to
+  every subject (Apply to All Raw Files, or a shared template) so their montages
+  match, or run the same `let` on the grand average itself.
+
+A note on the LRP specifically: `let LRP = C3 - C4` supplies the channel
+subtraction, but the lateralised readiness potential proper is a double
+subtraction that also depends on the responding hand. You still split the
+response-locked epochs into left- and right-hand bins in `DefineBins` and form
+the combination bin (`0.5 binRight - 0.5 binLeft`), then measure it on the
+derived `C3 - C4` channel. The `let` is the channel half; the bin split is the
+other half.
+
 ## 8. Baseline correction
 
 The optional **Baseline (ms)** cell names a `start stop` interval whose mean is
@@ -399,8 +440,10 @@ lists the bin waveforms only.
 ## What you get out
 
 `Measure` adds `EEG.measurements` to the result and, like every other
-transformation, lands as a new node in the tree. Nothing about the waveform
-itself is changed; it is a read-only quantification step.
+transformation, lands as a new node in the tree. The recorded waveforms are
+left unchanged, except that any derived (`let`) channels are appended to the
+dataset (see [Derived channels](#derived-channels-let-statements)); apart from
+those, it is a read-only quantification step.
 
 To get the numbers into a statistics package, use **Export Measurements...**
 on the ribbon's **Measurements** tab. It walks the whole workspace, every
@@ -489,6 +532,15 @@ sensible default measure at its canonical site:
 - `p300` — Pz, 300–600 ms, mean amplitude (positive).
 - `n400` — Cz, 300–500 ms, mean amplitude (negative).
 - `lpp` — Pz, 400–800 ms, mean amplitude (positive).
+
+Response-locked components (time 0 = the response; the windows sit at or before
+0, so load these onto a **response-locked** average):
+
+- `lrp` — C3/C4, −100–0 ms, mean amplitude (negative). Motor sites for the
+  lateralised readiness potential; the LRP proper is the contralateral-minus-
+  ipsilateral double subtraction (see the file's own note).
+- `ern` — FCz, 0–100 ms, mean amplitude (negative), baselined −400 to −200 ms.
+  The error-related negativity on error trials.
 
 ## Running a Measure across a study
 
