@@ -1,0 +1,1 @@
+{"Name":"Spectral Measure","Description":"Quantify frequency-tagging / SSVEP / RIFT responses (power, SNR, phase-locking, coherence) at named frequencies","Entry":"SpectralMeasure.m","Icon":"SpectralMeasure.png","Section":"Frequency and Component Analysis","Category":"Frequency"}

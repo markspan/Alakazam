@@ -1,0 +1,92 @@
+function exportSpectralCSV(entries, targetFile)
+%EXPORTSPECTRALCSV  Write every SpectralMeasure result in ENTRIES to one
+%   long-format, R-compatible CSV at TARGETFILE. The frequency-domain sibling
+%   of exportMeasurementsCSV.
+%
+%   ENTRIES is a struct array with .subject, .datasetType ('subject' or
+%   'grand_average') and .EEG (already loaded, carrying .spectralMeasures --
+%   see SpectralMeasure.m and Alakazam.collectSpectralEntries).
+%
+%   One row per (dataset x frequency x bin x channel x measure type), columns
+%   dataset,dataset_type,bin,channel,frequency_label,frequency_hz,reference,
+%   measure_type,value. measure_type is power / amplitude / snr / itc / phase
+%   (always) and coherence / phaselag (only when the frequency was measured
+%   against a reference channel), so every row's value column stays uniformly
+%   numeric with no per-type NA columns. Same tidy/long shape and quoting as
+%   exportMeasurementsCSV, so both drop into the same R workflow.
+    fid = fopen(targetFile, 'w');
+    if fid < 0
+        throw(MException('Alakazam:exportSpectralCSV', ...
+            'Could not open "%s" for writing.', targetFile));
+    end
+    closeFile = onCleanup(@() fclose(fid));
+
+    fprintf(fid, ['dataset,dataset_type,bin,channel,frequency_label,frequency_hz,' ...
+        'reference,measure_type,value\n']);
+
+    for i = 1:numel(entries)
+        writeEntry(fid, entries(i));
+    end
+end
+
+function writeEntry(fid, entry)
+    datasetField = csvField(entry.subject);
+    typeField    = csvField(entry.datasetType);
+    EEG = entry.EEG;
+
+    for w = 1:numel(EEG.spectralMeasures)
+        m = EEG.spectralMeasures{w};
+        labelField = csvField(m.label);
+        freqField  = sprintf('%.6g', m.freq);
+        refField   = csvField(m.refChannel);
+        hasRef     = ~isempty(strtrim(char(string(m.refChannel))));
+        nBins      = size(m.power, 2);
+
+        for b = 1:nBins
+            binField = csvField(binLabel(EEG, b));
+            for c = 1:numel(m.channels)
+                chField = csvField(m.channels{c});
+                prefix = sprintf('%s,%s,%s,%s,%s,%s,%s,', datasetField, typeField, ...
+                    binField, chField, labelField, freqField, refField);
+                writeRow(fid, prefix, 'power',     m.power(c, b));
+                writeRow(fid, prefix, 'amplitude', m.amplitude(c, b));
+                writeRow(fid, prefix, 'snr',       m.snr(c, b));
+                writeRow(fid, prefix, 'itc',       m.itc(c, b));
+                writeRow(fid, prefix, 'phase',     m.phase(c, b));
+                if hasRef
+                    writeRow(fid, prefix, 'coherence', m.coherence(c, b));
+                    writeRow(fid, prefix, 'phaselag',  m.phaselag(c, b));
+                end
+            end
+        end
+    end
+end
+
+function writeRow(fid, prefix, measureType, value)
+    fprintf(fid, '%s%s,%s\n', prefix, measureType, numField(value));
+end
+
+function label = binLabel(EEG, b)
+%BINLABEL  EEG.bindesc(b)'s own label, or the bare bin number as a fallback --
+%   matches exportMeasurementsCSV/exportGrandAveragesCSV.
+    if isfield(EEG, 'bindesc') && numel(EEG.bindesc) >= b && ~isempty(EEG.bindesc(b).label)
+        label = EEG.bindesc(b).label;
+    else
+        label = num2str(b);
+    end
+end
+
+function field = csvField(value)
+    field = char(string(value));
+    if any(field == ',' | field == '"' | field == newline)
+        field = ['"' strrep(field, '"', '""') '"'];
+    end
+end
+
+function field = numField(value)
+    if isnan(value)
+        field = 'NA';
+    else
+        field = sprintf('%.6g', value);
+    end
+end

@@ -210,7 +210,7 @@ pipeline can be defined once and replayed across a study with Apply to All
 Raw Files or a saved template (see [Key features](#key-features)) -- no need
 to re-run Measure by hand on every subject.
 
-The **Measurements** ribbon tab's **Export Measurements...** walks the whole
+The **Measurements** ribbon tab's **Export ERP Measures...** walks the whole
 workspace (every subject branch and every Grand Average, in either tree) for
 a Measure result and writes one long-format, R-compatible CSV: one row per
 dataset x window x bin x channel x measure type (`mean_amplitude`,
@@ -286,7 +286,7 @@ stimuli. Stimulus-locked.
 5. **Measure**: Load the `p300` preset (Pz, 300 to 600 ms, mean amplitude), or
    the `erp_components_mean_amplitude` battery. Read the `Rare` bin for the P300
    itself, and the `Rare-Freq` bin for the oddball effect.
-6. **Grand Average** across subjects, then **Export Measurements...** (the
+6. **Grand Average** across subjects, then **Export ERP Measures...** (the
    **Measurements** ribbon tab) for one long-format CSV.
 
 ### How to do an LRP analysis (response-locked)
@@ -371,7 +371,7 @@ required.
 4. **Average**.
 5. **Measure**: Load the `mmn` preset (Fz, 150 to 250 ms, mean amplitude,
    negative), and read the `MMN` difference bin (bin 3) at Fz.
-6. **Grand Average**, then **Export Measurements...**.
+6. **Grand Average**, then **Export ERP Measures...**.
 
 ## References
 

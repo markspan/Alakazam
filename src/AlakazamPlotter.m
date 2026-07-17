@@ -174,6 +174,13 @@ classdef AlakazamPlotter < handle
                 view = ScalpDistributionView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "ScalpDistributionView", view);
+            elseif strcmpi(eeg.id, "SpectralMeasure")
+                % Still DataFormat "EPOCHED" with multiple trials (so it would
+                % otherwise land in EpochView), but it carries EEG.spectrum /
+                % .spectralMeasures for a per-channel tagged-spectrum view.
+                view = SpectralMeasureView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "SpectralMeasureView", view);
             elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1

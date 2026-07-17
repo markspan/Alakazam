@@ -215,21 +215,26 @@ classdef AlakazamRibbon < handle
         end
 
         function items = measurementsItems(this, iconsDir)
-        %MEASUREMENTSITEMS  "Export Measurements..." batch exporter -- walks
-        %   every dataset in the workspace (both trees) carrying a Measure
-        %   result (see Alakazam.onExportMeasurements) and writes one
-        %   R-compatible, long-format CSV, the same "batch export
-        %   everything I've computed" idea grandAverageItems' own Export
-        %   Grand Averages already implements. Not part of the auto-
-        %   discovered Tools tab: like Grand Average's own actions, this is
-        %   a workspace-wide action, not something run on one selected
-        %   dataset. Icon: a small ruler-tick table with the same export
-        %   arrow ExportGrandAverages.svg uses, so the two batch-export
-        %   buttons read as a matched pair.
-            icon = this.encodeSvgFile(fullfile(iconsDir, 'ExportMeasurements.svg'));
-            items = {struct('id', 'exportMeasurements', 'label', 'Export Measurements...', ...
-                'tooltip', 'Export every Measure result to one R-compatible, long-format CSV', ...
-                'icon', icon)};
+        %MEASUREMENTSITEMS  The two workspace-wide batch exporters on the
+        %   Measurements tab: "Export ERP Measures..." (time-domain Measure
+        %   results, see Alakazam.onExportMeasurements) and "Export Spectral
+        %   Measures..." (frequency-domain SpectralMeasure results, see
+        %   Alakazam.onExportSpectral), each writing one R-compatible,
+        %   long-format CSV -- the same "batch export everything I've
+        %   computed" idea grandAverageItems' own Export Grand Averages
+        %   implements. Not part of the auto-discovered Tools tab: like
+        %   Grand Average's own actions, these are workspace-wide, not run on
+        %   one selected dataset. Distinct icons (a ruler-tick table vs a
+        %   spectrum), both sharing ExportGrandAverages.svg's export arrow so
+        %   the batch-export buttons read as a family.
+            items = {struct('id', 'exportMeasurements', 'label', 'ERP', ...
+                'tooltip', ['Export every time-domain ERP Measure result (amplitude / latency / area) ' ...
+                    'to one R-compatible, long-format CSV'], ...
+                'icon', this.encodeSvgFile(fullfile(iconsDir, 'ExportMeasurements.svg'))), ...
+                struct('id', 'exportSpectral', 'label', 'Spectral', ...
+                'tooltip', ['Export every frequency-domain Spectral Measure result (power / SNR / ' ...
+                    'phase-locking / coherence) to one R-compatible, long-format CSV'], ...
+                'icon', this.encodeSvgFile(fullfile(iconsDir, 'ExportSpectral.svg')))};
         end
 
         function groups = transformationGroups(this, transRoot)
@@ -249,7 +254,7 @@ classdef AlakazamRibbon < handle
                         'id', ['transform:' iTransForm.Entry], ...
                         'label', iTransForm.Name, ...
                         'tooltip', iTransForm.Description, ...
-                        'icon', this.encodeIcon(fullfile(transRoot, iTransForm.Name, iTransForm.Icon)));
+                        'icon', this.encodeIcon(fullfile(transRoot, iTransForm.Folder, iTransForm.Icon)));
                 end
                 groups{si} = struct('title', tS, 'items', {items});
             end
@@ -320,6 +325,11 @@ function info = getIndividualTransInfos(TName, transRoot)
 
     % Decode the JSON file content
     info = jsondecode(char(jsonraw'));
+
+    % Record the transformation's own folder name (== the transform id /
+    % EEG.Call), so the display Name can differ from the folder without
+    % breaking the icon lookup or the dispatch id.
+    info.Folder = TName;
 end
 
 function transInfo = getTransInfos(transRoot)

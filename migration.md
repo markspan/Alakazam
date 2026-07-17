@@ -4283,3 +4283,56 @@ matching an independent recompute against the new upstream result (not
 just "did it change"); a second, unrelated Grand Average sharing no
 sources with the recalculated branch is confirmed to be left completely
 untouched. `checkcode` clean on `Alakazam.m`.
+
+## Alakazam.m split into an @Alakazam class folder (2255 lines -> a 177-line classdef + 59 method files)
+
+`src/Alakazam.m` -- the application controller, and by far the largest
+file in the project -- had grown to 2255 lines and ~60 methods. Split it
+into a `src/@Alakazam/` class folder: the classdef (`@Alakazam/Alakazam.m`,
+177 lines) keeps the header comment, all properties, the method prototype
+declarations, and the constructor + `delete` inline; every other method
+body moved to its own `@Alakazam/<name>.m` file.
+
+Chose a class folder over extracting helper/controller classes precisely
+because it is the *safe* option: MATLAB treats folder methods identically
+to in-file methods, so the class identity, every method's name /
+signature / access, and all the callbacks other components wire onto the
+instance keep resolving unchanged -- `registerTileClick` / `closeTab`
+(from `AlakazamPlotter`, `AverageView`, `EpochView`), `onNodeDropped` /
+`onContextMenuAction` (from `@WorkSpace/CreateTreeComponent`),
+`dispatchKey` / `dispatchWheel`. It is a pure file reorganisation, not a
+redesign, so nothing calling into `Alakazam` had to change.
+
+The one substantive edit: the constructor resolves `RootDir` / `RepoRoot`
+from `mfilename('fullpath')`, which assumed the classdef sat directly in
+`src/`. With the file now one level deeper (`src/@Alakazam/`), `RootDir`
+became `fileparts(fileparts(mfilename('fullpath')))`. That is the only
+line whose behaviour changed; every method body was moved byte-for-byte
+(de-indented only). `mfilename` is used nowhere else -- the other
+`pwd`-based paths are unrelated export-directory fallbacks.
+
+Method access is preserved by declaring prototypes: the 17 private
+methods are declared in a `methods (Access = private)` block, because a
+method defined in a separate class-folder file is *public by default*, so
+without the declaration they would silently widen to public. The public
+methods are declared too, so the classdef reads as a complete index and
+MATLAB's metaclass reports their real signatures rather than a
+placeholder.
+
+Verified behaviour-preserving by capturing the class's full metaclass API
+-- every method with its access and input/output argument counts, plus
+every property -- before and after the split, and confirming the two are
+byte-identical. With the bodies moved verbatim, an identical metaclass API
+is a strong equivalence proof for a class-folder split (dispatch depends
+only on the method set, signatures and access). `checkcode` clean on all
+60 files; `which -all Alakazam` resolves to the single new definition with
+no shadow. The two non-obvious MATLAB mechanics this relied on -- a `~`
+argument inside a prototype, and preserving private access via a prototype
+declaration -- were confirmed in a throwaway class first. The running app
+was then smoke-tested (open a workspace, run a transform) and works.
+
+Note for the older entries in this log: references to `src/Alakazam.m:<line>`
+and to methods "in `Alakazam.m`" now live under `src/@Alakazam/` -- the
+classdef holds the constructor and properties, and `@Alakazam/<method>.m`
+holds each method. The historical line numbers no longer resolve; the
+method names are unchanged and remain the reliable way to find the code.

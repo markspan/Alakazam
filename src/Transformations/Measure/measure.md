@@ -445,7 +445,7 @@ left unchanged, except that any derived (`let`) channels are appended to the
 dataset (see [Derived channels](#derived-channels-let-statements)); apart from
 those, it is a read-only quantification step.
 
-To get the numbers into a statistics package, use **Export Measurements...**
+To get the numbers into a statistics package, use **Export ERP Measures...**
 on the ribbon's **Measurements** tab. It walks the whole workspace, every
 subject branch and every Grand Average that carries a `Measure` result, and
 writes one long-format, R-friendly CSV: one row per
@@ -599,7 +599,7 @@ extreme than its `N` neighbours each side), falling back to the absolute
 extreme if the window has none. Guards against picking a window-edge sample or
 a lone noise spike.
 
-### Output rows (Export Measurements...)
+### Output rows (Export ERP Measures...)
 
 | Window's Measure | `measure_type` value(s) |
 |---|---|

@@ -82,7 +82,7 @@ classdef WorkSpaceTree < handle
         % offering an edit it cannot actually perform would be worse than
         % not offering it.
         RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
-            'Baseline', 'DefineBins', 'Fourier', 'Measure', 'TimeFrequency'}
+            'Baseline', 'DefineBins', 'Fourier', 'Measure', 'SpectralMeasure', 'TimeFrequency'}
     end
 
     methods
