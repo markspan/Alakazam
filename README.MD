@@ -210,7 +210,7 @@ pipeline can be defined once and replayed across a study with Apply to All
 Raw Files or a saved template (see [Key features](#key-features)) -- no need
 to re-run Measure by hand on every subject.
 
-The **Measurements** ribbon tab's **Export ERP Measures...** walks the whole
+The **Measurements** ribbon tab's **ERP** export button walks the whole
 workspace (every subject branch and every Grand Average, in either tree) for
 a Measure result and writes one long-format, R-compatible CSV: one row per
 dataset x window x bin x channel x measure type (`mean_amplitude`,
@@ -232,6 +232,44 @@ measure reference, with worked examples, is
 ![ScreenshotEpoched](Screenshots/Epoched.jpg)
 
 ![ScreenshotTF](Screenshots/TimeFrequency.jpg)
+
+## Frequency analysis (frequency tagging / RIFT)
+
+The **Spectral Measure** transform is the frequency-domain counterpart of ERP
+Measure: it quantifies steady-state / frequency-tagging responses -- SSVEP, and
+Rapid Invisible Frequency Tagging (RIFT). It runs on epoched, single-trial data.
+
+Declare the tagging fundamentals (`let f1 = 60`, `let f2 = 64`) and name each
+frequency of interest as an expression over them: the fundamental (`f1`), a
+harmonic (`2*f1`), or an intermodulation term (`f1+f2`, `2*f1-f2`). For every
+frequency x channel x bin it computes the complex Fourier coefficient directly
+at that exact frequency (a tapered single-frequency DFT, Hann or DPSS
+multitaper, so harmonic / intermodulation terms off the `fs/N` grid are still
+exact), and reports:
+
+- **power / amplitude** of the trial-averaged (evoked) response and its **SNR**
+  against the neighbouring frequency bins -- the amplitude-based SSVEP read-out
+  used to track, for example, attentional modulation of the tagged response
+  (Toffanin et al., 2009);
+- **inter-trial phase-locking** (how consistently the response tracks the
+  flicker across trials); and
+- against an optional reference channel such as a **photodiode** recording the
+  flicker, the **magnitude-squared coherence** and phase-lag between that
+  reference and each EEG channel. This is the standard RIFT cross-coherence:
+  the trial-wise complex cross-spectra are averaged and normalised by the
+  trial-averaged autospectra, then squared -- exactly the read-out used to
+  reveal tagging responses in Dimigen et al. (2025) (see
+  [References](#references)).
+
+The reference is optional (not every recording has a photodiode), so power /
+SNR / phase-locking are always available and coherence is added when a
+reference is set. Results export to one long-format, R-compatible CSV via the
+Measurements tab's **Spectral** button
+([`exportSpectralCSV.m`](src/exportSpectralCSV.m)); like any transformation, a
+whole tagging pipeline can be replayed across a study with Apply to All Raw
+Files or a saved template. The full reference is the
+[`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)
+header.
 
 ## How-to walkthroughs
 
@@ -286,8 +324,8 @@ stimuli. Stimulus-locked.
 5. **Measure**: Load the `p300` preset (Pz, 300 to 600 ms, mean amplitude), or
    the `erp_components_mean_amplitude` battery. Read the `Rare` bin for the P300
    itself, and the `Rare-Freq` bin for the oddball effect.
-6. **Grand Average** across subjects, then **Export ERP Measures...** (the
-   **Measurements** ribbon tab) for one long-format CSV.
+6. **Grand Average** across subjects, then export for one long-format CSV (the
+   **Measurements** ribbon tab's **ERP** button).
 
 ### How to do an LRP analysis (response-locked)
 
@@ -371,7 +409,7 @@ required.
 4. **Average**.
 5. **Measure**: Load the `mmn` preset (Fz, 150 to 250 ms, mean amplitude,
    negative), and read the `MMN` difference bin (bin 3) at Fz.
-6. **Grand Average**, then **Export ERP Measures...**.
+6. **Grand Average**, then export via the **Measurements** tab's **ERP** button.
 
 ## References
 
@@ -389,6 +427,19 @@ Scientific/methodological:
   BINLISTER), `Average`'s contrast-bin handling, and `GrandAverage`'s
   weighted grand-average option; not a runtime dependency, ERPLAB itself is
   not called.
+- Toffanin, P., de Jong, R., Johnson, A., & Martens, S. (2009). Using frequency
+  tagging to quantify attentional deployment in a visual divided attention
+  task. *International Journal of Psychophysiology*, 72(3), 289-298. DOI:
+  [10.1016/j.ijpsycho.2009.01.006](https://doi.org/10.1016/j.ijpsycho.2009.01.006).
+  The amplitude-based SSVEP read-out `SpectralMeasure` implements (power / SNR
+  at the tagging frequency, modulated by attention).
+- Dimigen, O., Badea, I., Simon, I., & Span, M. M. (2025). Rapid Invisible
+  Frequency Tagging (RIFT) with a consumer monitor: A proof-of-concept.
+  *bioRxiv*. DOI:
+  [10.1101/2025.08.14.670287](https://doi.org/10.1101/2025.08.14.670287). The
+  cross-coherence read-out `SpectralMeasure` implements: magnitude-squared
+  coherence between a photodiode and each EEG channel, from trial-wise cross-
+  spectra normalised by the trial-averaged autospectra.
 - Ros, T., et al. (2025). GEDAI: generalized eigenvalue decomposition for
   automated EEG artefact removal.
   [github.com/neurotuning/GEDAI-master](https://github.com/neurotuning/GEDAI-master).
