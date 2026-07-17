@@ -89,6 +89,18 @@ classdef SpectralMeasureView < handle
             this.redraw();
         end
 
+        function onWheel(this, callbackData)
+        %ONWHEEL  Mouse wheel steps the shown channel (same direction as the
+        %   arrow keys), dispatched centrally by Alakazam.dispatchWheel.
+            if callbackData.VerticalScrollCount > 0
+                this.Channel = min(size(this.EEG.spectrum, 1), this.Channel + 1);
+            else
+                this.Channel = max(1, this.Channel - 1);
+            end
+            this.redraw();
+            this.notifyActivated();
+        end
+
         function notifyActivated(this)
             if ~isempty(this.ActivatedFcn)
                 this.ActivatedFcn();
