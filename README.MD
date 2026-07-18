@@ -105,7 +105,7 @@ scrolling, channel stacking, and overlays for events and marked artefacts.
 
 Requirements: MATLAB (with `uifigure`/App Designer support -- the UI is built
 entirely on that component family, not the classic figure/uicontrol one), the
-Signal Processing Toolbox (IIR filtering in `IIRFilter`, the taper windows in
+Signal Processing Toolbox (used by the `Filter` transform and the taper windows in
 `Fourier`) and the Statistics and Machine Learning Toolbox (used by EEGLAB and
 some of its plugins), plus the external toolkits listed in
 [`dependencies.md`](dependencies.md), most importantly EEGLAB. Parallel
@@ -176,7 +176,7 @@ The current library:
 
 | Transformation | Does |
 |---|---|
-| `IIRFilter` | IIR (Butterworth) low-pass/high-pass/band-stop filtering, per channel or globally. |
+| `Filter` | FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering (EEGLAB's `firfilt`, Kaiser window). Each filter is set by just a frequency and a dB rating (stopband attenuation); the filter order, transition band and window are chosen automatically. |
 | `ReRef` | Re-references the data (wraps `pop_reref`). |
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
 | `DefineBins` | Assigns events to ERP bins with a small, purpose-built event-selection language -- see [`bin_language.md`](src/Transformations/DefineBins/bin_language.md) for the full reference. Replaces the ERPLAB EVENTLIST + BINLISTER step. |
@@ -309,7 +309,7 @@ which is worth knowing a little of, because it is what makes each design precise
 The P300 is a large centro-parietal positivity, 300 to 600 ms, to rare target
 stimuli. Stimulus-locked.
 
-1. **Filter** the raw recording (`IIRFilter`, e.g. 0.1 to 30 Hz).
+1. **Filter** the raw recording (`Filter`, e.g. 0.1 Hz high-pass, 30 Hz low-pass).
 2. **DefineBins**, splitting rare targets from frequent standards and adding the
    oddball difference wave. Here the rare bin also requires the participant to
    have actually responded, in a plausible RT window, so misses and slow lapses

@@ -56,3 +56,11 @@ html.alz-busy, html.alz-busy * { cursor: wait !important; }
    just a background tint) so it stays visible layered over both the hover
    tint and the solid-blue alz-row-selected background. */
 .alz-drop-target { outline: 2px dashed #4a7fc9; outline-offset: -2px; background: rgba(74, 127, 201, 0.18); }
+
+/* Reserves the dragged row's vertical space so the rest of the tree stays put
+   while a node is being dragged (see alakazam-tree.js's _pickup wrap): without
+   it, yy-tree floating the row out to document.body collapses its slot and
+   shifts every row below, moving the drop target the user is aiming at. An
+   inert spacer -- not a .yy-tree-leaf, so yy-tree's own leaf traversal
+   (_getChildren) ignores it; its height is set inline to the dragged row's. */
+.alz-drag-placeholder { pointer-events: none; }

@@ -43,6 +43,15 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-item:hover { background: #e0e0ff; border-color: #99a; }
 .alz-item img { width: 32px; height: 32px; margin-bottom: 1px; }
 .alz-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+
+/* Dense mode: a category with more than four transforms halves its icon and
+   row height, so two rows of (up to) four occupy the same height a single
+   full-size row does -- the ribbon stays one row tall regardless. Width is
+   kept so four still fit per row; the icon, row height, margins and label
+   shrink. */
+.alz-group.dense .alz-item { height: 25px; padding: 0px; }
+.alz-group.dense .alz-item img { width: 16px; height: 14px; margin-bottom: 0; }
+.alz-group.dense .alz-item-label { font-size: 10px; line-height: 1; }
 </style>
 </head>
 <body>
@@ -106,6 +115,11 @@ function alzRenderContent() {
     (tab.groups || []).forEach(function (group) {
         var groupEl = document.createElement('div');
         groupEl.className = 'alz-group';
+        // More than four transforms in a category -> half-size icons in two
+        // rows, so the group stays as tall as a single full-size row.
+        if ((group.items || []).length > 4) {
+            groupEl.classList.add('dense');
+        }
 
         var itemsEl = document.createElement('div');
         itemsEl.className = 'alz-group-items';

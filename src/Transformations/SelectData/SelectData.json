@@ -1,1 +1,1 @@
-{"Name":"SelectData","Description":"Select Data Function","Entry":"SelectData.m","Icon":"SelectData.png","Section":"Preprocessing","Category":"Data"}
+{"Name":"SelectData","Description":"Select or Remove by Time or Channel","Entry":"SelectData.m","Icon":"SelectData.png","Section":"Preprocessing","Category":"Data"}

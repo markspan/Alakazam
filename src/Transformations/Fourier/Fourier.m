@@ -24,30 +24,25 @@ function [ output, options ] = Fourier( varargin )
 %
 %   options : Struct
 %       Updated options struct after processing input arguments. Contains
-%       parameters for the Fourier transformation such as:
-%       - Resolution : Resolution mode ('Max' or 'Other').
-%       - Output : Output format ('Volt', 'Power', 'VoltDens', 'PowerDens') --
-%         these exact strings, taken from FourierGui.fig's OutPutRadio button
-%         group Tags (get(handles.OutPutRadio,'SelectedObject')'s Tag), not
-%         the longer on-screen labels ("Voltage [uV]" etc.) shown next to them.
-%       - Interval : Frequency interval for transformation.
-%       - Window : Windowing function used ('Hanning', 'Hamming', etc.).
+%       the parameters for the Fourier transformation (only these fields are
+%       read by the compute; the app-styled TransformOptionsDialog collects
+%       exactly this set):
+%       - Output : Output format ('Volt', 'Power', 'VoltDens', 'PowerDens').
+%       - FullSpectrum : logical; when true the (one-sided) magnitude is
+%         doubled (fs = 2 below) to account for the folded negative half.
+%       - Window : Windowing function used ('Hanning', 'Hamming', etc.; see
+%         TransTools.WindowByName for the full list).
 %       - Window_Length : Length of the windowing function in percentage.
-%       - ResVal : Resolution value for custom mode.
-%       - Complex, FullSpectrum, Normalize, Compression, CompRes : captured
-%         from the dialog but currently only FullSpectrum is actually read by
-%         this function (fs = 2 below); the others are stored in the returned
-%         options (and hence replayed) but have no effect on the computed
-%         output -- their dialog controls are not yet wired to any behaviour.
+%       - Resolution : Resolution mode ('Max' or 'Other').
+%       - ResVal : Resolution value (Hz) for the 'Other' mode.
 %
 %   Notes:
 %   ------
-%   - If 'opts' is not provided, default options are used for transformation.
+%   - If 'opts' is not provided, the dialog is shown to collect them.
 %   - Supports windowing functions like Hanning, Hamming, Bartlett, etc.
 %   - Computes the Fourier transform for each segment of the input data.
 %   - Per-segment normalization ('norm' below) always compares the windowed
-%     signal's variance against the unwindowed signal's, unconditionally --
-%     this is not what options.Normalize controls (see above).
+%     signal's variance against the unwindowed signal's, unconditionally.
 %
 %   Example:
 %   --------
@@ -68,40 +63,49 @@ function [ output, options ] = Fourier( varargin )
 %   Contact: m.m.span@rug.nl
 
 if (nargin == 1)
-    options = [];
-    options.Name            = 'Fourier';
-    options.Resolution      = 'Max';
-    options.Output          = 'Volt';
-    options.Complex         = 'On';
-    options.FullSpectrum    = 'On';
-    options.Normalize       = 'On';
-    options.Interval        = [0.5 125];
-    options.Window          = 'Hanning';
-    options.Window_Length   = 100;
-    options.Compression     = 'On';
-    options.CompRes         = 10;
-    options.ResVal          = .333;
-    % Seed from the last time Fourier ran in the current workspace
-    % (TransformSettings), field by field, so a schema field that a
-    % previously-stored value predates still falls back to the literal
-    % default above rather than being left missing.
+    % Literal defaults, then seed field by field from the last Fourier run
+    % in this workspace (TransformSettings), so a field a stored value
+    % predates still falls back to its default rather than being missing.
+    defaults = struct('Output', 'Volt', 'FullSpectrum', true, ...
+        'Window', 'Hanning', 'Window_Length', 100, ...
+        'Resolution', 'Max', 'ResVal', 0.333);
+    seed = defaults;
     stored = TransformSettings.get('Fourier');
     if ~isempty(stored)
-        storedFields = fieldnames(stored);
-        for si = 1:numel(storedFields)
-            options.(storedFields{si}) = stored.(storedFields{si});
+        f = fieldnames(defaults);
+        for si = 1:numel(f)
+            if isfield(stored, f{si}) && ~isempty(stored.(f{si}))
+                seed.(f{si}) = stored.(f{si});
+            end
         end
     end
-    options = FourierGui(options);
+
+    outputs     = {'Volt', 'Power', 'VoltDens', 'PowerDens'};
+    windows     = {'No', 'Hanning', 'Hamming', 'Bartlett', 'BlackmanHarris', ...
+                   'BohmanWin', 'NuttallWin', 'ParzenWin', 'RectWin', 'Triang'};
+    resolutions = {'Max', 'Other'};
+
+    options = TransformOptionsDialog( ...
+        'title', 'Fourier options', ...
+        'Description', ['Windowed FFT of each segment. Choose the output units, ' ...
+            'the taper window and the frequency resolution.'], ...
+        'separator', 'Output:', ...
+        {'Units'; 'Output'}, putFirst(outputs, seed.Output), ...
+        {'Full spectrum (x2)'; 'FullSpectrum'}, toLogical(seed.FullSpectrum), ...
+        'separator', 'Window:', ...
+        {'Taper'; 'Window'}, putFirst(windows, seed.Window), ...
+        {'Length (% of segment)'; 'Window_Length'}, seed.Window_Length, ...
+        'separator', 'Resolution:', ...
+        {'Mode'; 'Resolution'}, putFirst(resolutions, seed.Resolution), ...
+        {'Resolution (Hz, "Other" mode)'; 'ResVal'}, seed.ResVal);
     if isempty(options)
         % Cancelled: nothing to persist (leave the remembered settings
         % untouched) and nothing to run -- Alakazam.onTransformation
         % treats an empty EEG as "cancelled", not an error.
-        % FourierGui's own Cancel_Button_Callback already returns []
-        % correctly; this was the missing check on the caller side.
         output = [];
         return;
     end
+    options.Name = 'Fourier';
     TransformSettings.set('Fourier', options);
 elseif (nargin == 2)
     options = varargin{2};
@@ -115,7 +119,7 @@ output.DataType = 'FrequencyDomain';
 
 %% use full spectrum: power * 2;
 fs = 1;
-if strcmpi(options.FullSpectrum, 'On')
+if toLogical(options.FullSpectrum)
     fs = 2;
 end
 %--------------------------------------------------------------------------
@@ -177,4 +181,29 @@ end
 
 output.data = gather(data(:,1:NFFT/2+1,:));
 output.pnts = NFFT/2+1;
+
+% ======================================================================= %
+function out = putFirst(list, value)
+%PUTFIRST  LIST reordered so its (case-insensitive) match of VALUE leads,
+%   the canonical spelling from LIST. VALUE not in LIST -> LIST unchanged.
+%   Used to pre-select a stored dropdown choice (TransformOptionsDialog
+%   takes the first cell as the initial selection).
+idx = find(strcmpi(list, char(string(value))), 1);
+if isempty(idx)
+    out = list;
+    return;
+end
+rest = list(setdiff(1:numel(list), idx, 'stable'));
+out = [list(idx), rest];
+
+function tf = toLogical(v)
+%TOLOGICAL  Coerce a stored FullSpectrum value to logical, tolerating an
+%   older 'On'/'Off' string as well as a logical/numeric.
+if islogical(v)
+    tf = v;
+elseif isnumeric(v)
+    tf = v ~= 0;
+else
+    tf = any(strcmpi(char(string(v)), {'on', 'true', 'yes', '1'}));
+end
 

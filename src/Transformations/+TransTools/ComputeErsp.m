@@ -4,7 +4,7 @@ function [ersp, freqs] = ComputeErsp(input, opts)
 %   perturbation (ERSP) computation TimeFrequency.m's per-bin heatmaps
 %   are built from. Pulled out of TimeFrequency.m into +TransTools (the
 %   package this project already uses for shared, independently-testable
-%   transformation helpers -- see CreateFilter.m/WindowByName.m) so this
+%   transformation helpers -- see WindowByName.m) so this
 %   can be called and verified directly, without going through
 %   TimeFrequency.m's own blocking TransformOptionsDialog options dialog.
 %

@@ -74,16 +74,13 @@ classdef WorkSpaceTree < handle
         % Every one of these follows the same [EEG,opts] = Fn(input) /
         % [EEG,opts] = Fn(input,opts) contract and is already
         % TransformSettings-wired (see PROJECT_STRUCTURE.md). Deliberately
-        % NOT exhaustive: ReRef/SelectData delegate to EEGLAB's own
-        % pop_reref/pop_select dialogs (no seed parameter), IIRFilter's
-        % dialog is a binary .mlapp (not text-seedable), and Average/
-        % ScalpDistribution take no options at all -- "Recalculate" stays
-        % disabled for nodes produced by any of those (see optsFor), since
-        % offering an edit it cannot actually perform would be worse than
-        % not offering it.
+        % NOT exhaustive: Average/ScalpDistribution take no options at all
+        % -- "Recalculate" stays disabled for nodes produced by any of
+        % those (see optsFor), since offering an edit it cannot actually
+        % perform would be worse than not offering it.
         RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
-            'Baseline', 'CoherenceMap', 'DefineBins', 'Fourier', 'Measure', ...
-            'SpectralMeasure', 'TimeFrequency'}
+            'Baseline', 'CoherenceMap', 'DefineBins', 'Filter', 'Fourier', 'Measure', ...
+            'ReRef', 'SelectData', 'SpectralMeasure', 'TimeFrequency'}
     end
 
     methods
@@ -323,7 +320,7 @@ classdef WorkSpaceTree < handle
         %   recompute it and everything downstream -- see
         %   Alakazam.recalculateTransformNode); every other node (a raw
         %   root import, or one produced by a transform with no editable/
-        %   re-seedable dialog, e.g. ReRef/SelectData/IIRFilter/Average/
+        %   re-seedable dialog, e.g. ReRef/SelectData/Average/
         %   ScalpDistribution) leaves it disabled rather than offering an
         %   edit it cannot actually perform. Both are baked into the node
         %   once, here, rather than toggled reactively on right-click (as

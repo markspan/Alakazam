@@ -6,13 +6,11 @@ function prev = WindowByName(type, n)
 %   insensitively; an unrecognised TYPE returns a flat (all-ones) window,
 %   same as 'No'.
 %
-%   Shared by Fourier.m (the real per-segment analysis window, sized to
-%   the loaded signal) and FourierGui's live preview (SelectWindow.m,
-%   sized to a fixed preview canvas) so both always agree on which window
-%   types exist and what each one computes -- previously two independent,
-%   separately-maintained copies of the same dispatch list.
+%   Used by Fourier.m for the real per-segment analysis window, sized to
+%   the loaded signal. A single dispatch list, so every window type the
+%   Fourier dialog offers computes exactly one way.
 %
-%   See also: Fourier, TransTools.SelectWindow.
+%   See also: Fourier.
     switch lower(type)
         case 'no'
             prev = zeros(n,1)+1;

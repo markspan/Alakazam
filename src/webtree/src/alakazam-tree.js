@@ -61,9 +61,17 @@ const TREE_STYLES = {
         flex: 'none'
     },
     indicatorStyles: {
-        background: '#4a7fc9',
-        height: '3px',
-        width: '100px',
+        // The prospective drop position is shown by our own dashed outline on
+        // the whole target row (alz-drop-target, see _setDropTargetHighlight),
+        // not yy-tree's thin insertion line. A travelling line would also
+        // reflow the rows we deliberately keep static during a drag (see the
+        // _pickup wrap in the constructor), so the built-in indicator is
+        // collapsed to nothing here. It still sits in the DOM at the
+        // prospective drop parent, which is all _onDragPointerMove and
+        // Input._up ever read off it -- never its size.
+        background: 'transparent',
+        height: '0',
+        width: '0',
         padding: '0'
     },
     selectStyles: {
@@ -145,6 +153,7 @@ class AlakazamTree {
         this._highlightedLeaf = null // see _applySelectionHighlight
         this._dropTargetLeaf = null  // see _setDropTargetHighlight
         this._leaveGraceTimer = null // see _cancelDrag
+        this._dragPlaceholder = null // see the _pickup wrap / _removeDragPlaceholder
 
         this._root = { id: ROOT_ID, name: '', children: [], expanded: true }
 
@@ -213,6 +222,38 @@ class AlakazamTree {
                 return true
             }
             return false
+        }
+
+        // Keep the tree visually static during a drag. yy-tree's Input._pickup()
+        // lifts the dragged row out to document.body (floating it under the
+        // cursor), which collapses its slot and shifts every row below it up --
+        // "the original node is cut first", moving the very target the user is
+        // aiming at. A drop here never actually reorders anything (see _onMove),
+        // so there is nothing to be gained from that reflow: reserve the vacated
+        // space with an inert, same-height spacer so nothing below moves. Removed
+        // on drop/cancel (see _removeDragPlaceholder). Wrapping _pickup (rather
+        // than acting on the 'move-pending' event) is deliberate -- that event
+        // fires INSIDE the original _pickup, before it relocates the row, so the
+        // slot to backfill does not exist yet at that point.
+        const input = this._tree._input
+        const originalPickup = input._pickup.bind(input)
+        input._pickup = () => {
+            const target = input._target
+            const height = target ? target.offsetHeight : 0
+            originalPickup()
+            if (target && height) {
+                const spacer = document.createElement('div')
+                spacer.className = 'alz-drag-placeholder'
+                spacer.style.height = height + 'px'
+                // The indicator now sits where the row was (Input._pickup inserts
+                // it there before floating the row out); drop the spacer into that
+                // same slot so the gap stays put even as the indicator travels.
+                const indicator = input._indicator.get()
+                if (indicator.parentNode) {
+                    indicator.parentNode.insertBefore(spacer, indicator)
+                }
+                this._dragPlaceholder = spacer
+            }
         }
 
         this._tree.on('render', (leaf) => this._onRender(leaf))
@@ -371,7 +412,11 @@ class AlakazamTree {
             e.preventDefault()
             e.stopPropagation()
             this._selectById(data.id)
-            this._openMenu(e.pageX, e.pageY, data)
+            // clientX/clientY (viewport-relative), not pageX/pageY: the menu is
+            // positioned against the viewport in _positionMenu, and the tree's
+            // own scroll container (#tree) can be scrolled -- so page coords
+            // would be offset by the scroll amount.
+            this._openMenu(e.clientX, e.clientY, data)
         })
     }
 
@@ -408,6 +453,7 @@ class AlakazamTree {
         const targetId = newParent.id === ROOT_ID ? null : newParent.id
         document.documentElement.classList.remove('alz-dragging')
         this._setDropTargetHighlight(null)
+        this._removeDragPlaceholder()
 
         // Always undo the reparent yy-tree just performed: dropping a node
         // onto another applies that node's transformation chain to the
@@ -457,7 +503,18 @@ class AlakazamTree {
         this._pending = null
         document.documentElement.classList.remove('alz-dragging')
         this._setDropTargetHighlight(null)
+        this._removeDragPlaceholder()
         this._tree.update()
+    }
+
+    // Removes the drag spacer that reserved the dragged row's slot (see the
+    // _pickup wrap in the constructor). Called on every drop (_onMove) and
+    // every abandoned drag (_cancelDrag); a no-op if none is present.
+    _removeDragPlaceholder() {
+        if (this._dragPlaceholder) {
+            this._dragPlaceholder.remove()
+            this._dragPlaceholder = null
+        }
     }
 
     _onNameChange(leaf, name) {
@@ -502,6 +559,32 @@ class AlakazamTree {
         }
         document.body.appendChild(menu)
         this._menuEl = menu
+        this._positionMenu(menu, x, y)
+    }
+
+    // Keeps the whole menu inside the tree's own viewport. uihtml renders in a
+    // fixed-size iframe whose <body> is overflow:hidden, so a menu opened near
+    // the right or bottom edge would otherwise be clipped by the panel. Opens
+    // at the click point, then shifts back (leftward/upward) by whatever would
+    // overflow; if the menu is taller than the panel, caps its height and lets
+    // it scroll rather than run off the bottom. Must run after the menu is in
+    // the DOM so offsetWidth/offsetHeight are measurable.
+    _positionMenu(menu, x, y) {
+        const pad = 2
+        const vw = document.documentElement.clientWidth
+        const vh = document.documentElement.clientHeight
+        if (menu.offsetHeight > vh - 2 * pad) {
+            menu.style.maxHeight = (vh - 2 * pad) + 'px'
+            menu.style.overflowY = 'auto'
+        }
+        const w = menu.offsetWidth
+        const h = menu.offsetHeight
+        let left = x
+        let top = y
+        if (left + w + pad > vw) { left = Math.max(pad, vw - w - pad) }
+        if (top + h + pad > vh) { top = Math.max(pad, vh - h - pad) }
+        menu.style.left = left + 'px'
+        menu.style.top = top + 'px'
     }
 
     _closeMenu() {

@@ -363,3 +363,51 @@ window.document.body.dispatchEvent(new window.MouseEvent('mouseenter'))
 await sleep(LEAVE_GRACE_MS + 150)
 assert.strictEqual(JSON.stringify(events), '[]', 'a stray mouseleave/mouseenter with no drag in progress must not emit anything')
 console.log('a stray mouseleave with no drag in progress is a no-op: OK')
+
+// --- 13. drag spacer keeps the tree from collapsing while a node is dragged.
+//     yy-tree floats the dragged row out to document.body, which would shift
+//     every row below it up ("the original node is cut first"); the _pickup
+//     wrap reserves that space with an inert .alz-drag-placeholder. jsdom has
+//     no layout engine, so offsetHeight is stubbed to a real height for the
+//     duration -- the wrap only inserts a spacer when it can measure one. ---
+html.classList.remove('alz-busy')
+events.length = 0
+const origOffsetHeight = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetHeight')
+Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', { configurable: true, get() { return 22 } })
+const leafSpacer = findLeafByLabel('Fourier1')
+down(leafSpacer, 10, 10)
+move(30, 30) // past the threshold -> a real Input._pickup(), running our wrap
+const spacer = window.document.querySelector('.alz-drag-placeholder')
+assert.ok(spacer, 'a placeholder spacer should hold the dragged row\'s slot during the drag')
+assert.strictEqual(spacer.style.height, '22px', 'the spacer should be exactly as tall as the dragged row')
+window.document.body.dispatchEvent(new window.MouseEvent('mouseup')) // real drop -> _onMove
+assert.ok(!window.document.querySelector('.alz-drag-placeholder'), 'the spacer must be gone once the drop completes')
+if (origOffsetHeight) {
+    Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', origOffsetHeight)
+} else {
+    delete window.HTMLElement.prototype.offsetHeight
+}
+console.log('drag spacer reserves the dragged row\'s space, then clears on drop: OK')
+
+// --- 14. context menu is clamped into the viewport so it is never cut off by
+//     the fixed-size uihtml panel. Stub the layout metrics _positionMenu
+//     reads (jsdom reports 0 for all of them), open a menu near the
+//     bottom-right corner, and confirm it was shifted back to fit. ---
+html.classList.remove('alz-busy')
+const savedOffsetW = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetWidth')
+const savedOffsetH = Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetHeight')
+Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', { configurable: true, get() { return 140 } })
+Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', { configurable: true, get() { return 200 } })
+Object.defineProperty(window.document.documentElement, 'clientWidth', { configurable: true, get() { return 300 } })
+Object.defineProperty(window.document.documentElement, 'clientHeight', { configurable: true, get() { return 250 } })
+const leafMenu = findLeafByLabel('Average1')
+leafMenu.content.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 280, clientY: 240 }))
+const clampedMenu = window.document.querySelector('.alz-menu')
+assert.ok(clampedMenu, 'context menu should be shown')
+// 280 + 140 + 2 > 300 -> left = 300 - 140 - 2 = 158; 240 + 200 + 2 > 250 -> top = 250 - 200 - 2 = 48
+assert.strictEqual(clampedMenu.style.left, '158px', 'menu should be shifted left so its right edge fits inside the panel')
+assert.strictEqual(clampedMenu.style.top, '48px', 'menu should be shifted up so its bottom edge fits inside the panel')
+tree._closeMenu()
+if (savedOffsetW) { Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', savedOffsetW) } else { delete window.HTMLElement.prototype.offsetWidth }
+if (savedOffsetH) { Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', savedOffsetH) } else { delete window.HTMLElement.prototype.offsetHeight }
+console.log('context menu is clamped to stay fully inside the panel: OK')

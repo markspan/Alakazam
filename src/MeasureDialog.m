@@ -51,8 +51,13 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     allLabels = string({chanlocs.labels});
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
-    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 510]);
-    outer = uigridlayout(fig, [5 1], 'RowHeight', {'fit', 66, '1x', 'fit', 44});
+    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
+    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 550], 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Measure', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [5 1], 'RowHeight', {'fit', 66, '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
         'Define one or more measurement windows over the Start-Stop range. Measures: ' ...
@@ -105,7 +110,8 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     loadBtn.Layout.Column = 2;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
     cancelBtn.Layout.Column = 4;
-    okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~, ~) onOK());
+    okBtn = uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, ...
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(~, ~) onOK());
     okBtn.Layout.Column = 5;
     fig.CloseRequestFcn = @(~, ~) onCancel();
 

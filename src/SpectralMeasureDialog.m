@@ -41,8 +41,13 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     end
     tableData = vertcat(seedRows{:});
 
-    fig = uifigure('Name', 'SpectralMeasure', 'Position', [100 100 900 520]);
-    outer = uigridlayout(fig, [5 1], 'RowHeight', {'fit', 'fit', '1x', 'fit', 44});
+    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
+    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    fig = uifigure('Name', 'SpectralMeasure', 'Position', [100 100 900 560], 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Spectral measure', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [5 1], 'RowHeight', {'fit', 'fit', '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
         'Quantify tagged responses at named frequencies. Declare fundamentals below ' ...
@@ -89,7 +94,8 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     b1 = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~, ~) onSave());  b1.Layout.Column = 1;
     b2 = uibutton(buttons, 'Text', 'Load...', 'ButtonPushedFcn', @(~, ~) onLoad());  b2.Layout.Column = 2;
     b3 = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel()); b3.Layout.Column = 4;
-    b4 = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~, ~) onOK());         b4.Layout.Column = 5;
+    b4 = uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, ...
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(~, ~) onOK());                    b4.Layout.Column = 5;
     fig.CloseRequestFcn = @(~, ~) onCancel();
 
     uiwait(fig);
