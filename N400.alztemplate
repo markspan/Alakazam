@@ -1,0 +1,51 @@
+{
+  "alakazamTemplate": true,
+  "version": 1,
+  "name": "AutoGEDAI",
+  "steps": [
+    {
+      "transformId": "AutoGEDAI",
+      "params": {
+        "Strength": "auto",
+        "Leadfield": "precomputed",
+        "LowCut": 0.4,
+        "RejectEpochs": "no",
+        "EpochENOVA": 0.9,
+        "RejectChannels": "no",
+        "ChannelENOVA": 0.9,
+        "Parallel": "no"
+      }
+    },
+    {
+      "transformId": "DefineBins",
+      "params": {
+        "script": "% Imported from an ERPLAB bin descriptor file (BDF).\n% Review the bins below; any lines marked WARNING need a look.\nbin 1 \"Prime word, related to subsequent target word\" : 111|112\nbin 2 \"Prime word, unrelated to subsequent target word\" : 121|122\nbin 3 \"Target word, related to previous prime, followed by correct response\" : 211|212 and next(201) within [200,1500] ms\nbin 4 \"Target word, unrelated to previous prime, followed by correct response\" : 221|222 and next(201) within [200,1500] ms\n\nbin 5 \"N400\" = bin 4 - bin 3",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "params": {
+        "Start": -100,
+        "Stop": -10
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "params": {
+        "Minimum": -100,
+        "Maximum": 100
+      }
+    },
+    {
+      "transformId": "Average",
+      "params": {
+        "Param": "Init"
+      }
+    }
+  ]
+}
