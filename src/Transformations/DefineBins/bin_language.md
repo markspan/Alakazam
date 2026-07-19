@@ -281,6 +281,18 @@ file: a `% epoch_start_ms: …` / `% epoch_stop_ms: …` header, then the script
 text. A plain script file with no header loads fine too , the epoch fields
 are just left as they were.
 
+### Import BDF...
+
+Reads an **ERPLAB bin descriptor file** (BINLISTER's `.txt`/`.bdf`) and
+translates it into this language, filling the editor. The time-locking event
+`.{a;b}` becomes the anchor `a|b`; a preceding bracket `{c}.{…}` becomes
+`prev(c)`; a following bracket with a timing flag `.{…}{r:200<t<=800}` becomes
+`next(r) within (200,800] ms`. Anything with no equivalent (write-back `w`,
+flag conditions, open-ended `t>x`) is imported best-effort and flagged with a
+`% WARNING:` line so you can finish it by hand. The epoch bounds are ERPLAB's
+own separate step, so the two fields above are left untouched. The converter
+is `erplabBdfToBinScript` (usable on its own for scripting).
+
 ### Errors
 
 Every parse error shows the exact line, a caret under the mistake, and a

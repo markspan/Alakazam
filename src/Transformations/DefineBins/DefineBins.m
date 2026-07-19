@@ -317,18 +317,21 @@ function result = showDefineBinsDialog(defaultScript, prevEpoch)
         'FontName', 'Consolas');
     scriptArea.Layout.Row = 2;
 
-    % Row 3: Save / Load on the left, OK / Cancel right-aligned.
-    buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {90, 90, '1x', 90, 90}, ...
+    % Row 3: Save / Load / Import on the left, OK / Cancel right-aligned.
+    buttons = uigridlayout(outer, [1 6], 'ColumnWidth', {90, 90, 120, '1x', 90, 90}, ...
         'Padding', [8 6 8 6]);
     buttons.Layout.Row = 3;
     saveBtn = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~,~) onSave());
     saveBtn.Layout.Column = 1;
     loadBtn = uibutton(buttons, 'Text', 'Load...', 'ButtonPushedFcn', @(~,~) onLoad());
     loadBtn.Layout.Column = 2;
+    importBtn = uibutton(buttons, 'Text', 'Import BDF...', 'ButtonPushedFcn', @(~,~) onImportBdf(), ...
+        'Tooltip', 'Import an ERPLAB bin descriptor file and translate it to this language');
+    importBtn.Layout.Column = 3;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
-    cancelBtn.Layout.Column = 4;
+    cancelBtn.Layout.Column = 5;
     okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
-    okBtn.Layout.Column = 5;
+    okBtn.Layout.Column = 6;
     fig.CloseRequestFcn = @(~,~) onCancel();
 
     uiwait(fig);
@@ -369,6 +372,28 @@ function result = showDefineBinsDialog(defaultScript, prevEpoch)
             scriptArea.Value = splitlines(script);
         catch err
             uialert(fig, err.message, 'Load failed');
+        end
+    end
+
+    function onImportBdf()
+        % Import an ERPLAB bin descriptor file and translate it into this
+        % language (see erplabBdfToBinScript). Fills the script editor; the
+        % epoch bounds are ERPLAB's separate step, so they are left untouched.
+        [file, path] = uiextras.uigetfile2( ...
+            {'*.txt;*.bdf', 'ERPLAB bin descriptor file (*.txt, *.bdf)'}, ...
+            'Import ERPLAB bin descriptor file');
+        if isequal(file, 0); return; end
+        try
+            [script, warnings] = erplabBdfToBinScript(fileread(fullfile(path, file)));
+            scriptArea.Value = splitlines(script);
+        catch err
+            uialert(fig, err.message, 'Import failed');
+            return;
+        end
+        if ~isempty(warnings)
+            uialert(fig, sprintf(['Imported with %d note(s) -- review the lines marked ' ...
+                'WARNING in the script:\n\n%s'], numel(warnings), strjoin(warnings, newline)), ...
+                'Imported with notes', 'Icon', 'warning');
         end
     end
 end

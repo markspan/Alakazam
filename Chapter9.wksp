@@ -1,0 +1,38 @@
+{
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/Luck/ch9/",
+  "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
+  "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
+  "TransformSettings": {
+    "DefineBins": {
+      "epochStart": "-200",
+      "epochStop": "800",
+      "script": "% Codes are markers; ? = any char; { } lists alternatives; | is or.\n% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.\n% let names a reusable expression (codes or relations); = makes a difference bin.\nlet prime  = {111, 112, 121, 122}\nlet target = {211, 212, 221, 222}\nlet related = \"?1?\"\nlet unrelated = \"?2?\"\nbin 1 \"Prime, related\"    (prime and related)\nbin 2 \"Prime, unrelated\"  (prime and unrelated)\nbin 3 \"Target, related\"   (target and related) and next(\"201\") within (200,1500] ms\nbin 4 \"Target, unrelated\" (target and unrelated) and next(\"201\") within (200,1500] ms\n"
+    },
+    "AutoEyeICA": {
+      "EyeThreshold": 0.6
+    },
+    "AutoGEDAI": {
+      "Strength": "auto",
+      "Leadfield": "precomputed",
+      "LowCut": 0.4,
+      "RejectEpochs": "no",
+      "EpochENOVA": 0.9,
+      "RejectChannels": "no",
+      "ChannelENOVA": 0.9,
+      "Parallel": "no"
+    },
+    "Baseline": {
+      "Start": -100,
+      "Stop": -10
+    },
+    "TimeFrequency": {
+      "MinFreq": 2,
+      "MaxFreq": 40,
+      "NumFreqs": 30,
+      "MinCycles": 3,
+      "MaxCycles": 10,
+      "BaselineStart": -100,
+      "BaselineStop": 0
+    }
+  }
+}

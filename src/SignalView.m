@@ -4,7 +4,9 @@ classdef SignalView < handle
 %   SignalView draws a continuous EEGLAB dataset into a scrollable, zoomable
 %   axes with scroll / zoom / scale sliders and mouse-wheel scrolling
 %   (channel stacking, fixed or dynamic y-limits, and event / area overlays
-%   taken from the EEG structure), driving the decimation from a precomputed
+%   taken from the EEG structure), plus a vertical scrollbar that pages
+%   through the channels once there are more than fit legibly at once,
+%   driving the decimation from a precomputed
 %   MinMaxPyramid, so each redraw costs O(pixels) instead of O(visible
 %   samples). This is what lets long recordings scroll and zoom without lag.
 %
@@ -39,6 +41,8 @@ classdef SignalView < handle
         ScrollSlider    % uislider, horizontal position (pan)
         ZoomSlider      % uislider, time span shown (zoom)
         ScaleSlider     % uislider, amplitude gain (magnify y)
+        ChannelSlider   % uislider (vertical), pages through channels when
+                        % there are more than MaxVisibleChannels; empty otherwise
         PanLabel        % uilabel, "pan" label left of the scroll slider
         ZoomLabel       % uilabel, "zoom" label left of the zoom slider
         MagLabel        % uilabel, "mag" label left of the scale slider
@@ -57,6 +61,8 @@ classdef SignalView < handle
         Options         % struct of resolved name-value options
         StackOffset     % 1 x nchan, vertical offset per channel (stacking)
         StackTick       % 1 x nchan, y-tick position per channel
+        LaneSpacing = 0 % double, per-channel lane height in stacked mode
+        ChannelScroll = false % logical, whether the channel scrollbar is active
         FixedYLim       % 1 x 2, y-limits used in "fixed" mode
         Overlay         % struct of parsed event / area overlay data
 
@@ -69,6 +75,9 @@ classdef SignalView < handle
     properties (Constant, Access = private)
         LabelWidthPx = 40  % slider row's label column width, pixels
         SliderRowPx  = 24  % each slider row's height, pixels
+        MaxVisibleChannels = 40 % above this many channels a vertical scrollbar
+                                % pages through them, showing this many at a time
+        ChannelSliderPx = 18    % width of that scrollbar's column, pixels
     end
 
     methods
@@ -233,15 +242,42 @@ classdef SignalView < handle
             % zoom/pan/mag slider rows, matching the old bottom-up ordering
             % (uipanel's own Position, normalized with y growing upward, put
             % zoom first, then pan, then mag, with the axes above them all).
-            this.Grid = uigridlayout(this.Parent, [4 1], ...
+            % Column 2 (row 1 only) holds the vertical channel scrollbar when
+            % there are more channels than fit legibly at once; its width
+            % collapses to 0 otherwise, so the layout is unchanged in the
+            % common case.
+            nchan = size(this.Y, 2);
+            stacked = ~isempty(this.Options.AutoStackSignals) && strcmp(this.Options.YLimMode, "fixed");
+            this.ChannelScroll = stacked && nchan > this.MaxVisibleChannels;
+            channelSliderCol = 0;
+            if this.ChannelScroll
+                channelSliderCol = this.ChannelSliderPx;
+            end
+            this.Grid = uigridlayout(this.Parent, [4 2], ...
                 "RowHeight", {'1x', this.SliderRowPx, this.SliderRowPx, this.SliderRowPx}, ...
-                "Padding", [2 2 2 2], "RowSpacing", 2);
+                "ColumnWidth", {'1x', channelSliderCol}, ...
+                "Padding", [2 2 2 2], "RowSpacing", 2, "ColumnSpacing", 2);
             this.Axes = uiaxes(this.Grid, "TickLabelInterpreter", "none");
             this.Axes.Layout.Row = 1;
+            this.Axes.Layout.Column = 1;
             % Custom wheel scrolling needs uiaxes' own built-in scroll/drag
             % interactions disabled so they do not fight it.
             disableDefaultInteractivity(this.Axes);
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
+
+            % Vertical channel scrollbar (only when there are too many channels
+            % to read at once). Value 1 = top of the stack, 0 = bottom; it just
+            % pans the y-limit window over the fixed stack (see onChannelScroll
+            % / channelWindowYLim), leaving the stacking itself untouched.
+            if this.ChannelScroll
+                this.ChannelSlider = uislider(this.Grid, "Orientation", "vertical", ...
+                    "Limits", [0, 1], "Value", 1, "MajorTicks", [], "MinorTicks", [], ...
+                    "Tooltip", "Scroll through channels", ...
+                    "ValueChangingFcn", @(src, e) this.onChannelScrollChanging(src, e), ...
+                    "ValueChangedFcn", @(~, ~) this.onChannelScroll());
+                this.ChannelSlider.Layout.Row = 1;
+                this.ChannelSlider.Layout.Column = 2;
+            end
 
             nchan = size(this.Y, 2);
             this.Lines = gobjects(1, nchan);
@@ -269,6 +305,7 @@ classdef SignalView < handle
             row2 = uigridlayout(this.Grid, [1 2], ...
                 "ColumnWidth", {this.LabelWidthPx, '1x'}, "Padding", [0 0 0 0]);
             row2.Layout.Row = row;
+            row2.Layout.Column = [1, 2]; % full width, under both the axes and the channel scrollbar
             lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);
             lbl.Layout.Column = 1;
             s = uislider(row2, "Limits", [lo, hi], "Value", val, ...
@@ -286,6 +323,38 @@ classdef SignalView < handle
             src.Value = event.Value;
             this.redraw();
             this.notifyActivated();
+        end
+
+        function onChannelScrollChanging(this, src, event)
+        %ONCHANNELSCROLLCHANGING  Live-drag of the channel scrollbar. Only the
+        %   y-limit window moves, so this repositions it directly rather than
+        %   going through the full redraw() the time sliders use.
+            src.Value = event.Value;
+            this.onChannelScroll();
+        end
+
+        function onChannelScroll(this)
+        %ONCHANNELSCROLL  Slide the visible y-window over the channel stack.
+            yl = this.channelWindowYLim();
+            if all(isfinite(yl)) && yl(2) > yl(1)
+                set(this.Axes, "YLim", yl);
+            end
+            this.notifyActivated();
+        end
+
+        function yl = channelWindowYLim(this)
+        %CHANNELWINDOWYLIM  Y-limits showing MaxVisibleChannels lanes, panned by
+        %   the vertical scrollbar (Value 1 = top of the stack, 0 = bottom).
+            tick = this.StackTick;
+            spacing = this.LaneSpacing;
+            fullHi = max(tick) + spacing / 2;
+            fullLo = min(tick) - spacing / 2;
+            windowHeight = this.MaxVisibleChannels * spacing;
+            travel = max(0, (fullHi - fullLo) - windowHeight);
+            s = this.ChannelSlider.Value;
+            winHi = fullLo + windowHeight + s * travel;
+            winLo = winHi - windowHeight;
+            yl = [winLo, winHi];
         end
 
         function applyAxisLabels(this, eeg)
@@ -312,23 +381,31 @@ classdef SignalView < handle
         %COMPUTESTACKING  Fixed-mode channel offsets and y-limits (computed once).
             nchan = size(this.Y, 2);
             if ~isempty(this.Options.AutoStackSignals) && strcmp(this.Options.YLimMode, "fixed")
-                [this.StackTick, this.StackOffset] = this.autoStackNoOverlap(this.Y);
+                [this.StackTick, this.StackOffset, spacing] = this.autoStackNoOverlap(this.Y);
+                this.LaneSpacing = spacing;
                 this.applyStackTicks();
+                % Y-limits span the evenly spaced channel lanes (each baseline
+                % +/- half a lane), NOT the full excursion of the largest
+                % channel: a channel far bigger than the rest overflows its own
+                % lane and is clipped at the axis edge, instead of the axis
+                % growing to contain its whole swing and squashing every other
+                % channel into a near-flat line bunched in the middle (see
+                % autoStackNoOverlap). The mag slider scales the traces against
+                % these fixed lanes, so turning it up clips the big channels more.
+                lo = min(this.StackTick) - spacing / 2;
+                hi = max(this.StackTick) + spacing / 2;
+                margin = (hi - lo) / 50;
+                this.FixedYLim = [lo - margin, hi + margin];
             else
                 this.StackTick   = zeros(1, nchan);
                 this.StackOffset = zeros(1, nchan);
-            end
-
-            % Fixed y-limits from the whole-signal (unscaled) stacked range, with
-            % a small margin, matching the original behaviour.
-            yPos = this.Y + this.StackOffset;
-            lo = min(yPos(:));
-            hi = max(yPos(:));
-            margin = (hi - lo) / 50;
-            this.FixedYLim = [lo - margin, hi + margin];
-            if nnz(this.StackTick) > 1
-                this.FixedYLim(1) = min([this.FixedYLim(1), this.StackTick(:)']);
-                this.FixedYLim(2) = max([this.FixedYLim(2), this.StackTick(:)']);
+                % Non-stacked (single-channel) view: fixed y-limits from the
+                % whole-signal range, with a small margin. Nothing is clipped.
+                yPos = this.Y + this.StackOffset;
+                lo = min(yPos(:));
+                hi = max(yPos(:));
+                margin = (hi - lo) / 50;
+                this.FixedYLim = [lo - margin, hi + margin];
             end
         end
 
@@ -342,6 +419,15 @@ classdef SignalView < handle
         function applyYLim(this, yVis)
         %APPLYYLIM  Fixed y-limits, or a padded data range in dynamic mode.
             if strcmp(this.Options.YLimMode, "fixed")
+                % With more channels than fit legibly, show only a window of
+                % them, positioned by the vertical channel scrollbar.
+                if this.ChannelScroll
+                    yl = this.channelWindowYLim();
+                    if all(isfinite(yl)) && yl(2) > yl(1)
+                        set(this.Axes, "YLim", yl);
+                    end
+                    return;
+                end
                 if all(isfinite(this.FixedYLim)) && this.FixedYLim(2) > this.FixedYLim(1)
                     set(this.Axes, "YLim", this.FixedYLim);
                 end
@@ -457,19 +543,35 @@ classdef SignalView < handle
     end
 
     methods (Access = private, Static)
-        function [tickPos, addVec] = autoStackNoOverlap(y)
-        %AUTOSTACKNOOVERLAP  Even, non-overlapping vertical offsets per channel
-        %   (fixed-mode stacking: evenly spaced channels).
+        function [tickPos, addVec, spacing] = autoStackNoOverlap(y)
+        %AUTOSTACKNOOVERLAP  Evenly spaced channel lanes for fixed-mode stacking.
+        %   Every channel gets an equal share of the y-axis, spaced by a single
+        %   lane height derived from the TYPICAL (median-across-channels)
+        %   channel scale, not the largest. A channel far bigger than the rest
+        %   therefore overflows its lane and is clipped by the fixed y-limits
+        %   (see computeStacking), rather than forcing the axis to grow to fit
+        %   its full swing -- which used to squash every other channel into a
+        %   near-flat line bunched in the middle (the whole signal made to "fit
+        %   in the range"). Returns the per-channel tick positions, the offset
+        %   added to each channel's samples (centred on its lane), and the lane
+        %   height SPACING (used for the y-limits).
+            n = size(y, 2);
             signalMed = median(y, 1, "omitnan");
-            centred = y - signalMed;
-            overlap = min(centred(:, 1:end-1), [], 1) - max(centred(:, 2:end), [], 1);
-            overlap(isnan(overlap)) = 0;
-            overlap(isinf(overlap)) = 1e5;
-            spacing = -overlap * 1.01;
-            spacing = max(spacing, max(spacing) / 1000 * ones(size(spacing)));
-            spacing = max(eps, spacing);
-            addVec = -(0:numel(signalMed) - 1) * mean(spacing);
-            tickPos = addVec;
+            % Robust typical channel scale: the median across channels of each
+            % channel's standard deviation, so one big channel does not move it.
+            % std is base MATLAB (no Statistics Toolbox needed).
+            sd = std(y, 0, 1, "omitnan");
+            sd(~isfinite(sd)) = 0;
+            scale = median(sd(sd > 0), "omitnan");
+            if isempty(scale) || ~isfinite(scale) || scale <= 0
+                scale = 1;
+            end
+            % One lane spans roughly +/-4 SD of a typical channel: typical
+            % channels sit comfortably within their lane, while a channel
+            % several times larger spills over and clips.
+            spacing = 8 * scale;
+            tickPos = -(0:n - 1) * spacing;   % evenly distributed baselines
+            addVec  = tickPos - signalMed;    % centre each channel on its lane
         end
 
         function [tickPos, addVec] = autoStack(y)

@@ -129,12 +129,13 @@ classdef WorkSpaceTree < handle
         %ADDNODE  Add a node, returning its struct(Id,Name,UserData,IsRoot).
         %   PARENTID is another node's Id, or '' for a top-level node. OPTS
         %   is a struct with optional fields canListEvents, canRecalculate,
-        %   canApplyToAll, isRoot (all default false).
+        %   canApplyToAll, canExportErpset, isRoot (all default false).
             if nargin < 6; opts = struct(); end
-            if ~isfield(opts, 'canListEvents');  opts.canListEvents  = false; end
-            if ~isfield(opts, 'canRecalculate'); opts.canRecalculate = false; end
-            if ~isfield(opts, 'canApplyToAll');  opts.canApplyToAll  = false; end
-            if ~isfield(opts, 'isRoot');         opts.isRoot         = false; end
+            if ~isfield(opts, 'canListEvents');   opts.canListEvents   = false; end
+            if ~isfield(opts, 'canRecalculate');  opts.canRecalculate  = false; end
+            if ~isfield(opts, 'canApplyToAll');   opts.canApplyToAll   = false; end
+            if ~isfield(opts, 'canExportErpset'); opts.canExportErpset = false; end
+            if ~isfield(opts, 'isRoot');          opts.isRoot          = false; end
 
             id = sprintf('n%d', this.NextId);
             this.NextId = this.NextId + 1;
@@ -143,6 +144,7 @@ classdef WorkSpaceTree < handle
                 'canListEvents', logical(opts.canListEvents), ...
                 'canRecalculate', logical(opts.canRecalculate), ...
                 'canApplyToAll', logical(opts.canApplyToAll), ...
+                'canExportErpset', logical(opts.canExportErpset), ...
                 'isRoot', logical(opts.isRoot));
             this.push();
             node = this.nodeStruct(id);
@@ -335,7 +337,8 @@ classdef WorkSpaceTree < handle
                 any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
             opts = struct( ...
                 'canListEvents',  isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'CONTINUOUS'), ...
-                'canRecalculate', isGrandAverage || isEditableTransform);
+                'canRecalculate', isGrandAverage || isEditableTransform, ...
+                'canExportErpset', isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'Averaged'));
         end
     end
 
@@ -410,7 +413,8 @@ classdef WorkSpaceTree < handle
                 end
                 nodes{i} = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
                     'parentId', parentId, 'canListEvents', n.canListEvents, ...
-                    'canRecalculate', n.canRecalculate, 'canApplyToAll', n.canApplyToAll);
+                    'canRecalculate', n.canRecalculate, 'canApplyToAll', n.canApplyToAll, ...
+                    'canExportErpset', n.canExportErpset);
             end
             selId = this.SelectedId;
             if isempty(selId); selId = []; end

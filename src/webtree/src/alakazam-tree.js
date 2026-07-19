@@ -137,6 +137,8 @@ const CONTEXT_ITEMS = [
     { action: 'saveTemplate', label: 'Save Template...' },
     { action: 'applyTemplate', label: 'Apply Template...' },
     { separator: true },
+    { action: 'exportErpset', label: 'Export as ERPset...' },
+    { separator: true },
     { action: 'delete', label: 'Delete' }
 ]
 
@@ -284,7 +286,7 @@ class AlakazamTree {
                 id: n.id, name: n.label, icon: n.icon || 'default',
                 expanded: n.expanded !== false, children: [], parent: null,
                 canListEvents: !!n.canListEvents, canRecalculate: !!n.canRecalculate,
-                canApplyToAll: !!n.canApplyToAll
+                canApplyToAll: !!n.canApplyToAll, canExportErpset: !!n.canExportErpset
             })
         }
         this._root.children = []
@@ -547,6 +549,7 @@ class AlakazamTree {
                 || (item.action === 'recalculate' && !data.canRecalculate)
                 || (item.action === 'applyToAll' && !data.canApplyToAll)
                 || (item.action === 'saveTemplate' && !data.canApplyToAll)
+                || (item.action === 'exportErpset' && !data.canExportErpset)
             if (disabled) {
                 row.classList.add('alz-menu-item-disabled')
             } else {

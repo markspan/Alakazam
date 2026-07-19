@@ -30,7 +30,7 @@ const FAKE_ICON_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQ
 tree.setNodes([
     { id: 'a', label: 'RawImport', icon: 'raw', parentId: null },
     { id: 'b', label: 'Fourier1', icon: 'freq', parentId: 'a' },
-    { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false },
+    { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false, canExportErpset: true },
     { id: 'd', label: 'RawImport2', icon: 'raw', parentId: null },
     { id: 'e', label: 'FourierResult1', icon: FAKE_ICON_URI, parentId: 'a' },
     { id: 'f', label: 'GrandAverage1', icon: 'grandAverage', parentId: null }
@@ -130,7 +130,10 @@ const menu = window.document.querySelector('.alz-menu')
 assert.ok(menu, 'context menu should be shown')
 const items = [...menu.querySelectorAll('.alz-menu-item')].map(el => el.textContent)
 console.log('menu items:', items);
-assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Delete']))
+assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Delete']))
+// 'Average1' is an averaged node (canExportErpset: true) -> Export as ERPset enabled.
+const exportItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
+assert.ok(!exportItemC.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be enabled for an averaged node')
 const listEventsItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'List events')
 assert.ok(listEventsItem.classList.contains('alz-menu-item-disabled'), 'List events should be disabled for canListEvents:false node')
 const applyToAllItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Apply to All Raw Files...')
@@ -144,6 +147,15 @@ renameItem.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 console.log('after clicking Rename:', JSON.stringify(events))
 assert.strictEqual(JSON.stringify(events[events.length - 1]), JSON.stringify({ type: 'contextMenuAction', action: 'rename', id: 'c' }))
 assert.ok(!window.document.querySelector('.alz-menu'), 'menu should close after an action')
+
+// 'RawImport' is not averaged (no canExportErpset) -> Export as ERPset disabled.
+const leafRaw = findLeafByLabel('RawImport')
+leafRaw.content.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 20, clientY: 20 }))
+const rawMenu = window.document.querySelector('.alz-menu')
+const exportItemRaw = [...rawMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
+assert.ok(exportItemRaw.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be disabled for a non-averaged node')
+tree._closeMenu()
+console.log('Export as ERPset gating (enabled for averaged, disabled otherwise): OK')
 
 console.log('\nREAL-DOM CHECKS OK (render/click/double-click/context-menu)\n')
 

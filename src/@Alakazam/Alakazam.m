@@ -93,6 +93,7 @@ classdef Alakazam < handle
         closeTab(this, tag)
         onDefineGrandAverage(this)
         onExportGrandAverages(this)
+        onExportErpset(this)
         onExportMeasurements(this)
         onExportSpectral(this)
         onRecalculateNode(this)
