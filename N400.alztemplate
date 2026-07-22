@@ -46,6 +46,28 @@
       "params": {
         "Param": "Init"
       }
+    },
+    {
+      "transformId": "Measure",
+      "params": {
+        "windows": [
+          {
+            "label": "N400",
+            "start": 300,
+            "stop": 500,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 100,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "Cz"
+          }
+        ],
+        "derivations": ""
+      }
     }
   ]
 }

@@ -100,7 +100,13 @@ end
 % low-amplitude instant does not look just as saturated as a high-amplitude
 % one -- DrawScalpMap otherwise has no natural scale of its own to fall
 % back on.
-mapLimit = max(abs(EEG.data(hasPos, :, :)), [], 'all');
+% Scale on the scalp EEG channels only: a positioned EOG/ECG channel would
+% otherwise set the limit and wash out the EEG maps (see eegChannelMask). The
+% maps still draw every positioned channel; only the shared colour limit is
+% restricted. Falls back to all positioned channels when no channel is left.
+scaleMask = hasPos(:)' & eegChannelMask(chanlocs);
+if ~any(scaleMask); scaleMask = hasPos(:)'; end
+mapLimit = max(abs(EEG.data(scaleMask, :, :)), [], 'all');
 if mapLimit == 0 || isnan(mapLimit)
     mapLimit = 1; % an all-zero (or all-NaN) dataset would otherwise give an empty [0 0] scale
 end

@@ -166,7 +166,11 @@ classdef AlakazamPlotter < handle
         %   result is still DataFormat "AVERAGED" with trials==1 (so it
         %   would otherwise land in AverageView, which cannot draw a
         %   scalp topography).
-            if strcmpi(eeg.id, "TimeFrequency")
+            % The id check catches a fresh transform result; the field check
+            % also catches a grand average of such results, whose id has been
+            % renamed to the grand-average's name (see saveGrandAverage) but
+            % which still carries the .ersp / .coherence map to draw.
+            if strcmpi(eeg.id, "TimeFrequency") || (isfield(eeg, "ersp") && ~isempty(eeg.ersp))
                 view = TimeFrequencyView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "TimeFrequencyView", view);
@@ -181,9 +185,10 @@ classdef AlakazamPlotter < handle
                 view = SpectralMeasureView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "SpectralMeasureView", view);
-            elseif strcmpi(eeg.id, "CoherenceMap")
+            elseif strcmpi(eeg.id, "CoherenceMap") || (isfield(eeg, "coherence") && ~isempty(eeg.coherence))
                 % Also EPOCHED, but carries EEG.coherence for a per-channel
-                % time x frequency coherence-to-reference heatmap.
+                % time x frequency coherence-to-reference heatmap (or a grand
+                % average of such maps, renamed -- see the TimeFrequency note).
                 view = CoherenceView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "CoherenceView", view);

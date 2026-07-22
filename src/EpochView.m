@@ -103,7 +103,16 @@ classdef EpochView < handle
                 this.BinNamesKnown = true;
             end
 
-            this.ColorLimit = max(abs(eeg.data(:)), [], "omitnan");
+            % Base the shared colour scale on the scalp EEG channels only: a
+            % large-amplitude EOG/ECG channel would otherwise set the limit and
+            % wash every EEG channel's ERP-image out (see eegChannelMask). Falls
+            % back to all channels when there is no usable per-channel type info.
+            scaleData = eeg.data;
+            if isfield(eeg, "chanlocs") && numel(eeg.chanlocs) == size(eeg.data, 1)
+                m = eegChannelMask(eeg.chanlocs);
+                scaleData = eeg.data(m, :, :);
+            end
+            this.ColorLimit = max(abs(scaleData(:)), [], "omitnan");
             if ~isfinite(this.ColorLimit) || this.ColorLimit == 0
                 this.ColorLimit = 1; % an all-zero (or all-NaN) dataset would otherwise give an empty [0 0] scale
             end

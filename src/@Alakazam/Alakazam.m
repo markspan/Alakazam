@@ -67,7 +67,7 @@ classdef Alakazam < handle
         steps = readTemplate(~, file)
         tf = isOverlayableAverage(~, targetEEG, sourceEEG)
         overlayAverage(this, targetEEG, sourceEEG)
-        [files, labels] = findGrandAverageCandidates(this)
+        [files, labels, kinds] = findGrandAverageCandidates(this)
         entries = collectMeasurementEntries(this)
         entries = collectSpectralEntries(this)
         saveGrandAverage(this, spec, existingNode)

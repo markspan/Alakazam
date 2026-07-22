@@ -1,1 +1,1 @@
-{"Name":"AutoGEDAI","Description":"Denoise EEG with GEDAI (generalized eigenvalue decomposition against a leadfield reference)","Entry":"AutoGEDAI.m","Icon":"AutoGEDAI.png","Section":"Artifact Rejection / Reduction","Category":"Denoising"}
+{"Name":"AutoGEDAI","Description":"Denoise EEG with GEDAI (generalized eigenvalue decomposition against a leadfield reference)","Entry":"AutoGEDAI.m","Icon":"AutoGEDAI.png","Section":"2. Artifact Rejection / Reduction","Category":"Denoising"}

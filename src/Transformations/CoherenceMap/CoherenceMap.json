@@ -1,1 +1,1 @@
-{"Name":"Coherence Map","Description":"Time-resolved coherence of every channel to a reference (e.g. photodiode): a time x frequency heatmap per channel (RIFT / frequency-tagging)","Entry":"CoherenceMap.m","Icon":"CoherenceMap.png","Section":"Plots","Category":"Coherence"}
+{"Name":"Coherence Map","Description":"Time-resolved coherence of every channel to a reference (e.g. photodiode): a time x frequency heatmap per channel (RIFT / frequency-tagging)","Entry":"CoherenceMap.m","Icon":"CoherenceMap.png","Section":"5. Plots","Category":"Coherence"}

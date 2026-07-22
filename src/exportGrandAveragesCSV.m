@@ -37,6 +37,14 @@ function exportGrandAveragesCSV(nodes, targetFile)
 end
 
 function writeGrandAverage(fid, gaField, EEG)
+    % This CSV is an ERP-waveform export (amplitude per bin/channel/time). A
+    % time-frequency or coherence grand average has no ERP waveform (its .data
+    % is stale epoched data, and its real content is the .ersp / .coherence
+    % map), so it is skipped here rather than written as garbage.
+    if (isfield(EEG, 'ersp') && ~isempty(EEG.ersp)) || ...
+       (isfield(EEG, 'coherence') && ~isempty(EEG.coherence))
+        return;
+    end
     nSubjects = NaN;
     if isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage') && isfield(EEG.etc.GrandAverage, 'nSubjects')
         nSubjects = EEG.etc.GrandAverage.nSubjects;

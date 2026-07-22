@@ -43,6 +43,28 @@ function EEG = GrandAverage(sourceFiles, weighted)
         subjects{i} = loaded.EEG;
     end
 
+    % A grand average combines like with like: ERP waveforms (Averaged .data),
+    % time-frequency maps (.ersp), or coherence maps (.coherence). The kind is
+    % read off the first subject; the rest must match.
+    kind = grandAverageKind(subjects{1});
+    for s = 2:numel(subjects)
+        if ~strcmp(grandAverageKind(subjects{s}), kind)
+            throw(MException('Alakazam:GrandAverage', sprintf([ ...
+                '"%s" is a %s result but "%s" is a %s result. A grand average ' ...
+                'combines datasets of one kind -- all ERPs, all time-frequency ' ...
+                'maps, or all coherence maps -- not a mix.'], ...
+                displayNameFor(sourceFiles{s}), kindName(grandAverageKind(subjects{s})), ...
+                displayNameFor(sourceFiles{1}), kindName(kind))));
+        end
+    end
+
+    if ~strcmp(kind, 'erp')
+        EEG = combineMaps(subjects, sourceFiles, kind);
+        EEG.etc.GrandAverage = struct('sources', {sourceFiles}, ...
+            'weighted', false, 'nSubjects', numel(subjects), 'kind', kind);
+        return;
+    end
+
     validateCompatibility(subjects, sourceFiles);
 
     referenceLabels = {subjects{1}.bindesc.label};
@@ -84,7 +106,110 @@ function EEG = GrandAverage(sourceFiles, weighted)
         EEG.bindesc(b).trials = [];
     end
     EEG.etc.GrandAverage = struct('sources', {sourceFiles}, ...
-        'weighted', weighted, 'nSubjects', nSubjects);
+        'weighted', weighted, 'nSubjects', nSubjects, 'kind', 'erp');
+end
+
+function kind = grandAverageKind(EEG)
+%GRANDAVERAGEKIND  Which kind of result EEG is, for grand-averaging: a
+%   time-frequency map ('tf', carries .ersp), a coherence map ('coherence',
+%   carries .coherence), an ERP ('erp', an Averaged .data waveform set), or
+%   'unknown'. The map kinds are checked first: a TimeFrequency/CoherenceMap
+%   result keeps DataFormat "EPOCHED" but is really its map, not its trials.
+    if isfield(EEG, 'ersp') && ~isempty(EEG.ersp)
+        kind = 'tf';
+    elseif isfield(EEG, 'coherence') && ~isempty(EEG.coherence)
+        kind = 'coherence';
+    elseif isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'Averaged')
+        kind = 'erp';
+    else
+        kind = 'unknown';
+    end
+end
+
+function name = kindName(kind)
+    switch kind
+        case 'tf';        name = 'time-frequency';
+        case 'coherence'; name = 'coherence';
+        case 'erp';       name = 'ERP';
+        otherwise;        name = 'unrecognised';
+    end
+end
+
+function EEG = combineMaps(subjects, sourceFiles, kind)
+%COMBINEMAPS  Grand-average time-frequency (.ersp) or coherence (.coherence)
+%   maps across subjects: an equal-weight mean of the per-subject maps, the
+%   standard way to form a group-level time-frequency / coherence result
+%   (compute per subject on their single trials, THEN average the maps -- the
+%   maps cannot be recovered from an ERP grand average, which is why this is
+%   its own path). Both arrays are channels x freq x time x bins (bins last);
+%   bins are matched by label to the first subject before averaging.
+    field = 'ersp';
+    if strcmp(kind, 'coherence'); field = 'coherence'; end
+
+    validateMapCompatibility(subjects, sourceFiles, field);
+
+    referenceLabels = {subjects{1}.bindesc.label};
+    nSubjects = numel(subjects);
+    nBins     = numel(referenceLabels);
+    sz        = size(subjects{1}.(field));            % chan x freq x time x bins
+    stacked   = nan([sz, nSubjects]);
+
+    for s = 1:nSubjects
+        subjectLabels = {subjects{s}.bindesc.label};
+        A = subjects{s}.(field);
+        reordered = nan(sz);
+        for b = 1:nBins
+            match = find(strcmp(subjectLabels, referenceLabels{b}), 1);
+            reordered(:, :, :, b) = A(:, :, :, match);
+        end
+        stacked(:, :, :, :, s) = reordered;
+    end
+
+    grand = mean(stacked, 5, 'omitnan');
+
+    EEG = subjects{1};
+    EEG.(field) = grand;
+    EEG.ntrials = NaN;
+    EEG.event   = struct([]); % stale per-subject trial-level info; a grand
+    EEG.epoch   = struct([]); % average has none of its own
+    for b = 1:nBins
+        EEG.bindesc(b).label  = referenceLabels{b};
+        EEG.bindesc(b).n      = sprintf('%d subjects', nSubjects);
+        EEG.bindesc(b).events = [];
+        EEG.bindesc(b).rt     = [];
+        EEG.bindesc(b).trials = [];
+    end
+end
+
+function validateMapCompatibility(subjects, sourceFiles, field)
+%VALIDATEMAPCOMPATIBILITY  Every subject's map must match in channels, frequency
+%   count and time count, and carry the same set of bin labels.
+    reference     = subjects{1};
+    referenceName = displayNameFor(sourceFiles{1});
+    refSize       = size(reference.(field));
+    referenceLabels = sort(string({reference.bindesc.label}));
+
+    for i = 2:numel(subjects)
+        subject     = subjects{i};
+        subjectName = displayNameFor(sourceFiles{i});
+        subSize     = size(subject.(field));
+
+        if ~isequal(subSize(1:3), refSize(1:3))
+            throw(MException('Alakazam:GrandAverage', sprintf([ ...
+                '"%s" has a %s map of size %s (channels x freq x time), but "%s" ' ...
+                'has %s. Every subject needs the same channels, frequencies and ' ...
+                'time points -- run the transform with the same settings on each.'], ...
+                subjectName, field, mat2str(subSize(1:3)), referenceName, mat2str(refSize(1:3)))));
+        end
+
+        subjectLabels = sort(string({subject.bindesc.label}));
+        if ~isequal(subjectLabels, referenceLabels)
+            throw(MException('Alakazam:GrandAverage', sprintf([ ...
+                '"%s" has bins %s, but "%s" has bins %s. Every subject needs the ' ...
+                'same set of bin labels.'], subjectName, strjoin(subjectLabels, ', '), ...
+                referenceName, strjoin(referenceLabels, ', '))));
+        end
+    end
 end
 
 function [grandMean, grandSEM] = combineSubjects(data, trialCount, weighted)

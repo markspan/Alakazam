@@ -61,6 +61,15 @@ function onApplyTemplate(this)
         return;
     end
 
+    % Show the final result. applyStepToTarget only persists each step (it is
+    % also used where plotting would be wrong, e.g. batch apply-to-all), so
+    % without this the template runs silently and nothing appears -- which
+    % reads as broken when the last step is a plot (TimeFrequency / Coherence
+    % / Scalp), whose plot IS the deliverable. persistResultNode already made
+    % the last result the workspace's current dataset, so plotCurrent draws it
+    % in the right view (see AlakazamPlotter's id / .ersp / .coherence routing).
+    this.Plotter.plotCurrent();
+
     this.restoreFocus();
     % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
     msgbox(sprintf('Applied template "%s" (%d step(s)).', fileName, applied), ...
