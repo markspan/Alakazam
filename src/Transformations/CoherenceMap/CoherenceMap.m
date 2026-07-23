@@ -41,8 +41,8 @@ if nargin < 2
             'MinFreq', 2, 'MaxFreq', min(80, floor(input.srate / 3)), 'NumFreqs', 40, ...
             'MinCycles', 3, 'MaxCycles', 12, 'WindowMs', 500, 'PadRatio', 4);
     end
-    refList = referenceChoices(labels, getField(stored, 'RefChannel', ''));
-    methodList = putFirst({'Wavelet', 'STFT'}, getField(stored, 'Method', 'Wavelet'));
+    refList = TransTools.ReferenceChoices(labels, getField(stored, 'RefChannel', ''));
+    methodList = TransTools.PutFirst({'Wavelet', 'STFT'}, getField(stored, 'Method', 'Wavelet'));
 
     opts = TransformOptionsDialog( ...
         'Description', ['Time-resolved coherence of every channel to a reference ' ...
@@ -99,34 +99,6 @@ EEG.cohFreqs  = freqs;
 EEG.cohTimes  = cohTimes;
 EEG.cohRef    = char(labels{refIdx});
 EEG.cohMethod = char(string(opts.Method));
-end
-
-function list = referenceChoices(labels, preferred)
-%REFERENCECHOICES  The channel labels as a dropdown cellstr, with the preferred
-%   (previously chosen) or an auto-detected photodiode-like channel put first.
-    labels = cellfun(@(s) char(string(s)), labels, 'UniformOutput', false);
-    pick = '';
-    if ~isempty(char(string(preferred))) && any(strcmpi(labels, preferred))
-        pick = preferred;
-    else
-        hit = find(~cellfun(@isempty, regexpi(labels, ...
-            'photodiode|diode|photo|^pd$|lum|sensor|erg', 'once')), 1);
-        if ~isempty(hit); pick = labels{hit}; end
-    end
-    if isempty(pick)
-        list = labels;
-    else
-        list = putFirst(labels, pick);
-    end
-end
-
-function list = putFirst(list, value)
-%PUTFIRST  Move VALUE to the front of the cellstr LIST (a no-op if absent), so
-%   TransformOptionsDialog uses it as the dropdown's default.
-    idx = find(strcmpi(list, char(string(value))), 1);
-    if ~isempty(idx)
-        list = [list(idx), list(setdiff(1:numel(list), idx, 'stable'))];
-    end
 end
 
 function v = getField(s, name, default)

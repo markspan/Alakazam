@@ -67,24 +67,8 @@ end
 % only ever touches a plain chanlocs array, never eeg_checkset, and is the
 % same approach AutoGEDAI already uses for its own template matching.
 EEG = input;
-elcFile  = TransTools.Dipfit1005File('Alakazam:ScalpDistribution');
-template = readlocs(elcFile);
-templateLabels = lower(string({template.labels}));
-
-chanlocs = EEG.chanlocs;
-hasPos = false(1, numel(chanlocs));
-for c = 1:numel(chanlocs)
-    match = find(templateLabels == lower(string(chanlocs(c).labels)), 1);
-    if isempty(match)
-        continue;
-    end
-    chanlocs(c).X      = template(match).X;
-    chanlocs(c).Y      = template(match).Y;
-    chanlocs(c).Z      = template(match).Z;
-    chanlocs(c).theta  = template(match).theta;
-    chanlocs(c).radius = template(match).radius;
-    hasPos(c) = true;
-end
+[chanlocs, hasPos] = TransTools.TemplateScalpLocs(EEG.chanlocs, ...
+    TransTools.Dipfit1005File('Alakazam:ScalpDistribution'));
 
 if ~any(hasPos)
     throw(MException('Alakazam:ScalpDistribution', ...

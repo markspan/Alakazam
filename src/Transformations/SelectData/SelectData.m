@@ -20,7 +20,7 @@ end
 interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     options = SelectDataDialog(input.chanlocs, size(input.data, 2), size(input.data, 3), ...
-        TransformSettings.get('SelectData'));
+        TransformSettings.get('SelectData'), timeUnit(input));
     if isempty(options)
         EEG = [];   % cancelled -- no node, no compute (see Alakazam.onTransformation)
         return;
@@ -37,11 +37,17 @@ if isempty(args)
 end
 EEG = pop_select(input, args{:});
 
-% EEGLAB sometimes leaves EEG.times in seconds after pop_select; this ratio
-% check (real recordings are well under 500x xmax/times(end) when both are in
-% the same unit) detects and corrects that rather than assuming a fixed unit.
-if isfield(EEG, 'times') && ~isempty(EEG.times) && (EEG.xmax / EEG.times(end) > 500)
-    EEG.times = EEG.times * 1000;
+% pop_select (via eeg_checkset) rewrites EEG.times in EEGLAB's millisecond
+% convention. Alakazam keeps *continuous* data on a SECONDS time axis (epoched
+% and averaged data stay in ms, matching EEGLAB and the rest of the app), so
+% restore seconds for a continuous result -- otherwise the axis reads in ms and
+% the duration/sample-rate look 1000x off (see Resample.m, same convention).
+if isContinuous(input)
+    EEG.times = (0:EEG.pnts - 1) / EEG.srate;   % seconds, 0-based
+    if ~isempty(EEG.times)
+        EEG.xmin = EEG.times(1);
+        EEG.xmax = EEG.times(end);
+    end
 end
 end
 
@@ -61,7 +67,11 @@ function args = buildSelectArgs(input, o)
             args = [args, {'nochannel', idx}];
         end
     end
-    args = [args, rangeArgs(o, 'time',   'time',  'notime',  1 / 1000)];  % ms -> s
+    % pop_select's 'time' argument is always in seconds. The dialog collects the
+    % time range in the data's own display unit -- seconds for continuous data,
+    % milliseconds for epoched/averaged data -- so scale to seconds accordingly.
+    if isContinuous(input); timeScale = 1; else; timeScale = 1 / 1000; end
+    args = [args, rangeArgs(o, 'time',   'time',  'notime',  timeScale)];
     args = [args, rangeArgs(o, 'points', 'point', 'nopoint', 1)];
     if isfield(o, 'trials') && ~strcmp(o.trials.mode, '(off)') && ~isempty(o.trials.indices)
         key = keepKey(o.trials.mode, 'trial', 'notrial');
@@ -78,6 +88,22 @@ end
 
 function key = keepKey(mode, keepK, removeK)
     if strcmp(mode, 'Keep'); key = keepK; else; key = removeK; end
+end
+
+function tf = isContinuous(EEG)
+%ISCONTINUOUS  True for continuous (non-epoched) data, whose time axis Alakazam
+%   keeps in seconds. Prefers EEG.DataFormat; falls back to the data shape.
+    if isfield(EEG, 'DataFormat') && ~isempty(EEG.DataFormat)
+        tf = strcmpi(EEG.DataFormat, 'CONTINUOUS');
+    else
+        tf = ismatrix(EEG.data) && (~isfield(EEG, 'trials') || EEG.trials <= 1);
+    end
+end
+
+function u = timeUnit(EEG)
+%TIMEUNIT  The unit the dataset's time axis is displayed in: 's' for continuous
+%   data, 'ms' for epoched/averaged data (matching SignalView / the app).
+    if isContinuous(EEG); u = 's'; else; u = 'ms'; end
 end
 
 function idx = labelsToIdx(input, wantLabels)

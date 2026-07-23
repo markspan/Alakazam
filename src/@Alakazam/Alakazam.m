@@ -41,6 +41,8 @@ classdef Alakazam < handle
         MainGrid        % uigridlayout, the top-level shell layout (see setupMainWindow)
         ToolbarGrid     % uigridlayout cell reserved for the ribbon
         Ribbon          % AlakazamRibbon, the Home/Tools/Grand Average control strip
+        RibbonBaseHeight   = 120  % collapsed ribbon row height (px); see setupMainWindow
+        RibbonExpandFactor = 2    % how much taller the ribbon grows when a group unfolds (2 = double; try 3 later)
         TreeGrid        % uigridlayout cell reserved for the workspace tree area (split top/bottom)
         DataTreePanel           % uipanel hosting WorkSpace.Tree (data & analyses), top half of TreeGrid
         GrandAveragesTreePanel  % uipanel hosting WorkSpace.GrandAveragesTree, bottom half of TreeGrid

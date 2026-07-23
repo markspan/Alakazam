@@ -91,11 +91,11 @@ if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
             'RejectEpochs', 'no', 'EpochENOVA', 0.9, ...
             'RejectChannels', 'no', 'ChannelENOVA', 0.9, 'Parallel', parallelChoices{1});
     end
-    strengthChoices       = putFirst({'auto', 'auto+', 'auto-'}, stored.Strength);
-    leadfieldChoices      = putFirst({'precomputed', 'interpolated'}, stored.Leadfield);
-    rejectEpochsChoices   = putFirst({'no', 'yes'}, stored.RejectEpochs);
-    rejectChannelsChoices = putFirst({'no', 'yes'}, stored.RejectChannels);
-    parallelChoices       = putFirst(parallelChoices, stored.Parallel);
+    strengthChoices       = TransTools.PutFirst({'auto', 'auto+', 'auto-'}, stored.Strength);
+    leadfieldChoices      = TransTools.PutFirst({'precomputed', 'interpolated'}, stored.Leadfield);
+    rejectEpochsChoices   = TransTools.PutFirst({'no', 'yes'}, stored.RejectEpochs);
+    rejectChannelsChoices = TransTools.PutFirst({'no', 'yes'}, stored.RejectChannels);
+    parallelChoices       = TransTools.PutFirst(parallelChoices, stored.Parallel);
 
     opts = TransformOptionsDialog( ...
         'Description', 'Denoise EEG with GEDAI (generalized eigenvalue decomposition against a leadfield reference).', ...
@@ -231,20 +231,6 @@ if channelThreshold < inf
 end
 end
 
-% ======================================================================= %
-function choices = putFirst(choices, value)
-%PUTFIRST  Move VALUE to the front of the cell array CHOICES, if present.
-%   settingsdlg shows a cell-array field as a popup defaulting to its first
-%   entry, so this is how a remembered choice becomes the dialog's default
-%   without dropping any of the other selectable choices. Leaves CHOICES
-%   unchanged if VALUE is not one of them.
-    idx = find(strcmpi(choices, value), 1);
-    if ~isempty(idx)
-        choices = [choices(idx), choices(1:idx - 1), choices(idx + 1:end)];
-    end
-end
-
-% ======================================================================= %
 function ensureGEDAI()
 %ENSUREGEDAI  Make sure the GEDAI plugin is on the path, with consent.
 %   GEDAI is not in the EEGLAB plugin registry and is licensed for

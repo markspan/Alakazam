@@ -36,6 +36,10 @@ classdef AlakazamRibbon < handle
         % Callback function handle: fcn(id). Mirrors WorkSpaceTree's
         % *Fcn callback-property style.
         ItemPushedFcn = function_handle.empty
+        % Callback function handle: fcn(expanded) -- true when a group is
+        % unfolded, false when everything is collapsed. The owner uses it to
+        % grow/shrink the ribbon row (see Alakazam.onRibbonExpandChanged).
+        ExpandChangedFcn = function_handle.empty
     end
 
     properties (Access = private)
@@ -81,6 +85,8 @@ classdef AlakazamRibbon < handle
                     this.invoke(this.ItemPushedFcn, d.id);
                 case 'tabChanged'
                     this.ActiveTab = string(d.id);
+                case 'heightChanged'
+                    this.invoke(this.ExpandChangedFcn, logical(d.expanded));
             end
         end
 

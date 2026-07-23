@@ -31,7 +31,7 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-tab.alz-active { background: #f5f5f5; color: #333; font-weight: bold; border-bottom: 2px solid #4472c4; }
 
 .alz-content { flex: 1; overflow-x: auto; overflow-y: auto; display: flex; align-items: flex-start; padding: 3px; box-sizing: border-box; }
-.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 261px; }
+.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 320px; }
 .alz-group-items { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
 .alz-group-title { text-align: center; font-size: 11px; color: #fff; background: #2e5c8a; border-top: 1px solid #ddd; padding-top: 2px; margin-top: 2px; }
 
@@ -50,12 +50,10 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
    area scrolls if the expanded group is taller than the ribbon strip).
    Replaces the earlier "dense" half-size two-row cramming. */
 .alz-group.collapsible:not(.expanded) .alz-group-items { max-height: 52px; overflow: hidden; }
-.alz-group-expander {
-    text-align: center; cursor: pointer; user-select: none;
-    font-size: 10px; line-height: 1.2; color: #2e5c8a; font-weight: bold;
-    background: #eef2f8; border-top: 1px solid #ddd; padding: 1px 0; margin-top: 2px;
-}
-.alz-group-expander:hover { background: #dce6f5; }
+/* The title bar of a collapsible group doubles as its unfold control, so it is
+   exactly as tall as any other group's title (the ribbon height is constant). */
+.alz-group-title.expandable { cursor: pointer; user-select: none; }
+.alz-group-title.expandable:hover { filter: brightness(1.18); }
 </style>
 </head>
 <body>
@@ -129,42 +127,64 @@ function alzRenderContent() {
         groupEl.appendChild(itemsEl);
 
         // More than one full-size row of transforms -> collapse to the first
-        // row and add an expander bar just below the icons that unfolds the
-        // rest on click (see alzBuildExpander / the .collapsible CSS).
-        if (items.length > ALZ_PER_ROW) {
-            groupEl.classList.add('collapsible');
-            groupEl.appendChild(alzBuildExpander(groupEl, items.length - ALZ_PER_ROW));
-        }
-
+        // row; the group's own title bar (just below the icons) doubles as the
+        // unfold control, so every group keeps the same height whether or not
+        // it can unfold (see the .collapsible CSS).
         var titleEl = document.createElement('div');
         titleEl.className = 'alz-group-title';
-        titleEl.textContent = group.title;
+        if (items.length > ALZ_PER_ROW) {
+            groupEl.classList.add('collapsible');
+            titleEl.classList.add('expandable');
+            alzWireTitleExpander(groupEl, titleEl, group.title, items.length - ALZ_PER_ROW);
+        } else {
+            titleEl.textContent = group.title;
+        }
         groupEl.appendChild(titleEl);
 
         content.appendChild(groupEl);
     });
+
+    // A fresh render has no expanded group; keep MATLAB's ribbon height in sync
+    // (this also shrinks the ribbon back after a tab switch).
+    alzUpdateRibbonHeight();
 }
 
 // Full-size icons that fit in one row at the group's max width (see the
 // .alz-group max-width and .alz-item width in the CSS above).
 var ALZ_PER_ROW = 6;
 
-function alzBuildExpander(groupEl, hiddenCount) {
-    // A thin, clickable bar directly beneath the icon row. Clicking it toggles
-    // the group's .expanded class, which lifts the one-row height cap so the
-    // remaining icons unfold downward; the caret and count flip to match.
-    var exp = document.createElement('div');
-    exp.className = 'alz-group-expander';
+function alzCollapseAll() {
+    // Fold every unfolded group back up (used when a transformation is chosen).
+    document.querySelectorAll('.alz-group.expanded').forEach(function (g) {
+        g.classList.remove('expanded');
+        if (g._alzRelabel) { g._alzRelabel(false); }
+    });
+}
+
+function alzUpdateRibbonHeight() {
+    // Tell MATLAB whether any group is currently unfolded, so it can grow the
+    // ribbon row to fit the extra transform rows (and shrink back otherwise).
+    var expanded = document.querySelectorAll('.alz-group.expanded').length > 0;
+    alzSendEvent('heightChanged', { expanded: expanded });
+}
+
+function alzWireTitleExpander(groupEl, titleEl, title, hiddenCount) {
+    // The title bar doubles as the unfold control for a collapsible group:
+    // clicking it toggles .expanded (which lifts the one-row height cap so the
+    // remaining icons unfold downward), and its caret + hidden-count flip to
+    // match. Keeping the control in the title bar means a collapsible group is
+    // exactly as tall as any other, so the collapsed ribbon height is uniform.
     function relabel(expanded) {
-        exp.textContent = expanded ? '▴ less' : ('▾ ' + hiddenCount + ' more');
-        exp.title = expanded ? 'Show fewer' : 'Show all tools';
+        titleEl.textContent = expanded ? (title + '  ▴') : (title + '  ▾ ' + hiddenCount + ' more');
+        titleEl.title = expanded ? 'Show fewer' : 'Show all tools';
     }
     relabel(false);
-    exp.addEventListener('click', function (ev) {
+    groupEl._alzRelabel = relabel;   // so alzCollapseAll can reset the caret/count
+    titleEl.addEventListener('click', function (ev) {
         ev.stopPropagation();
         relabel(groupEl.classList.toggle('expanded'));
+        alzUpdateRibbonHeight();      // ask MATLAB to grow / shrink the ribbon row
     });
-    return exp;
 }
 
 function alzBuildItem(item) {
@@ -184,6 +204,8 @@ function alzBuildItem(item) {
     itemEl.appendChild(label);
 
     itemEl.addEventListener('click', function () {
+        alzCollapseAll();          // a choice was made: fold groups back up
+        alzUpdateRibbonHeight();   // and shrink the ribbon to its base height
         alzSendEvent('itemPushed', { id: item.id });
     });
     return itemEl;

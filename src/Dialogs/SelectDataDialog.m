@@ -1,16 +1,21 @@
-function options = SelectDataDialog(chanlocs, npnts, ntrials, stored)
+function options = SelectDataDialog(chanlocs, npnts, ntrials, stored, timeUnit)
 %SELECTDATADIALOG  Native editor for the SelectData transform: pick data to
 %   keep or remove along four axes (channels, time, points, trials), the same
 %   selection pop_select offers, in the app's own dialog style.
 %
 %   Each axis has a mode -- "(off)", "Keep" or "Remove" -- and its own input:
-%   a multi-select channel list, a time range (ms), a point range (samples), or
-%   a list of trial indices. An axis left "(off)" is not applied. CHANLOCS is
+%   a multi-select channel list, a time range, a point range (samples), or a
+%   list of trial indices. An axis left "(off)" is not applied. CHANLOCS is
 %   the dataset's channels, NPNTS/NTRIALS its sample and trial counts (for
-%   labels/limits), STORED a previous run's options (or [] on first use).
+%   labels/limits), STORED a previous run's options (or [] on first use), and
+%   TIMEUNIT the unit the time range is entered in -- 's' for continuous data,
+%   'ms' for epoched/averaged data (SelectData converts to pop_select's seconds
+%   and keeps the result's own axis in that unit).
 %
 %   Returns the options struct (.channels/.time/.points/.trials, each with a
 %   .mode plus its values), or [] on cancel.
+    if nargin < 5 || isempty(timeUnit); timeUnit = 'ms'; end
+    timeUnit = char(string(timeUnit));
     labels = arrayfun(@(c) char(string(c.labels)), chanlocs, 'UniformOutput', false);
     MODES = {'(off)', 'Keep', 'Remove'};
     accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
@@ -31,7 +36,7 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored)
     outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', '1x', 'fit', 'fit', 'fit', 44}, 'Padding', [10 10 10 10]);
 
     uilabel(outer, 'Text', ['Select the data to keep or remove. Set each axis to Keep or Remove ' ...
-        '(or leave it off). Channels: pick from the list; Time in ms; Points in samples; ' ...
+        '(or leave it off). Channels: pick from the list; Time in ' timeUnit '; Points in samples; ' ...
         'Trials as indices (e.g. "1:10, 15").'], 'WordWrap', 'on');
 
     % Channels
@@ -43,8 +48,8 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored)
     chanList = uilistbox(chanGrid, 'Items', labels, 'Multiselect', 'on', ...
         'Value', intersectLabels(labels, seed.channels.labels));
 
-    % Time (ms)
-    timeGrid = rangeRow(outer, 3, 'Time (ms)', MODES, seed.time.mode, seed.time.range(1), seed.time.range(2));
+    % Time (unit depends on the dataset: seconds continuous, ms epoched)
+    timeGrid = rangeRow(outer, 3, ['Time (' timeUnit ')'], MODES, seed.time.mode, seed.time.range(1), seed.time.range(2));
     % Points (samples)
     pointGrid = rangeRow(outer, 4, 'Points (samples)', MODES, seed.points.mode, seed.points.range(1), seed.points.range(2));
     % Trials

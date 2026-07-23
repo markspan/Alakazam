@@ -46,7 +46,7 @@ if interactive
     % the template's '+Y'); DrawScalpMap reads the stored theta, so passing
     % those directly would draw every map rotated 90 degrees. Re-derive the
     % polar coordinates straight from the template by label instead.
-    dispLocs = templateScalpLocs(EEG.chanlocs(EEG.icachansind), ...
+    dispLocs = TransTools.TemplateScalpLocs(EEG.chanlocs(EEG.icachansind), ...
         TransTools.Dipfit1005File('Alakazam:RemoveComponents'));
     [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs);
     if ~ok
@@ -123,27 +123,6 @@ function EEG = ensureDecomposition(input)
     EEG.icaact      = eegOnly.icaact;
     EEG.icachansind = eegIdx(eegOnly.icachansind);
     EEG.etc.ic_classification = eegOnly.etc.ic_classification;
-end
-
-function locs = templateScalpLocs(chanlocs, elcFile)
-%TEMPLATESCALPLOCS  Return CHANLOCS with theta/radius/X/Y/Z re-derived by
-%   label from the 10-5 template, matching how ScalpDistribution builds its
-%   display coordinates. This restores the template's native nose direction
-%   (see the caller) so DrawScalpMap orients the maps the same as the Scalp
-%   plot. A label the template does not recognise keeps its existing
-%   coordinates (all decomposed channels match by construction).
-    locs = chanlocs;
-    template = readlocs(elcFile);
-    templateLabels = lower(string({template.labels}));
-    for c = 1:numel(locs)
-        m = find(templateLabels == lower(string(locs(c).labels)), 1);
-        if isempty(m); continue; end
-        locs(c).X      = template(m).X;
-        locs(c).Y      = template(m).Y;
-        locs(c).Z      = template(m).Z;
-        locs(c).theta  = template(m).theta;
-        locs(c).radius = template(m).radius;
-    end
 end
 
 function tf = hasICLabel(EEG)

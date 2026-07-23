@@ -64,7 +64,7 @@ if (ischar(options) || isstring(options)) && strcmpi(string(options), 'Init')
         {'Start'; 'TestStart'}, d('TestStart', 0), ...
         {'Stop'; 'TestStop'}, d('TestStop', 0), ...
         'separator', 'Rejection:', ...
-        {'Reject'; 'Scope'}, putFirst(SCOPES, d('Scope', 'Whole epoch')));
+        {'Reject'; 'Scope'}, TransTools.PutFirst(SCOPES, d('Scope', 'Whole epoch')));
     if isempty(options)
         EEG = [];   % cancelled -- no node, no compute
         return;
@@ -211,10 +211,4 @@ function list = toMethodList(value)
         list = cellstr(string(value(:)))';
     end
     list = list(~cellfun(@(s) isempty(strtrim(s)), list));
-end
-
-function out = putFirst(list, value)
-    idx = find(strcmpi(list, char(string(value))), 1);
-    if isempty(idx); out = list; return; end
-    out = [list(idx), list(setdiff(1:numel(list), idx, 'stable'))];
 end

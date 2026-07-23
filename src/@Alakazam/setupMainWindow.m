@@ -44,15 +44,21 @@ function setupMainWindow(this)
     % endTreeResize): a plain uigridlayout has no built-in resizable
     % divider the way AppContainer's dock panels did, so this is a
     % hand-rolled replacement for that lost affordance.
+    % Ribbon row height is sized to the ribbon's own content (tab strip + one
+    % full-size icon row + group title, ~115 px); anything taller just shows as
+    % empty space between the ribbon and the plots below it.
     this.MainGrid = uigridlayout(this.MainFigure, [2 3], ...
-        "RowHeight", {138, '1x'}, "ColumnWidth", {260, 3, '1x'}, ...
-        "Padding", [1 1 1 1], "RowSpacing", 4, "ColumnSpacing", 0);
+        "RowHeight", {this.RibbonBaseHeight, '1x'}, "ColumnWidth", {260, 3, '1x'}, ...
+        "Padding", [1 1 1 1], "RowSpacing", 2, "ColumnSpacing", 0);
 
     this.ToolbarGrid = uigridlayout(this.MainGrid, [1 1], "Padding", [0 0 0 0]);
     this.ToolbarGrid.Layout.Row = 1;
     this.ToolbarGrid.Layout.Column = [1 3];
+    % ExpandChangedFcn grows/shrinks the ribbon row when a group is unfolded in
+    % the ribbon HTML (see onRibbonExpandChanged).
     this.Ribbon = AlakazamRibbon(this.ToolbarGrid, fullfile(this.RootDir, "Transformations"), ...
-        "ItemPushedFcn", @(id) this.onRibbonAction(id));
+        "ItemPushedFcn", @(id) this.onRibbonAction(id), ...
+        "ExpandChangedFcn", @(expanded) this.onRibbonExpandChanged(expanded));
 
     % Row 2 is a thin draggable splitter between the two trees (see
     % beginTreesSplitResize/dragTreesSplitResize/endTreesSplitResize),

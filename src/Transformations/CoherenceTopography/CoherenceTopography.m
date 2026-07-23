@@ -45,7 +45,7 @@ if nargin < 2
         stored = struct('RefChannel', '', 'MinFreq', 55, 'MaxFreq', 68, ...
             'Frequency', 0, 'TimeStart', 0, 'TimeStop', 0);
     end
-    refList = referenceChoices(labels, getField(stored, 'RefChannel', ''));
+    refList = TransTools.ReferenceChoices(labels, getField(stored, 'RefChannel', ''));
     opts = TransformOptionsDialog( ...
         'Description', ['Scalp head-map of every channel''s coherence to a reference ' ...
             '(e.g. a photodiode), per bin. The frequency is auto-detected from the ' ...
@@ -94,7 +94,7 @@ computeOpts.RefIndex = refIdx;
 %% Resolve scalp positions (template lookup, exactly as ScalpDistribution does:
 %  a direct readlocs lookup by label, so no eeg_checkset is run on an averaged/
 %  bin-based struct, and the template's own nose-up orientation is kept).
-[scalpLocs, hasPos] = templateScalpLocs(input.chanlocs, ...
+[scalpLocs, hasPos] = TransTools.TemplateScalpLocs(input.chanlocs, ...
     TransTools.Dipfit1005File('Alakazam:CoherenceTopography'));
 if ~any(hasPos)
     throw(MException('Alakazam:CoherenceTopography', ...
@@ -140,49 +140,6 @@ EEG.CohTopoRefAmp    = refAmp;              % reference evoked spectrum over the
 EEG.CohTopoAmpFreqs  = ampFreqs;
 EEG.CohTopoBins      = keep;                % original bin indices of the kept (trial-bearing) bins
 EEG.CohTopoBinLabels = binLabels;
-end
-
-% ======================================================================= %
-function [locs, hasPos] = templateScalpLocs(chanlocs, elcFile)
-%TEMPLATESCALPLOCS  Copy theta/radius/X/Y/Z from the 10-5 template by label, so
-%   DrawScalpMap orients the maps the same as ScalpDistribution. HASPOS marks
-%   the channels the template recognised.
-    locs = chanlocs;
-    hasPos = false(1, numel(locs));
-    template = readlocs(elcFile);
-    templateLabels = lower(string({template.labels}));
-    for c = 1:numel(locs)
-        m = find(templateLabels == lower(string(locs(c).labels)), 1);
-        if isempty(m); continue; end
-        locs(c).X      = template(m).X;
-        locs(c).Y      = template(m).Y;
-        locs(c).Z      = template(m).Z;
-        locs(c).theta  = template(m).theta;
-        locs(c).radius = template(m).radius;
-        hasPos(c) = true;
-    end
-end
-
-function list = referenceChoices(labels, preferred)
-%REFERENCECHOICES  Channel labels as a dropdown cellstr, with the previously
-%   chosen or an auto-detected photodiode-like channel put first.
-    labels = cellfun(@(s) char(string(s)), labels, 'UniformOutput', false);
-    pick = '';
-    if ~isempty(char(string(preferred))) && any(strcmpi(labels, preferred))
-        pick = preferred;
-    else
-        hit = find(~cellfun(@isempty, regexpi(labels, ...
-            'photodiode|diode|photo|^pd$|lum|sensor|erg', 'once')), 1);
-        if ~isempty(hit); pick = labels{hit}; end
-    end
-    if isempty(pick); list = labels; else; list = putFirst(labels, pick); end
-end
-
-function list = putFirst(list, value)
-    idx = find(strcmpi(list, char(string(value))), 1);
-    if ~isempty(idx)
-        list = [list(idx), list(setdiff(1:numel(list), idx, 'stable'))];
-    end
 end
 
 function v = getField(s, name, default)
