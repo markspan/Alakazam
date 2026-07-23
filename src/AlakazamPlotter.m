@@ -192,6 +192,13 @@ classdef AlakazamPlotter < handle
                 view = CoherenceView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "CoherenceView", view);
+            elseif strcmpi(eeg.id, "CoherenceTopography") || (isfield(eeg, "CohTopoValues") && ~isempty(eeg.CohTopoValues))
+                % Also EPOCHED, but carries EEG.CohTopoValues for a per-bin
+                % scalp head-map of coherence to a reference at a single
+                % (auto-detected) frequency.
+                view = CoherenceTopographyView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "CoherenceTopographyView", view);
             elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1

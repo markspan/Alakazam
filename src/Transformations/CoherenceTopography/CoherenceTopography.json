@@ -1,0 +1,1 @@
+{"Name":"CohTopo","Description":"Scalp head-map of every channel's coherence to a reference (e.g. photodiode) per bin, at the reference's auto-detected tagging frequency (RIFT / frequency-tagging)","Entry":"CoherenceTopography.m","Icon":"CoherenceTopography.png","Section":"5. Plots","Category":"Coherence"}

@@ -90,7 +90,8 @@ common montage of scalp electrodes plus horizontal and vertical EOG. The book
   *2. Artifact Rejection / Reduction* (ArtefactDetect, AutoEyeICA, ICA,
   AutoGEDAI), *3. Segment Analysis* (DefineBins),
   *4. Frequency and Component Analysis* (Fourier, Spectral Measure, ERP Measure),
-  *5. Plots* (Scalp, TimeFrequency, Coherence Map). A **Grand Average** tab builds
+  *5. Plots* (Scalp, TimeFrequency, Coherence Map, Coherence Topography). A
+  **Grand Average** tab builds
   group results; a **Measurements** tab scores and exports.
 - **Reproducibility is templates**, not `.m` files: any branch saves as a
   template and re-applies to other subjects, and any step's parameters can be
