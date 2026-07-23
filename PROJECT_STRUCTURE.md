@@ -37,32 +37,50 @@ resources stay at the repository root. The app resolves two roots at startup:
 ## Launching
 
 Run **`startAlakazam`** (function at the repo root): it adds `src/` to the path
-and constructs the app; the app then adds its `Transformations/`.
+and constructs the app; the app then adds its own subfolders (`Views`, `Dialogs`,
+`IO`, `Support`) and `Transformations/` (see `@Alakazam/setupDirectories`).
 To use the bare `Alakazam` command instead, add `src/` to your MATLAB path once
-(via `pathtool` or a `startup.m`).
+(via `pathtool` or a `startup.m`) and let the app add the rest.
+
+## Source layout (folders under `src/`)
+
+Authored code is grouped by role. `src/` itself is added to the path
+non-recursively (so the `@class` / `+package` folders are not put on the path
+directly); the app adds the plain-function/class folders below explicitly.
+
+| Folder | Holds |
+|---|---|
+| `src/` (top level) | The core app singletons/classes: `AlakazamPlotter`, `AlakazamRibbon` (+`.html`), `AlakazamSettings`, `WorkSpaceTree` (+`.html`), `TransformSettings`, `EEGLabEnvironment`, `GrandAverage`. |
+| `src/@Alakazam/`, `src/@WorkSpace/`, `src/@cursor/`, `src/@label/` | Class folders: the main app class and its methods, per-format loaders / `.wksp` persistence, and small plot-cursor/label helper classes. |
+| `src/Views/` | The plot **View** classes (`SignalView`, `EpochView`, `AverageView`, `FourierView`, `TimeFrequencyView`, `ScalpDistributionView`, `SpectralMeasureView`, `CoherenceView`, `CoherenceTopographyView`). |
+| `src/Dialogs/` | Hand-built `uifigure` dialogs (`TransformOptionsDialog`, `MeasureDialog`, `FilterDialog`, `ReRefDialog`, `SelectDataDialog`, `ChannelEditorDialog`, `InterpolateDialog`, `RemoveComponentsDialog`, `SpectralMeasureDialog`, `GrandAverageDialog`, `SettingsDialog`). |
+| `src/IO/` | Import / export / format conversion: erpset converters (`erpsetToAveraged`, `averagedToErpset`), the ERPLAB BDF importer (`erplabBdfToBinScript`), the CSV writers (`exportMeasurementsCSV`, `exportSpectralCSV`, `exportGrandAveragesCSV`) and the R-script generator (`generateRScript` + its `statsTemplate.R`). |
+| `src/Support/` | Small shared helpers (`eegChannelMask`, `guessChannelTypes`, `channelTypeFromLabel`, `multiSelectField`, `spectralFreqSpecs`, `MinMaxPyramid`). |
+| `src/Transformations/` | Analysis plugins (`<Name>/` folders) and the `+TransTools` shared-helper package. |
+| `src/+uiextras/`, `src/Compat/`, `src/Icons/`, `src/webtree/` | The dialog-widget helper package, compatibility shims, SVG icon sources, and the WorkSpaceTree HTML build pipeline. |
 
 ## Authored code (edit these)
 
 | Path | Role |
 |---|---|
 | `startAlakazam.m` | Root launcher: adds `src/` to the path, constructs the app. |
-| `src/Alakazam.m` | Main application class: lifecycle, tree callbacks, transformation dispatch, persistence. |
+| `src/@Alakazam/` | Main application class (class folder): lifecycle, tree callbacks, transformation dispatch, persistence, and its many method files. |
 | `src/EEGLabEnvironment.m` | Ensures EEGLAB and the required plugins (bva-io, XDF, ICLabel, FastICA) are installed, that EEGLAB has actually been *run* at least once in the current MATLAB session (not just found on the path -- see `ensureEEGLabInitialized`), and warns if the Signal Processing or Statistics and Machine Learning toolboxes are missing; called once at startup. |
 | `src/AlakazamPlotter.m` | Renders EEG datasets into tabs of the app's plots tabgroup (plotting split out of the main class). |
-| `src/MinMaxPyramid.m` | Precomputed min/max pyramid: the decimation engine for fast signal plotting. |
-| `src/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed legacy plotting tool). |
-| `src/EpochView.m` | ERP-image view of epoched multichannel data: a time x trial heatmap for the current channel (up/down arrows step it), rows grouped by bin, plus a trial-average trace below -- replaces an earlier overlaid-line-traces plot (which didn't scale past a handful of trials/channels) and its own since-removed "all channels, one trial" mode (replaces Tools.plotEpochedTimeMulti). |
-| `src/AverageView.m` | Trial-average view with error bands and overlay (replaces Tools.plotEpochedTimeMultiAverage). |
-| `src/FourierView.m` | Keyboard-driven frequency-domain view (one channel's spectrum at a time, band shading, zoom/pan; up/down arrows step the channel, left/right the trial -- same interaction model AverageView uses; replaces Tools.plotFourier). |
-| `src/TimeFrequencyView.m` | Grid of per-bin ERSP heatmaps (`TransTools.ComputeErsp`'s precomputed output), one channel at a time; up/down arrows step the channel, an instant re-slice since every channel was computed up front. The app's first multi-tile-grid view. |
-| `src/ScalpDistributionView.m` | Grid of per-bin scalp topographies (`TransTools.DrawScalpMap`), scrubbable by a `uislider`; only draws the bins ticked on in a sibling `AverageView` tab, if one is open. Mouse/slider-only, no keyboard navigation. |
+| `src/Support/MinMaxPyramid.m` | Precomputed min/max pyramid: the decimation engine for fast signal plotting. |
+| `src/Views/SignalView.m` | Fast scrolling continuous-signal view (replaces the removed legacy plotting tool). |
+| `src/Views/EpochView.m` | ERP-image view of epoched multichannel data: a time x trial heatmap for the current channel (up/down arrows step it), rows grouped by bin, plus a trial-average trace below -- replaces an earlier overlaid-line-traces plot (which didn't scale past a handful of trials/channels) and its own since-removed "all channels, one trial" mode (replaces Tools.plotEpochedTimeMulti). |
+| `src/Views/AverageView.m` | Trial-average view with error bands and overlay (replaces Tools.plotEpochedTimeMultiAverage). |
+| `src/Views/FourierView.m` | Keyboard-driven frequency-domain view (one channel's spectrum at a time, band shading, zoom/pan; up/down arrows step the channel, left/right the trial -- same interaction model AverageView uses; replaces Tools.plotFourier). |
+| `src/Views/TimeFrequencyView.m` | Grid of per-bin ERSP heatmaps (`TransTools.ComputeErsp`'s precomputed output), one channel at a time; up/down arrows step the channel, an instant re-slice since every channel was computed up front. The app's first multi-tile-grid view. |
+| `src/Views/ScalpDistributionView.m` | Grid of per-bin scalp topographies (`TransTools.DrawScalpMap`), scrubbable by a `uislider`; only draws the bins ticked on in a sibling `AverageView` tab, if one is open. Mouse/slider-only, no keyboard navigation. |
 | `src/AlakazamRibbon.m` + `src/AlakazamRibbon.html` | uihtml-based control-strip ribbon (Home/Tools/Grand Average); discovers transformations from `src/Transformations/*/*.json`. Hand-written self-contained HTML page, no build step. |
 | `src/WorkSpaceTree.m` + `src/WorkSpaceTree.html` | uihtml-based data-browser tree (replaces the old Java-Swing `uiextras.jTree.Tree`). The `.html` is a **built artifact**, assembled from `src/webtree/src/*` by `src/webtree/`'s own npm/esbuild pipeline (see `src/webtree/README.md`) -- edit the source there, not the `.html` directly, then rebuild and re-copy. |
 | `src/@WorkSpace/` | Per-format file loaders, `.wksp` session persistence, and construction of the app's **two** `WorkSpaceTree` instances (`Tree` for data & analyses, `GrandAveragesTree` for grand averages -- see `CreateTreeComponent.m`). |
-| `src/AlakazamSettings.m` + `src/SettingsDialog.m` | Global settings: `AlakazamSettings` defines the schema (tabs/sections/settings, persisted to `prefdir()/AlakazamSettings.json`); `SettingsDialog` builds the editor UI from that schema. |
+| `src/AlakazamSettings.m` + `src/Dialogs/SettingsDialog.m` | Global settings: `AlakazamSettings` defines the schema (tabs/sections/settings, persisted to `prefdir()/AlakazamSettings.json`); `SettingsDialog` builds the editor UI from that schema. |
 | `src/TransformSettings.m` | Per-transformation "last used options", scoped to the *currently open workspace* (unlike `AlakazamSettings`, which is machine-wide) -- `get`/`set` by transform id, with `.wksp` save/load folding the whole store in as one more JSON field (see `WorkSpace.save`/`load`). Wired into `DefineBins`, `ArtefactDetect`, `AutoEyeICA`, `AutoGEDAI`, `Baseline` and `Fourier`. Not wired into `Average`/`ScalpDistribution` (no options at all), `IIRFilter` (its dialog is a binary `.mlapp`, not text-editable to seed), `ReRef`/`SelectData` (delegate to EEGLAB's own `pop_reref`/`pop_select` dialogs, which take no seed parameter). |
-| `src/GrandAverage.m` + `src/GrandAverageDialog.m` | Grand-average computation and its subject-picker dialog (Grand Average tab). |
-| `src/exportGrandAveragesCSV.m` | Writes every Grand Average to one long-format, R-compatible CSV (`Alakazam.onExportGrandAverages`, Grand Average tab's "Export Grand Averages..." button) -- the app's first working export path (`Workspace.ExportsDirectory` used to be configured but never actually written to). |
+| `src/GrandAverage.m` + `src/Dialogs/GrandAverageDialog.m` | Grand-average computation and its subject-picker dialog (Grand Average tab). |
+| `src/IO/exportGrandAveragesCSV.m` | Writes every Grand Average to one long-format, R-compatible CSV (`Alakazam.onExportGrandAverages`, Grand Average tab's "Export Grand Averages..." button) -- the app's first working export path (`Workspace.ExportsDirectory` used to be configured but never actually written to). |
 | `src/@cursor/`, `src/@label/` | Small UI helper classes (plot cursors and labels). |
 | `src/Transformations/<Name>/` | Analysis plugins. Each folder: `<Name>.m` (entry), `<Name>.json` (manifest), `<Name>.png` (icon). |
 | `src/Transformations/+TransTools/` | Shared helpers for transformations (`CheckOptions`, `CreateFilter`, `WindowByName` (the taper-window dispatch `Fourier.m` calls), `progressbar`, `FillChanlocs`/`Dipfit1005File` for scalp-position lookups, `ComputeErsp` (`TimeFrequency.m`'s wavelet ERSP computation, pulled out here so it's callable/testable without going through that transformation's own blocking options dialog), `DrawScalpMap` (a uiaxes-compatible port of EEGLAB's `topoplot()` used by `ScalpDistributionView`, needed because `topoplot()` itself only draws via gca/gcf-implicit state and was confirmed to silently draw nothing when targeted at a uiaxes hosted in a uitab), `DivergingColormap` (the shared blue/white/red colour scale `TimeFrequencyView` and `EpochView`'s ERP-image both use for a signed, zero-centred quantity)). |

@@ -215,7 +215,7 @@ target words.
 
 1. Open `Chapter1.wksp`. Both files load as root nodes: the `.set` with a
    person-shaped "raw" badge, the `.erp` with an "averaged" badge (Alakazam
-   reads ERPLAB erpsets directly, see [erpset support](../src/erpsetToAveraged.m)).
+   reads ERPLAB erpsets directly, see [erpset support](../src/IO/erpsetToAveraged.m)).
 2. Click `1_N400_preprocessed` for the scrolling **SignalView** (pan / zoom /
    magnify sliders, mouse-wheel scroll; the display scales off the EEG channels
    only, so a big EOG channel does not squash the trace).

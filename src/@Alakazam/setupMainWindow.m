@@ -45,8 +45,8 @@ function setupMainWindow(this)
     % divider the way AppContainer's dock panels did, so this is a
     % hand-rolled replacement for that lost affordance.
     this.MainGrid = uigridlayout(this.MainFigure, [2 3], ...
-        "RowHeight", {124, '1x'}, "ColumnWidth", {260, 3, '1x'}, ...
-        "Padding", [4 4 4 4], "RowSpacing", 4, "ColumnSpacing", 0);
+        "RowHeight", {138, '1x'}, "ColumnWidth", {260, 3, '1x'}, ...
+        "Padding", [1 1 1 1], "RowSpacing", 4, "ColumnSpacing", 0);
 
     this.ToolbarGrid = uigridlayout(this.MainGrid, [1 1], "Padding", [0 0 0 0]);
     this.ToolbarGrid.Layout.Row = 1;

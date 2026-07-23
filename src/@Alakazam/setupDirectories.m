@@ -8,6 +8,12 @@ function setupDirectories(this)
     close all;
     warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
     addpath(this.RootDir, '-end');
-    addpath(fullfile(this.RootDir, 'Views'), '-end');
+    % Authored source is grouped into folders under src (added explicitly, since
+    % src itself is added non-recursively so the @class / +package folders are
+    % not put on the path directly): the plot View classes, the uifigure
+    % Dialogs, IO (import/export/format conversion) and Support helpers.
+    for sub = {'Views', 'Dialogs', 'IO', 'Support'}
+        addpath(fullfile(this.RootDir, sub{1}), '-end');
+    end
     addpath(genpath(fullfile(this.RootDir, 'Transformations')));
 end
