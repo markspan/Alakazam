@@ -51,6 +51,11 @@ function settings = TransformOptionsDialog(varargin)
     for k = 1:nRows
         if strcmp(fieldSpecs(k).kind, 'separator')
             rowHeight{k} = 22;
+        elseif isMultiSelect(fieldSpecs(k).default)
+            % A multi-select list box needs room for several rows; size it to
+            % the number of choices (capped) rather than the single-line 28px.
+            nItems = numel(fieldSpecs(k).default.Items);
+            rowHeight{k} = min(140, max(60, 18 * nItems + 8));
         end
     end
 
@@ -110,7 +115,12 @@ function settings = TransformOptionsDialog(varargin)
         label.Layout.Column = 1;
 
         default = spec.default;
-        if iscell(default)
+        if isMultiSelect(default)
+            sel = intersect(default.Selected, default.Items, 'stable');
+            if isempty(sel); selVal = {}; else; selVal = cellstr(sel); end
+            ctrl = uilistbox(fieldsGrid, 'Items', string(default.Items), ...
+                'Multiselect', 'on', 'Value', selVal);
+        elseif iscell(default)
             ctrl = uidropdown(fieldsGrid, 'Items', string(default), ...
                 'Value', string(default{1}));
         elseif islogical(default) && isscalar(default)
@@ -145,7 +155,10 @@ function settings = TransformOptionsDialog(varargin)
                 continue;
             end
             ctrl = controls.(fs.name);
-            if iscell(fs.default)
+            if isMultiSelect(fs.default)
+                v = ctrl.Value;
+                if isempty(v); settings.(fs.name) = {}; else; settings.(fs.name) = cellstr(v); end
+            elseif iscell(fs.default)
                 settings.(fs.name) = char(ctrl.Value);
             else
                 settings.(fs.name) = ctrl.Value;
@@ -159,6 +172,12 @@ function settings = TransformOptionsDialog(varargin)
         % anything but onOK) -- nothing to do beyond closing the window.
         delete(fig);
     end
+end
+
+function tf = isMultiSelect(default)
+%ISMULTISELECT  True when a field default is a multiSelectField(...) wrapper.
+    tf = isstruct(default) && isscalar(default) && ...
+        isfield(default, 'AlzMultiSelect') && default.AlzMultiSelect;
 end
 
 function [dlgTitle, description, fieldSpecs] = parseArgs(args)

@@ -43,7 +43,26 @@ function onExportMeasurements(this)
         warndlg(err.message, 'Could not export Measurements');
         return;
     end
+
+    % Write a companion R analysis script (tidyverse + ggplot2) next to the CSV
+    % so the export is ready to run stats/plots on, not just a table. Best
+    % effort: a failure here must not lose the CSV the user just exported.
+    rNote = '';
+    try
+        [~, stem] = fileparts(fileName);
+        rFile = fullfile(pathName, [stem '.R']);
+        fid = fopen(rFile, 'w');
+        if fid >= 0
+            fwrite(fid, generateRScript(fileName), 'char');
+            fclose(fid);
+            rNote = sprintf(['\n\nA companion R analysis script (tidyverse + ggplot2, ' ...
+                'repeated-measures ANOVA + pairwise tests + plots) was written next to it:\n%s'], rFile);
+        end
+    catch
+        rNote = '';
+    end
+
     % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
-    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s', numel(entries), targetFile), ...
+    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s', numel(entries), targetFile, rNote), ...
         'Export complete');
 end

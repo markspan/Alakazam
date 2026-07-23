@@ -61,7 +61,7 @@ classdef Alakazam < handle
         setupDirectories(this)
         setupMainWindow(this)
         [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~, transformId, parentTreeNode)
-        steps = collectBranchSteps(~, sourceFile)
+        nodes = collectBranchTree(~, sourceFile)
         p = templateParams(~, p)
         newNode = applyStepToTarget(this, transformId, params, targetNode)
         steps = readTemplate(~, file)

@@ -26,13 +26,13 @@ function onApplyTemplate(this)
     end
 
     try
-        steps = this.readTemplate(fullfile(pathName, fileName));
+        templateNodes = this.readTemplate(fullfile(pathName, fileName));
     catch ME
         uialert(this.MainFigure, sprintf('Could not read this template:\n\n%s', ME.message), ...
             'Could not apply template', 'Icon', 'warning');
         return;
     end
-    if isempty(steps)
+    if isempty(templateNodes)
         uialert(this.MainFigure, 'This template file has no steps to apply.', ...
             'Could not apply template', 'Icon', 'warning');
         return;
@@ -46,10 +46,23 @@ function onApplyTemplate(this)
     this.MainFigure.Pointer = "watch";
     restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
 
+    % Rebuild the whole tree the template captured: apply each node to its
+    % recorded parent's result, with the selected node standing in for the
+    % root's parent. readTemplate guarantees a parent appears before its
+    % children, so resultNodes{parent} is always ready when a child is applied
+    % -- and a node with several children recreates that fork (each child
+    % applied to the same parent result), not just one linear path.
+    resultNodes = cell(1, numel(templateNodes));
     applied = 0;
     try
-        for k = 1:numel(steps)
-            node = this.applyStepToTarget(steps(k).transformId, steps(k).params, node);
+        for k = 1:numel(templateNodes)
+            if templateNodes(k).parent < 1
+                parentNode = node;                        % the selected target
+            else
+                parentNode = resultNodes{templateNodes(k).parent};
+            end
+            resultNodes{k} = this.applyStepToTarget( ...
+                templateNodes(k).transformId, templateNodes(k).params, parentNode);
             applied = applied + 1;
         end
     catch ME
@@ -57,7 +70,7 @@ function onApplyTemplate(this)
         uialert(this.MainFigure, sprintf( ...
             ['Applied %d of %d step(s) before this one failed:\n\n%s\n\n' ...
              'The steps that succeeded are still in the tree.'], ...
-            applied, numel(steps), ME.message), 'Could not apply template', 'Icon', 'warning');
+            applied, numel(templateNodes), ME.message), 'Could not apply template', 'Icon', 'warning');
         return;
     end
 

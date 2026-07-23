@@ -31,7 +31,7 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-tab.alz-active { background: #f5f5f5; color: #333; font-weight: bold; border-bottom: 2px solid #4472c4; }
 
 .alz-content { flex: 1; overflow-x: auto; overflow-y: auto; display: flex; align-items: flex-start; padding: 3px; box-sizing: border-box; }
-.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 268px; }
+.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 392px; }
 .alz-group-items { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
 .alz-group-title { text-align: center; font-size: 11px; color: #fff; background: #2e5c8a; border-top: 1px solid #ddd; padding-top: 2px; margin-top: 2px; }
 
@@ -44,10 +44,10 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-item img { width: 32px; height: 32px; margin-bottom: 1px; }
 .alz-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
 
-/* Dense mode: a category with more than four transforms halves its icon and
-   row height, so two rows of (up to) four occupy the same height a single
+/* Dense mode: a category with more than six transforms halves its icon and
+   row height, so two rows of (up to) six occupy the same height a single
    full-size row does -- the ribbon stays one row tall regardless. Width is
-   kept so four still fit per row; the icon, row height, margins and label
+   kept so six still fit per row; the icon, row height, margins and label
    shrink. */
 .alz-group.dense .alz-item { height: 25px; padding: 0px; }
 .alz-group.dense .alz-item img { width: 16px; height: 14px; margin-bottom: 0; }
@@ -115,9 +115,9 @@ function alzRenderContent() {
     (tab.groups || []).forEach(function (group) {
         var groupEl = document.createElement('div');
         groupEl.className = 'alz-group';
-        // More than four transforms in a category -> half-size icons in two
+        // More than six transforms in a category -> half-size icons in two
         // rows, so the group stays as tall as a single full-size row.
-        if ((group.items || []).length > 4) {
+        if ((group.items || []).length > 6) {
             groupEl.classList.add('dense');
         }
 

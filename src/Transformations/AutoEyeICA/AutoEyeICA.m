@@ -70,19 +70,25 @@ EEG.id = name;
 %  unmodified, once pruning is done -- see AutoGEDAI for the same pattern.
 EEG = TransTools.FillChanlocs(EEG, 'Alakazam:AutoEyeICA', ...
     TransTools.Dipfit1005File('Alakazam:AutoEyeICA'));
+% Eligible = has a scalp position AND is not a peripheral (EOG/ECG/...). EOG
+% electrodes often carry real coordinates beside the eyes, so they pass hasPos
+% and, if decomposed, dominate the ICA and plot outside the head; exclude them
+% by type (guessed from the label, so pre-positioned untyped data works too).
+EEG.chanlocs = guessChannelTypes(EEG.chanlocs);
 hasPos   = arrayfun(@(c) ~isempty(c.X) && ~isnan(c.X), EEG.chanlocs);
-eegIdx   = find(hasPos);
-otherIdx = find(~hasPos);
+eligible = hasPos & eegChannelMask(EEG.chanlocs);
+eegIdx   = find(eligible);
+otherIdx = find(~eligible);
 
 if isempty(eegIdx)
     throw(MException('Alakazam:AutoEyeICA', ...
-        ['None of this dataset''s channels have a standard 10-5 scalp ' ...
+        ['None of this dataset''s channels are scalp EEG with a standard 10-5 ' ...
          'position, so there is nothing for ICA to decompose. Rename ' ...
          'channels to match 10-5 nomenclature, or set their locations ' ...
          'manually (Edit > Channel locations) first.']));
 end
 if ~isempty(otherIdx)
-    fprintf('AutoEyeICA: excluding %d channel(s) with no scalp position (not decomposed): %s\n', ...
+    fprintf('AutoEyeICA: excluding %d non-scalp channel(s) (peripheral or unpositioned; not decomposed): %s\n', ...
         numel(otherIdx), strjoin({EEG.chanlocs(otherIdx).labels}, ', '));
 end
 

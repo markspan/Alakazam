@@ -68,6 +68,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     nbin  = numel(input.bindesc);
     data  = nan(nchan, npnts, nbin);
     stErr = nan(nchan, npnts, nbin);
+    aSME  = nan(nchan, nbin);   % analytic standardized measurement error, per channel/bin
     for b = 1:nbin
         idx = binTrials(input, b);
         EEG.bindesc(b).n = numel(idx);
@@ -76,6 +77,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         end
         data(:, :, b)  = mean(input.data(:, :, idx), 3, 'omitnan');
         stErr(:, :, b) = std(input.data(:, :, idx), 0, 3, 'omitnan') / sqrt(numel(idx));
+        aSME(:, b)     = windowedSME(input.data(:, :, idx));
     end
 
     % Second pass: combination (difference) bins defined in DefineBins with
@@ -109,13 +111,15 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
                 continue; % a dependency (possibly itself a combo bin) isn't ready yet
             end
 
-            acc    = zeros(nchan, npnts);
-            varAcc = zeros(nchan, npnts);
+            acc     = zeros(nchan, npnts);
+            varAcc  = zeros(nchan, npnts);
+            smeAcc  = zeros(nchan, 1);
             nParts = strings(1, numel(combo));
             for t = 1:numel(combo)
                 r      = refPos(t);
                 acc    = acc    + combo(t).coeff * data(:, :, r);
                 varAcc = varAcc + (combo(t).coeff * stErr(:, :, r)).^2;
+                smeAcc = smeAcc + (combo(t).coeff * aSME(:, r)).^2;
                 if combo(t).coeff < 0;     sign = "-";
                 elseif t == 1;             sign = "";
                 else;                      sign = "+";
@@ -124,6 +128,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
             end
             data(:, :, b)  = acc;
             stErr(:, :, b) = sqrt(varAcc);
+            aSME(:, b)     = sqrt(smeAcc);
             % A combination bin has no trials of its own; report the
             % constituent bins' (signed) trial counts, e.g. "68-74", or, for
             % a nested combination, another such string -- rather than the
@@ -144,11 +149,29 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
 
     EEG.data  = data;
     EEG.stErr = stErr;
+    EEG.aSME  = aSME;
 else
     % No bins: average across every trial.
     EEG.data  = mean(input.data, 3, 'omitnan');
     EEG.stErr = std(input.data, 0, 3, 'omitnan') / sqrt(ntrials);
+    EEG.aSME  = windowedSME(input.data);
 end
+end
+
+function sme = windowedSME(trials)
+%WINDOWEDSME  Analytic standardized measurement error of the mean amplitude,
+%   per channel: the standard deviation across trials of each trial's own
+%   mean amplitude (over the whole epoch), divided by sqrt(number of trials).
+%   This is the SME ERPLAB reports for a mean-amplitude score, here summarised
+%   over the full epoch (the per-time-point counterpart is EEG.stErr, the
+%   shaded band in AverageView). TRIALS is channels x time x trials.
+    n = size(trials, 3);
+    if n < 2
+        sme = nan(size(trials, 1), 1);
+        return;
+    end
+    perTrialMean = squeeze(mean(trials, 2, 'omitnan'));   % channels x trials
+    sme = std(perTrialMean, 0, 2, 'omitnan') / sqrt(n);
 end
 
 function idx = binTrials(EEG, b)

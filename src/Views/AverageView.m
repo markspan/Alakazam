@@ -153,6 +153,9 @@ classdef AverageView < handle
             first = this.Series{1};
             ch = min(this.Channel, numel(first.labels));
             title(ax, "Channel: " + first.labels{ch});
+            % Data quality (analytic aSME per bin, at the shown channel) is shown
+            % below the bin tickboxes rather than as an axes subtitle -- see
+            % buildCheckboxes / asmeText.
             xlabel(ax, "Time (ms)");
             ylabel(ax, "Amplitude (\muV)");
             xline(ax, 0, "Color", "k", "LineStyle", "--");
@@ -400,14 +403,20 @@ classdef AverageView < handle
         function buildCheckboxes(this, names)
         %BUILDCHECKBOXES  One tickbox per series, stacked down the right-hand
         %   grid strip (this.CheckboxGrid), reflecting (and toggling)
-        %   this.Visible.
+        %   this.Visible; directly below them, the per-bin analytic aSME
+        %   data-quality readout for the shown channel (visible bins only).
             delete(this.CheckboxGrid.Children);
             n = numel(this.Series);
             if n == 0
                 this.CheckboxGrid.RowHeight = {'1x'};
                 return;
             end
-            this.CheckboxGrid.RowHeight = [repmat({22}, 1, n), {'1x'}];
+            smeText = this.asmeText();
+            rows = repmat({22}, 1, n);
+            if ~isempty(smeText)
+                rows = [rows, {'fit'}];   % aSME block sits under the tickboxes
+            end
+            this.CheckboxGrid.RowHeight = [rows, {'1x'}];
             for i = 1:n
                 cb = uicheckbox(this.CheckboxGrid, ...
                     "Text", char(names(i)), ...
@@ -415,6 +424,32 @@ classdef AverageView < handle
                     "ValueChangedFcn", @(src, ~) this.onToggle(i, src.Value));
                 cb.Layout.Row = i;
             end
+            if ~isempty(smeText)
+                lbl = uilabel(this.CheckboxGrid, "Text", smeText, "FontSize", 10, ...
+                    "VerticalAlignment", "top", "WordWrap", "on");
+                lbl.Layout.Row = n + 1;
+            end
+        end
+
+        function txt = asmeText(this)
+        %ASMETEXT  Per-bin analytic aSME (uV) at the shown channel, one line per
+        %   visible bin, as a string array (each element a line) for a uilabel.
+        %   Empty when no visible bin carries an aSME (e.g. an averaged dataset
+        %   made before aSME existed).
+            txt = strings(0, 1);
+            if isempty(this.Series); return; end
+            first = this.Series{1};
+            ch = min(this.Channel, numel(first.labels));
+            lines = strings(0, 1);
+            for i = 1:numel(this.Series)
+                if ~this.Visible(i); continue; end
+                s = this.Series{i};
+                if isfield(s, 'aSME') && numel(s.aSME) >= ch && isfinite(s.aSME(ch))
+                    lines(end + 1, 1) = sprintf('%s  %.2f', s.name, s.aSME(ch)); %#ok<AGROW>
+                end
+            end
+            if isempty(lines); return; end
+            txt = ["aSME (" + char(181) + "V)"; lines];
         end
 
         function onToggle(this, idx, value)
@@ -456,6 +491,7 @@ classdef AverageView < handle
                     s.times  = eeg.times;
                     s.data   = eeg.data(:, :, b);
                     s.stErr  = eeg.stErr(:, :, b);
+                    s.aSME   = binASME(eeg, b);
                     s.labels = labels;
                     s.bin    = b;
                     s.measurements = meas;
@@ -472,11 +508,21 @@ classdef AverageView < handle
                 else
                     s.stErr = zeros(size(s.data));
                 end
+                s.aSME  = binASME(eeg, 1);
                 s.labels = labels;
                 s.bin    = 1;
                 s.measurements = meas;
                 series{end + 1} = s;
             end
         end
+    end
+end
+
+function sme = binASME(eeg, b)
+%BINASME  Per-channel analytic SME (uV) for bin B (a column vector), or [] when
+%   the dataset carries none (e.g. an averaged dataset made before aSME existed).
+    sme = [];
+    if isfield(eeg, 'aSME') && ~isempty(eeg.aSME) && size(eeg.aSME, 2) >= b
+        sme = eeg.aSME(:, b);
     end
 end

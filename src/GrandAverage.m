@@ -78,14 +78,20 @@ function EEG = GrandAverage(sourceFiles, weighted)
     % combination bin, which has no trial count of its own).
     data       = nan(nChan, nPnts, nBins, nSubjects);
     trialCount = nan(nBins, nSubjects);
+    aSMEstack  = nan(nChan, nBins, nSubjects);
     for s = 1:nSubjects
         subjectLabels = {subjects{s}.bindesc.label};
+        hasSME = isfield(subjects{s}, 'aSME') && ~isempty(subjects{s}.aSME) ...
+            && size(subjects{s}.aSME, 1) == nChan;
         for b = 1:nBins
             match = find(strcmp(subjectLabels, referenceLabels{b}), 1);
             data(:, :, b, s) = subjects{s}.data(:, :, match);
             n = subjects{s}.bindesc(match).n;
             if isnumeric(n)
                 trialCount(b, s) = n;
+            end
+            if hasSME && match <= size(subjects{s}.aSME, 2)
+                aSMEstack(:, b, s) = subjects{s}.aSME(:, match);
             end
         end
     end
@@ -95,6 +101,12 @@ function EEG = GrandAverage(sourceFiles, weighted)
     EEG = subjects{1};
     EEG.data  = grandMean;
     EEG.stErr = grandSEM;
+    % Pool the analytic SME across subjects: for a grand average (a mean of N
+    % subject means), the SME is the root of the summed squared subject SMEs,
+    % divided by N. Only where every subject contributed a value.
+    present  = sum(~isnan(aSMEstack), 3);
+    EEG.aSME = sqrt(sum(aSMEstack .^ 2, 3, 'omitnan')) ./ nSubjects;
+    EEG.aSME(present < nSubjects) = NaN;
     EEG.ntrials = NaN;   % a grand average has no single "original trial count"
     EEG.event = struct([]);   % stale per-subject event/epoch info; a grand
     EEG.epoch = struct([]);   % average has no trial-level data of its own

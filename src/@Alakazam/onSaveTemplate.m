@@ -20,7 +20,7 @@ function onSaveTemplate(this)
     end
 
     try
-        steps = this.collectBranchSteps(node.UserData);
+        nodes = this.collectBranchTree(node.UserData);
     catch ME
         uialert(this.MainFigure, sprintf('Could not read this branch:\n\n%s', ME.message), ...
             'Could not save template', 'Icon', 'warning');
@@ -32,19 +32,24 @@ function onSaveTemplate(this)
     % bare JSON object instead of a single-element array (the same
     % gotcha WorkSpaceTree.buildData's own header comment documents
     % for the JS tree push) -- a cell array sidesteps it, so a
-    % one-step template still round-trips through readTemplate as a
-    % one-element list, not a bare object. Each step's params goes
-    % through templateParams first, so a step with a derivable
-    % compiled cache (currently just DefineBins' .bins, derivable
-    % from .script) is re-derived on apply instead of trusting the
-    % cache to survive jsonencode/jsondecode with its original
-    % MATLAB types intact.
+    % one-node template still round-trips through readTemplate as a
+    % one-element list, not a bare object. Each node keeps its PARENT
+    % index (collectBranchTree's flat, branch-preserving form), so
+    % applying the template rebuilds the whole tree, forks and all --
+    % not just one linear path. Each node's params goes through
+    % templateParams first, so a derivable compiled cache (currently
+    % just DefineBins' .bins, derivable from .script) is re-derived on
+    % apply instead of trusting the cache to survive jsonencode/
+    % jsondecode with its original MATLAB types intact. version 2 is
+    % this tree form; readTemplate still reads a version-1 (flat
+    % linear "steps") file for backward compatibility.
     template = struct( ...
         'alakazamTemplate', true, ...
-        'version', 1, ...
+        'version', 2, ...
         'name', node.Name, ...
-        'steps', {arrayfun(@(s) struct('transformId', s.transformId, ...
-            'params', this.templateParams(s.params)), steps, 'UniformOutput', false)});
+        'nodes', {arrayfun(@(s) struct('transformId', s.transformId, ...
+            'params', this.templateParams(s.params), 'parent', s.parent), ...
+            nodes, 'UniformOutput', false)});
 
     exportsDir = this.Workspace.ExportsDirectory;
     if isempty(exportsDir) || ~isfolder(exportsDir)
@@ -82,6 +87,6 @@ function onSaveTemplate(this)
     end
 
     % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
-    msgbox(sprintf('Saved template "%s" (%d step(s)) to:\n%s', node.Name, numel(steps), ...
+    msgbox(sprintf('Saved template "%s" (%d step(s)) to:\n%s', node.Name, numel(nodes), ...
         fullfile(pathName, fileName)), 'Template saved');
 end

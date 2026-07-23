@@ -24,6 +24,7 @@ classdef CoherenceView < handle
         ChannelLabel
         Axes
         Images
+        BinIndices      % original coherence 4th-dim index for each drawn tile
         Channel = 1
     end
 
@@ -32,7 +33,18 @@ classdef CoherenceView < handle
             this.Figure = fig;
             this.EEG    = eeg;
 
-            nBins = size(eeg.coherence, 4);
+            % Only draw bins that actually have a coherence map. Combination
+            % (difference) bins have no trials of their own, so
+            % ComputeCoherenceMap leaves their whole slice NaN -- drawing them
+            % gave blank tiles. Keep each drawn tile's original bin index for
+            % slicing and labelling (see BinIndices).
+            nBinsTotal = size(eeg.coherence, 4);
+            this.BinIndices = find(arrayfun( ...
+                @(b) any(~isnan(reshape(eeg.coherence(:, :, :, b), [], 1))), 1:nBinsTotal));
+            if isempty(this.BinIndices)
+                this.BinIndices = 1:nBinsTotal; % never show a completely empty view
+            end
+            nBins = numel(this.BinIndices);
             nCols = min(3, nBins);
             nRows = ceil(nBins / nCols);
 
@@ -57,7 +69,7 @@ classdef CoherenceView < handle
                 ax.Layout.Row    = row + 1;
                 ax.Layout.Column = col;
                 colormap(ax, cmap);
-                title(ax, eeg.bindesc(b).label, "Interpreter", "none");
+                title(ax, eeg.bindesc(this.BinIndices(b)).label, "Interpreter", "none");
                 xlabel(ax, "Time (ms)");
                 if col == 1
                     ylabel(ax, "Frequency (Hz)");
@@ -101,7 +113,7 @@ classdef CoherenceView < handle
             ch = this.Channel;
             cmax = this.climMax();
             for b = 1:numel(this.Axes)
-                this.Images(b).CData = squeeze(this.EEG.coherence(ch, :, :, b));
+                this.Images(b).CData = squeeze(this.EEG.coherence(ch, :, :, this.BinIndices(b)));
                 this.Axes(b).CLim = [0, cmax];
             end
             ref = '';

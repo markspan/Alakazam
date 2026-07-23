@@ -35,4 +35,8 @@ function EEG = FillChanlocs(EEG, errorId, elcFile)
             'Cannot auto-fill electrode positions: %s was not found.', elcFile));
     end
     EEG = pop_chanedit(EEG, 'lookup', elcFile);
+    % A location lookup fills positions but never channel types; guess the
+    % blank ones by label so eegChannelMask can separate EOG/ECG/... from the
+    % scalp EEG (an untyped dataset otherwise reads as all-EEG).
+    EEG.chanlocs = guessChannelTypes(EEG.chanlocs);
 end

@@ -1,1 +1,1 @@
-{"Name":"AutoEyeICA","Description":"Decompose ICA, classify with ICLabel, and auto-remove eye components","Entry":"AutoEyeICA.m","Icon":"AutoEyeICA.png","Section":"2. Artifact Rejection / Reduction","Category":"EOG"}
+{"Name":"AutoICA","Description":"Decompose ICA, classify with ICLabel, and auto-remove eye components","Entry":"AutoEyeICA.m","Icon":"AutoEyeICA.png","Section":"2. Artifact Rejection / Reduction","Category":"EOG"}
