@@ -509,6 +509,22 @@ each waveform, which shows quality resolved across time) and the **trial counts*
 so "how noisy, on how many trials" is answered both as the formal aSME and
 visually.
 
+**Is there a "good" aSME?** There is no universal threshold: the value is in
+microvolts and depends on the component, montage, reference, filter, measurement
+window and trial count, so a number that is fine for a large slow component (P3b)
+would be poor for a small fast one (N170). It is meant for *relative* comparison,
+not a fixed pass/fail cutoff. Published **benchmarks** do exist to compare against:
+the SME metric was introduced by Luck, Stewart, Simmons & Kappenman (2021), and the
+ERP CORE paper (Kappenman et al., 2021) reports per-component data-quality figures
+for exactly these datasets, the natural reference for this walkthrough. Use them
+that way, against a published value for the same component and measurement, or
+across your own conditions, subjects and labs, rather than as a hard cutoff. Two
+cautions before comparing to a published number: match the **measurement window and
+measure** (Alakazam reports the aSME of the mean amplitude over the analysis window;
+a benchmark computed on a different window, or on a peak measure, is not comparable),
+and remember Alakazam's aSME is itself unvalidated here, so check it against ERPLAB
+on one dataset before reading anything into the comparison.
+
 ---
 
 ## Chapter 7 -- Inspecting the EEG and interpolating bad channels
