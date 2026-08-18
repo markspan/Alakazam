@@ -45,15 +45,18 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
 
 /* Collapsible group: a category with more than one full-size row of transforms
-   shows just its first row, plus an expander bar directly below the icons.
-   Clicking the bar unfolds the group downward to reveal the rest (the content
-   area scrolls if the expanded group is taller than the ribbon strip).
-   Replaces the earlier "dense" half-size two-row cramming. */
-.alz-group.collapsible:not(.expanded) .alz-group-items { max-height: 52px; overflow: hidden; }
-/* The title bar of a collapsible group doubles as its unfold control, so it is
-   exactly as tall as any other group's title (the ribbon height is constant). */
+   always shows just its first row, plus an expander bar directly below the
+   icons. Clicking the bar no longer unfolds the group in place (that used to
+   require MATLAB growing the whole ribbon row to fit -- see
+   AlakazamRibbon.m's class doc) -- it now opens a floating popup positioned
+   by MATLAB right under this group, over the plots area, so the row here
+   stays a constant, capped height regardless of expand state. */
+.alz-group.collapsible .alz-group-items { max-height: 52px; overflow: hidden; }
+/* The title bar of a collapsible group doubles as its popup-open control, so
+   it is exactly as tall as any other group's title (ribbon height is constant). */
 .alz-group-title.expandable { cursor: pointer; user-select: none; }
 .alz-group-title.expandable:hover { filter: brightness(1.18); }
+.alz-group-title.expandable.alz-popup-open { filter: brightness(1.18); }
 </style>
 </head>
 <body>
@@ -74,12 +77,17 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 //     ] }, ... ] }, ... ],
 //     activeTab: <id> }
 // Events sent to MATLAB (htmlComponent.sendEventToMATLAB(name, payload)):
-//   itemPushed  {id}
-//   tabChanged  {id}
+//   itemPushed    {id}
+//   tabChanged    {id}
+//   groupExpand   {tabId, groupIndex, left, top, width, height} -- see
+//                 alzWireTitleExpander; MATLAB positions its own floating
+//                 popup component from this rect, this page never grows.
+//   groupCollapse {}
 
 var alzData = null;
 var alzActiveTab = null;
 var alzComponent = null;
+var alzOpenGroupTitleEl = null;   // the .alz-group-title currently showing 'popup open' styling, or null
 
 function alzRender(data) {
     alzData = data || { tabs: [] };
@@ -98,6 +106,7 @@ function alzRender(data) {
             // here got immediately clobbered back to the original tab by
             // that re-derivation, so clicking Tools/Grand Average always
             // snapped straight back to Home.
+            alzClosePopup();   // switching tabs closes any open group popup
             alzData.activeTab = tab.id;
             alzRender(alzData);
             alzSendEvent('tabChanged', { id: tab.id });
@@ -111,10 +120,11 @@ function alzRender(data) {
 function alzRenderContent() {
     var content = document.getElementById('alzContent');
     content.innerHTML = '';
+    alzOpenGroupTitleEl = null;   // old DOM discarded below, so any 'popup open' styling goes with it
     var tab = (alzData.tabs || []).find(function (t) { return t.id === alzActiveTab; });
     if (!tab) { return; }
 
-    (tab.groups || []).forEach(function (group) {
+    (tab.groups || []).forEach(function (group, groupIndex) {
         var groupEl = document.createElement('div');
         groupEl.className = 'alz-group';
         var items = group.items || [];
@@ -126,16 +136,17 @@ function alzRenderContent() {
         });
         groupEl.appendChild(itemsEl);
 
-        // More than one full-size row of transforms -> collapse to the first
-        // row; the group's own title bar (just below the icons) doubles as the
-        // unfold control, so every group keeps the same height whether or not
-        // it can unfold (see the .collapsible CSS).
+        // More than one full-size row of transforms -> cap to the first row;
+        // the group's own title bar (just below the icons) doubles as the
+        // control that opens the rest in a floating popup (see
+        // alzWireTitleExpander), so every group keeps the same height
+        // whether or not it has overflow (see the .collapsible CSS).
         var titleEl = document.createElement('div');
         titleEl.className = 'alz-group-title';
         if (items.length > ALZ_PER_ROW) {
             groupEl.classList.add('collapsible');
             titleEl.classList.add('expandable');
-            alzWireTitleExpander(groupEl, titleEl, group.title, items.length - ALZ_PER_ROW);
+            alzWireTitleExpander(groupEl, titleEl, group.title, groupIndex, items.length - ALZ_PER_ROW);
         } else {
             titleEl.textContent = group.title;
         }
@@ -143,47 +154,44 @@ function alzRenderContent() {
 
         content.appendChild(groupEl);
     });
-
-    // A fresh render has no expanded group; keep MATLAB's ribbon height in sync
-    // (this also shrinks the ribbon back after a tab switch).
-    alzUpdateRibbonHeight();
 }
 
 // Full-size icons that fit in one row at the group's max width (see the
 // .alz-group max-width and .alz-item width in the CSS above).
 var ALZ_PER_ROW = 6;
 
-function alzCollapseAll() {
-    // Fold every unfolded group back up (used when a transformation is chosen).
-    document.querySelectorAll('.alz-group.expanded').forEach(function (g) {
-        g.classList.remove('expanded');
-        if (g._alzRelabel) { g._alzRelabel(false); }
-    });
-}
-
-function alzUpdateRibbonHeight() {
-    // Tell MATLAB whether any group is currently unfolded, so it can grow the
-    // ribbon row to fit the extra transform rows (and shrink back otherwise).
-    var expanded = document.querySelectorAll('.alz-group.expanded').length > 0;
-    alzSendEvent('heightChanged', { expanded: expanded });
-}
-
-function alzWireTitleExpander(groupEl, titleEl, title, hiddenCount) {
-    // The title bar doubles as the unfold control for a collapsible group:
-    // clicking it toggles .expanded (which lifts the one-row height cap so the
-    // remaining icons unfold downward), and its caret + hidden-count flip to
-    // match. Keeping the control in the title bar means a collapsible group is
-    // exactly as tall as any other, so the collapsed ribbon height is uniform.
-    function relabel(expanded) {
-        titleEl.textContent = expanded ? (title + '  ▴') : (title + '  ▾ ' + hiddenCount + ' more');
-        titleEl.title = expanded ? 'Show fewer' : 'Show all tools';
+function alzClosePopup() {
+    // Ask MATLAB to close its floating popup, if one is open, and reset this
+    // page's own 'popup open' title styling. Safe to call unconditionally.
+    if (alzOpenGroupTitleEl) {
+        alzOpenGroupTitleEl.classList.remove('alz-popup-open');
+        alzOpenGroupTitleEl = null;
+        alzSendEvent('groupCollapse', {});
     }
-    relabel(false);
-    groupEl._alzRelabel = relabel;   // so alzCollapseAll can reset the caret/count
+}
+
+function alzWireTitleExpander(groupEl, titleEl, title, groupIndex, hiddenCount) {
+    // The title bar doubles as the popup-open control for a collapsible
+    // group. Clicking it reports this group's own on-page rect to MATLAB,
+    // which positions and reveals a floating popup directly under it (see
+    // AlakazamRibbon.m's showPopup) -- nothing on this page resizes.
+    // Clicking the already-open group's title again just closes it.
+    titleEl.textContent = title + '  ▾ ' + hiddenCount + ' more';
+    titleEl.title = 'Show all tools';
     titleEl.addEventListener('click', function (ev) {
         ev.stopPropagation();
-        relabel(groupEl.classList.toggle('expanded'));
-        alzUpdateRibbonHeight();      // ask MATLAB to grow / shrink the ribbon row
+        if (alzOpenGroupTitleEl === titleEl) {
+            alzClosePopup();
+            return;
+        }
+        alzClosePopup();   // close whichever other group's popup was open, if any
+        var rect = groupEl.getBoundingClientRect();
+        alzOpenGroupTitleEl = titleEl;
+        titleEl.classList.add('alz-popup-open');
+        alzSendEvent('groupExpand', {
+            tabId: alzActiveTab, groupIndex: groupIndex,
+            left: rect.left, top: rect.top, width: rect.width, height: rect.height
+        });
     });
 }
 
@@ -204,8 +212,7 @@ function alzBuildItem(item) {
     itemEl.appendChild(label);
 
     itemEl.addEventListener('click', function () {
-        alzCollapseAll();          // a choice was made: fold groups back up
-        alzUpdateRibbonHeight();   // and shrink the ribbon to its base height
+        alzClosePopup();   // a choice was made on the main row: close any open group popup too
         alzSendEvent('itemPushed', { id: item.id });
     });
     return itemEl;

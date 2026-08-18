@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+/* AlakazamRibbonPopup.html -- the floating dropdown for one overflowing
+   ribbon group, shown by AlakazamRibbon.m's showPopup. A separate,
+   self-contained uihtml page from AlakazamRibbon.html (rather than a mode of
+   it): it is parented directly to the figure with an explicit pixel
+   Position, not to the ribbon's own grid cell, which is what lets it float
+   over the plots area instead of being clipped to the ribbon row (see the
+   class doc in AlakazamRibbon.m for why that split is necessary). Item/title
+   styling intentionally mirrors AlakazamRibbon.html's .alz-item/.alz-group-
+   title so the popup reads as part of the same ribbon, not a separate UI.
+
+   Data shape (see AlakazamRibbon.m's showPopup):
+     { title: <string>, items: [ {id, label, tooltip, icon}, ... ] }
+   Events sent to MATLAB:
+     itemPushed  {id}   -- a button was clicked
+     closePopup  {}     -- the close control was clicked
+*/
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: sans-serif; font-size: 12px; }
+#pop { width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column;
+       background: #f5f5f5; border: 1px solid #888; border-radius: 3px; box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+
+.pop-title { flex: none; display: flex; align-items: center; justify-content: space-between;
+             background: #2e5c8a; color: #fff; font-size: 11px; padding: 3px 6px; box-sizing: border-box; }
+.pop-close { cursor: pointer; opacity: 0.85; padding: 0 3px; }
+.pop-close:hover { opacity: 1; }
+
+.pop-items { flex: 1; overflow-y: auto; display: flex; flex-wrap: wrap; align-content: flex-start;
+             gap: 2px; padding: 3px; box-sizing: border-box; }
+
+/* Matches AlakazamRibbon.html's .alz-item exactly, so an item looks
+   identical whether it's showing in the main row or in this popup. */
+.pop-item {
+    width: 62px; height: 50px; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    cursor: pointer; border: 1px solid transparent; border-radius: 3px; padding: 2px; text-align: center;
+}
+.pop-item:hover { background: #e0e0ff; border-color: #99a; }
+.pop-item img { width: 32px; height: 32px; margin-bottom: 1px; }
+.pop-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="pop">
+    <div class="pop-title">
+        <span id="popTitleText"></span>
+        <span class="pop-close" id="popClose" title="Close">✕</span>
+    </div>
+    <div class="pop-items" id="popItems"></div>
+</div>
+<script>
+var popComponent = null;
+
+function popRender(data) {
+    data = data || { title: '', items: [] };
+    document.getElementById('popTitleText').textContent = data.title || '';
+
+    var itemsEl = document.getElementById('popItems');
+    itemsEl.innerHTML = '';
+    (data.items || []).forEach(function (item) {
+        var el = document.createElement('div');
+        el.className = 'pop-item';
+        el.title = item.tooltip || '';
+
+        if (item.icon) {
+            var img = document.createElement('img');
+            img.src = item.icon;
+            el.appendChild(img);
+        }
+
+        var label = document.createElement('div');
+        label.className = 'pop-item-label';
+        label.textContent = item.label;
+        el.appendChild(label);
+
+        el.addEventListener('click', function () {
+            popSendEvent('itemPushed', { id: item.id });
+        });
+        itemsEl.appendChild(el);
+    });
+}
+
+function popSendEvent(name, payload) {
+    if (popComponent) {
+        popComponent.sendEventToMATLAB(name, payload);
+    }
+}
+
+function setup(htmlComponent) {
+    popComponent = htmlComponent;
+    document.getElementById('popClose').addEventListener('click', function () {
+        popSendEvent('closePopup', {});
+    });
+    popRender(htmlComponent.Data);
+    htmlComponent.addEventListener('DataChanged', function () {
+        popRender(htmlComponent.Data);
+    });
+}
+</script>
+</body>
+</html>

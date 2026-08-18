@@ -24,27 +24,57 @@ classdef AlakazamRibbon < handle
 %     itemPushed  {id}   -- a button was clicked; id is either a fixed
 %                           action string or "transform:<Entry>"
 %     tabChanged  {id}   -- the active tab changed
+%     groupExpand {tabId, groupIndex, left, top, width, height} -- a
+%                           collapsible group's title bar was clicked to
+%                           unfold it; left/top/width/height is that group's
+%                           own on-page rect (CSS pixels, top-left origin, as
+%                           reported by getBoundingClientRect()).
+%     groupCollapse {}    -- the open group's title bar was clicked again
+%
+%   Overflow groups (more items than fit in one row) used to unfold in
+%   place, which meant growing the whole ribbon row height (and pushing
+%   everything below it down) whenever any group unfolded. That is gone:
+%   a group now opens as a small floating popup positioned directly under
+%   it, drawn over the plots area rather than resizing anything (see
+%   PopupComponent/Scrim below and showPopup/hidePopup). uihtml itself
+%   clips to its own box like an iframe -- CSS alone can't make content
+%   spill past AlakazamRibbon.html's own rectangle -- so the popup is a
+%   second uihtml component, parented directly to the figure (not to
+%   Grid/the ribbon's own uigridlayout cell) so it floats free of the grid
+%   and can be positioned/sized in figure pixel coordinates on demand.
 %
 %   See also WORKSPACETREE, ALAKAZAM.
 
     properties (SetAccess = private)
-        Component   % the uihtml component
-        Grid        % 1x1 uigridlayout the component fills; see the constructor
+        Component       % the uihtml component
+        Grid            % 1x1 uigridlayout the component fills; see the constructor
+        PopupComponent  % uihtml, the floating group-overflow popup (hidden until needed)
+        Scrim           % uipanel covering the figure behind the popup; a click on it closes the popup
     end
 
     properties
         % Callback function handle: fcn(id). Mirrors WorkSpaceTree's
         % *Fcn callback-property style.
         ItemPushedFcn = function_handle.empty
-        % Callback function handle: fcn(expanded) -- true when a group is
-        % unfolded, false when everything is collapsed. The owner uses it to
-        % grow/shrink the ribbon row (see Alakazam.onRibbonExpandChanged).
-        ExpandChangedFcn = function_handle.empty
     end
 
     properties (Access = private)
         TabsData    % cell array of tab structs, built once from Transformations/*.json
         ActiveTab = "home"
+    end
+
+    properties (Access = private, Constant)
+        % Popup grid metrics, kept in one place since MATLAB has to size and
+        % position the popup itself (see showPopup) -- these must stay in
+        % rough visual agreement with the .alz-item/.alz-group-title rules in
+        % AlakazamRibbonPopup.html. Approximate by design (real row heights
+        % depend on label wrapping); tune here first if the popup looks off
+        % once seen live, before touching the HTML/CSS.
+        PopupCols        = 4    % items per row in the popup (vs. ALZ_PER_ROW=6 in the main ribbon: narrower, taller)
+        PopupItemRowPx   = 58   % px per row of items (item box + gaps)
+        PopupTitleBarPx  = 24   % px for the popup's own title bar
+        PopupPaddingPx   = 14   % px total (top+bottom) panel padding
+        PopupColWidthPx  = 68   % px per column, for popup width
     end
 
     methods
@@ -67,6 +97,48 @@ classdef AlakazamRibbon < handle
             htmlFile = fullfile(fileparts(mfilename('fullpath')), 'AlakazamRibbon.html');
             this.Component = uihtml(this.Grid, 'HTMLSource', htmlFile, 'Data', this.buildData());
             this.Component.HTMLEventReceivedFcn = @(~, evt) this.onEvent(evt);
+
+            this.buildPopup(parent);
+        end
+    end
+
+    methods (Access = private)
+        function buildPopup(this, parent)
+        %BUILDPOPUP  Create the (hidden) Scrim + PopupComponent used by an
+        %   overflow group's dropdown. Both are parented directly to the
+        %   figure with an explicit pixel Position -- not to Grid, which is
+        %   pinned inside the fixed-height ribbon row -- so they float free
+        %   of the app's uigridlayout and can be positioned over the plots
+        %   area on demand (see showPopup). A component parented straight to
+        %   a uifigure with Position set is not grid-managed and can overlap
+        %   whatever else is drawn there, which is exactly the "floats over
+        %   the plots area" effect this replaces the old row-resize with.
+        %   Built once up front rather than lazily on first use, so the
+        %   first group-overflow click isn't slowed down by construction.
+            fig = ancestor(parent, 'figure');
+
+            % Scrim: an otherwise invisible panel, sized to the figure, that
+            % sits directly behind the popup. Its only job is to catch the
+            % next click anywhere outside the popup and close it -- the
+            % standard click-away-to-dismiss behaviour for a dropdown.
+            % NOTE: both this and PopupComponent are built here, i.e.
+            % *before* setupMainWindow goes on to create TreeGrid and
+            % PlotsTabGroup -- so creation order alone would leave them
+            % sitting *behind* the tree/plots, not in front. showPopup
+            % therefore explicitly uistacks both to the top on every open,
+            % rather than relying on this constructor's ordering. Position
+            % here is just a placeholder; showPopup re-fits it to the
+            % figure's current size every time, in case the window was
+            % resized meanwhile.
+            this.Scrim = uipanel(fig, 'BorderType', 'none', ...
+                'BackgroundColor', fig.Color, 'Visible', 'off', ...
+                'Position', [1 1 fig.Position(3) fig.Position(4)], ...
+                'ButtonDownFcn', @(~, ~) this.hidePopup());
+
+            popupHtmlFile = fullfile(fileparts(mfilename('fullpath')), 'AlakazamRibbonPopup.html');
+            this.PopupComponent = uihtml(fig, 'HTMLSource', popupHtmlFile, ...
+                'Visible', 'off', 'Position', [1 1 200 100]);
+            this.PopupComponent.HTMLEventReceivedFcn = @(~, evt) this.onPopupEvent(evt);
         end
     end
 
@@ -85,8 +157,108 @@ classdef AlakazamRibbon < handle
                     this.invoke(this.ItemPushedFcn, d.id);
                 case 'tabChanged'
                     this.ActiveTab = string(d.id);
-                case 'heightChanged'
-                    this.invoke(this.ExpandChangedFcn, logical(d.expanded));
+                    this.hidePopup();   % switching tabs closes any open group popup
+                case 'groupExpand'
+                    this.showPopup(d);
+                case 'groupCollapse'
+                    this.hidePopup();
+            end
+        end
+
+        function onPopupEvent(this, evt)
+        %ONPOPUPEVENT  Dispatch a bridge event from AlakazamRibbonPopup.html
+        %   (the floating dropdown), a separate uihtml page from the main
+        %   ribbon's -- see buildPopup.
+            name = evt.HTMLEventName;
+            d = evt.HTMLEventData;
+            switch name
+                case 'itemPushed'
+                    this.hidePopup();          % close the dropdown, then act,
+                    this.invoke(this.ItemPushedFcn, d.id);   % matching the main
+                    % ribbon's own alzClosePopup-before-dispatch ordering in
+                    % AlakazamRibbon.html, so a transformation firing and the
+                    % popup closing never race visually.
+                case 'closePopup'
+                    this.hidePopup();
+            end
+        end
+
+        function showPopup(this, d)
+        %SHOWPOPUP  Position and reveal the floating dropdown for one
+        %   overflowing group. D is the groupExpand payload from
+        %   AlakazamRibbon.html: {tabId, groupIndex, left, top, width,
+        %   height}, where left/top/width/height is that group's own
+        %   on-page rect in CSS pixels (top-left origin), as measured by
+        %   the ribbon HTML itself via getBoundingClientRect().
+            tab = this.TabsData(cellfun(@(t) strcmp(t.id, char(d.tabId)), this.TabsData));
+            if isempty(tab)
+                return;
+            end
+            groups = tab{1}.groups;
+            gi = double(d.groupIndex) + 1;   % JS is 0-based, MATLAB is 1-based
+            if gi < 1 || gi > numel(groups)
+                return;
+            end
+            group = groups{gi};
+            items = group.items;
+
+            % --- figure-relative position -------------------------------
+            % getpixelposition(..., true) resolves the ribbon uihtml
+            % component's actual on-screen rect relative to the figure,
+            % correctly accounting for it being nested inside Grid inside
+            % ToolbarGrid inside MainGrid -- this is the one MATLAB call
+            % that understands nested uigridlayouts, so it is used instead
+            % of reading Component.Position directly (which is not
+            % meaningful for a grid-managed child).
+            ribbonRect = getpixelposition(this.Component, true);   % [left bottom width height]
+            fig = ancestor(this.Component, 'figure');
+
+            % d.left/d.top are top-left-origin CSS pixels, measured within
+            % the ribbon HTML page (which exactly fills Component, so this
+            % is a 1:1 pixel match with no separate DPI/scroll correction
+            % needed). Figure coordinates are bottom-left-origin, so the
+            % group's bottom edge (where the dropdown should hang from) is:
+            groupBottomFromPageTop = double(d.top) + double(d.height);
+            anchorY = ribbonRect(2) + (ribbonRect(4) - groupBottomFromPageTop);
+            anchorX = ribbonRect(1) + double(d.left);
+
+            nCols = min(this.PopupCols, max(1, numel(items)));
+            nRows = ceil(numel(items) / this.PopupCols);
+            popupWidth  = max(double(d.width), nCols * this.PopupColWidthPx);
+            popupHeight = this.PopupTitleBarPx + nRows * this.PopupItemRowPx + this.PopupPaddingPx;
+
+            % Keep the popup on-screen if the group sits near the figure's
+            % right/bottom edge (it opens downward from the group, so only
+            % the right edge needs clamping in the common case; a group
+            % near the very bottom of a very short window is not a
+            % realistic layout here since the ribbon is always the top row).
+            popupWidth = min(popupWidth, fig.Position(3) - 4);
+            anchorX = min(anchorX, fig.Position(3) - popupWidth - 2);
+            anchorX = max(anchorX, 2);
+
+            this.PopupComponent.Data = struct('title', group.title, 'items', {items});
+            this.PopupComponent.Position = [anchorX, anchorY - popupHeight, popupWidth, popupHeight];
+
+            this.Scrim.Position = [1 1 fig.Position(3) fig.Position(4)];
+            this.Scrim.Visible = 'on';
+            this.PopupComponent.Visible = 'on';
+            % Both were built before TreeGrid/PlotsTabGroup exist (see
+            % buildPopup), so creation order alone would put them behind
+            % those -- explicitly restack on every open instead. Scrim
+            % first, then Popup, so Popup ends up above Scrim too.
+            uistack(this.Scrim, 'top');
+            uistack(this.PopupComponent, 'top');
+        end
+
+        function hidePopup(this)
+        %HIDEPOPUP  Close the floating dropdown, if one is open. Safe to
+        %   call unconditionally (tab changes, item pushes, and the scrim's
+        %   own click-away all just call this without checking state first).
+            if ~isempty(this.PopupComponent) && isvalid(this.PopupComponent)
+                this.PopupComponent.Visible = 'off';
+            end
+            if ~isempty(this.Scrim) && isvalid(this.Scrim)
+                this.Scrim.Visible = 'off';
             end
         end
 
