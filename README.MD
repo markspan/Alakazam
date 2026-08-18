@@ -145,40 +145,36 @@ category, icon), and an icon. Manifests are discovered automatically and placed
 in the ribbon's Tools tab, grouped by the manifest's `Section` field.
 
 A transformation receives an `EEG` structure and returns the transformed `EEG`
-together with an `options` value describing what it did. When called
-interactively (from the ribbon) it may prompt the user; when called with a
-previously captured `options` value (when a branch is dragged onto another
-dataset) it reproduces the operation without interaction. For transformations
-that wrap EEGLAB `pop_*` functions, that stored value is EEGLAB's own command
-history, which is replayed with `eval`; this is a deliberate part of the plugin
-system rather than an oversight.
+together with an `options` struct describing what it did. When called
+interactively (from the ribbon) it prompts the user and remembers the chosen
+`options` (`TransformSettings`) for next time; when called with a previously
+captured `options` struct (dragging a branch onto another dataset, **Apply to
+All Raw Files...**, or replaying a saved template) it reproduces the operation
+without interaction, via a direct `feval(transformId, EEG, options)` call --
+plain data, not a parsed or `eval`'d command string. Every transformation opens
+with the same `nargin`/`'Init'`-sentinel guard,
+[`TransTools.InitGuard`](src/Transformations/+TransTools/InitGuard.m).
 
 ```matlab
-function [EEG, options] = SelectData(input, opts)
-% Example transformation that wraps an EEGLAB function.
-% Returns the transformed EEG and an options value the function understands.
+function [EEG, options] = SelectData(input, varargin)
+% Example transformation (trimmed from the real SelectData.m).
+% Returns the transformed EEG and an options struct the function understands.
 
-    if nargin < 1
-        error("Alakazam:SelectData", "No data supplied");
-    end
-
-    if nargin == 1
-        options = "Init";   % interactive call from the ribbon
-    else
-        options = opts;     % re-apply a previously captured operation
-    end
-
-    EEG = input;
-
-    if ischar(options) || isstring(options)
-        if strcmpi(options, "Init")
-            % Interactive: EEGLAB returns the command history as options.
-            [EEG, options] = pop_select(input);
+    [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:SelectData', varargin{:});
+    if interactive
+        % Interactive: prompt for options, remember them for next time.
+        options = SelectDataDialog(input.chanlocs);
+        if isempty(options)
+            EEG = [];   % cancelled -- no node, no compute
+            return;
         end
+        TransformSettings.set('SelectData', options);
     else
-        % Re-apply: replay the captured EEGLAB command on this EEG.
-        eval(options.Param);
+        % Replay: reuse a previously captured options struct as-is.
+        options = opts;
     end
+
+    EEG = pop_select(input, buildSelectArgs(input, options){:});
 end
 ```
 

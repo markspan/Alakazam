@@ -146,7 +146,7 @@ against the real millisecond axis). Two columns shape it: **Area mode** (how the
 sign of the waveform is treated) and **Width** (whether it covers the whole
 window or a band on the peak).
 
-**Area mode** — four ways to handle sign:
+**Area mode**: four ways to handle sign:
 
 - `Signed`: the plain integral. Positive and negative excursions cancel; a
   positive-going component gives a positive area, a negative-going one a
@@ -156,7 +156,7 @@ window or a band on the peak).
 - `Positive`: the integral of the positive part only (`max(waveform, 0)`).
 - `Negative`: the integral of the negative part only (`min(waveform, 0)`).
 
-**Width** — the scope of the integration:
+**Width**: the scope of the integration:
 
 *Whole window* (`Width` = 0 or blank) integrates the entire Start–Stop range:
 
@@ -204,7 +204,7 @@ Notes:
 Two more measures share the same window/channel columns and add one parameter
 each.
 
-**Fractional Peak Latency** — the latency at which the waveform rises through
+**Fractional Peak Latency**: the latency at which the waveform rises through
 `Fraction` × its peak amplitude on the onset side (searching back from the
 peak), interpolated between samples. More robust than raw peak latency.
 
@@ -213,7 +213,7 @@ Label      Start  Stop  Measure                  Polarity  Fraction  Channels
 P3 onset   250    600   Fractional Peak Latency  Positive  0.5       Pz
 ```
 
-**Fractional Area Latency** — the latency that divides the window's cumulative
+**Fractional Area Latency**: the latency that divides the window's cumulative
 signed area at `Fraction` (e.g. `0.5` = the **50% area latency**, the robust
 onset/timing measure recommended over peak latency for many analyses),
 interpolated between samples.
@@ -225,8 +225,8 @@ P3 50%     250    600   Fractional Area Latency  0.5       Pz
 
 **Local pts** applies to every peak-locating measure (`Peak`, band `Area`,
 `Fractional Peak Latency`): `0` finds the absolute extreme in the window; `N ≥
-1` finds the most extreme *local* peak — a sample more extreme than its `N`
-neighbours on each side — and falls back to the absolute extreme only if the
+1` finds the most extreme *local* peak (a sample more extreme than its `N`
+neighbours on each side) and falls back to the absolute extreme only if the
 window has no local peak. Use it (e.g. `2`–`5`) to stop a rising edge or a lone
 noise spike from being picked as "the peak".
 
@@ -291,8 +291,8 @@ silently dropped.
 
 ### Pooling channels into an ROI
 
-Wrap channels in **braces** to pool them into one virtual channel — the
-NaN-tolerant mean of the members — instead of measuring each separately. This
+Wrap channels in **braces** to pool them into one virtual channel (the
+NaN-tolerant mean of the members) instead of measuring each separately. This
 is the standard "measure over a region of interest" (BrainVision's *Pooling*,
 ERPLAB's channel operations).
 
@@ -420,14 +420,14 @@ reading at the window's first sample.
 A `Measure` result opens as an ordinary averaged-ERP plot, with the measures
 drawn on top of the waveform, in each bin's own colour:
 
-- **Peak** — a dot at the peak, labelled with the window name.
-- **Area** — the integrated region shaded under the curve (down to the 0 µV
+- **Peak**: a dot at the peak, labelled with the window name.
+- **Area**: the integrated region shaded under the curve (down to the 0 µV
   baseline): a peak-locked band or the whole window, clipped to the Area mode's
   polarity (`Positive` shades only the part above 0, `Negative` only below),
   labelled at the peak or window centre.
-- **Mean Amplitude** — a level line at the mean, spanning the measurement
+- **Mean Amplitude**: a level line at the mean, spanning the measurement
   window, labelled at its start.
-- **Fractional Peak / Area Latency** — a dashed drop line and a dot at the
+- **Fractional Peak / Area Latency**: a dashed drop line and a dot at the
   located latency on the curve, labelled with the window name.
 
 The annotations are drawn for the **channel currently shown**, so stepping
@@ -513,33 +513,33 @@ Ready-made starting points live in
 [`presets/`](presets) (Load one, then adjust the channels/windows to your
 montage and design). Multi-component **batteries**:
 
-- `erp_components_mean_amplitude` — P2, P300, N400, MMN as mean amplitude at
+- `erp_components_mean_amplitude`: P2, P300, N400, MMN as mean amplitude at
   their canonical sites (Cz, Pz, Cz, Fz).
-- `erp_components_peak_amplitude_latency` — the same four as Peak (amplitude +
+- `erp_components_peak_amplitude_latency`: the same four as Peak (amplitude +
   latency), with a local-peak neighbourhood.
-- `erp_components_mean_and_area_latency` — the same four with mean amplitude
+- `erp_components_mean_and_area_latency`: the same four with mean amplitude
   **and** 50% area latency (the robust modern amplitude + timing pair).
 
 Single-component files (a growing library; Load the one you need, or combine
 several by Load-ing one and copying rows in). Each holds that component's
 sensible default measure at its canonical site:
 
-- `p1` — Oz, 80–130 ms, Peak (positive, local peak).
-- `n170` — PO8, 130–200 ms, Peak (negative, local peak).
-- `p2` — Cz, 150–250 ms, mean amplitude (positive).
-- `mmn` — Fz, 150–250 ms, mean amplitude (negative).
-- `n2` — FCz, 200–350 ms, mean amplitude (negative).
-- `p300` — Pz, 300–600 ms, mean amplitude (positive).
-- `n400` — Cz, 300–500 ms, mean amplitude (negative).
-- `lpp` — Pz, 400–800 ms, mean amplitude (positive).
+- `p1`: Oz, 80–130 ms, Peak (positive, local peak).
+- `n170`: PO8, 130–200 ms, Peak (negative, local peak).
+- `p2`: Cz, 150–250 ms, mean amplitude (positive).
+- `mmn`: Fz, 150–250 ms, mean amplitude (negative).
+- `n2`: FCz, 200–350 ms, mean amplitude (negative).
+- `p300`: Pz, 300–600 ms, mean amplitude (positive).
+- `n400`: Cz, 300–500 ms, mean amplitude (negative).
+- `lpp`: Pz, 400–800 ms, mean amplitude (positive).
 
 Response-locked components (time 0 = the response; the windows sit at or before
 0, so load these onto a **response-locked** average):
 
-- `lrp` — C3/C4, −100–0 ms, mean amplitude (negative). Motor sites for the
+- `lrp`: C3/C4, −100–0 ms, mean amplitude (negative). Motor sites for the
   lateralised readiness potential; the LRP proper is the contralateral-minus-
   ipsilateral double subtraction (see the file's own note).
-- `ern` — FCz, 0–100 ms, mean amplitude (negative), baselined −400 to −200 ms.
+- `ern`: FCz, 0–100 ms, mean amplitude (negative), baselined −400 to −200 ms.
   The error-related negativity on error trials.
 
 ## Running a Measure across a study
@@ -652,7 +652,7 @@ Reading this table:
   report their amplitude at Oz's negative peak, sharing one latency.
 - **P2, N2, P3, LPP**: mean amplitudes over fixed windows, the robust default;
   polarity, width and reference channel left unset because they don't apply.
-- **P3 area**: the P3 as a peak-locked integrated amplitude — find the positive
+- **P3 area**: the P3 as a peak-locked integrated amplitude: find the positive
   peak on `Pz`, integrate a 150 ms `Signed` band centred on it, and read the
   same band on Pz/POz/CPz (reference channel keeps the band identical across the
   three).

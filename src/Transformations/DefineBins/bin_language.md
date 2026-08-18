@@ -75,7 +75,7 @@ within [-2,-2] events    % ordinal event count instead of elapsed time
 
 `ms`/`samples` windows measure elapsed *time*; `events` measures ordinal
 *position* in the event stream instead, counting the candidate event itself
-as 0. `within [-2,-2] events` means "exactly two events back" — the
+as 0. `within [-2,-2] events` means "exactly two events back": the
 relation's own direction (`next`/`prev`) still decides which way to search,
 `events` just changes what the window is measured in.
 

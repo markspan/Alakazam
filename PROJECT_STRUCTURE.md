@@ -12,14 +12,14 @@ https://github.com/matlab/rules/blob/main/matlab-coding-standards.md
 4-space indents, an H1 line after each declaration, no repeated blocks,
 `fullfile`/`fileparts` for paths, `try`/`catch` with `MException`).
 
-Deliberate, documented exception: **`eval` is retained** for the plugin
-system. Transformations wrap EEGLAB `pop_*` functions, which return their
-"eegh" command history as a code string; that string is stored on the
-dataset and re-executed with `eval` to replay the operation headlessly when
-a branch is dragged onto another dataset. The strings originate from EEGLAB
-and the app itself (not untrusted external input). The transformation
-*dispatch* already uses the safer `feval(transformId, EEG)`; only the
-history *replay* uses `eval`, and it should stay contained and commented.
+**No `eval` anywhere in the app.** Both the transformation *dispatch* (a
+fresh run from the ribbon) and *replay* (dragging a branch onto another
+dataset, **Apply to All Raw Files...**, template replay) call
+`feval(transformId, EEG, options)` with a stored `options`/`params` struct:
+plain data, not a parsed or `eval`'d command string. An earlier design stored
+EEGLAB's own "eegh" command-history string and re-executed it with `eval`;
+that was replaced by this typed `{id, params}` record (Phase 4, see
+"Refactoring status" below, now done rather than upcoming).
 
 ## Layout at a glance
 
@@ -84,7 +84,7 @@ directly); the app adds the plain-function/class folders below explicitly.
 | `src/IO/exportGrandAveragesCSV.m` | Writes every Grand Average to one long-format, R-compatible CSV (`Alakazam.onExportGrandAverages`, Grand Average tab's "Export Grand Averages..." button) -- the app's first working export path (`Workspace.ExportsDirectory` used to be configured but never actually written to). |
 | `src/@cursor/`, `src/@label/` | Small UI helper classes (plot cursors and labels). |
 | `src/Transformations/<Name>/` | Analysis plugins. Each folder: `<Name>.m` (entry), `<Name>.json` (manifest), `<Name>.png` (icon). |
-| `src/Transformations/+TransTools/` | Shared helpers for transformations: `CreateFilter`, `WindowByName` (the taper-window dispatch `Fourier.m` calls), `progressbar`, `FillChanlocs`/`Dipfit1005File`/`TemplateScalpLocs` for scalp-position lookups, `ComputeErsp` (`TimeFrequency.m`'s wavelet ERSP computation, pulled out here so it's callable/testable without going through that transformation's own blocking options dialog), `ComputeCoherenceMap`/`ComputeCoherenceTopography`, `DrawScalpMap` (a uiaxes-compatible port of EEGLAB's `topoplot()` used by `ScalpDistributionView`, needed because `topoplot()` itself only draws via gca/gcf-implicit state and was confirmed to silently draw nothing when targeted at a uiaxes hosted in a uitab), `DivergingColormap` (the shared blue/white/red colour scale `TimeFrequencyView` and `EpochView`'s ERP-image both use for a signed, zero-centred quantity), `AddSharedColorbar` (the dedicated-hidden-axes colorbar trick six views share), `ResolveScalpDistribution`/`TickedScalpBins` (shared by `ScalpDistribution`/`Brain3D` and their views), `ReadBrainMeshNV`/`DrawBrainMap` (`Brain3D`'s mesh projection), and the August 2026 audit's `FieldOr`/`LabelsToIdx`/`InitGuard` (the options-struct-parsing boilerplate ~15 transformations shared). `CheckOptions` was removed in that same audit -- orphaned by the `IIRFilter`→`Filter` rename, zero remaining callers. |
+| `src/Transformations/+TransTools/` | Shared helpers for transformations: `CreateFilter`, `WindowByName` (the taper-window dispatch `Fourier.m` calls), `progressbar`, `FillChanlocs`/`Dipfit1005File`/`TemplateScalpLocs` for scalp-position lookups, `ComputeErsp` (`TimeFrequency.m`'s wavelet ERSP computation, pulled out here so it's callable/testable without going through that transformation's own blocking options dialog), `ComputeCoherenceMap`/`ComputeCoherenceTopography`, `DrawScalpMap` (a uiaxes-compatible port of EEGLAB's `topoplot()` used by `ScalpDistributionView`, needed because `topoplot()` itself only draws via gca/gcf-implicit state and was confirmed to silently draw nothing when targeted at a uiaxes hosted in a uitab), `DivergingColormap` (the shared blue/white/red colour scale `TimeFrequencyView` and `EpochView`'s ERP-image both use for a signed, zero-centred quantity), `AddSharedColorbar`/`ColorbarColumnWidth` (the dedicated-hidden-axes colorbar trick six views share, centred in a sized column), `BuildBinDropdown` (the "Bin:" label + dropdown row shared by `TimeScrubStrip` and `CoherenceTopographyView`), `ResolveScalpDistribution`/`TickedScalpBins` (shared by `ScalpDistribution`/`Brain3D` and their views), `ReadBrainMeshNV`/`DrawBrainMap`/`DrawBrainPatch` (`Brain3D`'s scalp-projection mesh and its shared patch/lighting/view drawing), `BuildSourceForwardModel`/`ComputeSourceEstimate`/`DrawSourceMap`/`ensureFieldTrip` (`Brain3D`'s optional FieldTrip-based MNE source-estimate mode, see the README's own "3D brain view" section), and the August 2026 audit's `FieldOr`/`LabelsToIdx`/`InitGuard` (the options-struct-parsing boilerplate ~21 transformations now share). `CheckOptions` was removed in that same audit, orphaned by the `IIRFilter`→`Filter` rename with zero remaining callers. |
 | `src/webtree/` | Node.js/esbuild source for `WorkSpaceTree.html` (see above). Not needed to *run* Alakazam (the built output is committed) -- only to change the tree's look/behaviour. |
 | `src/Icons/` | Hand-drawn SVG source for every ribbon icon. `AlakazamRibbon.m` reads the View/WorkSpace/Settings/Grand Average ones from here directly at construction time (`encodeSvgFile`, the SVG counterpart of `encodeIcon`); each transformation's `Transformations/<Name>/<Name>.png` is a separately rasterized copy of `src/Icons/<Name>.svg` (kept as a PNG too since `WorkSpaceTree.iconForResult` needs a raster image for tree-node icons, and re-rasterizing isn't automatic -- regenerate it by hand after editing the `.svg`). |
 
@@ -196,7 +196,10 @@ Alakazam fields (`File`, `id`, `Call`, `params`, `DataType`, `DataFormat`).
   shared by all four format loaders; `open.m` collapsed to one small
   format table). `@cursor`/`@label` brought onto the project's own
   UpperCamelCase property standard.
+- **Phase 4** (formalise the transformation contract): done, confirmed
+  during this pass, not tracked separately when it landed. Dispatch and
+  replay both already call `feval(transformId, EEG, options)` with a typed
+  `options`/`params` struct; there is no `EEG.Call` string-parsing or
+  `eval` replay left anywhere in `src/` (see "Coding standards" above).
 
-Next: **Phase 4** (formalise the transformation contract: replace the
-`EEG.Call` string-parsing and `eval` replay with a typed `{id, params}`
-record).
+No further phase is currently planned.
