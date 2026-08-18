@@ -27,31 +27,31 @@ function ERP = averagedToErpset(EEG)
     end
     [nchan, npnts, nbin] = size(data);
 
-    name = firstNonEmpty(getField(EEG, 'erpname', ''), ...
-           firstNonEmpty(getField(EEG, 'setname', ''), getField(EEG, 'id', 'erpset')));
+    name = firstNonEmpty(TransTools.FieldOr(EEG, 'erpname', ''), ...
+           firstNonEmpty(TransTools.FieldOr(EEG, 'setname', ''), TransTools.FieldOr(EEG, 'id', 'erpset')));
 
     ERP = struct();
     ERP.erpname   = char(string(name));
     ERP.filename  = '';
     ERP.filepath  = '';
     ERP.workfiles = {};
-    ERP.subject   = char(string(getField(EEG, 'subject', '')));
+    ERP.subject   = char(string(TransTools.FieldOr(EEG, 'subject', '')));
     ERP.nchan     = nchan;
     ERP.nbin      = nbin;
     ERP.pnts      = npnts;
-    ERP.srate     = getField(EEG, 'srate', NaN);
-    ERP.xmin      = getField(EEG, 'xmin', NaN);   % seconds
-    ERP.xmax      = getField(EEG, 'xmax', NaN);   % seconds
-    ERP.times     = reshape(double(getField(EEG, 'times', [])), 1, []); % ms
+    ERP.srate     = TransTools.FieldOr(EEG, 'srate', NaN);
+    ERP.xmin      = TransTools.FieldOr(EEG, 'xmin', NaN);   % seconds
+    ERP.xmax      = TransTools.FieldOr(EEG, 'xmax', NaN);   % seconds
+    ERP.times     = reshape(double(TransTools.FieldOr(EEG, 'times', [])), 1, []); % ms
     if isempty(ERP.times) && isfinite(ERP.srate)
         ERP.times = (ERP.xmin + (0:npnts - 1) / ERP.srate) * 1000;
     end
     ERP.bindata   = data;
     ERP.binerror  = binError(EEG, size(data));
     ERP.datatype  = 'ERP';
-    ERP.chanlocs  = getField(EEG, 'chanlocs', struct([]));
-    ERP.chaninfo  = getField(EEG, 'chaninfo', struct());
-    ERP.ref       = char(string(getField(EEG, 'ref', '')));
+    ERP.chanlocs  = TransTools.FieldOr(EEG, 'chanlocs', struct([]));
+    ERP.chaninfo  = TransTools.FieldOr(EEG, 'chaninfo', struct());
+    ERP.ref       = char(string(TransTools.FieldOr(EEG, 'ref', '')));
     ERP.bindescr  = binLabels(EEG, nbin);
 
     accepted = acceptedCounts(EEG, nbin);
@@ -68,18 +68,11 @@ function ERP = averagedToErpset(EEG)
     ERP.EVENTLIST  = [];
 end
 
-% ----------------------------------------------------------------------- %
-function v = getField(s, name, default)
-    if isfield(s, name) && ~isempty(s.(name))
-        v = s.(name);
-    else
-        v = default;
-    end
-end
-
-function v = firstNonEmpty(a, b)
-    if ~isempty(a); v = a; else; v = b; end
-end
+% TransTools.FieldOr used to be duplicated locally here as getField (same
+% logic, module the isstruct(s) guard TransTools.FieldOr adds -- isfield()
+% on a non-struct already returns false safely, so this is not a
+% behavioural change). firstNonEmpty (src/Support/) used to be duplicated
+% locally here too.
 
 function e = binError(EEG, sz)
     if isfield(EEG, 'stErr') && ~isempty(EEG.stErr) && isequal(size(EEG.stErr), sz)

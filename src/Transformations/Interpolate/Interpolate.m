@@ -1,4 +1,4 @@
-function [EEG, options] = Interpolate(input, opts)
+function [EEG, options] = Interpolate(input, varargin)
 %% Interpolate  Reconstruct bad channels from their neighbours.
 %
 %   Wraps EEGLAB's pop_interp (spherical-spline and related methods), driven by
@@ -10,12 +10,7 @@ function [EEG, options] = Interpolate(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Interpolate(input)        % interactive dialog
 %     [EEG, options] = Interpolate(input, opts)  % replay a stored options struct
-if nargin < 1
-    throw(MException('Alakazam:Interpolate', 'Problem in Interpolate: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Interpolate', varargin{:});
 if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
     throw(MException('Alakazam:Interpolate', ...
         'Problem in Interpolate: this dataset has no channel locations.'));
@@ -27,7 +22,6 @@ if ~anyHasPosition(input.chanlocs)
          'standard 10-5 positions by label.']));
 end
 
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     options = InterpolateDialog(input.chanlocs, TransformSettings.get('Interpolate'));
     if isempty(options)
@@ -39,7 +33,7 @@ else
     options = opts;
 end
 
-badIdx = labelsToIdx(input, options.channels);
+badIdx = TransTools.LabelsToIdx(input, options.channels);
 if isempty(badIdx)
     EEG = input;   % none of the stored channels are in this dataset -> no-op
     return;
@@ -65,12 +59,4 @@ function tf = anyHasPosition(chanlocs)
             tf = true; return;
         end
     end
-end
-
-function idx = labelsToIdx(input, wantLabels)
-%LABELSTOIDX  Row indices of WANTLABELS in EEG.chanlocs (case-insensitive).
-    if isempty(wantLabels); idx = []; return; end
-    all = {input.chanlocs.labels};
-    want = cellfun(@(s) char(string(s)), wantLabels, 'UniformOutput', false);
-    idx = find(ismember(lower(all), lower(want)));
 end

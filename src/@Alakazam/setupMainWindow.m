@@ -56,7 +56,7 @@ function setupMainWindow(this)
     this.ToolbarGrid.Layout.Column = [1 3];
     % A group with more items than fit in one row now opens as a floating
     % popup positioned over the plots area (see AlakazamRibbon's
-    % PopupComponent/Scrim), instead of resizing this row -- the ribbon row
+    % PopupComponent), instead of resizing this row -- the ribbon row
     % height is therefore fixed for the app's lifetime, no ExpandChangedFcn
     % needed here any more.
     this.Ribbon = AlakazamRibbon(this.ToolbarGrid, fullfile(this.RootDir, "Transformations"), ...

@@ -5,7 +5,6 @@ function setupDirectories(this)
 %   +uiextras package (added by putting src on the path); the plot View
 %   classes live in src/Views (added explicitly, since src itself is added
 %   non-recursively); the Transformations are added with their subfolders.
-    close all;
     warning("off", "MATLAB:ui:javacomponent:FunctionToBeRemoved");
     addpath(this.RootDir, '-end');
     % Authored source is grouped into folders under src (added explicitly, since

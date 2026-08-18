@@ -1,4 +1,4 @@
-function [EEG, options] = ChannelEditor(input, opts)
+function [EEG, options] = ChannelEditor(input, varargin)
 %% ChannelEditor  Edit channel labels, types and scalp coordinates.
 %
 %   An Alakazam-styled channel-location editor (the uifigure counterpart of
@@ -10,18 +10,12 @@ function [EEG, options] = ChannelEditor(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ChannelEditor(input)        % interactive dialog
 %     [EEG, options] = ChannelEditor(input, opts)  % replay stored chanlocs
-if nargin < 1
-    throw(MException('Alakazam:ChannelEditor', 'Problem in ChannelEditor: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:ChannelEditor', varargin{:});
 if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
     throw(MException('Alakazam:ChannelEditor', ...
         'Problem in ChannelEditor: this dataset has no channel structure to edit.'));
 end
 
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     elcFile = TransTools.Dipfit1005File('Alakazam:ChannelEditor');
     edited = ChannelEditorDialog(input.chanlocs, elcFile);

@@ -35,8 +35,7 @@ function settings = TransformOptionsDialog(varargin)
 %   settings dialog -- schema-driven from AlakazamSettings, a different
 %   use case from this one-off, call-site-parameterized dialog).
 
-    accentColor = [0.290 0.498 0.788]; % matches AlakazamRibbon.html's .alz-tab-home (#4a7fc9)
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
 
     [dlgTitle, description, fieldSpecs] = parseArgs(varargin);
 

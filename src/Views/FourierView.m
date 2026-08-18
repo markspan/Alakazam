@@ -13,11 +13,16 @@ classdef FourierView < handle
 %   Zoom/pan push-buttons remain (frequency data commonly needs zooming into
 %   a specific band, clamped to [0, srate/2] -- something the generic
 %   axtoolbar zoom does not do), as do the trial-step buttons alongside the
-%   new left/right arrow keys.
+%   new left/right arrow keys -- see ZoomPanButtons, shared with
+%   SpectralMeasureView (its near-twin: same interaction model, same
+%   button row, stepping bins there instead of trials). The mouse wheel
+%   also steps the channel, same direction as the arrow keys, matching
+%   SpectralMeasureView's own onWheel.
 %
 %   Style follows the project standard.
 %
-%   See also ALAKAZAMPLOTTER, EPOCHVIEW, AVERAGEVIEW.
+%   See also ALAKAZAMPLOTTER, EPOCHVIEW, AVERAGEVIEW, SPECTRALMEASUREVIEW,
+%   ZOOMPANBUTTONS.
 
     properties
         % Called (no args) when the user clicks this view's axes or presses
@@ -33,6 +38,7 @@ classdef FourierView < handle
         EEG             % frequency-domain dataset (channels x freqs x trials)
         Grid            % 2x1 uigridlayout: axes | buttons (built once, never rebuilt)
         Axes            % the single axes the current channel's spectrum is drawn in
+        Buttons         % ZoomPanButtons, the zoom/pan/trial-step row
         Channel = 1     % channel currently shown
         CurrentTrial = 1
     end
@@ -66,7 +72,12 @@ classdef FourierView < handle
             this.Axes.Layout.Row = 1;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
 
-            this.addButtons(size(eeg.data, 3) > 1);
+            stepFcn = [];
+            if size(eeg.data, 3) > 1
+                stepFcn = @(delta) this.trialStep(delta);
+            end
+            this.Buttons = ZoomPanButtons(this.Grid, 2, this.Axes, eeg.srate / 2, ...
+                @() this.notifyActivated(), stepFcn);
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -117,6 +128,22 @@ classdef FourierView < handle
             this.redraw();
         end
 
+        function onWheel(this, callbackData)
+        %ONWHEEL  Scroll the mouse wheel to step the shown channel -- the
+        %   same direction convention as the up/down arrow keys, matching
+        %   SpectralMeasureView's own onWheel (its near-twin: both views
+        %   share the same interaction model, see the class header
+        %   comment). Public: dispatched centrally by
+        %   Alakazam.dispatchWheel for whichever tab is currently active.
+            if callbackData.VerticalScrollCount > 0
+                this.Channel = min(size(this.EEG.data, 1), this.Channel + 1);
+            else
+                this.Channel = max(1, this.Channel - 1);
+            end
+            this.redraw();
+            this.notifyActivated();
+        end
+
         function notifyActivated(this)
         %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
         %   empty-function_handle case.
@@ -144,63 +171,6 @@ classdef FourierView < handle
                 area(ax, freqs(sel), spectrum(sel), ...
                     "EdgeColor", "k", "EdgeAlpha", 0.33, "FaceColor", colour);
             end
-        end
-
-        function addButtons(this, includeTrial)
-        %ADDBUTTONS  Zoom / pan (and optionally trial) push-buttons, in the
-        %   bottom row (row 2) of this.Grid, built once in the constructor.
-            labels    = {"+", "-", "^", "v", "<", ">"};
-            callbacks = {@() this.zoomX(0.5), @() this.zoomX(2), @() this.zoomY(0.5), ...
-                         @() this.zoomY(2), @() this.panX(-1), @() this.panX(1)};
-            if includeTrial
-                labels    = [labels, {"<<", ">>"}];
-                callbacks = [callbacks, {@() this.trialStep(-1), @() this.trialStep(1)}];
-            end
-            n = numel(labels);
-            btnGrid = uigridlayout(this.Grid, [1, n + 1], "Padding", [0 0 0 0], ...
-                "ColumnWidth", [repmat({30}, 1, n), {'1x'}], "ColumnSpacing", 4);
-            btnGrid.Layout.Row = 2;
-            for i = 1:n
-                b = uibutton(btnGrid, "Text", labels{i}, ...
-                    "ButtonPushedFcn", @(~, ~) this.onButtonPushed(callbacks{i}));
-                b.Layout.Column = i;
-            end
-        end
-
-        function onButtonPushed(this, callback)
-        %ONBUTTONPUSHED  A zoom/pan/trial button was pushed: mark this view
-        %   activated (see ActivatedFcn) before running its callback.
-            this.notifyActivated();
-            callback();
-        end
-
-        function zoomX(this, factor)
-        %ZOOMX  Scale the x range about its left edge (factor < 1 zooms in).
-            span = xlim(this.Axes);
-            newHigh = span(1) + (span(2) - span(1)) * factor;
-            if factor > 1
-                newHigh = min(newHigh, this.EEG.srate / 2);
-            end
-            xlim(this.Axes, [span(1), newHigh]);
-        end
-
-        function zoomY(this, factor)
-        %ZOOMY  Scale the y range about its bottom edge.
-            span = ylim(this.Axes);
-            ylim(this.Axes, [span(1), span(1) + (span(2) - span(1)) * factor]);
-        end
-
-        function panX(this, direction)
-        %PANX  Shift the x range by a tenth of its width, clamped to [0, fs/2].
-            span = xlim(this.Axes);
-            shifted = span + direction * (span(2) - span(1)) / 10;
-            if shifted(1) < 0
-                shifted = shifted - shifted(1);
-            end
-            if shifted(2) > this.EEG.srate / 2
-                shifted = shifted - (shifted(2) - this.EEG.srate / 2);
-            end
-            xlim(this.Axes, shifted);
         end
 
         function trialStep(this, delta)

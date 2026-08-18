@@ -18,8 +18,7 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored, timeUnit)
     timeUnit = char(string(timeUnit));
     labels = arrayfun(@(c) char(string(c.labels)), chanlocs, 'UniformOutput', false);
     MODES = {'(off)', 'Keep', 'Remove'};
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
     options = [];
 
     seed = struct( ...
@@ -122,14 +121,7 @@ function [out, err] = readRange(g, name)
     end
 end
 
-function v = intersectLabels(all, want)
-    v = all(ismember(all, want));
-    if isempty(v) && ~isempty(all); v = {}; end
-end
-
-function c = asCell(v)
-    if isempty(v); c = {}; elseif ischar(v); c = {v}; else; c = v; end
-end
+% intersectLabels/asCell (src/Support/) used to be duplicated locally here.
 
 function idx = parseIndices(text)
 %PARSEINDICES  "1:10, 15" -> [1..10 15]; tolerant of blanks. No eval.

@@ -5,9 +5,11 @@ classdef SpectralMeasureView < handle
 %   EEG.specFreqs, computed by SpectralMeasure), with a dashed marker at each
 %   named frequency and its measured SNR annotated. Up/down arrows step the
 %   channel; left/right step the bin (for multi-bin data) -- the same
-%   interaction model FourierView/EpochView/AverageView use.
+%   interaction model FourierView/EpochView/AverageView use. Zoom/pan
+%   buttons and mouse-wheel channel stepping: see ZoomPanButtons/onWheel,
+%   shared with FourierView.
 %
-%   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE.
+%   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMPANBUTTONS.
 
     properties
         ActivatedFcn = function_handle.empty
@@ -18,6 +20,7 @@ classdef SpectralMeasureView < handle
         EEG
         Grid
         Axes
+        Buttons     % ZoomPanButtons, the zoom/pan/bin-step row
         Channel = 1
         CurrentBin = 1
     end
@@ -31,7 +34,12 @@ classdef SpectralMeasureView < handle
             this.Axes = uiaxes(this.Grid);
             this.Axes.Layout.Row = 1;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
-            this.addButtons(size(eeg.spectrum, 3) > 1);
+            stepFcn = [];
+            if size(eeg.spectrum, 3) > 1
+                stepFcn = @(delta) this.binStep(delta);
+            end
+            this.Buttons = ZoomPanButtons(this.Grid, 2, this.Axes, eeg.srate / 2, ...
+                @() this.notifyActivated(), stepFcn);
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -109,51 +117,6 @@ classdef SpectralMeasureView < handle
     end
 
     methods (Access = private)
-        function addButtons(this, includeBin)
-        %ADDBUTTONS  Zoom / pan (and optionally bin-step) push-buttons.
-            labels    = {"+", "-", "^", "v", "<", ">"};
-            callbacks = {@() this.zoomX(0.5), @() this.zoomX(2), @() this.zoomY(0.5), ...
-                         @() this.zoomY(2), @() this.panX(-1), @() this.panX(1)};
-            if includeBin
-                labels    = [labels, {"<<", ">>"}];
-                callbacks = [callbacks, {@() this.binStep(-1), @() this.binStep(1)}];
-            end
-            n = numel(labels);
-            btnGrid = uigridlayout(this.Grid, [1, n + 1], "Padding", [0 0 0 0], ...
-                "ColumnWidth", [repmat({30}, 1, n), {'1x'}], "ColumnSpacing", 4);
-            btnGrid.Layout.Row = 2;
-            for i = 1:n
-                b = uibutton(btnGrid, "Text", labels{i}, ...
-                    "ButtonPushedFcn", @(~, ~) this.onButtonPushed(callbacks{i}));
-                b.Layout.Column = i;
-            end
-        end
-
-        function onButtonPushed(this, callback)
-            this.notifyActivated();
-            callback();
-        end
-
-        function zoomX(this, factor)
-            span = xlim(this.Axes);
-            newHigh = span(1) + (span(2) - span(1)) * factor;
-            if factor > 1; newHigh = min(newHigh, this.EEG.srate / 2); end
-            xlim(this.Axes, [span(1), newHigh]);
-        end
-
-        function zoomY(this, factor)
-            span = ylim(this.Axes);
-            ylim(this.Axes, [span(1), span(1) + (span(2) - span(1)) * factor]);
-        end
-
-        function panX(this, direction)
-            span = xlim(this.Axes);
-            shifted = span + direction * (span(2) - span(1)) / 10;
-            if shifted(1) < 0; shifted = shifted - shifted(1); end
-            if shifted(2) > this.EEG.srate / 2; shifted = shifted - (shifted(2) - this.EEG.srate / 2); end
-            xlim(this.Axes, shifted);
-        end
-
         function binStep(this, delta)
             nBins = size(this.EEG.spectrum, 3);
             this.CurrentBin = min(nBins, max(1, this.CurrentBin + delta));

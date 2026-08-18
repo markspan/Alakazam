@@ -1,4 +1,4 @@
-function [EEG, opts] = AutoEyeICA(input, opts)
+function [EEG, opts] = AutoEyeICA(input, varargin)
 %% AutoEyeICA  ICA-decompose, classify with ICLabel, and prune eye components.
 %
 %   Runs ICA decomposition (pop_runica), classifies the resulting components
@@ -30,16 +30,9 @@ function [EEG, opts] = AutoEyeICA(input, opts)
 %               decomposed (see EEG.icachansind).
 %       opts  - Struct with the EyeThreshold used.
 
-%% Check for the EEG dataset input:
-if (nargin < 1)
-    throw(MException('Alakazam:AutoEyeICA', 'Problem in AutoEyeICA: No Data Supplied'));
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:AutoEyeICA', varargin{:});
 
-if (nargin == 1)
-    opts = 'Init';
-end
-
-if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
+if interactive
     stored = TransformSettings.get('AutoEyeICA');
     if isempty(stored)
         stored = struct('EyeThreshold', 0.8);

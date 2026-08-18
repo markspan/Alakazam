@@ -18,10 +18,7 @@ function [EEG, opts] = CoherenceMap(varargin)
 %   [EEG, opts] = CoherenceMap(input) pops the options dialog and stores the
 %   chosen settings; [EEG, opts] = CoherenceMap(input, opts) replays a stored
 %   options struct with no dialog.
-if nargin < 1
-    throw(MException('Alakazam:CoherenceMap', ...
-        'Problem in CoherenceMap: needs a dataset to run on, and none was given.'));
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:CoherenceMap', varargin{2:end});
 input = varargin{1};
 
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
@@ -34,15 +31,15 @@ end
 
 labels = {input.chanlocs.labels};
 
-if nargin < 2
+if interactive
     stored = TransformSettings.get('CoherenceMap');
     if isempty(stored) || ~isstruct(stored)
         stored = struct('RefChannel', '', 'Method', 'Wavelet', ...
             'MinFreq', 2, 'MaxFreq', min(80, floor(input.srate / 3)), 'NumFreqs', 40, ...
             'MinCycles', 3, 'MaxCycles', 12, 'WindowMs', 500, 'PadRatio', 4);
     end
-    refList = TransTools.ReferenceChoices(labels, getField(stored, 'RefChannel', ''));
-    methodList = TransTools.PutFirst({'Wavelet', 'STFT'}, getField(stored, 'Method', 'Wavelet'));
+    refList = TransTools.ReferenceChoices(labels, TransTools.FieldOr(stored, 'RefChannel', ''));
+    methodList = TransTools.PutFirst({'Wavelet', 'STFT'}, TransTools.FieldOr(stored, 'Method', 'Wavelet'));
 
     opts = TransformOptionsDialog( ...
         'Description', ['Time-resolved coherence of every channel to a reference ' ...
@@ -66,8 +63,6 @@ if nargin < 2
         return;
     end
     TransformSettings.set('CoherenceMap', opts);
-else
-    opts = varargin{2};
 end
 
 %% Validate + resolve the reference channel to a row index
@@ -99,8 +94,4 @@ EEG.cohFreqs  = freqs;
 EEG.cohTimes  = cohTimes;
 EEG.cohRef    = char(labels{refIdx});
 EEG.cohMethod = char(string(opts.Method));
-end
-
-function v = getField(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
 end

@@ -1,4 +1,4 @@
-function [EEG, opts] = Average(input,opts)
+function [EEG, opts] = Average(input, varargin)
 % Average - Compute the trial average of epoched EEG data.
 %
 % Syntax: [EEG, opts] = Average(input, opts)
@@ -31,14 +31,8 @@ function [EEG, opts] = Average(input,opts)
 %   averages across all trials, as before. A trial in several bins contributes
 %   to each of them.
 %
-%% Check for the EEG dataset input:
-if (nargin < 1)
-    throw(MException('Alakazam:Average','Problem in Average: No Data Supplied'));
-end
+opts = TransTools.InitGuard(nargin, 'Alakazam:Average', varargin{:});
 
-if (nargin == 1)
-    opts = 'Init';
-end
 % Validate input data
 if ~isfield(input, 'data')
     throw(MException('Alakazam:Average', ...

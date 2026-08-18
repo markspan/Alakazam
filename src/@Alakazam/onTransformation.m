@@ -20,11 +20,7 @@ function onTransformation(this, entry)
     transformId = entryName(1:find(entryName == '.', 1, "last") - 1);
 
     try
-        % Run from the repository root (historic behaviour): individual
-        % plugins may resolve resources relative to it. Restore the
-        % previous directory on exit, including on error.
-        originalDir = cd(this.RepoRoot);
-        restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+        restoreDir = this.enterRepoRoot();
 
         % Pointer is figure-wide (every dataset is a tab on the one
         % shared MainFigure), so no per-tab lookup is needed here.

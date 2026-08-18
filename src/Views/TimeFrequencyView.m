@@ -54,7 +54,7 @@ classdef TimeFrequencyView < handle
             % its own column rather than sharing a tile's.
             this.Grid = uigridlayout(fig, [nRows + 1, nCols + 1], ...
                 "RowHeight", [{22}, repmat({'1x'}, 1, nRows)], ...
-                "ColumnWidth", [repmat({'1x'}, 1, nCols), {56}], "Padding", [4 4 4 4]);
+                "ColumnWidth", [repmat({'1x'}, 1, nCols), {TransTools.ColorbarColumnWidth()}], "Padding", [4 4 4 4]);
 
             this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "center", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
@@ -101,30 +101,19 @@ classdef TimeFrequencyView < handle
             % One shared colorbar: every tile carries the same CLim (see
             % redraw's own climAbs, computed over the WHOLE precomputed
             % ersp tensor, hence identical regardless of the shown
-            % channel). Deliberately NOT attached directly to one of the
-            % real tiles (colorbar(this.Axes(...))) -- confirmed directly
-            % that doing so shrinks that tile's own axes to make room for
-            % it (its InnerPosition narrows noticeably). Attached instead
-            % to a dedicated, invisible axes in its own reserved grid
-            % column -- confirmed directly that every real tile's
-            % InnerPosition is then completely unaffected.
+            % channel) -- see TransTools.AddSharedColorbar for why it is a
+            % dedicated hidden axes rather than attached to a real tile.
             climAbs = max(abs(eeg.ersp(:)), [], "omitnan");
             if ~isfinite(climAbs) || climAbs == 0
                 climAbs = 1;
             end
-            colorbarAxes = uiaxes(this.Grid);
-            colorbarAxes.Layout.Column = nCols + 1;
             if nRows > 1
-                colorbarAxes.Layout.Row = [2, nRows + 1];
+                cbRow = [2, nRows + 1];
             else
-                colorbarAxes.Layout.Row = 2;
+                cbRow = 2;
             end
-            colorbarAxes.Visible = "off";
-            colormap(colorbarAxes, cmap); % must match the real tiles' own colormap (set above), or the
-                                           % colorbar shows MATLAB's default (parula) gradient instead
-            colorbarAxes.CLim = [-climAbs, climAbs];
-            cb = colorbar(colorbarAxes);
-            cb.Label.String = "Power vs. baseline (dB)";
+            TransTools.AddSharedColorbar(this.Grid, cbRow, nCols + 1, cmap, ...
+                [-climAbs, climAbs], "Power vs. baseline (dB)");
 
             this.redraw();
             for b = 1:nBins

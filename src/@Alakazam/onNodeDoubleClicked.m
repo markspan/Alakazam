@@ -3,12 +3,6 @@ function onNodeDoubleClicked(this, eventData, sourceTree)
 %   dataset. Loads it itself rather than relying on a preceding single
 %   click's SelectionChangedFcn having already done so, since
 %   WorkSpaceTree does not guarantee that ordering. SOURCETREE: see
-%   onNodeDropped.
-    this.Workspace.ActiveTree = sourceTree;
-    EEG = this.loadNodeEEG(eventData.UserData, 'open this dataset');
-    if isempty(EEG)
-        return;
-    end
-    this.Workspace.EEG = EEG;
-    this.Plotter.plotCurrent();
+%   onNodeDropped. See loadAndPlotNode, shared with onSelectionChanged.
+    this.loadAndPlotNode(eventData, sourceTree, 'open this dataset');
 end

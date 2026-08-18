@@ -17,8 +17,7 @@ function options = FilterDialog(srate, labels, stored)
 %   on cancel.
     nyq = srate / 2;
     labels = cellfun(@(s) char(string(s)), labels, 'UniformOutput', false);
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
     options = [];
 
     defaults = struct( ...

@@ -1,4 +1,4 @@
-function [EEG, options] = ReRef(input, opts)
+function [EEG, options] = ReRef(input, varargin)
 %% ReRef  Re-reference the data to the average, or to specific channel(s).
 %
 %   The app-styled ReRefDialog collects the reference choice (the same one
@@ -11,14 +11,7 @@ function [EEG, options] = ReRef(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ReRef(input)        % interactive dialog
 %     [EEG, options] = ReRef(input, opts)  % replay a stored options struct
-if nargin < 1
-    throw(MException('Alakazam:ReRef', 'Problem in ReRef: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
-
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:ReRef', varargin{:});
 if interactive
     options = ReRefDialog(input.chanlocs, TransformSettings.get('ReRef'));
     if isempty(options)
@@ -33,7 +26,7 @@ end
 if strcmpi(options.mode, 'Average')
     refarg = [];
 else
-    refarg = labelsToIdx(input, options.refChannels);
+    refarg = TransTools.LabelsToIdx(input, options.refChannels);
     if isempty(refarg)
         throw(MException('Alakazam:ReRef', ...
             'ReRef: none of the reference channels are in this dataset.'));
@@ -42,7 +35,7 @@ end
 
 extra = {};
 if isfield(options, 'exclude')
-    exidx = labelsToIdx(input, options.exclude);
+    exidx = TransTools.LabelsToIdx(input, options.exclude);
     if ~isempty(exidx)
         extra = [extra, {'exclude', exidx}];
     end
@@ -55,12 +48,4 @@ else
 end
 
 EEG = pop_reref(input, refarg, extra{:});
-end
-
-% ======================================================================= %
-function idx = labelsToIdx(input, wantLabels)
-    if isempty(wantLabels); idx = []; return; end
-    all = {input.chanlocs.labels};
-    want = cellfun(@(s) char(string(s)), wantLabels, 'UniformOutput', false);
-    idx = find(ismember(lower(all), lower(want)));
 end

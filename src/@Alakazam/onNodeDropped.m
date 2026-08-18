@@ -20,11 +20,7 @@ function onNodeDropped(this, eventData, sourceTree)
     % ignored drop or a failed transformation would leave it stuck.
     notifyDone = onCleanup(@() sourceTree.notifyDropHandled());
 
-    % Run from the repository root (historic behaviour): the drop
-    % triggers plugins that may resolve resources relative to it.
-    % Restore the previous directory when this callback returns.
-    originalDir = cd(this.RepoRoot);
-    restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at callback exit
+    restoreDir = this.enterRepoRoot();
 
     if eventData.Source.IsRoot
         return; % a root node was dropped; ignore

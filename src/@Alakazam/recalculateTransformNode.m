@@ -44,8 +44,7 @@ function recalculateTransformNode(this, node, ownEEG)
     TransformSettings.set(transformId, ownEEG.params);
     restoreStored = onCleanup(@() TransformSettings.set(transformId, previousStored));
 
-    originalDir = cd(this.RepoRoot);
-    restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+    restoreDir = this.enterRepoRoot();
     this.MainFigure.Pointer = "watch";
     restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
 

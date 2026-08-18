@@ -1,4 +1,4 @@
-function [EEG, options] = SpectralMeasure(input, opts)
+function [EEG, options] = SpectralMeasure(input, varargin)
 %% SpectralMeasure  Quantify frequency-tagging / SSVEP / RIFT responses at
 %   named frequencies: power, SNR, inter-trial phase-locking, phase, and
 %   (against an optional reference channel) coherence and phase-lag.
@@ -43,13 +43,7 @@ function [EEG, options] = SpectralMeasure(input, opts)
 %   EXPORTSPECTRALCSV, SPECTRALMEASUREVIEW, TIMEFREQUENCY.
 
 %% Guard
-if nargin < 1
-    throw(MException('Alakazam:SpectralMeasure', ...
-        'Problem in SpectralMeasure: needs a dataset to run on, and none was given.'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:SpectralMeasure', varargin{:});
 EEG = input;
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
     throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
@@ -58,9 +52,6 @@ if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
         '''epoch'' statement first -- phase-locking and coherence are computed across ' ...
         'trials, so they need the individual trials.'], input.DataFormat)));
 end
-
-%% Mode
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     stored = TransformSettings.get('SpectralMeasure');
     [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
@@ -82,12 +73,12 @@ else
     options = opts;
 end
 rows         = options.rows;
-fundamentals = getField(options, 'fundamentals', '');
-refChannel   = getField(options, 'refChannel', '');
-method       = getField(options, 'method', 'Hann');
-nTapers      = getField(options, 'tapers', 3);
-snrN         = getField(options, 'snrNeighbours', 10);
-snrGuard     = getField(options, 'snrGuard', 1);
+fundamentals = TransTools.FieldOr(options, 'fundamentals', '');
+refChannel   = TransTools.FieldOr(options, 'refChannel', '');
+method       = TransTools.FieldOr(options, 'method', 'Hann');
+nTapers      = TransTools.FieldOr(options, 'tapers', 3);
+snrN         = TransTools.FieldOr(options, 'snrNeighbours', 10);
+snrGuard     = TransTools.FieldOr(options, 'snrGuard', 1);
 
 if isempty(rows)
     throw(MException('Alakazam:SpectralMeasure', ...
@@ -272,12 +263,4 @@ function [spectrum, freqs] = evokedSpectrum(EEG, taper, df)
         spectrum(:, :, b) = (2 / g) * abs(F(:, 1:nF));
     end
     freqs = (0:nF - 1) * df;
-end
-
-function v = getField(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
-        v = s.(name);
-    else
-        v = default;
-    end
 end

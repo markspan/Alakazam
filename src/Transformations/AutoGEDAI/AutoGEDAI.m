@@ -1,4 +1,4 @@
-function [EEG, opts] = AutoGEDAI(input, opts)
+function [EEG, opts] = AutoGEDAI(input, varargin)
 %% AutoGEDAI  Denoise EEG with GEDAI (generalized eigenvalue decomposition).
 %
 %   Runs GEDAI (Ros et al., 2025), an EEGLAB plugin that separates brain
@@ -57,21 +57,14 @@ function [EEG, opts] = AutoGEDAI(input, opts)
 %
 %   See also: AutoEyeICA.
 
-%% Check for the EEG dataset input:
-if (nargin < 1)
-    throw(MException('Alakazam:AutoGEDAI', 'Problem in AutoGEDAI: No Data Supplied'));
-end
-
-if (nargin == 1)
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:AutoGEDAI', varargin{:});
 
 %% GEDAI is an optional, noncommercially-licensed plugin: make sure it is
 %  installed (with consent) before configuring or running anything.
 ensureGEDAI();
 ensureGpuDeviceCountShim();
 
-if (ischar(opts) || isstring(opts)) && strcmpi(opts, 'Init')
+if interactive
     hasParallelToolbox = license('test', 'Distrib_Computing_Toolbox') && ~isempty(ver('parallel'));
     if hasParallelToolbox
         parallelChoices = {'yes', 'no'};

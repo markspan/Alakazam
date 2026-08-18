@@ -52,10 +52,11 @@ directly); the app adds the plain-function/class folders below explicitly.
 |---|---|
 | `src/` (top level) | The core app singletons/classes: `AlakazamPlotter`, `AlakazamRibbon` (+`.html`), `AlakazamSettings`, `WorkSpaceTree` (+`.html`), `TransformSettings`, `EEGLabEnvironment`, `GrandAverage`. |
 | `src/@Alakazam/`, `src/@WorkSpace/`, `src/@cursor/`, `src/@label/` | Class folders: the main app class and its methods, per-format loaders / `.wksp` persistence, and small plot-cursor/label helper classes. |
-| `src/Views/` | The plot **View** classes (`SignalView`, `EpochView`, `AverageView`, `FourierView`, `TimeFrequencyView`, `ScalpDistributionView`, `SpectralMeasureView`, `CoherenceView`, `CoherenceTopographyView`). |
+| `src/Views/` | The plot **View** classes (`SignalView`, `EpochView`, `AverageView`, `FourierView`, `TimeFrequencyView`, `ScalpDistributionView`, `Brain3DView`, `SpectralMeasureView`, `CoherenceView`, `CoherenceTopographyView`), plus two small shared UI-component classes `ZoomPanButtons` (FourierView/SpectralMeasureView's zoom/pan/step button row) and `TimeScrubStrip` (ScalpDistributionView/Brain3DView's bin-dropdown/time-label/Play-button/slider scaffolding). |
 | `src/Dialogs/` | Hand-built `uifigure` dialogs (`TransformOptionsDialog`, `MeasureDialog`, `FilterDialog`, `ReRefDialog`, `SelectDataDialog`, `ChannelEditorDialog`, `InterpolateDialog`, `RemoveComponentsDialog`, `SpectralMeasureDialog`, `GrandAverageDialog`, `SettingsDialog`). |
 | `src/IO/` | Import / export / format conversion: erpset converters (`erpsetToAveraged`, `averagedToErpset`), the ERPLAB BDF importer (`erplabBdfToBinScript`), the CSV writers (`exportMeasurementsCSV`, `exportSpectralCSV`, `exportGrandAveragesCSV`) and the R-script generator (`generateRScript` + its `statsTemplate.R`). |
-| `src/Support/` | Small shared helpers (`eegChannelMask`, `guessChannelTypes`, `channelTypeFromLabel`, `multiSelectField`, `spectralFreqSpecs`, `MinMaxPyramid`). |
+| `src/Support/` | Small shared helpers (`eegChannelMask`, `guessChannelTypes`, `channelTypeFromLabel`, `multiSelectField`, `spectralFreqSpecs`, `MinMaxPyramid`, plus a batch of dialog/IO helpers consolidated in the August 2026 audit: `dialogChromeColors`, `intersectLabels`/`asCell`/`mergeSeedFields`, `linesFromText`/`textFromLines`, `csvField`/`numField`/`csvBinLabel`, `firstNonEmpty`). |
+| `src/Meshes/` | `BrainMesh_ICBM152.nv`, the 3D brain surface mesh `Brain3D`/`Brain3DView` project scalp topographies onto (see `TransTools.ReadBrainMeshNV`/`DrawBrainMap`) -- vendored from BrainNet Viewer (GPLv3), see `src/Meshes/README.md` and `dependencies.md`. |
 | `src/Transformations/` | Analysis plugins (`<Name>/` folders) and the `+TransTools` shared-helper package. |
 | `src/+uiextras/`, `src/Compat/`, `src/Icons/`, `src/webtree/` | The dialog-widget helper package, compatibility shims, SVG icon sources, and the WorkSpaceTree HTML build pipeline. |
 
@@ -73,7 +74,7 @@ directly); the app adds the plain-function/class folders below explicitly.
 | `src/Views/AverageView.m` | Trial-average view with error bands and overlay (replaces Tools.plotEpochedTimeMultiAverage). |
 | `src/Views/FourierView.m` | Keyboard-driven frequency-domain view (one channel's spectrum at a time, band shading, zoom/pan; up/down arrows step the channel, left/right the trial -- same interaction model AverageView uses; replaces Tools.plotFourier). |
 | `src/Views/TimeFrequencyView.m` | Grid of per-bin ERSP heatmaps (`TransTools.ComputeErsp`'s precomputed output), one channel at a time; up/down arrows step the channel, an instant re-slice since every channel was computed up front. The app's first multi-tile-grid view. |
-| `src/Views/ScalpDistributionView.m` | Grid of per-bin scalp topographies (`TransTools.DrawScalpMap`), scrubbable by a `uislider`; only draws the bins ticked on in a sibling `AverageView` tab, if one is open. Mouse/slider-only, no keyboard navigation. |
+| `src/Views/ScalpDistributionView.m` | One scalp topography (`TransTools.DrawScalpMap`) with a bin dropdown when there is more than one, scrubbable by a `uislider` (`TimeScrubStrip`); only offers the bins ticked on in a sibling `AverageView` tab, if one is open. Mouse/slider-only, no keyboard navigation. Its rotatable-3D-brain-mesh sibling `Brain3DView.m` shares the same interface (`TransTools.ResolveScalpDistribution`/`DrawBrainMap`, `TimeScrubStrip`). |
 | `src/AlakazamRibbon.m` + `src/AlakazamRibbon.html` | uihtml-based control-strip ribbon (Home/Tools/Grand Average); discovers transformations from `src/Transformations/*/*.json`. Hand-written self-contained HTML page, no build step. |
 | `src/WorkSpaceTree.m` + `src/WorkSpaceTree.html` | uihtml-based data-browser tree (replaces the old Java-Swing `uiextras.jTree.Tree`). The `.html` is a **built artifact**, assembled from `src/webtree/src/*` by `src/webtree/`'s own npm/esbuild pipeline (see `src/webtree/README.md`) -- edit the source there, not the `.html` directly, then rebuild and re-copy. |
 | `src/@WorkSpace/` | Per-format file loaders, `.wksp` session persistence, and construction of the app's **two** `WorkSpaceTree` instances (`Tree` for data & analyses, `GrandAveragesTree` for grand averages -- see `CreateTreeComponent.m`). |
@@ -83,7 +84,7 @@ directly); the app adds the plain-function/class folders below explicitly.
 | `src/IO/exportGrandAveragesCSV.m` | Writes every Grand Average to one long-format, R-compatible CSV (`Alakazam.onExportGrandAverages`, Grand Average tab's "Export Grand Averages..." button) -- the app's first working export path (`Workspace.ExportsDirectory` used to be configured but never actually written to). |
 | `src/@cursor/`, `src/@label/` | Small UI helper classes (plot cursors and labels). |
 | `src/Transformations/<Name>/` | Analysis plugins. Each folder: `<Name>.m` (entry), `<Name>.json` (manifest), `<Name>.png` (icon). |
-| `src/Transformations/+TransTools/` | Shared helpers for transformations (`CheckOptions`, `CreateFilter`, `WindowByName` (the taper-window dispatch `Fourier.m` calls), `progressbar`, `FillChanlocs`/`Dipfit1005File` for scalp-position lookups, `ComputeErsp` (`TimeFrequency.m`'s wavelet ERSP computation, pulled out here so it's callable/testable without going through that transformation's own blocking options dialog), `DrawScalpMap` (a uiaxes-compatible port of EEGLAB's `topoplot()` used by `ScalpDistributionView`, needed because `topoplot()` itself only draws via gca/gcf-implicit state and was confirmed to silently draw nothing when targeted at a uiaxes hosted in a uitab), `DivergingColormap` (the shared blue/white/red colour scale `TimeFrequencyView` and `EpochView`'s ERP-image both use for a signed, zero-centred quantity)). |
+| `src/Transformations/+TransTools/` | Shared helpers for transformations: `CreateFilter`, `WindowByName` (the taper-window dispatch `Fourier.m` calls), `progressbar`, `FillChanlocs`/`Dipfit1005File`/`TemplateScalpLocs` for scalp-position lookups, `ComputeErsp` (`TimeFrequency.m`'s wavelet ERSP computation, pulled out here so it's callable/testable without going through that transformation's own blocking options dialog), `ComputeCoherenceMap`/`ComputeCoherenceTopography`, `DrawScalpMap` (a uiaxes-compatible port of EEGLAB's `topoplot()` used by `ScalpDistributionView`, needed because `topoplot()` itself only draws via gca/gcf-implicit state and was confirmed to silently draw nothing when targeted at a uiaxes hosted in a uitab), `DivergingColormap` (the shared blue/white/red colour scale `TimeFrequencyView` and `EpochView`'s ERP-image both use for a signed, zero-centred quantity), `AddSharedColorbar` (the dedicated-hidden-axes colorbar trick six views share), `ResolveScalpDistribution`/`TickedScalpBins` (shared by `ScalpDistribution`/`Brain3D` and their views), `ReadBrainMeshNV`/`DrawBrainMap` (`Brain3D`'s mesh projection), and the August 2026 audit's `FieldOr`/`LabelsToIdx`/`InitGuard` (the options-struct-parsing boilerplate ~15 transformations shared). `CheckOptions` was removed in that same audit -- orphaned by the `IIRFilter`→`Filter` rename, zero remaining callers. |
 | `src/webtree/` | Node.js/esbuild source for `WorkSpaceTree.html` (see above). Not needed to *run* Alakazam (the built output is committed) -- only to change the tree's look/behaviour. |
 | `src/Icons/` | Hand-drawn SVG source for every ribbon icon. `AlakazamRibbon.m` reads the View/WorkSpace/Settings/Grand Average ones from here directly at construction time (`encodeSvgFile`, the SVG counterpart of `encodeIcon`); each transformation's `Transformations/<Name>/<Name>.png` is a separately rasterized copy of `src/Icons/<Name>.svg` (kept as a PNG too since `WorkSpaceTree.iconForResult` needs a raster image for tree-node icons, and re-rasterizing isn't automatic -- regenerate it by hand after editing the `.svg`). |
 
@@ -173,7 +174,29 @@ Alakazam fields (`File`, `id`, `Call`, `params`, `DataType`, `DataFormat`).
   `IIRFilter`/`Fourier` issues, `WorkSpace.load` calling an unqualified
   `uigetfile2`, now fixed) are tracked wherever they were reported, not
   duplicated here.
+- **Phase 5** (table-drive the `@WorkSpace` loaders) and an **August 2026
+  audit**: four parallel sweeps (app-controller, transformation plugins,
+  UI layer, I/O/data-loading) surfaced real bugs and a further round of
+  duplication. Fixed: `onExportSpectral`'s misused error dialog;
+  `WorkSpace`'s constructor (a malformed `if`/`elseif` left its 4-argument
+  form silently unreachable, and its error branch threw a plain string
+  instead of an `MException`); `@label.m`'s `buttonmotion`/`buttonup`
+  referencing fields never set (a `cursor.m` copy-paste remnant, currently
+  dead since every caller passes empty callbacks); the trailing-separator
+  path bug across `@WorkSpace` (`strcat` assumed a directory string always
+  ended in a separator; the constructor's own fallback-defaults path,
+  built with `fullfile`, does not -- silently produced an empty tree on a
+  fresh install). Deduplicated: `TransTools.FieldOr`/`LabelsToIdx`/
+  `InitGuard` (options-struct boilerplate across ~19 transformation
+  files), `TransTools.AddSharedColorbar` (6 views), `Views/ZoomPanButtons`
+  (FourierView/SpectralMeasureView), `Views/TimeScrubStrip`
+  (ScalpDistributionView/Brain3DView), a dialog-chrome colour helper and
+  several small `Support/` helpers (see that row above), and the
+  `@WorkSpace` loaders themselves (`resolveCachePaths`/`registerRootNode`,
+  shared by all four format loaders; `open.m` collapsed to one small
+  format table). `@cursor`/`@label` brought onto the project's own
+  UpperCamelCase property standard.
 
 Next: **Phase 4** (formalise the transformation contract: replace the
 `EEG.Call` string-parsing and `eval` replay with a typed `{id, params}`
-record) and **Phase 5** (table-drive the `@WorkSpace` loaders).
+record).

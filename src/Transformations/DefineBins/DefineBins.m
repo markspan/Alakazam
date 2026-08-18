@@ -1,4 +1,4 @@
-function [EEG, options] = DefineBins(input, opts)
+function [EEG, options] = DefineBins(input, varargin)
 %% DefineBins  Assign events to ERP bins with an event-selection language.
 %
 % DefineBins replaces the ERPLAB EVENTLIST + BINLISTER step with a small,
@@ -100,13 +100,11 @@ function [EEG, options] = DefineBins(input, opts)
     EEG = input;
 
     %% Mode: interactive (Init) or replay (stored options struct)
-    if nargin == 1
-        options = 'Init';
-    else
-        options = opts;
-    end
-    interactive = (ischar(options) || isstring(options)) ...
-        && strcmpi(string(options), "Init");
+    % nargin is already known >= 1 (see the guard above), so InitGuard's own
+    % "no dataset" check never fires here -- this call only supplies the
+    % opts-default-to-'Init'/interactive-flag half of what it does, kept
+    % separate from DefineBins' own more specific "needs a dataset" message.
+    [options, interactive] = TransTools.InitGuard(nargin, 'Alakazam:DefineBins', varargin{:});
 
     if interactive
         [script, epochWin] = promptForScript();

@@ -14,8 +14,7 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs)
 %   (EEG.chanlocs(EEG.icachansind)). Returns REMOVED, a row vector of the
 %   component indices to subtract (possibly empty), and OK = true when the
 %   analyst confirmed, or REMOVED = [] and OK = false on cancel.
-    accentColor = [0.290 0.498 0.788];
-    bgColor     = [0.9608 0.9608 0.9608];
+    [accentColor, bgColor] = dialogChromeColors();
     removed = [];
     ok = false;
 

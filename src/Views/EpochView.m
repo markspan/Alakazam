@@ -134,7 +134,7 @@ classdef EpochView < handle
             % narrows HeatAxes' own Position to make room for it, breaking
             % the "same width as TraceAxes" pixel alignment below).
             this.Grid = uigridlayout(fig, [2 3], "RowHeight", {'3x', '1x'}, ...
-                "ColumnWidth", {0, '1x', 56}, "Padding", [4 4 4 4], "RowSpacing", 2);
+                "ColumnWidth", {0, '1x', TransTools.ColorbarColumnWidth()}, "Padding", [4 4 4 4], "RowSpacing", 2);
 
             this.BraceAxes = uiaxes(this.Grid);
             this.BraceAxes.Layout.Row = 1;
@@ -180,14 +180,8 @@ classdef EpochView < handle
             this.HeatImage.ButtonDownFcn = @(~, ~) this.notifyActivated();
             xlabel(this.HeatAxes, "Time (ms)");
 
-            colorbarAxes = uiaxes(this.Grid);
-            colorbarAxes.Layout.Row = 1;
-            colorbarAxes.Layout.Column = 3;
-            colorbarAxes.Visible = "off";
-            colormap(colorbarAxes, TransTools.DivergingColormap());
-            colorbarAxes.CLim = [-this.ColorLimit, this.ColorLimit];
-            cb = colorbar(colorbarAxes);
-            cb.Label.String = "Amplitude (\muV)";
+            TransTools.AddSharedColorbar(this.Grid, 1, 3, TransTools.DivergingColormap(), ...
+                [-this.ColorLimit, this.ColorLimit], "Amplitude (\muV)");
 
             this.TraceAxes = uiaxes(this.Grid);
             this.TraceAxes.Layout.Row = 2;

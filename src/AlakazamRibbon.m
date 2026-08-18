@@ -36,12 +36,25 @@ classdef AlakazamRibbon < handle
 %   everything below it down) whenever any group unfolded. That is gone:
 %   a group now opens as a small floating popup positioned directly under
 %   it, drawn over the plots area rather than resizing anything (see
-%   PopupComponent/Scrim below and showPopup/hidePopup). uihtml itself
-%   clips to its own box like an iframe -- CSS alone can't make content
-%   spill past AlakazamRibbon.html's own rectangle -- so the popup is a
-%   second uihtml component, parented directly to the figure (not to
-%   Grid/the ribbon's own uigridlayout cell) so it floats free of the grid
-%   and can be positioned/sized in figure pixel coordinates on demand.
+%   PopupComponent below and showPopup/hidePopup). uihtml itself clips to
+%   its own box like an iframe -- CSS alone can't make content spill past
+%   AlakazamRibbon.html's own rectangle -- so the popup is a second uihtml
+%   component, parented directly to the figure (not to Grid/the ribbon's
+%   own uigridlayout cell) so it floats free of the grid and can be
+%   positioned/sized in figure pixel coordinates on demand.
+%
+%   Click-away-to-dismiss (the standard "click anywhere else closes the
+%   dropdown" behaviour) is done via a temporary MainFigure.
+%   WindowButtonDownFcn hook while the popup is open (see showPopup/
+%   hidePopup/onFigureClickAway), the same figure-level Window*Fcn
+%   pattern Alakazam's own splitter dragging already uses (see
+%   beginTreeResize/beginTreesSplitResize). An earlier version used an
+%   opaque full-figure "scrim" uipanel instead; that had to be
+%   uistack(...,'top')'d above everything (the ribbon is built before
+%   TreeGrid/PlotsTabGroup exist, see setupMainWindow) to reliably catch
+%   the click, which meant it also visually covered the trees and plots
+%   the moment any popup opened. A WindowButtonDownFcn hook needs no
+%   visible element at all, so nothing gets hidden.
 %
 %   See also WORKSPACETREE, ALAKAZAM.
 
@@ -49,7 +62,6 @@ classdef AlakazamRibbon < handle
         Component       % the uihtml component
         Grid            % 1x1 uigridlayout the component fills; see the constructor
         PopupComponent  % uihtml, the floating group-overflow popup (hidden until needed)
-        Scrim           % uipanel covering the figure behind the popup; a click on it closes the popup
     end
 
     properties
@@ -61,6 +73,8 @@ classdef AlakazamRibbon < handle
     properties (Access = private)
         TabsData    % cell array of tab structs, built once from Transformations/*.json
         ActiveTab = "home"
+        PopupOpen = false                    % true while PopupComponent is visible; see showPopup/hidePopup
+        PrevWindowButtonDownFcn = []          % MainFigure's WindowButtonDownFcn, saved while the popup is open
     end
 
     properties (Access = private, Constant)
@@ -104,36 +118,21 @@ classdef AlakazamRibbon < handle
 
     methods (Access = private)
         function buildPopup(this, parent)
-        %BUILDPOPUP  Create the (hidden) Scrim + PopupComponent used by an
-        %   overflow group's dropdown. Both are parented directly to the
-        %   figure with an explicit pixel Position -- not to Grid, which is
-        %   pinned inside the fixed-height ribbon row -- so they float free
-        %   of the app's uigridlayout and can be positioned over the plots
-        %   area on demand (see showPopup). A component parented straight to
-        %   a uifigure with Position set is not grid-managed and can overlap
-        %   whatever else is drawn there, which is exactly the "floats over
-        %   the plots area" effect this replaces the old row-resize with.
-        %   Built once up front rather than lazily on first use, so the
-        %   first group-overflow click isn't slowed down by construction.
+        %BUILDPOPUP  Create the (hidden) PopupComponent used by an overflow
+        %   group's dropdown, parented directly to the figure with an
+        %   explicit pixel Position -- not to Grid, which is pinned inside
+        %   the fixed-height ribbon row -- so it floats free of the app's
+        %   uigridlayout and can be positioned over the plots area on demand
+        %   (see showPopup). A component parented straight to a uifigure
+        %   with Position set is not grid-managed and can overlap whatever
+        %   else is drawn there, which is exactly the "floats over the
+        %   plots area" effect this replaces the old row-resize with.
+        %   Click-away-to-dismiss is wired in showPopup/hidePopup via
+        %   MainFigure.WindowButtonDownFcn, not a visible element, so there
+        %   is nothing else to build here. Built once up front rather than
+        %   lazily on first use, so the first group-overflow click isn't
+        %   slowed down by construction.
             fig = ancestor(parent, 'figure');
-
-            % Scrim: an otherwise invisible panel, sized to the figure, that
-            % sits directly behind the popup. Its only job is to catch the
-            % next click anywhere outside the popup and close it -- the
-            % standard click-away-to-dismiss behaviour for a dropdown.
-            % NOTE: both this and PopupComponent are built here, i.e.
-            % *before* setupMainWindow goes on to create TreeGrid and
-            % PlotsTabGroup -- so creation order alone would leave them
-            % sitting *behind* the tree/plots, not in front. showPopup
-            % therefore explicitly uistacks both to the top on every open,
-            % rather than relying on this constructor's ordering. Position
-            % here is just a placeholder; showPopup re-fits it to the
-            % figure's current size every time, in case the window was
-            % resized meanwhile.
-            this.Scrim = uipanel(fig, 'BorderType', 'none', ...
-                'BackgroundColor', fig.Color, 'Visible', 'off', ...
-                'Position', [1 1 fig.Position(3) fig.Position(4)], ...
-                'ButtonDownFcn', @(~, ~) this.hidePopup());
 
             popupHtmlFile = fullfile(fileparts(mfilename('fullpath')), 'AlakazamRibbonPopup.html');
             this.PopupComponent = uihtml(fig, 'HTMLSource', popupHtmlFile, ...
@@ -216,10 +215,14 @@ classdef AlakazamRibbon < handle
             % d.left/d.top are top-left-origin CSS pixels, measured within
             % the ribbon HTML page (which exactly fills Component, so this
             % is a 1:1 pixel match with no separate DPI/scroll correction
-            % needed). Figure coordinates are bottom-left-origin, so the
-            % group's bottom edge (where the dropdown should hang from) is:
-            groupBottomFromPageTop = double(d.top) + double(d.height);
-            anchorY = ribbonRect(2) + (ribbonRect(4) - groupBottomFromPageTop);
+            % needed). Figure coordinates are bottom-left-origin. The popup
+            % is anchored to the group's TOP edge, not its bottom: it is
+            % taller than the group it is replacing, so lining its own top
+            % edge up with the group's top edge makes it open by drawing
+            % over the group (and the rest of the ribbon row) rather than
+            % hanging as a separate flyout below the ribbon strip.
+            groupTopFromPageTop = double(d.top);
+            anchorY = ribbonRect(2) + (ribbonRect(4) - groupTopFromPageTop);
             anchorX = ribbonRect(1) + double(d.left);
 
             nCols = min(this.PopupCols, max(1, numel(items)));
@@ -239,26 +242,60 @@ classdef AlakazamRibbon < handle
             this.PopupComponent.Data = struct('title', group.title, 'items', {items});
             this.PopupComponent.Position = [anchorX, anchorY - popupHeight, popupWidth, popupHeight];
 
-            this.Scrim.Position = [1 1 fig.Position(3) fig.Position(4)];
-            this.Scrim.Visible = 'on';
             this.PopupComponent.Visible = 'on';
-            % Both were built before TreeGrid/PlotsTabGroup exist (see
-            % buildPopup), so creation order alone would put them behind
-            % those -- explicitly restack on every open instead. Scrim
-            % first, then Popup, so Popup ends up above Scrim too.
-            uistack(this.Scrim, 'top');
+            % PopupComponent was built before TreeGrid/PlotsTabGroup exist
+            % (see buildPopup), so creation order alone would put it behind
+            % those -- explicitly restack on every open instead.
             uistack(this.PopupComponent, 'top');
+
+            % Click-away-to-dismiss: hook MainFigure's WindowButtonDownFcn
+            % for as long as the popup is open (see onFigureClickAway),
+            % restoring whatever handler was there before on close. Saved
+            % only on the first open of a (possibly re-targeted) popup, so
+            % switching straight from one overflow group to another via
+            % onEvent's groupExpand case doesn't clobber the real saved
+            % handler with our own.
+            if ~this.PopupOpen
+                this.PrevWindowButtonDownFcn = fig.WindowButtonDownFcn;
+            end
+            fig.WindowButtonDownFcn = @(~, ~) this.onFigureClickAway();
+            this.PopupOpen = true;
+        end
+
+        function onFigureClickAway(this)
+        %ONFIGURECLICKAWAY  MainFigure.WindowButtonDownFcn while the popup
+        %   is open (see showPopup/hidePopup). A click landing on the popup
+        %   itself is handled by AlakazamRibbonPopup.html directly (see
+        %   onPopupEvent); this only needs to close the popup when the
+        %   click lands anywhere else.
+            if isempty(this.PopupComponent) || ~isvalid(this.PopupComponent)
+                return;
+            end
+            fig = ancestor(this.Component, 'figure');
+            pt = fig.CurrentPoint;              % [x y], figure pixels, bottom-left origin
+            r = this.PopupComponent.Position;   % [left bottom width height]
+            inside = pt(1) >= r(1) && pt(1) <= r(1) + r(3) && ...
+                     pt(2) >= r(2) && pt(2) <= r(2) + r(4);
+            if ~inside
+                this.hidePopup();
+            end
         end
 
         function hidePopup(this)
         %HIDEPOPUP  Close the floating dropdown, if one is open. Safe to
-        %   call unconditionally (tab changes, item pushes, and the scrim's
-        %   own click-away all just call this without checking state first).
+        %   call unconditionally (tab changes, item pushes, and
+        %   onFigureClickAway all just call this without checking state
+        %   first).
             if ~isempty(this.PopupComponent) && isvalid(this.PopupComponent)
                 this.PopupComponent.Visible = 'off';
             end
-            if ~isempty(this.Scrim) && isvalid(this.Scrim)
-                this.Scrim.Visible = 'off';
+            if this.PopupOpen
+                fig = ancestor(this.Component, 'figure');
+                if ~isempty(fig) && isvalid(fig)
+                    fig.WindowButtonDownFcn = this.PrevWindowButtonDownFcn;
+                end
+                this.PopupOpen = false;
+                this.PrevWindowButtonDownFcn = [];
             end
         end
 
@@ -481,59 +518,36 @@ classdef AlakazamRibbon < handle
     end
 end
 
-function info = getIndividualTransInfos(TName, transRoot)
-    % Retrieve individual transformation information from a JSON file.
-    %
-    % Args:
-    %     TName: The name of the transformation.
-    %     transRoot: Absolute path to the Transformations directory.
-    %
-    % Returns:
-    %     info: A structure containing the transformation information.
+function info = getIndividualTransInfos(transformName, transRoot)
+%GETINDIVIDUALTRANSINFOS  One transformation's <Name>.json manifest, decoded
+%   and tagged with its own source folder name.
+%   TRANSFORMNAME is the transformation's folder name under TRANSROOT (also
+%   its manifest's file stem, <transformName>.json). Returns INFO, the
+%   decoded manifest struct, with INFO.Folder set to TRANSFORMNAME (== the
+%   transform id / EEG.Call), so the manifest's own display Name can differ
+%   from the folder without breaking the icon lookup or the dispatch id.
+    transformName = char(transformName);
 
-    % Convert TName to a character array
-    TName = char(TName);
+    manifestFile = dir(fullfile(transRoot, transformName, [transformName '.json']));
+    manifestFile = fullfile(manifestFile.folder, manifestFile.name);
+    fid = fopen(manifestFile);
+    raw = fread(fid, inf);
+    fclose(fid);
 
-    % Locate and read the JSON file containing the transformation information
-    json = dir(fullfile(transRoot, TName, [TName '.json']));
-    json = fullfile(json.folder, json.name);
-    jsonfile = fopen(json);
-    jsonraw = fread(jsonfile, inf);
-    fclose(jsonfile);
-
-    % Decode the JSON file content
-    info = jsondecode(char(jsonraw'));
-
-    % Record the transformation's own folder name (== the transform id /
-    % EEG.Call), so the display Name can differ from the folder without
-    % breaking the icon lookup or the dispatch id.
-    info.Folder = TName;
+    info = jsondecode(char(raw'));
+    info.Folder = transformName;
 end
 
 function transInfo = getTransInfos(transRoot)
-    % Retrieve information for all transformations.
-    %
-    % Args:
-    %     transRoot: Absolute path to the Transformations directory.
-    %
-    % Returns:
-    %     transInfo: A structure array containing information for all transformations.
+%GETTRANSINFOS  Every transformation's manifest under TRANSROOT, as a
+%   struct array (one entry per subfolder, +TransTools excluded).
+    entries = dir(fullfile(transRoot, '.'));
+    folderNames = {entries([entries.isdir]).name};
+    folderNames = folderNames(~ismember(folderNames, {'.', '..', '+TransTools'}));
 
-    % List directories within the 'Transformations' folder
-    fL = dir(fullfile(transRoot, '.'));
-
-    % Filter out unwanted directory names (keep real sub-directories only)
-    tF = {fL([fL.isdir]).name};
-    tF = tF(~ismember(tF, {'.', '..', '+TransTools'}));
-
-    % Initialize an empty cell array to store transformation information
     transInfo = {};
-
-    % Retrieve and store information for each transformation
-    for Trans = tF
-        transInfo{end+1} = getIndividualTransInfos(Trans{1}, transRoot); %#ok<AGROW>
+    for folderName = folderNames
+        transInfo{end+1} = getIndividualTransInfos(folderName{1}, transRoot); %#ok<AGROW>
     end
-
-    % Convert the cell array to a structure array
     transInfo = [transInfo{:}];
 end

@@ -38,11 +38,7 @@ function onApplyTemplate(this)
         return;
     end
 
-    % Run from the repository root (historic behaviour): individual
-    % plugins may resolve resources relative to it -- same as
-    % onTransformation/onNodeDropped/onApplyToAllRawFiles.
-    originalDir = cd(this.RepoRoot);
-    restoreDir  = onCleanup(@() cd(originalDir)); % restores cwd at method exit
+    restoreDir = this.enterRepoRoot();
     this.MainFigure.Pointer = "watch";
     restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
 

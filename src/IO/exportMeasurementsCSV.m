@@ -54,7 +54,7 @@ function writeEntry(fid, entry)
         nBins       = size(win.amplitude, 2);
 
         for b = 1:nBins
-            binField = csvField(binLabel(EEG, b));
+            binField = csvField(csvBinLabel(EEG, b));
             for c = 1:numel(win.channels)
                 chField = csvField(win.channels{c});
                 prefix = sprintf('%s,%s,%s,%s,%s,', datasetField, typeField, binField, chField, windowField);
@@ -119,34 +119,4 @@ function [mode, isBand] = areaModeScope(win, measureName)
     end
 end
 
-function label = binLabel(EEG, b)
-%BINLABEL  EEG.bindesc(b)'s own label, or the bare bin number if this
-%   dataset carries no bindesc (or a shorter one than expected) --
-%   matches exportGrandAveragesCSV's own fallback exactly.
-    if isfield(EEG, 'bindesc') && numel(EEG.bindesc) >= b && ~isempty(EEG.bindesc(b).label)
-        label = EEG.bindesc(b).label;
-    else
-        label = num2str(b);
-    end
-end
-
-function field = csvField(value)
-%CSVFIELD  A CSV-quoted field if VALUE needs it (contains a comma, quote,
-%   or newline), otherwise VALUE unchanged. Same as exportGrandAveragesCSV's
-%   own helper (kept as a separate copy here rather than a shared
-%   dependency, matching that file's own precedent).
-    field = char(string(value));
-    if any(field == ',' | field == '"' | field == newline)
-        field = ['"' strrep(field, '"', '""') '"'];
-    end
-end
-
-function field = numField(value)
-%NUMFIELD  A numeric value formatted for CSV, NA (R's own missing-value
-%   token) if it is NaN. Same as exportGrandAveragesCSV's own helper.
-    if isnan(value)
-        field = 'NA';
-    else
-        field = sprintf('%.6g', value);
-    end
-end
+% csvBinLabel/csvField/numField (src/Support/) used to be duplicated locally here.

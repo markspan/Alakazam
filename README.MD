@@ -42,9 +42,13 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   same recipe applied later, in another workspace, or after Alakazam has
   been restarted.
 - **Format support.** BrainVision (`.vhdr`, via the bva-io EEGLAB plugin),
-  EEGLAB `.set`, and previously-saved Alakazam `.mat` sessions. Each raw file
-  is cached to `.mat` on first read and only re-parsed if the raw file is
-  newer than its cache.
+  EEGLAB `.set`, ERPLAB erpsets (`.erp`, read directly as an already-averaged
+  root dataset, no ERPLAB installation required -- see `erpsetToAveraged`),
+  and previously-saved Alakazam `.mat` sessions. Each raw file is cached to
+  `.mat` on first read and only re-parsed if the raw file is newer than its
+  cache. Any Averaged dataset's right-click menu offers **Export ERPset...**,
+  the reverse conversion (`averagedToErpset`), to hand a result back to
+  ERPLAB.
 - **Fast visualisation of long recordings.** Continuous signals are drawn by
   a purpose-built renderer that decimates through a precomputed min/max
   pyramid, so scrolling and zooming stay smooth on multi-hour,
@@ -58,9 +62,11 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   assignment with a small purpose-built language, baseline correction,
   trial averaging (including bin-difference/interaction contrasts),
   amplitude-threshold artefact marking, automated ICA- and GEDAI-based
-  artefact removal, Fourier analysis, and scalp topography plots (see
-  [Transformations](#transformations)); grand averaging across subjects is
-  a separate mechanism with its own tree and dialog.
+  artefact removal, Fourier analysis, and scalp topography plots, including
+  a rotatable 3D brain view with an optional real MNE source estimate (see
+  [Transformations](#transformations) and [3D brain view](#3d-brain-view));
+  grand averaging across subjects is a separate mechanism with its own tree
+  and dialog.
 - **Session workspaces.** Working directories and the processing tree are
   saved and reloaded as a workspace.
 
@@ -114,6 +120,10 @@ its GEDAI plugin dependency uses GPU acceleration when a GPU is actually
 detected, and falls back to CPU (via a small compatibility shim,
 `src/Compat/gpuDeviceCount.m`, on a machine without the toolbox at all)
 otherwise, so a machine without a GPU is just slower, not broken.
+[FieldTrip](https://www.fieldtriptoolbox.org/) is an optional, larger
+(~400 MB) dependency needed only for `Brain3D`'s Source-estimate mode (see
+[3D brain view](#3d-brain-view)); it downloads on first use of that mode,
+after an explicit consent prompt, not at startup.
 
 ```matlab
 % From the repository root:
@@ -177,26 +187,78 @@ The current library:
 | Transformation | Does |
 |---|---|
 | `Filter` | FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering (EEGLAB's `firfilt`, Kaiser window). Each filter is set by just a frequency and a dB rating (stopband attenuation); the filter order, transition band and window are chosen automatically. |
+| `ChannelEditor` | Edit channel labels, types and locations. |
 | `ReRef` | Re-references the data (wraps `pop_reref`). |
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
+| `Interpolate` | Interpolates bad channels. |
+| `Resample` | Changes the sampling rate of continuous data. |
 | `DefineBins` | Assigns events to ERP bins with a small, purpose-built event-selection language -- see [`bin_language.md`](src/Transformations/DefineBins/bin_language.md) for the full reference. Replaces the ERPLAB EVENTLIST + BINLISTER step. |
 | `Baseline` | Baseline-corrects epoched data. |
 | `Average` | Averages one dataset's epoched trials into an ERP, including bin-difference/interaction contrast bins (see `bin_language.md` §11-12). |
 | `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold. |
+| `RemoveComponents` | Manually subtracts ICA components chosen by hand. Shown in the ribbon as "ICA". |
 | `AutoEyeICA` | Runs ICA, classifies components with ICLabel, and automatically removes eye components above a probability threshold. |
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
+| `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface -- either as a scalp-topography projection (default) or a real MNE source estimate (see [3D brain view](#3d-brain-view)). |
 | `Measure` | Quantifies ERP components in named time windows -- mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency) -- on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference and [Measurement export](#measurement-export). |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
 | `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and -- against an optional photodiode reference -- coherence and phase-lag, per channel and bin; batch-exported via the Measurements tab's **Spectral** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT -- the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
+| `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
 
 Grand averaging (combining several subjects' `Average` results into one) is
 a separate mechanism, not a transformation plugin: it has its own ribbon tab
 and dialog (`GrandAverage.m`/`GrandAverageDialog.m`) and lands in the
 "Grand Averages" tree rather than nested under any one subject's branch
 (see [Key features](#key-features)).
+
+## 3D brain view
+
+`Brain3D` opens the same scrubbable, per-bin averaged ERP as
+`ScalpDistribution`, but drawn on a rotatable 3D brain (click-and-drag to
+orbit) instead of a flat 2D topoplot, with a **Projection** dropdown
+choosing how the data is drawn:
+
+- **Scalp topography** (the default) is the same spherical-spline
+  interpolation `ScalpDistribution`'s flat topoplot uses, projected onto a
+  brain-shaped surface (a BrainNet Viewer ICBM152 mesh) purely for
+  legibility. It is **not source-localized** -- the colour scale is the
+  measured scalp voltage itself (µV, signed, symmetric about zero), exactly
+  as in the flat 2D plot.
+- **Source estimate (MNE)** is a real inverse computation: a
+  Tikhonov-regularized minimum-norm estimate, noise-normalized dSPM-style
+  (Dale et al., 2000 -- see [References](#references)), using
+  [FieldTrip](https://www.fieldtriptoolbox.org/)'s template BEM head model,
+  template 10-5 electrode positions, and a template cortical-sheet source
+  model, drawn directly on that cortical surface. Selecting it the first
+  time prompts to download FieldTrip (about 400 MB, one time, opt-in -- see
+  [`dependencies.md`](dependencies.md)); switching into it, or onto a bin
+  not yet computed, takes a moment longer than scalp mode while the
+  leadfield/inverse is built (cached afterwards per channel set/bin).
+
+  **Its colour scale looks nothing like scalp mode's, on purpose.** dSPM
+  normalization corrects raw minimum-norm's bias toward superficial
+  sources and turns the result into a statistic -- approximately "how many
+  noise standard deviations above baseline" -- comparable *across* source
+  locations, which raw dipole-moment magnitude is not. It is still **not**
+  on a µV-like physical scale, so the colorbar is labelled "dSPM
+  (noise-normalized)", not an amplitude; do not compare its numbers to
+  scalp mode's µV scale. One further simplification worth knowing: the
+  assumed noise covariance behind both the regularization and the dSPM
+  normalization itself is a scaled identity, not an independently
+  estimated one -- Alakazam's pipeline runs on already-averaged ERPs, with
+  no single-trial baseline available at this stage to estimate a real
+  noise covariance from (see
+  [`ComputeSourceEstimate.m`](src/Transformations/+TransTools/ComputeSourceEstimate.m)
+  for the full derivation).
+
+  **This is template-based, not a per-subject localization.** No
+  per-subject MRI or digitised electrode positions are used (same "10-5
+  template by channel label" approach the rest of Alakazam uses for scalp
+  topography) -- a real inverse computation, more physiologically grounded
+  than the scalp-topography projection, but still an approximation.
 
 ## Measurement export
 
@@ -461,6 +523,22 @@ Scientific/methodological:
   [research.ics.aalto.fi/ica/fastica](https://research.ics.aalto.fi/ica/fastica/).
   Used by `AutoEyeICA` when installed (falls back to `pop_runica`'s own
   default algorithm otherwise).
+- Oostenveld, R., Fries, P., Maris, E., & Schoffelen, J.-M. (2011). FieldTrip:
+  open source software for advanced analysis of MEG, EEG, and invasive
+  electrophysiological data. *Computational Intelligence and Neuroscience*,
+  2011, 156869. DOI:
+  [10.1155/2011/156869](https://doi.org/10.1155/2011/156869).
+  [fieldtriptoolbox.org](https://www.fieldtriptoolbox.org/). The template
+  head model, electrode positions, and cortical-sheet source model
+  `Brain3D`'s Source-estimate mode builds its minimum-norm inverse on; an
+  optional dependency, not bundled (see [3D brain view](#3d-brain-view)).
+- Dale, A. M., Liu, A. K., Fischl, B. R., Buckner, R. L., Belliveau, J. W.,
+  Lewine, J. D., & Halgren, E. (2000). Dynamic statistical parametric
+  mapping: combining fMRI and MEG for high-resolution imaging of cortical
+  activity. *Neuron*, 26(1), 55-67. DOI:
+  [10.1016/S0896-6273(00)81138-1](https://doi.org/10.1016/S0896-6273(00)81138-1).
+  The dSPM noise-normalization `Brain3D`'s Source-estimate mode applies to
+  its minimum-norm inverse (see [3D brain view](#3d-brain-view)).
 - Delorme, A., & Makeig, S. (2004). EEGLAB: an open source toolbox for
   analysis of single-trial EEG dynamics. *Journal of Neuroscience Methods*,
   134(1), 9-21. [sccn.ucsd.edu/eeglab](https://sccn.ucsd.edu/eeglab/index.php).

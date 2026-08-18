@@ -12,12 +12,11 @@ function options = ReRefDialog(chanlocs, stored)
 %   on cancel.
     labels = arrayfun(@(c) char(string(c.labels)), chanlocs, 'UniformOutput', false);
     MODES = {'Average', 'Specific channels'};
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
     options = [];
 
     seed = struct('mode', 'Average', 'refChannels', {{}}, 'exclude', {{}}, 'keepref', false);
-    seed = mergeSeed(seed, stored);
+    seed = mergeSeedFields(seed, stored);
 
     fig = uifigure('Name', 'ReRef', 'Position', [100 100 460 410], 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
@@ -76,22 +75,5 @@ function options = ReRefDialog(chanlocs, stored)
     end
 end
 
-% ======================================================================= %
-function v = intersectLabels(all, want)
-    v = all(ismember(all, want));
-    if isempty(v); v = {}; end
-end
-
-function c = asCell(v)
-    if isempty(v); c = {}; elseif ischar(v); c = {v}; else; c = v; end
-end
-
-function seed = mergeSeed(seed, stored)
-    if ~isstruct(stored); return; end
-    f = fieldnames(seed);
-    for j = 1:numel(f)
-        if isfield(stored, f{j}) && ~isempty(stored.(f{j}))
-            seed.(f{j}) = stored.(f{j});
-        end
-    end
-end
+% intersectLabels/asCell (src/Support/) and mergeSeedFields (src/Support/)
+% used to be duplicated locally here; see those files.

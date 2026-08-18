@@ -26,8 +26,15 @@ function onExportSpectral(this)
     restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
     try
         exportSpectralCSV(entries, targetFile);
-    catch ME
-        this.showTransformationError('Export Spectral Measures', ME);
+    catch err
+        % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents. Plain
+        % warndlg(err.message, ...), not showTransformationError -- that
+        % helper is built for a single-dataset transformation failure (its
+        % text talks about "the selected dataset"), which doesn't fit a
+        % bulk, workspace-wide export with no one dataset involved; matches
+        % onExportMeasurements.m/onExportGrandAverages.m/onExportErpset.m's
+        % own error handling for the same kind of export.
+        warndlg(err.message, 'Could not export Spectral Measures');
         return;
     end
     msgbox(sprintf('Exported %d dataset(s) to %s', numel(entries), targetFile), ...

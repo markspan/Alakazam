@@ -18,6 +18,7 @@ from the sources below and place them where noted.
 | bva-io, ICLabel | EEGLAB plugins (`Documents/MATLAB/eeglab/.../plugins/`) | current (unpinned) | installed automatically by `EEGLabEnvironment.ensure()` if missing |
 | FastICA | `Documents/MATLAB/FastICA/` | 2.5 | https://research.ics.aalto.fi/ica/fastica/ -- installed automatically by `EEGLabEnvironment.ensure()`; used by `AutoEyeICA` when present (falls back to `pop_runica`'s own default algorithm otherwise) |
 | GEDAI | `Documents/MATLAB/GEDAI/` | 1.7 | https://github.com/neurotuning/GEDAI-master -- **licensed PolyForm Noncommercial 1.0.0** (free for personal/noncommercial research use only, separate licence needed for commercial use); installed lazily on first `AutoGEDAI` run, only after the user explicitly consents to the download (see `AutoGEDAI.m`'s `ensureGEDAI`) |
+| FieldTrip | `Documents/MATLAB/fieldtrip/` | 20260812, pinned (see below) | https://www.fieldtriptoolbox.org/ -- **GPLv2/v3**; the full release (~400 MB, not the "lite" build, which strips the template head/source models this needs), installed lazily on first use of `Brain3DView`'s Source-estimate mode, only after the user explicitly consents (see `TransTools.ensureFieldTrip`). Pinned to a specific dated build (deliberately, unlike EEGLAB's own always-latest install) so source-modeling results stay reproducible across a project rather than shifting under an analyst whenever a new FieldTrip snapshot appears -- update `TransTools.ensureFieldTrip`'s `fieldTripUrl` by hand when a refresh is actually wanted. |
 
 `eeglabolder/` was an older bundled EEGLAB copy; it has been removed. Only one
 EEGLAB lives on the path at a time.
@@ -64,6 +65,12 @@ candidates for removal, evidently left over from the old Java-Swing
 tree at all (`git log --all -- '*findjobj*' '*uiinspect*'` shows they were
 already removed, in an earlier "repo legibility cleanup" commit predating
 this pass). This listing was itself stale; corrected.
+
+## Data assets (tracked in-repo)
+
+| Asset | Location | Version | Source |
+|---|---|---|---|
+| BrainMesh_ICBM152.nv | `src/Meshes/` | unversioned, fetched 2026-08-18 | https://github.com/mingruixia/BrainNet-Viewer -- **GPLv3**, same licence as Alakazam itself; see `src/Meshes/README.md` for format/coordinate notes. Used by the `Brain3D` transformation/`Brain3DView` for the rotatable 3D scalp-topography-on-a-brain view. |
 
 ## Build-time only (not needed to run the app)
 

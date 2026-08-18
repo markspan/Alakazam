@@ -50,7 +50,7 @@ classdef CoherenceView < handle
 
             this.Grid = uigridlayout(fig, [nRows + 1, nCols + 1], ...
                 "RowHeight", [{22}, repmat({'1x'}, 1, nRows)], ...
-                "ColumnWidth", [repmat({'1x'}, 1, nCols), {56}], "Padding", [4 4 4 4]);
+                "ColumnWidth", [repmat({'1x'}, 1, nCols), {TransTools.ColorbarColumnWidth()}], "Padding", [4 4 4 4]);
 
             this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "center", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
@@ -88,18 +88,12 @@ classdef CoherenceView < handle
 
             % Shared 0..max colorbar (coherence is bounded [0,1]; scaled to the
             % data's own max so low-coherence structure still shows contrast).
-            colorbarAxes = uiaxes(this.Grid);
-            colorbarAxes.Layout.Column = nCols + 1;
             if nRows > 1
-                colorbarAxes.Layout.Row = [2, nRows + 1];
+                cbRow = [2, nRows + 1];
             else
-                colorbarAxes.Layout.Row = 2;
+                cbRow = 2;
             end
-            colorbarAxes.Visible = "off";
-            colormap(colorbarAxes, cmap);
-            colorbarAxes.CLim = [0, this.climMax()];
-            cb = colorbar(colorbarAxes);
-            cb.Label.String = "Coherence";
+            TransTools.AddSharedColorbar(this.Grid, cbRow, nCols + 1, cmap, [0, this.climMax()], "Coherence");
 
             this.redraw();
             for b = 1:nBins

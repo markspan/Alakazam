@@ -1,4 +1,4 @@
-function [EEG, opts] = RemoveComponents(input, opts)
+function [EEG, opts] = RemoveComponents(input, varargin)
 %% RemoveComponents  Manually subtract ICA components chosen by hand.
 %
 %   The manual counterpart of AutoEyeICA: rather than pruning eye components
@@ -26,14 +26,7 @@ function [EEG, opts] = RemoveComponents(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, opts] = RemoveComponents(input)        % interactive selector
 %     [EEG, opts] = RemoveComponents(input, opts)  % subtract opts.components
-if nargin < 1
-    throw(MException('Alakazam:RemoveComponents', 'Problem in RemoveComponents: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
-
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:RemoveComponents', varargin{:});
 
 EEG = ensureDecomposition(input);
 

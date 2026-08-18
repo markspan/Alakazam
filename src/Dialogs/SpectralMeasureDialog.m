@@ -41,8 +41,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     end
     tableData = vertcat(seedRows{:});
 
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'SpectralMeasure', 'Position', [100 100 900 560], 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Spectral measure', 'FontSize', 14, 'FontWeight', 'bold', ...
@@ -250,10 +249,4 @@ function val = pickChoice(want, choices)
     if isempty(hit); val = choices{1}; else; val = choices{hit}; end
 end
 
-function lines = linesFromText(text)
-    if isempty(char(string(text))); lines = {''}; else; lines = cellstr(splitlines(string(text))); end
-end
-
-function text = textFromLines(value)
-    text = char(strjoin(string(value), newline));
-end
+% linesFromText/textFromLines (src/Support/) used to be duplicated locally here.

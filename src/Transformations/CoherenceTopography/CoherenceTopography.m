@@ -23,10 +23,7 @@ function [EEG, opts] = CoherenceTopography(varargin)
 %   Signature (Alakazam transformation contract):
 %   [EEG, opts] = CoherenceTopography(input)       % options dialog
 %   [EEG, opts] = CoherenceTopography(input, opts) % replay a stored struct
-if nargin < 1
-    throw(MException('Alakazam:CoherenceTopography', ...
-        'Problem in CoherenceTopography: needs a dataset to run on, and none was given.'));
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:CoherenceTopography', varargin{2:end});
 input = varargin{1};
 
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
@@ -39,13 +36,13 @@ end
 
 labels = {input.chanlocs.labels};
 
-if nargin < 2
+if interactive
     stored = TransformSettings.get('CoherenceTopography');
     if isempty(stored) || ~isstruct(stored)
         stored = struct('RefChannel', '', 'MinFreq', 55, 'MaxFreq', 68, ...
             'Frequency', 0, 'TimeStart', 0, 'TimeStop', 0);
     end
-    refList = TransTools.ReferenceChoices(labels, getField(stored, 'RefChannel', ''));
+    refList = TransTools.ReferenceChoices(labels, TransTools.FieldOr(stored, 'RefChannel', ''));
     opts = TransformOptionsDialog( ...
         'Description', ['Scalp head-map of every channel''s coherence to a reference ' ...
             '(e.g. a photodiode), per bin. The frequency is auto-detected from the ' ...
@@ -65,8 +62,6 @@ if nargin < 2
         return;
     end
     TransformSettings.set('CoherenceTopography', opts);
-else
-    opts = varargin{2};
 end
 
 %% Validate + resolve the reference channel
@@ -140,8 +135,4 @@ EEG.CohTopoRefAmp    = refAmp;              % reference evoked spectrum over the
 EEG.CohTopoAmpFreqs  = ampFreqs;
 EEG.CohTopoBins      = keep;                % original bin indices of the kept (trial-bearing) bins
 EEG.CohTopoBinLabels = binLabels;
-end
-
-function v = getField(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
 end

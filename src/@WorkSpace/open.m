@@ -37,25 +37,19 @@ function open(this,~,~)
         end
     end
 
-    fileList = dir (strcat(this.RawDirectory, '*.mat'));
-    for file = 1:length(fileList)
-        disp(fileList(file).name);
-        this.loadMATFile(this, fileList(file).name)
-    end
-    fileList = dir (strcat(this.RawDirectory, '*.vhdr'));
-    for file = 1:length(fileList)
-        disp(fileList(file).name);
-        this.loadBVAFile(this, fileList(file).name)
-    end
-    fileList = dir (strcat(this.RawDirectory, '*.set'));
-    for file = 1:length(fileList)
-        disp(fileList(file).name);
-        this.loadSETFile(this, fileList(file).name)
-    end
-    fileList = dir (strcat(this.RawDirectory, '*.erp'));
-    for file = 1:length(fileList)
-        disp(fileList(file).name);
-        this.loadERPFile(this, fileList(file).name)
+    % One loader per raw format, in a fixed order (mat, vhdr, set, erp --
+    % unchanged from before this was table-driven, in case anything ever
+    % turns out to depend on it). fullfile, not strcat -- see
+    % resolveCachePaths for why: RawDirectory is not guaranteed to end in
+    % a path separator, and strcat blindly concatenating one with a glob
+    % pattern silently searched the wrong (parent) directory.
+    formats = {'*.mat', 'loadMATFile'; '*.vhdr', 'loadBVAFile'; ...
+               '*.set', 'loadSETFile'; '*.erp', 'loadERPFile'};
+    for row = 1:size(formats, 1)
+        fileList = dir(fullfile(this.RawDirectory, formats{row, 1}));
+        for file = 1:numel(fileList)
+            this.(formats{row, 2})(fileList(file).name);
+        end
     end
 
     this.loadGrandAverages();

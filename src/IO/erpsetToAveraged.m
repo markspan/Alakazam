@@ -21,25 +21,25 @@ function EEG = erpsetToAveraged(ERP)
     [nchan, npnts, nbin] = size(data);
 
     EEG = struct();
-    EEG.setname    = getField(ERP, 'erpname', '');
+    EEG.setname    = TransTools.FieldOr(ERP, 'erpname', '');
     EEG.erpname    = EEG.setname;
-    EEG.subject    = getField(ERP, 'subject', '');
-    EEG.nbchan     = firstNonEmpty(getField(ERP, 'nchan', []), nchan);
-    EEG.pnts       = firstNonEmpty(getField(ERP, 'pnts', []), npnts);
+    EEG.subject    = TransTools.FieldOr(ERP, 'subject', '');
+    EEG.nbchan     = firstNonEmpty(TransTools.FieldOr(ERP, 'nchan', []), nchan);
+    EEG.pnts       = firstNonEmpty(TransTools.FieldOr(ERP, 'pnts', []), npnts);
     EEG.trials     = 1;                    % averaged: one "trial" (waveform) per bin
-    EEG.srate      = getField(ERP, 'srate', NaN);
-    EEG.xmin       = getField(ERP, 'xmin', NaN);   % seconds
-    EEG.xmax       = getField(ERP, 'xmax', NaN);   % seconds
-    EEG.times      = reshape(double(getField(ERP, 'times', [])), 1, []); % ms
+    EEG.srate      = TransTools.FieldOr(ERP, 'srate', NaN);
+    EEG.xmin       = TransTools.FieldOr(ERP, 'xmin', NaN);   % seconds
+    EEG.xmax       = TransTools.FieldOr(ERP, 'xmax', NaN);   % seconds
+    EEG.times      = reshape(double(TransTools.FieldOr(ERP, 'times', [])), 1, []); % ms
     if isempty(EEG.times) && isfinite(EEG.srate)
         % Reconstruct a millisecond time vector from srate/xmin when absent.
         EEG.times = (EEG.xmin + (0:npnts - 1) / EEG.srate) * 1000;
     end
     EEG.data       = data;
     EEG.stErr      = errorOrZeros(ERP, size(data));
-    EEG.chanlocs   = getField(ERP, 'chanlocs', struct([]));
-    EEG.chaninfo   = getField(ERP, 'chaninfo', struct());
-    EEG.ref        = getField(ERP, 'ref', '');
+    EEG.chanlocs   = TransTools.FieldOr(ERP, 'chanlocs', struct([]));
+    EEG.chaninfo   = TransTools.FieldOr(ERP, 'chaninfo', struct());
+    EEG.ref        = TransTools.FieldOr(ERP, 'ref', '');
     EEG.event      = [];                   % averaged data carries no events
     EEG.epoch      = [];
     EEG.DataType   = 'TIMEDOMAIN';
@@ -61,18 +61,11 @@ function EEG = erpsetToAveraged(ERP)
     EEG.ntrials = sum(accepted(isfinite(accepted)));
 end
 
-% ----------------------------------------------------------------------- %
-function v = getField(s, name, default)
-    if isfield(s, name) && ~isempty(s.(name))
-        v = s.(name);
-    else
-        v = default;
-    end
-end
-
-function v = firstNonEmpty(a, b)
-    if ~isempty(a); v = a; else; v = b; end
-end
+% TransTools.FieldOr used to be duplicated locally here as getField (same
+% logic, module the isstruct(s) guard TransTools.FieldOr adds -- isfield()
+% on a non-struct already returns false safely, so this is not a
+% behavioural change). firstNonEmpty (src/Support/) used to be duplicated
+% locally here too.
 
 function e = errorOrZeros(ERP, sz)
     if isfield(ERP, 'binerror') && ~isempty(ERP.binerror) && isequal(size(ERP.binerror), sz)

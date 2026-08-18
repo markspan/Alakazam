@@ -19,6 +19,24 @@ classdef SettingsDialog < handle
         OnSave = []
     end
 
+    properties (Constant, Access = private)
+        % Layout constants buildTab's own section-height estimate (see
+        % sectionHeight) and buildSection's actual grid construction both
+        % derive from, so the two cannot independently drift out of sync
+        % the way they did before: buildSection was changed to skip
+        % building a checkbox row when a section has none (e.g. "Colour
+        % map", one dropdown), but buildTab's own SEPARATE height formula
+        % was hand-tuned and not updated to match, reserving a checkbox
+        % row's worth of dead space that section never used -- forcing an
+        % unnecessary scrollbar. One shared set of numbers, not two
+        % independently-guessed formulas, going forward.
+        ItemRowPx     = 40   % px per non-checkbox control row (buildSection's own RowHeight for one)
+        RowSpacingPx  = 8    % buildSection's own grid RowSpacing
+        PaddingPx     = 8    % buildSection's own grid Padding (each of top/bottom)
+        CheckboxRowPx = 42   % estimated height of the 'fit' checkbox row, when a section has any
+        PanelChromePx = 20   % estimated uipanel title-bar chrome, outside buildSection's own grid entirely
+    end
+
     methods
         function this = SettingsDialog(onSave)
             if nargin > 0
@@ -30,8 +48,17 @@ classdef SettingsDialog < handle
 
     methods (Access = private)
         function build(this)
-            this.Fig = uifigure('Name', 'Settings', 'Position', [200 200 540 460]);
-            outer = uigridlayout(this.Fig, [2 1], 'RowHeight', {'1x', 44});
+            % Header bar + accent styling, matching every other dialog's
+            % own look (ReRefDialog, GrandAverageDialog, ...) -- this was
+            % previously the one dialog left unstyled, with no apparent
+            % reason to look different from its siblings.
+            [accentColor, bgColor] = dialogChromeColors();
+            this.Fig = uifigure('Name', 'Settings', 'Position', [200 200 540 460], 'Color', bgColor);
+            root = uigridlayout(this.Fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+            uilabel(root, 'Text', '  Settings', 'FontSize', 14, 'FontWeight', 'bold', ...
+                'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+
+            outer = uigridlayout(root, [2 1], 'RowHeight', {'1x', 44});
 
             tabgroup = uitabgroup(outer);
             tabgroup.Layout.Row = 1;
@@ -58,51 +85,82 @@ classdef SettingsDialog < handle
 
             heights = cell(1, numel(tabDef.sections) + 1);
             for s = 1:numel(tabDef.sections)
-                nOther = sum(~strcmp({tabDef.sections(s).settings.type}, 'bool'));
-                heights{s} = 78 + 56 * nOther;   % checkbox row + a row per other control
+                items = tabDef.sections(s).settings;
+                nOther = sum(~strcmp({items.type}, 'bool'));
+                nBool  = numel(items) - nOther;
+                heights{s} = this.sectionHeight(nBool, nOther);
             end
             heights{end} = '1x';   % absorb slack, keep sections at the top
 
             grid = uigridlayout(tab, [numel(tabDef.sections) + 1, 1], ...
                 'RowHeight', heights, 'Scrollable', 'on', 'Padding', [10 10 10 10]);
 
+            % Section title colour: the darker blue AlakazamRibbon.html's own
+            % .alz-group-title uses (#2e5c8a), not dialogChromeColors' own
+            % (lighter) accentColor -- a deliberately different shade, on
+            % request, not a copy-paste of the dialog header bar's own colour.
+            sectionTitleColor = [0.1804 0.3608 0.5412];
             for s = 1:numel(tabDef.sections)
                 panel = uipanel(grid, 'Title', tabDef.sections(s).label, ...
-                    'FontWeight', 'bold');
+                    'FontWeight', 'bold', 'ForegroundColor', sectionTitleColor);
                 panel.Layout.Row = s;
                 this.buildSection(panel, tabDef.name, tabDef.sections(s));
             end
         end
 
+        function h = sectionHeight(this, nBool, nOther)
+        %SECTIONHEIGHT  Panel height buildTab should reserve for a section
+        %   with NBOOL checkboxes and NOTHER other controls -- derived from
+        %   the same ItemRowPx/RowSpacingPx/PaddingPx/CheckboxRowPx/
+        %   PanelChromePx constants buildSection's own grid construction
+        %   uses, so the two stay in sync by construction (see the
+        %   properties block's own comment for why that matters).
+            hasCheckboxRow = nBool > 0;
+            nRows = double(hasCheckboxRow) + nOther;
+            rowsPx = double(hasCheckboxRow) * this.CheckboxRowPx + nOther * this.ItemRowPx;
+            spacingPx = max(0, nRows - 1) * this.RowSpacingPx;
+            h = this.PanelChromePx + 2 * this.PaddingPx + rowsPx + spacingPx;
+        end
+
         function buildSection(this, panel, tabName, sectionDef)
             % Checkboxes sit side by side on the top row; other controls (e.g.
-            % sliders) get a labelled row each, below the checkboxes.
+            % sliders) get a labelled row each, below the checkboxes. A
+            % section with no checkboxes at all (e.g. "Colour map", one
+            % dropdown) gets no checkbox row -- not just a zero-height one
+            % -- so it doesn't reserve dead space for a row it never uses
+            % (see sectionHeight's own matching formula).
             items = sectionDef.settings;
             isBool = strcmp({items.type}, 'bool');
             boolItems  = items(isBool);
             otherItems = items(~isBool);
             nOther = numel(otherItems);
+            nb = numel(boolItems);
+            hasCheckboxRow = nb > 0;
+            cbRows = double(hasCheckboxRow);   % 0 or 1 -- computed once, used for both the row count and RowHeight below
 
-            grid = uigridlayout(panel, [1 + nOther, 1], ...
-                'RowHeight', [{'fit'}, repmat({40}, 1, nOther)], ...
-                'Padding', [8 8 8 8], 'RowSpacing', 8);
+            grid = uigridlayout(panel, [cbRows + nOther, 1], ...
+                'RowHeight', [repmat({'fit'}, 1, cbRows), repmat({this.ItemRowPx}, 1, nOther)], ...
+                'Padding', [this.PaddingPx this.PaddingPx this.PaddingPx this.PaddingPx], ...
+                'RowSpacing', this.RowSpacingPx);
 
             byKey = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
-            % Top row: checkboxes, side by side.
-            nb = numel(boolItems);
-            cbRow = uigridlayout(grid, [1 nb + 1], ...
-                'ColumnWidth', [repmat({'fit'}, 1, nb), {'1x'}], ...
-                'Padding', [0 0 0 0], 'ColumnSpacing', 20);
-            cbRow.Layout.Row = 1;
-            for i = 1:nb
-                item = boolItems(i);
-                current = AlakazamSettings.get(tabName, sectionDef.name, item.key);
-                handle = uicheckbox(cbRow, 'Text', item.label, ...
-                    'Value', logical(current), 'Tooltip', item.tooltip);
-                handle.Layout.Column = i;
-                byKey(item.key) = handle;
-                this.addField(tabName, sectionDef.name, item, handle);
+            % Top row: checkboxes, side by side -- only built at all when
+            % there is at least one.
+            if hasCheckboxRow
+                cbRow = uigridlayout(grid, [1 nb + 1], ...
+                    'ColumnWidth', [repmat({'fit'}, 1, nb), {'1x'}], ...
+                    'Padding', [0 0 0 0], 'ColumnSpacing', 20);
+                cbRow.Layout.Row = 1;
+                for i = 1:nb
+                    item = boolItems(i);
+                    current = AlakazamSettings.get(tabName, sectionDef.name, item.key);
+                    handle = uicheckbox(cbRow, 'Text', item.label, ...
+                        'Value', logical(current), 'Tooltip', item.tooltip);
+                    handle.Layout.Column = i;
+                    byKey(item.key) = handle;
+                    this.addField(tabName, sectionDef.name, item, handle);
+                end
             end
 
             % Following rows: label + control for each non-bool setting.
@@ -111,7 +169,7 @@ classdef SettingsDialog < handle
                 current = AlakazamSettings.get(tabName, sectionDef.name, item.key);
                 rowGrid = uigridlayout(grid, [1 2], 'ColumnWidth', {220, '1x'}, ...
                     'Padding', [0 0 0 0], 'ColumnSpacing', 8);
-                rowGrid.Layout.Row = 1 + j;
+                rowGrid.Layout.Row = cbRows + j;
                 uilabel(rowGrid, 'Text', item.label, 'Tooltip', item.tooltip, ...
                     'VerticalAlignment', 'center');
                 handle = this.makeControl(rowGrid, item, current);

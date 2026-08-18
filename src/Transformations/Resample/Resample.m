@@ -1,4 +1,4 @@
-function [EEG, options] = Resample(input, opts)
+function [EEG, options] = Resample(input, varargin)
 %% Resample  Change the sampling rate of a continuous recording.
 %
 %   Wraps EEGLAB's pop_resample (anti-alias filtered resampling), driven by an
@@ -9,12 +9,7 @@ function [EEG, options] = Resample(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Resample(input)        % interactive dialog
 %     [EEG, options] = Resample(input, opts)  % replay a stored options struct
-if nargin < 1
-    throw(MException('Alakazam:Resample', 'Problem in Resample: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Resample', varargin{:});
 if ~isfield(input, 'data') || isempty(input.data)
     throw(MException('Alakazam:Resample', 'Problem in Resample: this dataset has no data.'));
 end
@@ -22,10 +17,9 @@ if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'CONTINUOUS')
     throw(MException('Alakazam:Resample', sprintf([ ...
         'Problem in Resample: works on a continuous recording, not this dataset ' ...
         '(DataFormat = "%s"). Resample before segmenting (before DefineBins).'], ...
-        char(string(getField(input, 'DataFormat', 'unknown'))))));
+        char(string(TransTools.FieldOr(input, 'DataFormat', 'unknown'))))));
 end
 
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     stored = TransformSettings.get('Resample');
     if isempty(stored) || ~isfield(stored, 'NewRate') || isempty(stored.NewRate)
@@ -74,8 +68,4 @@ function r = defaultRate(srate)
     else
         r = round(srate / 2);
     end
-end
-
-function v = getField(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
 end

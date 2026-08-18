@@ -51,8 +51,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     allLabels = string({chanlocs.labels});
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9, as TransformOptionsDialog
-    bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
+    [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 550], 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Measure', 'FontSize', 14, 'FontWeight', 'bold', ...
@@ -535,22 +534,7 @@ function [data, derivations] = readMeasuresFile(filePath)
     end
 end
 
-function lines = linesFromText(text)
-%LINESFROMTEXT  A char block (possibly '') to a cellstr for a uitextarea's
-%   Value (one entry per line; {''} for empty, never {} which a uitextarea
-%   rejects).
-    if isempty(char(string(text)))
-        lines = {''};
-    else
-        lines = cellstr(splitlines(string(text)));
-    end
-end
-
-function text = textFromLines(value)
-%TEXTFROMLINES  A uitextarea's Value (cellstr, one per line) back to a
-%   single newline-joined char block.
-    text = char(strjoin(string(value), newline));
-end
+% linesFromText/textFromLines (src/Support/) used to be duplicated locally here.
 
 function v = rowNum(r, name, default)
 %ROWNUM  R.(NAME) if present, non-empty and numeric, else DEFAULT -- used

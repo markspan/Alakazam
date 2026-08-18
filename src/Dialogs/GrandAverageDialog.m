@@ -31,8 +31,16 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     weightChoices = {'Unweighted (every subject counts equally)', ...
                      'Weighted by each subject''s trial count'};
 
-    fig = uifigure('Name', 'Grand Average', 'Position', [100 100 480 460]);
-    outer = uigridlayout(fig, [5 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 44});
+    % Header bar + accent styling, matching every other dialog's own look
+    % (ReRefDialog, SelectDataDialog, ...) -- this was previously the one
+    % dialog that skipped it, with no apparent reason to look unstyled
+    % next to its siblings.
+    [accentColor, bgColor] = dialogChromeColors();
+    fig = uifigure('Name', 'Grand Average', 'Position', [100 100 480 460], 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Grand Average', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [5 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 44}, 'Padding', [10 10 10 10]);
 
     % Row 1: name.
     nameRow = uigridlayout(outer, [1 2], 'ColumnWidth', {90, '1x'}, 'Padding', [8 8 8 0]);
@@ -71,7 +79,8 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     buttons.Layout.Row = 5;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
     cancelBtn.Layout.Column = 2;
-    okBtn = uibutton(buttons, 'Tag', 'gaOK', 'Text', 'Compute', 'ButtonPushedFcn', @(~,~) onOK());
+    okBtn = uibutton(buttons, 'Tag', 'gaOK', 'Text', 'Compute', 'BackgroundColor', accentColor, ...
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(~,~) onOK());
     okBtn.Layout.Column = 3;
     fig.CloseRequestFcn = @(~,~) onCancel();
 

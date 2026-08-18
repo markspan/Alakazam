@@ -62,7 +62,16 @@ function [ output, options ] = Fourier( varargin )
 %
 %   Contact: m.m.span@rug.nl
 
-if (nargin == 1)
+% Fourier was, historically, the one transformation with no such check --
+% a no-argument call fell through both branches below (options never
+% assigned) and only failed later, at `input = varargin{1}`, with a raw
+% "index exceeds array bounds" instead of the app's usual friendly
+% "Problem in <Name>: ..." message every other transformation gives. Now
+% goes through the same TransTools.InitGuard every other transformation
+% (that takes options at all) uses.
+[options, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Fourier', varargin{2:end});
+
+if interactive
     % Literal defaults, then seed field by field from the last Fourier run
     % in this workspace (TransformSettings), so a field a stored value
     % predates still falls back to its default rather than being missing.
@@ -107,8 +116,6 @@ if (nargin == 1)
     end
     options.Name = 'Fourier';
     TransformSettings.set('Fourier', options);
-elseif (nargin == 2)
-    options = varargin{2};
 end
 
 input = varargin{1};
@@ -164,18 +171,24 @@ for seg = 1:nseg
         norm = vunw/vwin;
         
         corrwin = repmat(fullwin ./ norm, nchan,1);
-        
-        if strcmpi(options.Output, 'Volt') % BVA CORRECT
-            data(:,:,seg) = fs*(abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))';
-        end
-        if strcmpi(options.Output, 'Power')% BVA CORRECT
-            data(:,:,seg) = fs*(abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))' .^2;
-        end
-        if strcmpi(options.Output, 'VoltDens')% BVA CORRECT
-            data(:,:,seg) = fs*(abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))' ./ (input.srate/NFFT);
-        end
-        if strcmpi(options.Output, 'PowerDens')% BVA CORRECT
-            data(:,:,seg) = fs*((abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))' .^2) ./ (input.srate/NFFT);
+
+        % Volt is the base quantity (BVA CORRECT -- verified against
+        % BrainVision Analyzer's own output); Power/VoltDens/PowerDens are
+        % all a fixed transform of it, so it is computed once per segment
+        % and reshaped per Output rather than the same fft() call repeated
+        % under four near-identical if-branches (the four used to each
+        % independently recompute it, only one of them ever actually
+        % running since options.Output is a single fixed string).
+        volt = fs*(abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))';
+        switch lower(options.Output)
+            case 'volt'
+                data(:,:,seg) = volt;
+            case 'power'
+                data(:,:,seg) = volt .^ 2;
+            case 'voltdens'
+                data(:,:,seg) = volt ./ (input.srate/NFFT);
+            case 'powerdens'
+                data(:,:,seg) = (volt .^ 2) ./ (input.srate/NFFT);
         end
 end
 

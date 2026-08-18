@@ -32,14 +32,15 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
     [nChan, nSamp, ~] = size(input.data);
     refIdx = opts.RefIndex;
 
-    [lo, hi] = windowRange(input, getf(opts, 'TimeStart', 0), getf(opts, 'TimeStop', 0), nSamp);
+    [lo, hi] = windowRange(input, TransTools.FieldOr(opts, 'TimeStart', 0), ...
+        TransTools.FieldOr(opts, 'TimeStop', 0), nSamp);
     win  = lo:hi;
     nwin = numel(win);
     t     = (0:nwin - 1) / srate;
     taper = hann(nwin);
 
-    fixedF = getf(opts, 'Frequency', 0);
-    step   = getf(opts, 'FreqStep', 0.1);
+    fixedF = TransTools.FieldOr(opts, 'Frequency', 0);
+    step   = TransTools.FieldOr(opts, 'FreqStep', 0.1);
     if step <= 0; step = 0.1; end
     ampFreqs = (opts.MinFreq:step:opts.MaxFreq).';
     if numel(ampFreqs) < 2; ampFreqs = [opts.MinFreq; opts.MaxFreq]; end
@@ -106,8 +107,4 @@ function [lo, hi] = windowRange(input, startMs, stopMs, nSamp)
     if isempty(lo); lo = 1; end
     if isempty(hi); hi = nSamp; end
     if hi < lo; lo = 1; hi = nSamp; end
-end
-
-function v = getf(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
 end

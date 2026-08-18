@@ -57,11 +57,7 @@ function writeGrandAverage(fid, gaField, EEG)
     hasSem = isfield(EEG, 'stErr') && ~isempty(EEG.stErr);
 
     for b = 1:nBins
-        if isfield(EEG, 'bindesc') && numel(EEG.bindesc) >= b && ~isempty(EEG.bindesc(b).label)
-            binField = csvField(EEG.bindesc(b).label);
-        else
-            binField = csvField(num2str(b));
-        end
+        binField = csvField(csvBinLabel(EEG, b));
         for ch = 1:nChan
             chField = csvField(EEG.chanlocs(ch).labels);
             amp = reshape(EEG.data(ch, :, b), 1, nT);
@@ -84,24 +80,5 @@ function writeGrandAverage(fid, gaField, EEG)
     end
 end
 
-function field = csvField(value)
-%CSVFIELD  A CSV-quoted field if VALUE needs it (contains a comma, quote,
-%   or newline), otherwise VALUE unchanged. Values are inserted as %s
-%   arguments into sprintf/fprintf format strings elsewhere in this file,
-%   never as literal format text, so a stray '%' in VALUE (e.g. a
-%   percent-labelled bin name) needs no escaping here.
-    field = char(string(value));
-    if any(field == ',' | field == '"' | field == newline)
-        field = ['"' strrep(field, '"', '""') '"'];
-    end
-end
-
-function field = numField(value)
-%NUMFIELD  A numeric value formatted for CSV, NA (R's own missing-value
-%   token) if it is NaN.
-    if isnan(value)
-        field = 'NA';
-    else
-        field = sprintf('%.6g', value);
-    end
-end
+% csvBinLabel/csvField/numField (src/Support/) used to be duplicated locally
+% here (csvField/numField), or inline (csvBinLabel's own fallback logic).

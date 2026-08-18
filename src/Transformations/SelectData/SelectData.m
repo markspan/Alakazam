@@ -1,4 +1,4 @@
-function [EEG, options] = SelectData(input, opts)
+function [EEG, options] = SelectData(input, varargin)
 %% SelectData  Keep or remove data along channels, time, points and trials.
 %
 %   The app-styled SelectDataDialog collects a selection (the same one
@@ -10,14 +10,7 @@ function [EEG, options] = SelectData(input, opts)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = SelectData(input)        % interactive dialog
 %     [EEG, options] = SelectData(input, opts)  % replay a stored options struct
-if nargin < 1
-    throw(MException('Alakazam:SelectData', 'Problem in SelectData: No Data Supplied'));
-end
-if nargin < 2
-    opts = 'Init';
-end
-
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:SelectData', varargin{:});
 if interactive
     options = SelectDataDialog(input.chanlocs, size(input.data, 2), size(input.data, 3), ...
         TransformSettings.get('SelectData'), timeUnit(input));
@@ -56,7 +49,7 @@ function args = buildSelectArgs(input, o)
 %BUILDSELECTARGS  The pop_select name/value arguments for one options struct.
     args = {};
     if isfield(o, 'channels') && ~strcmp(o.channels.mode, '(off)')
-        idx = labelsToIdx(input, o.channels.labels);
+        idx = TransTools.LabelsToIdx(input, o.channels.labels);
         if strcmp(o.channels.mode, 'Keep')
             if isempty(idx)
                 throw(MException('Alakazam:SelectData', ...
@@ -104,12 +97,4 @@ function u = timeUnit(EEG)
 %TIMEUNIT  The unit the dataset's time axis is displayed in: 's' for continuous
 %   data, 'ms' for epoched/averaged data (matching SignalView / the app).
     if isContinuous(EEG); u = 's'; else; u = 'ms'; end
-end
-
-function idx = labelsToIdx(input, wantLabels)
-%LABELSTOIDX  Row indices in EEG.chanlocs of WANTLABELS (case-insensitive),
-%   in dataset order; labels not present are skipped.
-    all = {input.chanlocs.labels};
-    want = cellfun(@(s) char(string(s)), wantLabels, 'UniformOutput', false);
-    idx = find(ismember(lower(all), lower(want)));
 end

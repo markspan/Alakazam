@@ -1,19 +1,25 @@
 classdef CoherenceTopographyView < handle
-%COHERENCETOPOGRAPHYVIEW  Grid of per-bin scalp coherence topographies.
+%COHERENCETOPOGRAPHYVIEW  One scalp coherence topography, with a bin
+%   dropdown when there is more than one.
 %
-%   Draws one head-map tile per bin (up to 3 per row, the tiling convention
-%   ScalpDistributionView/TimeFrequencyView use) of every scalp channel's
-%   magnitude-squared coherence to the reference, at the frequency
-%   CoherenceTopography detected (or was told to use) for that bin. Each tile
-%   is titled with its bin label and that frequency. Unlike ScalpDistribution
-%   there is no time scrubbing: a coherence topography is one map per bin.
+%   Draws one head-map, of every scalp channel's magnitude-squared
+%   coherence to the reference, at the frequency CoherenceTopography
+%   detected (or was told to use) for the selected bin -- the title shows
+%   that bin's label and frequency. A "Bin" dropdown appears when there is
+%   more than one bin, matching ScalpDistributionView's/Brain3DView's own
+%   single-plot-plus-bin-dropdown interface (this used to draw a whole grid
+%   of per-bin tiles at once; one topography plus a dropdown reads far more
+%   clearly once there are more than a couple of bins, and keeps every
+%   view in this family consistent with the others). Unlike
+%   ScalpDistributionView there is no time scrubbing: a coherence
+%   topography is one map per bin.
 %
-%   Uses TransTools.DrawScalpMap for the head/interpolation, then overrides its
-%   (signed, diverging) colour scale with a sequential 0..max map, since
-%   coherence is a non-negative [0,1] quantity. One shared colorbar.
+%   Uses TransTools.DrawScalpMap for the head/interpolation, then overrides
+%   its (signed, diverging) colour scale with a sequential 0..max map,
+%   since coherence is a non-negative [0,1] quantity. One shared colorbar.
 %
 %   See also ALAKAZAMPLOTTER, COHERENCETOPOGRAPHY, TRANSTOOLS.DRAWSCALPMAP,
-%   SCALPDISTRIBUTIONVIEW.
+%   SCALPDISTRIBUTIONVIEW, BRAIN3DVIEW.
 
     properties
         ActivatedFcn = function_handle.empty
@@ -23,7 +29,10 @@ classdef CoherenceTopographyView < handle
         Figure
         EEG
         Grid
-        Axes            % 1 x nBins uiaxes
+        Axes            % the single head-map uiaxes
+        BinLabels        % display label for each bin
+        SelectedBin      % index of the bin currently drawn
+        BinDropdown      % uidropdown, only built when numel(BinLabels) > 1
     end
 
     methods
@@ -31,28 +40,36 @@ classdef CoherenceTopographyView < handle
             this.Figure = fig;
             this.EEG    = eeg;
 
-            nBins  = size(eeg.CohTopoValues, 2);
-            labels = eeg.CohTopoBinLabels;
+            nBins = size(eeg.CohTopoValues, 2);
+            this.BinLabels = eeg.CohTopoBinLabels;
+            this.SelectedBin = 1;
 
-            nCols = min(3, max(1, nBins));
-            nRows = ceil(nBins / nCols);
+            hasDropdown = nBins > 1;
+            dropdownRows = double(hasDropdown); % 0 or 1 extra row at the top
 
-            % One extra, narrow trailing column for the shared colorbar.
-            this.Grid = uigridlayout(fig, [nRows, nCols + 1], ...
-                'ColumnWidth', [repmat({'1x'}, 1, nCols), {60}], ...
-                'RowHeight', repmat({'1x'}, 1, nRows), 'Padding', [4 4 4 4]);
+            this.Grid = uigridlayout(fig, [dropdownRows + 1, 2], ...
+                "RowHeight", [repmat({26}, 1, dropdownRows), {'1x'}], ...
+                "ColumnWidth", {'1x', TransTools.ColorbarColumnWidth()}, "Padding", [4 4 4 4]);
 
-            this.Axes = gobjects(1, nBins);
-            for b = 1:nBins
-                ax = uiaxes(this.Grid);
-                ax.Layout.Row    = floor((b - 1) / nCols) + 1;
-                ax.Layout.Column = mod(b - 1, nCols) + 1;
-                ax.ButtonDownFcn = @(~, ~) this.notifyActivated();
-                this.Axes(b) = ax;
-                this.drawTile(ax, b, char(string(labels{b})));
+            if hasDropdown
+                this.BinDropdown = TransTools.BuildBinDropdown(this.Grid, 1, 1, ...
+                    this.BinLabels, @(idx) this.onBinChanged(idx));
             end
 
-            this.addColorbar(nRows, nCols);
+            axRow = dropdownRows + 1;
+            this.Axes = uiaxes(this.Grid);
+            this.Axes.Layout.Row = axRow;
+            this.Axes.Layout.Column = 1;
+            this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
+            axtoolbar(this.Axes, "default");
+
+            this.redraw();
+
+            % Built AFTER the first redraw() above -- see Brain3DView's own
+            % constructor comment for why (a real reported regression when
+            % this order was briefly swapped for cross-file consistency).
+            TransTools.AddSharedColorbar(this.Grid, axRow, 2, parula, ...
+                [0, this.EEG.CohTopoLimit], sprintf('Coherence to %s', this.EEG.CohTopoRef));
         end
 
         function notifyActivated(this)
@@ -63,9 +80,12 @@ classdef CoherenceTopographyView < handle
     end
 
     methods (Access = private)
-        function drawTile(this, ax, b, label)
-        %DRAWTILE  One bin's coherence head-map.
-            eeg    = this.EEG;
+        function redraw(this)
+        %REDRAW  Draw the currently selected bin's coherence head-map.
+            eeg   = this.EEG;
+            b     = this.SelectedBin;
+            label = char(string(this.BinLabels{b}));
+            ax    = this.Axes;
             values = eeg.CohTopoValues(eeg.CohTopoDrawn, b);
             lim    = eeg.CohTopoLimit;
             try
@@ -87,20 +107,11 @@ classdef CoherenceTopographyView < handle
             end
         end
 
-        function addColorbar(this, nRows, nCols)
-        %ADDCOLORBAR  One shared 0..max colorbar in the reserved last column.
-            cax = uiaxes(this.Grid);
-            cax.Layout.Column = nCols + 1;
-            if nRows > 1
-                cax.Layout.Row = [1, nRows];
-            else
-                cax.Layout.Row = 1;
-            end
-            cax.Visible = 'off';
-            colormap(cax, parula);
-            cax.CLim = [0, this.EEG.CohTopoLimit];
-            cb = colorbar(cax);
-            cb.Label.String = sprintf('Coherence to %s', this.EEG.CohTopoRef);
+        function onBinChanged(this, binIdx)
+        %ONBINCHANGED  BinDropdown ValueChangedFcn target.
+            this.notifyActivated();
+            this.SelectedBin = binIdx;
+            this.redraw();
         end
     end
 end

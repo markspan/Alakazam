@@ -8,12 +8,11 @@ function options = InterpolateDialog(chanlocs, stored)
     labels = arrayfun(@(c) char(string(c.labels)), chanlocs, 'UniformOutput', false);
     METHODS = {'Spherical spline', 'Inverse distance', 'Spacetime'};
     METHODCODES = {'spherical', 'invdist', 'spacetime'};
-    accentColor = [0.290 0.498 0.788];   % #4a7fc9
-    bgColor     = [0.9608 0.9608 0.9608];
+    [accentColor, bgColor] = dialogChromeColors();
     options = [];
 
     seed = struct('channels', {{}}, 'method', 'spherical');
-    seed = mergeSeed(seed, stored);
+    seed = mergeSeedFields(seed, stored);
     seedMethodDisplay = METHODS{max(1, find(strcmp(METHODCODES, seed.method), 1))};
 
     fig = uifigure('Name', 'Interpolate', 'Position', [100 100 460 430], 'Color', bgColor);
@@ -62,22 +61,5 @@ function options = InterpolateDialog(chanlocs, stored)
     end
 end
 
-% ======================================================================= %
-function v = intersectLabels(all, want)
-    v = all(ismember(all, want));
-    if isempty(v); v = {}; end
-end
-
-function c = asCell(v)
-    if isempty(v); c = {}; elseif ischar(v); c = {v}; else; c = v; end
-end
-
-function seed = mergeSeed(seed, stored)
-    if ~isstruct(stored); return; end
-    f = fieldnames(seed);
-    for j = 1:numel(f)
-        if isfield(stored, f{j}) && ~isempty(stored.(f{j}))
-            seed.(f{j}) = stored.(f{j});
-        end
-    end
-end
+% intersectLabels/asCell (src/Support/) and mergeSeedFields (src/Support/)
+% used to be duplicated locally here; see those files.

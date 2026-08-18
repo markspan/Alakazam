@@ -1,4 +1,4 @@
-function [EEG, options] = ArtefactDetect(EEG, options)
+function [EEG, options] = ArtefactDetect(EEG, varargin)
 %% ArtefactDetect  Mark artifact-contaminated epochs so averaging omits them.
 %
 %   Four detectors, matching (and extending) ERPLAB's set:
@@ -22,12 +22,8 @@ function [EEG, options] = ArtefactDetect(EEG, options)
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ArtefactDetect(input)        % interactive dialog
 %     [EEG, options] = ArtefactDetect(input, opts)  % replay a stored struct
-if nargin < 1
-    throw(MException('Alakazam:ArtefactDetect', 'Problem in ArtefactDetect: No Data Supplied'));
-end
-if nargin < 2
-    options = 'Init';
-end
+[options, interactive] = TransTools.InitGuard(nargin, 'Alakazam:ArtefactDetect', varargin{:});
+
 if ~isfield(EEG, 'data') || isempty(EEG.data)
     throw(MException('Alakazam:ArtefactDetect', 'Problem in ArtefactDetect: this dataset has no data.'));
 end
@@ -40,12 +36,12 @@ end
 METHODS = {'Absolute threshold', 'Step function', 'Moving-window peak-to-peak', 'Sample-to-sample'};
 SCOPES  = {'Whole epoch', 'This channel only'};
 
-if (ischar(options) || isstring(options)) && strcmpi(string(options), 'Init')
+if interactive
     stored = TransformSettings.get('ArtefactDetect');
     if isempty(stored) || ~isstruct(stored)
         stored = struct();
     end
-    d = @(f, v) fieldOr(stored, f, v);
+    d = @(f, v) TransTools.FieldOr(stored, f, v);
     options = TransformOptionsDialog( ...
         'title', 'Artefact detection options', ...
         'Description', ['Mark artifact epochs so averaging omits them. Tick one or more ' ...
@@ -170,18 +166,18 @@ function opt = normaliseOptions(options)
 %   Method may be a single string (old struct) or a cellstr (multi-select); it
 %   is normalised to a cellstr, empty selection falling back to the absolute
 %   threshold so detection always does something.
-    opt.Method    = toMethodList(fieldOr(options, 'Method', {'Absolute threshold'}));
+    opt.Method    = toMethodList(TransTools.FieldOr(options, 'Method', {'Absolute threshold'}));
     if isempty(opt.Method)
         opt.Method = {'Absolute threshold'};
     end
-    opt.Minimum   = fieldOr(options, 'Minimum', -100);
-    opt.Maximum   = fieldOr(options, 'Maximum', 100);
-    opt.Threshold = fieldOr(options, 'Threshold', 100);
-    opt.Window    = fieldOr(options, 'Window', 200);
-    opt.Step      = fieldOr(options, 'Step', 50);
-    opt.TestStart = fieldOr(options, 'TestStart', 0);
-    opt.TestStop  = fieldOr(options, 'TestStop', 0);
-    opt.Scope     = fieldOr(options, 'Scope', 'Whole epoch');
+    opt.Minimum   = TransTools.FieldOr(options, 'Minimum', -100);
+    opt.Maximum   = TransTools.FieldOr(options, 'Maximum', 100);
+    opt.Threshold = TransTools.FieldOr(options, 'Threshold', 100);
+    opt.Window    = TransTools.FieldOr(options, 'Window', 200);
+    opt.Step      = TransTools.FieldOr(options, 'Step', 50);
+    opt.TestStart = TransTools.FieldOr(options, 'TestStart', 0);
+    opt.TestStop  = TransTools.FieldOr(options, 'TestStop', 0);
+    opt.Scope     = TransTools.FieldOr(options, 'Scope', 'Whole epoch');
 end
 
 function [lo, hi] = testRange(EEG, startMs, stopMs, nSamp)
@@ -193,10 +189,6 @@ function [lo, hi] = testRange(EEG, startMs, stopMs, nSamp)
     if isempty(lo); lo = 1; end
     if isempty(hi); hi = nSamp; end
     if hi < lo; lo = 1; hi = nSamp; end
-end
-
-function v = fieldOr(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
 end
 
 function list = toMethodList(value)

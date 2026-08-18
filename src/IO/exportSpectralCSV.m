@@ -43,7 +43,7 @@ function writeEntry(fid, entry)
         nBins      = size(m.power, 2);
 
         for b = 1:nBins
-            binField = csvField(binLabel(EEG, b));
+            binField = csvField(csvBinLabel(EEG, b));
             for c = 1:numel(m.channels)
                 chField = csvField(m.channels{c});
                 prefix = sprintf('%s,%s,%s,%s,%s,%s,%s,', datasetField, typeField, ...
@@ -66,27 +66,4 @@ function writeRow(fid, prefix, measureType, value)
     fprintf(fid, '%s%s,%s\n', prefix, measureType, numField(value));
 end
 
-function label = binLabel(EEG, b)
-%BINLABEL  EEG.bindesc(b)'s own label, or the bare bin number as a fallback --
-%   matches exportMeasurementsCSV/exportGrandAveragesCSV.
-    if isfield(EEG, 'bindesc') && numel(EEG.bindesc) >= b && ~isempty(EEG.bindesc(b).label)
-        label = EEG.bindesc(b).label;
-    else
-        label = num2str(b);
-    end
-end
-
-function field = csvField(value)
-    field = char(string(value));
-    if any(field == ',' | field == '"' | field == newline)
-        field = ['"' strrep(field, '"', '""') '"'];
-    end
-end
-
-function field = numField(value)
-    if isnan(value)
-        field = 'NA';
-    else
-        field = sprintf('%.6g', value);
-    end
-end
+% csvBinLabel/csvField/numField (src/Support/) used to be duplicated locally here.

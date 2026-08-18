@@ -1,4 +1,4 @@
-function [EEG, options] = Filter(input, opts)
+function [EEG, options] = Filter(input, varargin)
 %% Filter  FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering.
 %
 %   Each of the three filters is specified by just a frequency and a dB
@@ -25,19 +25,12 @@ function [EEG, options] = Filter(input, opts)
 %   this reports a friendly error rather than the raw firfilt one.
 %
 %   See also: FILTERDIALOG, FIRWS, FIRFILT (EEGLAB firfilt plugin).
-if nargin < 1
-    throw(MException('Alakazam:Filter', ...
-        'Problem in Filter: needs a dataset to run on, and none was given.'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Filter', varargin{:});
 if ~isfield(input, 'data') || ~isfield(input, 'srate') || isempty(input.srate)
     throw(MException('Alakazam:Filter', ...
         'Problem in Filter: this dataset has no data or no sample rate to filter.'));
 end
 
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 if interactive
     options = FilterDialog(input.srate, channelLabels(input), TransformSettings.get('Filter'));
     if isempty(options)

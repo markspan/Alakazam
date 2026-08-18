@@ -1,4 +1,4 @@
-function [EEG, options] = Measure(input, opts)
+function [EEG, options] = Measure(input, varargin)
 %% Measure  Quantify ERP components (mean amplitude, peak amplitude, peak
 %   latency) in named time windows, for group-level statistics.
 %
@@ -91,13 +91,7 @@ function [EEG, options] = Measure(input, opts)
 %   See also: MEASUREDIALOG, AVERAGE, SCALPDISTRIBUTION, EXPORTMEASUREMENTSCSV.
 
 %% Guard input
-if nargin < 1
-    throw(MException('Alakazam:Measure', ...
-        'Problem in Measure: needs a dataset to run on, and none was given.'));
-end
-if nargin < 2
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Measure', varargin{:});
 
 EEG = input;
 
@@ -107,9 +101,6 @@ if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'Averaged')
         'Average), not this dataset (DataFormat = "%s"). Run Average -- or Grand Average, ' ...
         'for a group result -- on it first.'], input.DataFormat)));
 end
-
-%% Mode: interactive (Init) or replay (stored options struct)
-interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
 
 if interactive
     stored = TransformSettings.get('Measure');

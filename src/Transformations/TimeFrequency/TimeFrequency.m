@@ -29,10 +29,7 @@ function [EEG, opts] = TimeFrequency(varargin)
 %   dialog (used when a branch bearing this transformation is dragged
 %   onto another dataset).
 
-if nargin < 1
-    throw(MException('Alakazam:TimeFrequency', ...
-        'Problem in TimeFrequency: needs a dataset to run on, and none was given.'));
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:TimeFrequency', varargin{2:end});
 input = varargin{1};
 
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
@@ -49,7 +46,7 @@ if ~isfield(input, 'bindesc') || isempty(input.bindesc)
         'Problem in TimeFrequency: this dataset has no bins (EEG.bindesc is empty). Run DefineBins first.'));
 end
 
-if nargin == 1
+if interactive
     stored = TransformSettings.get('TimeFrequency');
     if isempty(stored)
         stored = struct('MinFreq', 2, 'MaxFreq', min(40, floor(input.srate / 3)), ...
@@ -77,8 +74,6 @@ if nargin == 1
         return;
     end
     TransformSettings.set('TimeFrequency', opts);
-elseif nargin == 2
-    opts = varargin{2};
 end
 
 if opts.MaxFreq >= input.srate / 2

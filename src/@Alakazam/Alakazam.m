@@ -43,7 +43,7 @@ classdef Alakazam < handle
         Ribbon          % AlakazamRibbon, the Home/Tools/Grand Average control strip
         RibbonBaseHeight   = 120  % fixed ribbon row height (px); see setupMainWindow. Never grows: an
                                   % overflowing group now opens as a floating popup instead (see
-                                  % AlakazamRibbon's PopupComponent/Scrim), so this stays constant.
+                                  % AlakazamRibbon's PopupComponent), so this stays constant.
         TreeGrid        % uigridlayout cell reserved for the workspace tree area (split top/bottom)
         DataTreePanel           % uipanel hosting WorkSpace.Tree (data & analyses), top half of TreeGrid
         GrandAveragesTreePanel  % uipanel hosting WorkSpace.GrandAveragesTree, bottom half of TreeGrid
@@ -73,6 +73,10 @@ classdef Alakazam < handle
         [files, labels, kinds] = findGrandAverageCandidates(this)
         entries = collectMeasurementEntries(this)
         entries = collectSpectralEntries(this)
+        entries = collectEntriesWithField(this, fieldName)
+        restoreDir = enterRepoRoot(this)
+        loadAndPlotNode(this, eventData, sourceTree, action)
+        dispatchToActiveView(this, eventData, viewNames, methodName)
         saveGrandAverage(this, spec, existingNode)
         retile(this)
         wrapper = tileWrapperFor(this, tab)
@@ -147,6 +151,16 @@ classdef Alakazam < handle
             this.RootDir  = fileparts(fileparts(mfilename('fullpath')));  % up from @Alakazam to src
             this.RepoRoot = fileparts(this.RootDir);
 
+            % Close any figures left over from a previous session in this
+            % same MATLAB session (a leftover from the old Java-Swing
+            % ToolGroup shell's docking mechanism, see migration.md, which
+            % could leave stray windows behind on a crash) -- done here,
+            % not inside setupDirectories (which is otherwise purely about
+            % putting the source tree on the path), so this genuinely
+            % figure-wide side effect is visible at the one call site that
+            % matters, rather than hidden inside a method whose name gives
+            % no hint of it.
+            close all;
             EEGLabEnvironment.ensure();
             this.setupDirectories();
             this.setupMainWindow();

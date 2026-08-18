@@ -1,4 +1,4 @@
-function [EEG, opts] = Baseline(input,opts)
+function [EEG, opts] = Baseline(input, varargin)
 %% corrects the EEG data by subtracting
 %   the mean of a specified baseline period from each data point within each trial.
 %
@@ -11,14 +11,7 @@ function [EEG, opts] = Baseline(input,opts)
 %       EEG   - Struct of the baseline-corrected EEG dataset.
 %       opts  - Struct containing the used or updated baseline options.
 
-%% Check for the EEG dataset input:
-if (nargin < 1)
-    throw(MException('Alakazam:Baseline','Problem in Baseline: No Data Supplied'));
-end
-
-if (nargin == 1)
-    opts = 'Init';
-end
+[opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Baseline', varargin{:});
 
 if ~isfield(input, 'data')
     throw(MException('Alakazam:Baseline', ...
@@ -37,7 +30,7 @@ if ~isfield(input, 'trials')
         'Problem in Baseline: this dataset is missing its trial count, so it cannot be treated as segmented data.'));
 end
 
-if strcmp(opts, 'Init')
+if interactive
     stored = TransformSettings.get('Baseline');
     if isempty(stored)
         stored = struct('Start', -100, 'Stop', 0);

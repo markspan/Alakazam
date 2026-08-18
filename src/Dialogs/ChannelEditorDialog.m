@@ -8,8 +8,7 @@ function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
 %   by "Look up 10-5 locations". Returns the edited chanlocs struct array (with
 %   the spherical/polar fields re-derived from the Cartesian coordinates), or
 %   [] on cancel.
-    accentColor = [0.290 0.498 0.788];
-    bgColor     = [0.9608 0.9608 0.9608];
+    [accentColor, bgColor] = dialogChromeColors();
     result = [];
 
     fig = uifigure('Name', 'Channel editor', 'Position', [100 100 560 480], 'Color', bgColor);

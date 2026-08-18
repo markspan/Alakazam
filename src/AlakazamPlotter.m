@@ -178,6 +178,14 @@ classdef AlakazamPlotter < handle
                 view = ScalpDistributionView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "ScalpDistributionView", view);
+            elseif strcmpi(eeg.id, "Brain3D")
+                % Also DataFormat "AVERAGED" with trials==1, same as
+                % ScalpDistribution's own result (see TransTools.
+                % ResolveScalpDistribution, shared by both) -- projected
+                % onto a rotatable 3D brain mesh instead of a flat topoplot.
+                view = Brain3DView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "Brain3DView", view);
             elseif strcmpi(eeg.id, "SpectralMeasure")
                 % Still DataFormat "EPOCHED" with multiple trials (so it would
                 % otherwise land in EpochView), but it carries EEG.spectrum /
