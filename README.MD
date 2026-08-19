@@ -8,7 +8,7 @@ analysis.
 ## Overview
 
 Alakazam is a desktop application for EEG researchers: it loads a recording,
-lets the analyst apply a sequence of processing steps to it, and keeps the
+lets the researcher apply a sequence of processing steps to it, and keeps the
 full processing history as an explorable tree rather than a one-off script
 result. It is built directly on the EEGLAB `EEG` data structure, so any
 result can be handed off to the wider EEGLAB/ERPLAB ecosystem, and it
