@@ -38,12 +38,12 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   dragging onto each one by hand. **Save Template...** exports that same
   branch as a portable `.alztemplate` file (a plain JSON list of steps,
   independent of this workspace's own cache files); **Apply Template...**,
-  available on any node, replays a saved template's steps onto it -- the
+  available on any node, replays a saved template's steps onto it: the
   same recipe applied later, in another workspace, or after Alakazam has
   been restarted.
 - **Format support.** BrainVision (`.vhdr`, via the bva-io EEGLAB plugin),
   EEGLAB `.set`, ERPLAB erpsets (`.erp`, read directly as an already-averaged
-  root dataset, no ERPLAB installation required -- see `erpsetToAveraged`),
+  root dataset, no ERPLAB installation required, see `erpsetToAveraged`),
   and previously-saved Alakazam `.mat` sessions. Each raw file is cached to
   `.mat` on first read and only re-parsed if the raw file is newer than its
   cache. Any Averaged dataset's right-click menu offers **Export ERPset...**,
@@ -109,7 +109,7 @@ scrolling, channel stacking, and overlays for events and marked artefacts.
 
 ## Getting started
 
-Requirements: MATLAB (with `uifigure`/App Designer support -- the UI is built
+Requirements: MATLAB (with `uifigure`/App Designer support: the UI is built
 entirely on that component family, not the classic figure/uicontrol one), the
 Signal Processing Toolbox (used by the `Filter` transform and the taper windows in
 `Fourier`) and the Statistics and Machine Learning Toolbox (used by EEGLAB and
@@ -150,7 +150,7 @@ interactively (from the ribbon) it prompts the user and remembers the chosen
 `options` (`TransformSettings`) for next time; when called with a previously
 captured `options` struct (dragging a branch onto another dataset, **Apply to
 All Raw Files...**, or replaying a saved template) it reproduces the operation
-without interaction, via a direct `feval(transformId, EEG, options)` call --
+without interaction, via a direct `feval(transformId, EEG, options)` call:
 plain data, not a parsed or `eval`'d command string. Every transformation opens
 with the same `nargin`/`'Init'`-sentinel guard,
 [`TransTools.InitGuard`](src/Transformations/+TransTools/InitGuard.m).
@@ -165,7 +165,7 @@ function [EEG, options] = SelectData(input, varargin)
         % Interactive: prompt for options, remember them for next time.
         options = SelectDataDialog(input.chanlocs);
         if isempty(options)
-            EEG = [];   % cancelled -- no node, no compute
+            EEG = [];   % cancelled, no node, no compute
             return;
         end
         TransformSettings.set('SelectData', options);
@@ -188,7 +188,7 @@ The current library:
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
 | `Interpolate` | Interpolates bad channels. |
 | `Resample` | Changes the sampling rate of continuous data. |
-| `DefineBins` | Assigns events to ERP bins with a small, purpose-built event-selection language -- see [`bin_language.md`](src/Transformations/DefineBins/bin_language.md) for the full reference. Replaces the ERPLAB EVENTLIST + BINLISTER step. |
+| `DefineBins` | Assigns events to ERP bins with a small, purpose-built event-selection language: see [`bin_language.md`](src/Transformations/DefineBins/bin_language.md) for the full reference. Replaces the ERPLAB EVENTLIST + BINLISTER step. |
 | `Baseline` | Baseline-corrects epoched data. |
 | `Average` | Averages one dataset's epoched trials into an ERP, including bin-difference/interaction contrast bins (see `bin_language.md` §11-12). |
 | `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold. |

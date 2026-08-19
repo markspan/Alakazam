@@ -83,10 +83,17 @@ function [EEG, options] = Measure(input, varargin)
 %   array (the same gotcha documented in WorkSpaceTree.buildData and
 %   worked around in Alakazam.onSaveTemplate), which would silently break
 %   Save Template/Apply Template for a one-window Measure step. A cell
-%   array sidesteps it regardless of count, so Measure never needs a
-%   templateParams-style special case. Each window's .channels is, for
-%   the same reason, always a cellstr (never a bare char for a single
-%   channel) -- see MeasureDialog and resolveChannelList below.
+%   array sidesteps that on the ENCODE side regardless of count -- but
+%   jsondecode still hands back a plain struct array on the way IN
+%   (Apply Template's own readTemplate/jsondecode round trip), same as it
+%   would for any same-shaped-objects JSON array, one level up (see
+%   readTemplate's own asItemList, which normalises exactly this for the
+%   template's step list); the replay branch below re-normalises
+%   options.windows the same way, so Measure still doesn't need a
+%   templateParams-style special CASE, just this one CONVERSION. Each
+%   window's .channels is, for the same reason, always a cellstr (never a
+%   bare char for a single channel) -- see MeasureDialog and
+%   resolveChannelList below.
 %
 %   See also: MEASUREDIALOG, AVERAGE, SCALPDISTRIBUTION, EXPORTMEASUREMENTSCSV.
 
@@ -108,6 +115,20 @@ if interactive
         priorWindows = {};
     else
         priorWindows = stored.windows;
+        if isstruct(priorWindows)
+            % A node created (or recalculated) before this normalisation
+            % existed can still have a struct-array .windows baked into
+            % its own saved .params -- recalculateTransformNode seeds
+            % TransformSettings straight from that node's own file (see
+            % its own header comment), so this reaches here un-normalised
+            % on the very first Recalculate. MeasureDialog's rowsFromWindows
+            % indexes priorWindows{i}, which errors ("Brace indexing is
+            % not supported for variables of type struct") on a struct
+            % array before the dialog even finishes building -- normalise
+            % here too, not just in the replay branch below, so reopening
+            % an old node's dialog self-heals it instead of crashing.
+            priorWindows = num2cell(priorWindows);
+        end
     end
     priorDerivations = '';
     if isstruct(stored) && isfield(stored, 'derivations')
@@ -117,8 +138,14 @@ if interactive
     if isempty(windows)
         % Cancelled: nothing to persist and nothing to run -- see
         % TransformOptionsDialog's own header comment for why every
-        % transformation using a dialog must return [] on Cancel.
+        % transformation using a dialog must return [] on Cancel. OPTIONS
+        % (the second declared output) must still be assigned: every
+        % caller here (onTransformation.m, recalculateTransformNode.m)
+        % requests both outputs unconditionally, so leaving it unset
+        % throws "Output argument not assigned" instead of the clean
+        % cancel this branch means to be.
         EEG = [];
+        options = [];
         return;
     end
     options = struct('windows', {windows}, 'derivations', derivations);
@@ -130,7 +157,27 @@ else
              'given do not look like ones Measure itself produced (no .windows field).']));
     end
     windows = opts.windows;
+    if isstruct(windows)
+        % A template round trip through jsonencode/jsondecode (Apply
+        % Template) turns a cell array of same-shaped structs back into a
+        % struct array, not a cell array -- unlike the direct .mat-cache
+        % replay path (drag-drop/Apply to All Raw Files), which preserves
+        % the cell array exactly. Normalise back so the cell-array
+        % indexing below (and computeWindow's own windows{w} caller)
+        % works regardless of which replay path got us here.
+        windows = num2cell(windows);
+    end
+    % options.windows must carry the NORMALISED (cell array) form, not
+    % whatever shape opts.windows happened to arrive in: options becomes
+    % this run's own EEG.params (onTransformation.m/applyStepToTarget.m
+    % both save it verbatim onto the resulting node), so options = opts
+    % alone would keep re-saving a struct-array-contaminated .windows on
+    % every node built this way -- self-perpetuating the exact "Brace
+    % indexing is not supported for variables of type struct" crash the
+    % local normalisation above only fixed for THIS run's own computation,
+    % not for the node a later Recalculate would read back.
     options = opts;
+    options.windows = windows;
     derivations = '';
     if isfield(opts, 'derivations')
         derivations = opts.derivations;

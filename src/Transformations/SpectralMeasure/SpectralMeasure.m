@@ -57,7 +57,12 @@ if interactive
     [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         SpectralMeasureDialog(input.chanlocs, stored);
     if isempty(rows)
-        EEG = [];   % cancelled
+        % OPTIONS (the second declared output) must still be assigned:
+        % onTransformation.m/recalculateTransformNode.m both request both
+        % outputs unconditionally, so leaving it unset throws "Output
+        % argument not assigned" instead of the clean cancel this means.
+        EEG = [];
+        options = [];   % cancelled
         return;
     end
     options = struct('rows', {rows}, 'fundamentals', fundamentals, ...
@@ -72,7 +77,23 @@ else
     end
     options = opts;
 end
-rows         = options.rows;
+rows = options.rows;
+if isstruct(rows)
+    % Apply Template's jsonencode/jsondecode round trip turns a cell array
+    % of same-shaped structs back into a struct array, not a cell array --
+    % same gotcha, same fix, as Measure.m's own options.windows (see its
+    % header comment for the full explanation). rows{w} below needs the
+    % cell array back regardless of which replay path produced OPTIONS.
+    rows = num2cell(rows);
+    % options.rows must carry this NORMALISED form too, not just the local
+    % ROWS variable: options becomes this run's own EEG.params (saved
+    % verbatim onto the resulting node), so leaving options.rows as the
+    % un-normalised struct array would re-save the same contamination onto
+    % this node -- resurfacing the identical "Brace indexing is not
+    % supported for variables of type struct" crash the next time this
+    % specific node is recalculated, even though THIS run computed fine.
+    options.rows = rows;
+end
 fundamentals = TransTools.FieldOr(options, 'fundamentals', '');
 refChannel   = TransTools.FieldOr(options, 'refChannel', '');
 method       = TransTools.FieldOr(options, 'method', 'Hann');

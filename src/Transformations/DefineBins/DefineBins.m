@@ -55,16 +55,21 @@ function [EEG, options] = DefineBins(input, varargin)
 %                immune to jitter in the interval itself, e.g. from variable
 %                RTs). Windows are signed, so [-1200,-200) means "before".
 %
-% A single optional 'epoch' statement gives the window to cut around every
-% matched event. It is written once and applies to ALL bins (they share one
-% window). With it, DefineBins returns a segmented (channels x time x trials)
-% dataset that plots in EpochView; without it the data stays continuous and
-% only the bin tags are added.
+% The epoch window to cut around every matched event is NOT part of this
+% script language -- it is a separate parameter, .epoch (a struct with
+% .lo/.hi/.unit), passed alongside the script rather than written as a
+% statement inside it: interactively, the "Epoch start (ms)"/"Epoch stop
+% (ms)" fields above the script editor in the DefineBins dialog;
+% programmatically, struct('script', ..., 'epoch', struct('lo', -200,
+% 'hi', 800, 'unit', 'ms')). It applies to ALL bins (they share one
+% window). With it, DefineBins returns a segmented (channels x time x
+% trials) dataset that plots in EpochView; without it (both fields left
+% blank) the data stays continuous and only the bin tags are added.
 %
 % Example (the N400-style case: a target whose response falls in a plausible
-% reaction-time window):
+% reaction-time window; the epoch window itself, e.g. -200 to 800 ms, is set
+% separately as described above, not written into the script):
 %
-%   epoch [-200,800] ms
 %   bin 1 "Related"   : 112 and next(118) within (200,1200] ms
 %   bin 2 "Unrelated" : 122 and next(118) within (200,1200] ms
 %   bin 3 "No response": (112|122) and not next(118) within (0,2000] ms
@@ -81,7 +86,7 @@ function [EEG, options] = DefineBins(input, varargin)
 %                    epoched - trials (indices into the epoch stack).
 %   EEG.event(i).bini : row vector of bin numbers this event belongs to
 %                    (ERPLAB-style; an event may be in several bins).
-% With an 'epoch' statement it also segments EEG.data into
+% With an .epoch window (see above) it also segments EEG.data into
 % channels x time x trials, sets DataFormat = 'EPOCHED', fills EEG.times and
 % EEG.epoch (one entry per trial, tagged with its bins).
 %

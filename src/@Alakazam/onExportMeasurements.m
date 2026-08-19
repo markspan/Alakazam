@@ -44,25 +44,43 @@ function onExportMeasurements(this)
         return;
     end
 
-    % Write a companion R analysis script (tidyverse + ggplot2) next to the CSV
-    % so the export is ready to run stats/plots on, not just a table. Best
-    % effort: a failure here must not lose the CSV the user just exported.
-    rNote = '';
+    % Write a companion Quarto report (tidyverse + ggplot2 + rstatix + gt)
+    % next to the CSV, generated to suit THIS export's own bin design (see
+    % generateQuartoReport's own header: descriptive/paired/RM-ANOVA/one-
+    % sample sections are chosen per window from EEG.bindesc, not
+    % re-discovered at R runtime): rendering it (quarto render, self-
+    % contained HTML) produces a short, APA-styled report with narrative
+    % results prose, APA-formatted tables and embedded plots, not just a
+    % console dump. Best effort: a failure here must not lose the CSV the
+    % user just exported.
+    reportNote = '';
     try
+        % Generate the report text FIRST, before touching the file: opening
+        % (and so truncating) the target file before generateQuartoReport
+        % has actually succeeded would leave an empty, unexplained .qmd
+        % behind if it throws -- exactly what a silent catch below used to
+        % produce, with no way to tell why.
+        qmdText = generateQuartoReport(entries, fileName);
         [~, stem] = fileparts(fileName);
-        rFile = fullfile(pathName, [stem '.R']);
-        fid = fopen(rFile, 'w');
-        if fid >= 0
-            fwrite(fid, generateRScript(fileName), 'char');
-            fclose(fid);
-            rNote = sprintf(['\n\nA companion R analysis script (tidyverse + ggplot2, ' ...
-                'repeated-measures ANOVA + pairwise tests + plots) was written next to it:\n%s'], rFile);
+        qmdFile = fullfile(pathName, [stem '.qmd']);
+        fid = fopen(qmdFile, 'w');
+        if fid < 0
+            throw(MException('Alakazam:onExportMeasurements', 'Could not open "%s" for writing.', qmdFile));
         end
-    catch
-        rNote = '';
+        closeFile = onCleanup(@() fclose(fid));
+        fwrite(fid, qmdText, 'char');
+        reportNote = sprintf(['\n\nA companion Quarto report (tidyverse + ggplot2 + rstatix + gt, ' ...
+            'tailored to your bin design) was written next to it:\n%s\n\nRender it with:\n' ...
+            'quarto render "%s"'], qmdFile, qmdFile);
+    catch ME
+        % Surfaced in the completion dialog below, not swallowed: a bare
+        % `catch; reportNote = '';` here used to hide the real reason
+        % (and, combined with opening the file too early, leave an empty
+        % .qmd with no explanation at all).
+        reportNote = sprintf('\n\n(Could not generate the companion Quarto report: %s)', ME.message);
     end
 
     % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
-    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s', numel(entries), targetFile, rNote), ...
+    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s', numel(entries), targetFile, reportNote), ...
         'Export complete');
 end

@@ -37,13 +37,17 @@ classdef EpochView < handle
 %   "look at the single-trial detail AND the summary at once" idea an
 %   ERP-image conventionally pairs with.
 %
-%   One shared, symmetric colour scale across the WHOLE dataset (every
-%   channel, every trial), computed once in the constructor -- so paging
+%   One shared, symmetric colour scale PER CHANNEL GROUP (EEG/EOG/OTHER,
+%   see channelGroup), computed once in the constructor -- so paging
 %   through channels with the arrow keys is an eye-to-eye comparison
-%   (does channel 3 swing wider than channel 5?), the same "shared
-%   scale, not autoscaled per redraw" convention ScalpDistribution/
-%   TimeFrequency already established, rather than MATLAB's own default
-%   of a fresh, locally-autoscaled range on every redraw.
+%   within a group (does EEG channel 3 swing wider than EEG channel 5?),
+%   the same "shared scale, not autoscaled per redraw" convention
+%   ScalpDistribution/TimeFrequency already established, rather than
+%   MATLAB's own default of a fresh, locally-autoscaled range on every
+%   redraw. Grouped, not one single scale across the whole dataset,
+%   because a large-amplitude EOG/ECG channel would otherwise set the
+%   limit and wash every EEG channel's ERP-image out (or vice versa) --
+%   each group gets a scale appropriate to its own typical amplitude.
 %
 %   Style follows the project standard (UpperCamelCase class/properties,
 %   lowerCamelCase methods, double quotes except where a char array is
@@ -73,7 +77,10 @@ classdef EpochView < handle
         Times           % 1 x time, sample times
         Labels          % 1 x nchan cell of channel labels
         Channel = 1     % current channel
-        ColorLimit      % shared, symmetric [-lim lim] colour scale for the whole dataset
+        ChannelGroup    % 1 x nchan cellstr, each channel's display group ("EEG"/"EOG"/"OTHER", see channelGroup)
+        GroupColorLimit % containers.Map: group name -> shared, symmetric [-lim lim] colour scale for that group
+        ColorbarWrap    % the shared colorbar's own wrapping sub-grid (TransTools.AddSharedColorbar); rebuilt, not just re-CLim'd, when the shown channel's group changes
+        ShownGroup      % the group the currently-drawn ColorbarWrap/HeatAxes.CLim was built for, so redraw() only rebuilds the colorbar when it actually changes
         HasBins = false      % true when epochs carry .bini membership
         BinNameMap           % containers.Map: bin index -> label (if known)
         BinNamesKnown = false
@@ -103,18 +110,25 @@ classdef EpochView < handle
                 this.BinNamesKnown = true;
             end
 
-            % Base the shared colour scale on the scalp EEG channels only: a
-            % large-amplitude EOG/ECG channel would otherwise set the limit and
-            % wash every EEG channel's ERP-image out (see eegChannelMask). Falls
-            % back to all channels when there is no usable per-channel type info.
-            scaleData = eeg.data;
+            % Base each channel's colour scale on its OWN group's range
+            % (EEG/EOG/OTHER, see channelGroup), not one shared scale across
+            % everything -- see this file's own header comment for why.
+            % Falls back to "every channel is EEG" when there is no usable
+            % per-channel chanlocs at all (channelGroup's own fallback).
             if isfield(eeg, "chanlocs") && numel(eeg.chanlocs) == size(eeg.data, 1)
-                m = eegChannelMask(eeg.chanlocs);
-                scaleData = eeg.data(m, :, :);
+                this.ChannelGroup = channelGroup(eeg.chanlocs);
+            else
+                this.ChannelGroup = repmat({'EEG'}, 1, size(eeg.data, 1));
             end
-            this.ColorLimit = max(abs(scaleData(:)), [], "omitnan");
-            if ~isfinite(this.ColorLimit) || this.ColorLimit == 0
-                this.ColorLimit = 1; % an all-zero (or all-NaN) dataset would otherwise give an empty [0 0] scale
+            this.GroupColorLimit = containers.Map("KeyType", "char", "ValueType", "double");
+            for g = unique(this.ChannelGroup)
+                mask = strcmp(this.ChannelGroup, g{1});
+                groupData = eeg.data(mask, :, :);
+                lim = max(abs(groupData(:)), [], "omitnan");
+                if ~isfinite(lim) || lim == 0
+                    lim = 1; % an all-zero (or all-NaN) group would otherwise give an empty [0 0] scale
+                end
+                this.GroupColorLimit(g{1}) = lim;
             end
 
             % Key handling is wired by the shared Alakazam-level dispatcher
@@ -180,8 +194,11 @@ classdef EpochView < handle
             this.HeatImage.ButtonDownFcn = @(~, ~) this.notifyActivated();
             xlabel(this.HeatAxes, "Time (ms)");
 
-            TransTools.AddSharedColorbar(this.Grid, 1, 3, TransTools.DivergingColormap(), ...
-                [-this.ColorLimit, this.ColorLimit], "Amplitude (\muV)");
+            % The shared colorbar itself is built by redraw() below (it
+            % needs this.ChannelGroup/GroupColorLimit above, plus
+            % this.Channel, to pick the right group's scale, and is rebuilt
+            % whenever paging lands on a different group -- see redraw()'s
+            % own comment).
 
             this.TraceAxes = uiaxes(this.Grid);
             this.TraceAxes.Layout.Row = 2;
@@ -228,7 +245,22 @@ classdef EpochView < handle
             this.HeatImage.XData = this.Times;
             this.HeatImage.YData = 1:nRows;
             this.HeatImage.CData = ordered;
-            this.HeatAxes.CLim = [-this.ColorLimit, this.ColorLimit];
+            group = this.ChannelGroup{this.Channel};
+            lim = this.GroupColorLimit(group);
+            this.HeatAxes.CLim = [-lim, lim];
+            if ~isequal(group, this.ShownGroup)
+                % Paging landed on a different group (EEG/EOG/OTHER) than
+                % what the colorbar currently shows -- rebuild it to match.
+                % AddSharedColorbar's own hidden axes isn't exposed to just
+                % re-set CLim on, so a changing scale means delete() + build
+                % again (see its own header comment on this exact case).
+                if ~isempty(this.ColorbarWrap) && isvalid(this.ColorbarWrap)
+                    delete(this.ColorbarWrap);
+                end
+                this.ColorbarWrap = TransTools.AddSharedColorbar(this.Grid, 1, 3, ...
+                    TransTools.DivergingColormap(), [-lim, lim], "Amplitude (\muV)");
+                this.ShownGroup = group;
+            end
             xlim(this.HeatAxes, [this.Times(1), this.Times(end)]);
             ylim(this.HeatAxes, [0.5, nRows + 0.5]);
             title(this.HeatAxes, "Channel: " + this.Labels{this.Channel});

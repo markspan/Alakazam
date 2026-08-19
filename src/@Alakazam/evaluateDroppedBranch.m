@@ -6,7 +6,11 @@ function evaluateDroppedBranch(this, sourceFile, targetNode)
 %   branch has children.
 %
 %   Special case: dropping one AVERAGED dataset onto a matching AVERAGED
-%   dataset overlays their plots instead of transforming.
+%   dataset overlays their plots instead of transforming -- isOverlayableAverage's
+%   own job to recognise (see its header comment for why that is a source-side
+%   .Call check, not a step-position one: it needs to reject Measure et al
+%   reached either as the user's own direct drop or by descending into a
+%   branch's children).
     atLeaf     = false;
     targetFile = targetNode.UserData;
 

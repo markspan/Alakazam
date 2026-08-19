@@ -30,8 +30,21 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     seedFund = 'let f1 = 60';
     seedRef = ''; seedMethod = 'Hann'; seedTapers = 3; seedN = 10; seedGuard = 1;
     if isstruct(stored) && isfield(stored, 'rows') && ~isempty(stored.rows)
+        storedRows = stored.rows;
+        if isstruct(storedRows)
+            % A node created (or recalculated) before this normalisation
+            % existed can still have a struct-array .rows baked into its
+            % own saved .params -- recalculateTransformNode seeds
+            % TransformSettings straight from that node's own file, so
+            % this reaches here un-normalised on the very first
+            % Recalculate. cellfun below requires a cell array; normalise
+            % here so reopening an old node's dialog self-heals it
+            % instead of crashing (same gotcha as Measure.m's own
+            % options.windows -- see its header comment).
+            storedRows = num2cell(storedRows);
+        end
         seedRows = cellfun(@(r) {char(string(r.label)), char(string(r.freq)), ...
-            char(string(r.channels))}, stored.rows, 'UniformOutput', false);
+            char(string(r.channels))}, storedRows, 'UniformOutput', false);
         seedFund   = getField(stored, 'fundamentals', seedFund);
         seedRef    = getField(stored, 'refChannel', '');
         seedMethod = getField(stored, 'method', 'Hann');

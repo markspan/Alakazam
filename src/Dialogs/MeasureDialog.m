@@ -282,6 +282,18 @@ function data = rowsFromWindows(priorWindows)
 %   are never empty, and the pre-unification Peak Area / Integral measures
 %   are migrated to Area (see migrateMeasureWidth) so the Measure dropdown
 %   never shows a value it no longer offers.
+%
+%   PRIORWINDOWS is normalised to a cell array here too, not just by
+%   Measure.m's own callers: a struct array (Apply Template's jsonencode/
+%   jsondecode round trip turns a cell array of same-shaped structs back
+%   into one -- see Measure.m's own header comment) would otherwise break
+%   the priorWindows{i} indexing below with "Brace indexing is not
+%   supported for variables of type struct" before the dialog even
+%   finishes building, regardless of which caller let it through
+%   un-normalised.
+    if isstruct(priorWindows)
+        priorWindows = num2cell(priorWindows);
+    end
     data = cell(numel(priorWindows), 12);
     for i = 1:numel(priorWindows)
         w = priorWindows{i};
