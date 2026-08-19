@@ -67,6 +67,12 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   [Transformations](#transformations) and [3D brain view](#3d-brain-view));
   grand averaging across subjects is a separate mechanism with its own tree
   and dialog.
+- **Design-aware statistical reporting.** Exporting ERP measurements also
+  writes a companion Quarto report: one statistical test per window and
+  measure type, chosen to fit the actual design (descriptive statistics,
+  a paired test, a repeated-measures ANOVA, or a one-sample test against
+  zero for a difference bin), with APA-styled tables and violin plots
+  (see [Statistical analysis](#statistical-analysis)).
 - **Session workspaces.** Working directories and the processing tree are
   saved and reloaded as a workspace.
 
@@ -197,11 +203,11 @@ The current library:
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
-| `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface -- either as a scalp-topography projection (default) or a real MNE source estimate (see [3D brain view](#3d-brain-view)). |
-| `Measure` | Quantifies ERP components in named time windows -- mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency) -- on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference and [Measurement export](#measurement-export). |
+| `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real MNE source estimate (see [3D brain view](#3d-brain-view)). |
+| `Measure` | Quantifies ERP components in named time windows: mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency), on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference, [Measurement export](#measurement-export) and [Statistical analysis](#statistical-analysis). |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
-| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and -- against an optional photodiode reference -- coherence and phase-lag, per channel and bin; batch-exported via the Measurements tab's **Spectral** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
-| `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT -- the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
+| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Measurements tab's **Spectral** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
+| `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT: the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
 | `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
 
 Grand averaging (combining several subjects' `Average` results into one) is
@@ -220,32 +226,32 @@ choosing how the data is drawn:
 - **Scalp topography** (the default) is the same spherical-spline
   interpolation `ScalpDistribution`'s flat topoplot uses, projected onto a
   brain-shaped surface (a BrainNet Viewer ICBM152 mesh) purely for
-  legibility. It is **not source-localized** -- the colour scale is the
+  legibility. It is **not source-localized**: the colour scale is the
   measured scalp voltage itself (µV, signed, symmetric about zero), exactly
   as in the flat 2D plot.
 - **Source estimate (MNE)** is a real inverse computation: a
   Tikhonov-regularized minimum-norm estimate, noise-normalized dSPM-style
-  (Dale et al., 2000 -- see [References](#references)), using
+  (Dale et al., 2000, see [References](#references)), using
   [FieldTrip](https://www.fieldtriptoolbox.org/)'s template BEM head model,
   template 10-5 electrode positions, and a template cortical-sheet source
   model, drawn directly on that cortical surface. Selecting it the first
-  time prompts to download FieldTrip (about 400 MB, one time, opt-in -- see
+  time prompts to download FieldTrip (about 400 MB, one time, opt-in, see
   [`dependencies.md`](dependencies.md)); switching into it, or onto a bin
   not yet computed, takes a moment longer than scalp mode while the
   leadfield/inverse is built (cached afterwards per channel set/bin).
 
   **Its colour scale looks nothing like scalp mode's, on purpose.** dSPM
   normalization corrects raw minimum-norm's bias toward superficial
-  sources and turns the result into a statistic -- approximately "how many
-  noise standard deviations above baseline" -- comparable *across* source
+  sources and turns the result into a statistic, approximately "how many
+  noise standard deviations above baseline", comparable *across* source
   locations, which raw dipole-moment magnitude is not. It is still **not**
   on a µV-like physical scale, so the colorbar is labelled "dSPM
   (noise-normalized)", not an amplitude; do not compare its numbers to
   scalp mode's µV scale. One further simplification worth knowing: the
   assumed noise covariance behind both the regularization and the dSPM
   normalization itself is a scaled identity, not an independently
-  estimated one -- Alakazam's pipeline runs on already-averaged ERPs, with
-  no single-trial baseline available at this stage to estimate a real
+  estimated one, since Alakazam's pipeline runs on already-averaged ERPs,
+  with no single-trial baseline available at this stage to estimate a real
   noise covariance from (see
   [`ComputeSourceEstimate.m`](src/Transformations/+TransTools/ComputeSourceEstimate.m)
   for the full derivation).
@@ -253,7 +259,7 @@ choosing how the data is drawn:
   **This is template-based, not a per-subject localization.** No
   per-subject MRI or digitised electrode positions are used (same "10-5
   template by channel label" approach the rest of Alakazam uses for scalp
-  topography) -- a real inverse computation, more physiologically grounded
+  topography): a real inverse computation, more physiologically grounded
   than the scalp-topography projection, but still an approximation.
 
 ## Measurement export
@@ -268,7 +274,7 @@ colleague, independent of any one dataset's Recalculate history. Because it
 is an ordinary transformation, a whole
 `raw -> filter -> epoch -> baseline -> artefact-reject -> average -> measure`
 pipeline can be defined once and replayed across a study with Apply to All
-Raw Files or a saved template (see [Key features](#key-features)) -- no need
+Raw Files or a saved template (see [Key features](#key-features)), no need
 to re-run Measure by hand on every subject.
 
 The **Measurements** ribbon tab's **ERP** export button walks the whole
@@ -277,14 +283,16 @@ a Measure result and writes one long-format, R-compatible CSV: one row per
 dataset x window x bin x channel x measure type (`mean_amplitude`,
 `peak_amplitude`, `peak_latency`, `area_signed` / `area_rectified` /
 `area_positive` / `area_negative`, `fractional_peak_latency`,
-`fractional_area_latency` -- a measure that yields several values, such as Peak
+`fractional_area_latency`; a measure that yields several values, such as Peak
 or a peak-locked Area, contributes one row per value, so the CSV's own `value`
 column stays uniformly numeric).
 The same bulk-export-everything idea as **Export Grand Averages...** (see
-[`exportGrandAveragesCSV.m`](src/exportGrandAveragesCSV.m)), implemented in
-[`exportMeasurementsCSV.m`](src/exportMeasurementsCSV.m). The full window/
+[`exportGrandAveragesCSV.m`](src/IO/exportGrandAveragesCSV.m)), implemented in
+[`exportMeasurementsCSV.m`](src/IO/exportMeasurementsCSV.m). The full window/
 measure reference, with worked examples, is
-[`measure.md`](src/Transformations/Measure/measure.md).
+[`measure.md`](src/Transformations/Measure/measure.md). The same button also
+writes a companion statistical report next to the CSV, see
+[Statistical analysis](#statistical-analysis).
 
 ![ScreenshotERP](Screenshots/ERP.jpg)
 
@@ -294,10 +302,60 @@ measure reference, with worked examples, is
 
 ![ScreenshotTF](Screenshots/TimeFrequency.jpg)
 
+## Statistical analysis
+
+Exporting Measure results (the **Measurements** tab's **ERP** button, see
+[Measurement export](#measurement-export)) writes a companion
+[Quarto](https://quarto.org/) report, `<name>.qmd`, next to the CSV.
+Rendering it (`quarto render <name>.qmd`, self-contained HTML) produces a
+short, APA-styled results report, not just a table.
+
+The report is design-aware: it is built at generation time in MATLAB,
+where the actual bin structure is still fully known (`EEG.bindesc`, not
+recoverable from the flat CSV alone), so it can choose the statistical
+test each window and measure type actually calls for, rather than one
+generic script re-discovering the design at runtime. One section per
+window and measure type:
+
+- **one ordinary bin**: descriptive statistics only, since no comparison
+  is possible;
+- **two ordinary bins**: a paired *t*-test with Cohen's *dz*, a Wilcoxon
+  signed-rank robustness check, and a Shapiro-Wilk normality note;
+- **three or more ordinary bins**: a repeated-measures ANOVA (Type III
+  sum of squares) with Holm-corrected pairwise paired *t*-tests and
+  Cohen's *dz* per pair, plus a Friedman test robustness check;
+- **each combination (difference) bin**, separately: for an amplitude or
+  area measure, a one-sample *t*-test (and Wilcoxon) against zero, since
+  zero is the natural "no difference" reference for an amplitude/area
+  contrast; kept out of the omnibus test above, because a combination
+  bin's scores are a linear combination of the other bins', not an
+  independent condition. A latency measure (peak, fractional peak, or
+  fractional area latency) has no such natural zero to test against, so a
+  combination bin's own latency is reported as descriptive statistics
+  only, with no test.
+
+Every test's own key p-value also feeds one final cross-group summary
+table, corrected for multiple comparisons (Benjamini-Hochberg) across
+every channel, window and measure-type group the export produced, not
+just within one group's own pairwise comparisons. Tables are rendered in
+APA style (three-line format: a rule above the header, one below it, one
+at the foot, no vertical rules); plots are violins, showing the actual
+distribution rather than just a bar and an error bar, with each
+subject's own connecting line and jittered point layered on top for the
+repeated-measures designs. Each channel's own analysis runs inside its
+own error boundary, so an edge case on one channel (too few usable
+subjects for a normality check, say) is reported for that one channel
+alone and does not stop the rest of the report from rendering.
+
+Rendering the report needs Quarto plus R with the tidyverse, rstatix,
+ggpubr and gt packages (installed automatically by the report's own setup
+step on first render). Generated by
+[`generateQuartoReport.m`](src/IO/generateQuartoReport.m).
+
 ## Frequency analysis (frequency tagging / RIFT)
 
 The **Spectral Measure** transform is the frequency-domain counterpart of ERP
-Measure: it quantifies steady-state / frequency-tagging responses -- SSVEP, and
+Measure: it quantifies steady-state / frequency-tagging responses, SSVEP, and
 Rapid Invisible Frequency Tagging (RIFT). It runs on epoched, single-trial data.
 
 Declare the tagging fundamentals (`let f1 = 60`, `let f2 = 64`) and name each
@@ -309,7 +367,7 @@ multitaper, so harmonic / intermodulation terms off the `fs/N` grid are still
 exact), and reports:
 
 - **power / amplitude** of the trial-averaged (evoked) response and its **SNR**
-  against the neighbouring frequency bins -- the amplitude-based SSVEP read-out
+  against the neighbouring frequency bins, the amplitude-based SSVEP read-out
   used to track, for example, attentional modulation of the tagged response
   (Toffanin et al., 2009);
 - **inter-trial phase-locking** (how consistently the response tracks the
@@ -318,20 +376,20 @@ exact), and reports:
   flicker, the **magnitude-squared coherence** and phase-lag between that
   reference and each EEG channel. This is the standard RIFT cross-coherence:
   the trial-wise complex cross-spectra are averaged and normalised by the
-  trial-averaged autospectra, then squared -- exactly the read-out used to
+  trial-averaged autospectra, then squared, exactly the read-out used to
   reveal tagging responses in Dimigen et al. (2025) (see
   [References](#references)).
 
 For the time-resolved picture, the **Coherence Map** transform draws the
 coherence between each channel and a reference (photodiode) as a per-channel
-**time x frequency heatmap** -- the plot the RIFT figures show (Dimigen et al.,
-2025) -- using either a Morlet wavelet or a fixed-window STFT decomposition.
+**time x frequency heatmap**, the plot the RIFT figures show (Dimigen et al.,
+2025), using either a Morlet wavelet or a fixed-window STFT decomposition.
 
 The reference is optional (not every recording has a photodiode), so power /
 SNR / phase-locking are always available and coherence is added when a
 reference is set. Results export to one long-format, R-compatible CSV via the
 Measurements tab's **Spectral** button
-([`exportSpectralCSV.m`](src/exportSpectralCSV.m)); like any transformation, a
+([`exportSpectralCSV.m`](src/IO/exportSpectralCSV.m)); like any transformation, a
 whole tagging pipeline can be replayed across a study with Apply to All Raw
 Files or a saved template. The full reference is the
 [`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)
@@ -390,8 +448,9 @@ stimuli. Stimulus-locked.
 5. **Measure**: Load the `p300` preset (Pz, 300 to 600 ms, mean amplitude), or
    the `erp_components_mean_amplitude` battery. Read the `Rare` bin for the P300
    itself, and the `Rare-Freq` bin for the oddball effect.
-6. **Grand Average** across subjects, then export for one long-format CSV (the
-   **Measurements** ribbon tab's **ERP** button).
+6. **Grand Average** across subjects, then export for one long-format CSV and a
+   companion statistical report (the **Measurements** ribbon tab's **ERP**
+   button, see [Statistical analysis](#statistical-analysis)).
 
 ### How to do an LRP analysis (response-locked)
 
@@ -475,7 +534,11 @@ required.
 4. **Average**.
 5. **Measure**: Load the `mmn` preset (Fz, 150 to 250 ms, mean amplitude,
    negative), and read the `MMN` difference bin (bin 3) at Fz.
-6. **Grand Average**, then export via the **Measurements** tab's **ERP** button.
+6. **Grand Average**, then export via the **Measurements** tab's **ERP**
+   button. Since `MMN` is a difference bin measured as mean amplitude, the
+   companion statistical report tests it against zero (see
+   [Statistical analysis](#statistical-analysis)), the natural way to ask
+   whether the mismatch response is actually present.
 
 ## References
 
