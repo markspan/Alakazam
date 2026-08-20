@@ -38,9 +38,11 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   dragging onto each one by hand. **Save Template...** exports that same
   branch as a portable `.alztemplate` file (a plain JSON list of steps,
   independent of this workspace's own cache files); **Apply Template...**,
-  available on any node, replays a saved template's steps onto it: the
-  same recipe applied later, in another workspace, or after Alakazam has
-  been restarted.
+  available on any dataset node, replays a saved template's steps onto it:
+  the same recipe applied later, in another workspace, or after Alakazam
+  has been restarted. (Not offered on a rendered report node in the
+  Reports tree, see [Statistical analysis](#statistical-analysis) -- a
+  report has none of the real dataset fields a transformation expects.)
 - **Format support.** BrainVision (`.vhdr`, via the bva-io EEGLAB plugin),
   EEGLAB `.set`, ERPLAB erpsets (`.erp`, read directly as an already-averaged
   root dataset, no ERPLAB installation required, see `erpsetToAveraged`),
@@ -71,10 +73,14 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   results also writes a companion Quarto/R report to a persistent Reports
   folder: one statistical test per window/frequency and measure type,
   chosen to fit the actual design -- within-subjects (descriptive
-  statistics, a paired test, a repeated-measures ANOVA), between-subjects
-  or mixed once subjects are assigned to groups (independent-samples test,
-  one-way ANOVA, mixed ANOVA), or a one-sample test against zero for a
-  difference bin -- with APA-styled tables and violin plots. It is a real,
+  statistics, a paired test, or a linear mixed model for 3+ conditions),
+  between-subjects or mixed once subjects are assigned to groups via
+  **Grouping...** (a Welch *t*-test/ANOVA, or a linear mixed model with a
+  condition x group interaction), or a one-sample test against zero for a
+  difference bin -- every *t*-test-family comparison also backed by a
+  Bayes Factor and a bootstrapped effect-size confidence interval as a
+  robustness check, with APA-styled tables, violin plots, and a closing
+  forest plot of every effect size in the report. It is a real,
   human-editable Quarto document underneath, not a fixed template (see
   [Statistical analysis](#statistical-analysis)).
 - **Session workspaces.** Working directories and the processing tree are
@@ -327,7 +333,7 @@ and a sticky table of contents render better outside it). Rendering
 (`quarto render <name>.qmd`, self-contained HTML) produces a short,
 APA-styled results report, not just a table: tables in three-line APA
 format, violin plots showing the actual distribution rather than just a bar
-and an error bar, and narrative prose ("A repeated-measures ANOVA revealed a
+and an error bar, and narrative prose ("A linear mixed model revealed a
 significant effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
 
 ### What gets tested, and what question it answers
@@ -344,22 +350,36 @@ frequency (Spectral) x measure type:
 | Design | Test(s) | Question it answers |
 |---|---|---|
 | One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
-| Two ordinary bins | Paired *t*-test + Cohen's *dz*, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
-| Three or more ordinary bins | Repeated-measures ANOVA (Type III) + Holm-corrected pairwise paired *t*-tests + Cohen's *dz* per pair, Friedman test robustness check | Does this measure differ across conditions, within subjects? Which specific pairs of conditions differ? |
-| One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d*, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
-| One ordinary bin, **3+ groups** assigned | One-way ANOVA + Tukey-corrected pairwise comparisons | Does this measure differ between the groups? Which pairs of groups differ? |
-| Two or more ordinary bins, **groups** assigned | Mixed (split-plot) ANOVA -- within: bin, between: group -- reporting the bin main effect, the group main effect and their interaction, + Holm-corrected within-group and between-group pairwise comparisons | Does the **condition effect itself differ between groups** (the interaction -- usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
-| Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero | Is this effect (a priming effect, an oddball effect, ...) actually present? |
+| Two ordinary bins | Paired *t*-test + Cohen's *dz* (bootstrapped CI) + Bayes Factor, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
+| Three or more ordinary bins | Linear mixed model (subject random intercept + slope for bin, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects -- using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
+| One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d* (bootstrapped CI) + Bayes Factor, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
+| One ordinary bin, **3+ groups** assigned | Welch's ANOVA + Games-Howell pairwise comparisons | Does this measure differ between the groups? Which pairs of groups differ? |
+| Two or more ordinary bins, **groups** assigned | Linear mixed model with a condition x group interaction (same random-effects/fallback logic as above) + partial eta-squared with CI + Holm-corrected within-group and between-group pairwise comparisons (`emmeans`) | Does the **condition effect itself differ between groups** (the interaction -- usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
+| Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero, Cohen's *dz* (bootstrapped CI) + Bayes Factor | Is this effect (a priming effect, an oddball effect, ...) actually present? |
 | Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against* -- see below) |
 | Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test -- see below) |
-| Combination/difference bin (amplitude/area/power/...), **groups** assigned | One-sample test **within each group** + independent-samples test of the difference score **between groups** | Does the effect exist within each group? Does the effect's **size** differ between groups (e.g. "is the priming effect different in patients than in controls")? |
+| Combination/difference bin (amplitude/area/power/...), **groups** assigned | One-sample test **within each group** + independent-samples test of the difference score **between groups**, each with Cohen's *d*/*dz* (bootstrapped CI) + Bayes Factor | Does the effect exist within each group? Does the effect's **size** differ between groups (e.g. "is the priming effect different in patients than in controls")? |
 | Combination/difference bin, a **latency**, **groups** assigned | Independent-samples test **between groups** only (still no vs.-zero test) | Does the effect's *timing* differ between groups? |
 | Combination/difference bin, **circular**, **groups** assigned | Descriptive statistics only, per group | (still no linear test is valid, one-sample or between-groups) |
+
+The 3+-bin and mixed-design rows deliberately use a **linear mixed model**
+(`lme4`/`lmerTest`), not a repeated-measures or split-plot ANOVA: the LMM's
+whole point here is that a subject missing one bin still contributes their
+other bins to the fit, instead of being listwise-dropped from the entire
+channel the way a classic RM-ANOVA would drop them. A maximal model (random
+intercept **and** slope per subject) is tried first and falls back to a
+random-intercept-only model, narrated in the report, if the maximal one
+fails to converge to a non-singular fit -- typically too few
+subjects/observations for that many random parameters. The 3+-group
+between-subjects row uses **Welch's ANOVA + Games-Howell**, not classic
+ANOVA + Tukey, for the same reason the paired/between tests already default
+to Welch over Student's *t*: it does not assume equal variances between
+groups, which real between-subjects EEG samples rarely satisfy exactly.
 
 A combination bin's own test is always kept separate from the omnibus test
 over the ordinary bins above it, even when both are in the same report: its
 scores are a linear combination of the other bins' scores, not an
-independent condition, so folding it into the same ANOVA would be
+independent condition, so folding it into the same model would be
 statistically invalid. A **latency** has no natural "zero" to test *against*
 (zero would mean "no difference" for an amplitude; it means nothing of the
 kind for a point in time), which is why it drops the one-sample test but
@@ -370,28 +390,41 @@ quantity (phase/phaselag, an angle wrapping at &plusmn;&pi; radians) drops
 for circular data without dedicated circular-statistics machinery this
 generator does not have.
 
+Every *t*-test-family comparison in the table above (paired, one-sample-vs-
+zero, independent 2-group, and the within-/between-group combo-bin
+variants) is also backed by a Bayes Factor (`BayesFactor::ttestBF`) as an
+added robustness check alongside its Wilcoxon/Mann-Whitney/Friedman
+equivalent, and every Cohen's *d*/*dz* effect size carries a bootstrapped
+(BCa, 200 resamples) confidence interval, not just a point estimate. The
+omnibus LMM tests report partial eta-squared with a genuine confidence
+interval (`effectsize::F_to_eta2`, via the model's F-statistic) instead of
+marginal R^2 for exactly this reason -- R^2 alone has no CI to plot.
+
 Every section's own key test result also feeds one final cross-report
 summary table, Benjamini-Hochberg (BH/FDR) corrected across every channel,
 window/frequency and measure-type test the whole export produced, not just
-within one section's own pairwise comparisons. Each channel's own analysis
-runs inside its own error boundary, so an edge case on one channel (too few
-usable subjects for a normality check, missing data for that channel only,
-...) is reported for that one channel alone and does not stop the rest of
-the report from rendering.
+within one section's own pairwise comparisons, plus a closing **forest
+plot** (effect size + CI, faceted by effect-size type since Cohen's *d* and
+partial eta-squared are different scales) so every effect in the report can
+be compared at a glance, not just read off one table at a time. Each
+channel's own analysis runs inside its own error boundary, so an edge case
+on one channel (too few usable subjects for a normality check, missing data
+for that channel only, ...) is reported for that one channel alone and does
+not stop the rest of the report from rendering.
 
 ### Groups: setting up a between-subjects or mixed design
 
 Every design starts out within-subjects: every bin/condition is assumed to
 be measured on every subject, matched by `dataset` in the CSV. To ask a
 between-subjects question instead ("do patients and controls differ"),
-assign each subject to a group first, via **Edit Groups...** (Home ribbon
-tab, next to Edit WorkSpace): one row per subject -- every root node in the
-Data & Analyses tree -- with a free-text group label; leave it blank for "no
-group". A subject left blank is excluded from every group-based test (with a
-count and a reason in the rendered report), but still counted normally in a
-report that turns out to have no groups active at all. Like the workspace's
-own directories, group assignment lives only in this session until saved
-with **Save WorkSpace**.
+assign each subject to a group first, via **Grouping...** (the Home ribbon
+tab's own **Design** group) -- the "Edit Subjects" dialog: one row per
+subject -- every root node in the Data & Analyses tree -- with a free-text
+**Group** label; leave it blank for "no group". A subject left blank is
+excluded from every group-based test (with a count and a reason in the
+rendered report), but still counted normally in a report that turns out to
+have no groups active at all. Like the workspace's own directories, group
+assignment lives only in this session until saved with **Save WorkSpace**.
 
 Once at least two distinct group labels are actually in use, both exporters
 add a `group` column to their CSV, and `generateQuartoReport` switches every
@@ -401,29 +434,44 @@ data, with nothing else to configure. A workspace where nobody has been
 assigned a group (or everybody shares the same one label) renders exactly as
 it always has.
 
+The same dialog has two more columns, **Person ID** and **Session**, for
+linking multiple raw-file recordings of the same person (e.g. "...day1",
+"...day2") together -- give them the same Person ID and an optional Session
+label ("Day 1", "Pre", "Post", ...) to record that they are repeated
+measurements of one person, not unrelated subjects. Person ID is pre-filled
+per raw file with whatever substring varies once every part of the
+filename common to *all* raw files in the workspace is stripped out (an
+experiment name shared by every recording cannot help tell subjects apart,
+so it is not worth leaving in the suggestion). Both columns reach the
+exported CSV (`person_id`/`session`) for a researcher's own downstream use,
+but `generateQuartoReport` does not yet treat session as a statistical
+factor the way it does bin or group -- that is groundwork for a future
+multi-session design, not yet a wired-up test.
+
 ### It's just R and Quarto underneath
 
 The generated `.qmd` is an ordinary, human-editable Quarto document, not a
 locked report format: every test in the table above is a plain
-`tidyverse`/`rstatix`/`ggpubr`/`gt` call over a `dat` tibble read straight
-from the CSV copy sitting next to it. Open the `.qmd` itself (in the Reports
-folder, next to its `.html` and its own CSV copy) in RStudio, VS Code, or any
-text editor, and add, change, or remove anything -- a different test, a
-Bayesian alternative
-(`BayesFactor`, `brms`), a mixed-effects model (`lme4`/`lmerTest`) instead of
-repeated-measures ANOVA, a custom plot, a subset of channels or subjects,
-extra covariates joined in from elsewhere -- exactly as in any other
-Quarto/R document, then render it again (`quarto render <name>.qmd`, or the
-"Render" button in RStudio/VS Code). The auto-generated report is a
-statistically-considered starting point for this specific export's own
-design, tailored to it rather than generic, but it is not the last word on
-it: if a test exists in R, it can go in this report.
+`tidyverse`/`rstatix`/`lme4`/`emmeans`/`BayesFactor` call (see the package
+list below) over a `dat` tibble read straight from the CSV copy sitting next
+to it. Open the `.qmd` itself (in the Reports folder, next to its `.html`
+and its own CSV copy) in RStudio, VS Code, or any text editor, and add,
+change, or remove anything -- a fully Bayesian alternative (`brms`), a
+random-effects structure the built-in LMM does not try, a custom plot, a
+subset of channels or subjects, extra covariates joined in from elsewhere --
+exactly as in any other Quarto/R document, then render it again (`quarto
+render <name>.qmd`, or the "Render" button in RStudio/VS Code). The
+auto-generated report is a statistically-considered starting point for this
+specific export's own design, tailored to it rather than generic, but it is
+not the last word on it: if a test exists in R, it can go in this report.
 
-If Quarto or R (with the tidyverse, rstatix, ggpubr and gt packages --
-installed automatically by the report's own setup step on first render) are
-not found on this machine, the `.qmd` and its CSV are still written and the
-export still succeeds; render it manually once they are available (the
-export's completion dialog gives the exact command).
+If Quarto or R (with the `tidyverse`, `rstatix`, `ggpubr`, `gt`,
+`BayesFactor`, `lme4`, `lmerTest`, `emmeans`, `performance` and
+`effectsize` packages -- installed automatically by the report's own setup
+step on first render) are not found on this machine, the `.qmd` and its CSV
+are still written and the export still succeeds; render it manually once
+they are available (the export's completion dialog gives the exact
+command).
 
 Generated by [`generateQuartoReport.m`](src/IO/generateQuartoReport.m).
 
@@ -477,9 +525,12 @@ header.
 
 ## How-to walkthroughs
 
-Three worked pipelines. Each is an ordinary chain of transformations, so once
-built on one recording it replays across a whole study in one click with **Apply
-to All Raw Files** (a branch's right-click menu) or a saved template. The marker
+Three worked pipelines, plus a fourth that is a complete, reproducible run on
+real published data rather than a recipe (see
+[below](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)). Each
+is an ordinary chain of transformations, so once built on one recording it
+replays across a whole study in one click with **Apply to All Raw Files**
+(a branch's right-click menu) or a saved template. The marker
 codes below (`"S2?"`, `"201"`, ...) are placeholders: substitute the ones your
 recording actually used. Ready-made measurement windows live in
 [`presets/`](src/Transformations/Measure/presets) (the Measure dialog's
@@ -532,8 +583,8 @@ stimuli. Stimulus-locked.
    companion statistical report (the **Export/Report** ribbon tab's **ERP &
    Report** button, see [Statistical analysis](#statistical-analysis)). If
    subjects belong to different groups (e.g. patients vs. controls), assign
-   them first with **Edit Groups...** to get a between-subjects/mixed
-   comparison instead of a within-subjects one.
+   them first with **Grouping...** (Home tab, Design group) to get a
+   between-subjects/mixed comparison instead of a within-subjects one.
 
 ### How to do an LRP analysis (response-locked)
 
@@ -623,6 +674,130 @@ required.
    [Statistical analysis](#statistical-analysis)), the natural way to ask
    whether the mismatch response is actually present.
 
+### A worked example, start to finish: the ERP CORE N400 dataset
+
+Unlike the three recipes above, this one is a complete, reproducible run on
+real published data, using a template ([`N400.alztemplate`](N400.alztemplate))
+that ships in the repository, ending in an actual rendered statistics
+report -- not a generic recipe with placeholder marker codes.
+
+**The data.** The ERP CORE N400 experiment (Kappenman, Farrens, Zhang,
+Stewart, & Luck, 2021, see [References](#references)) is a semantic-priming
+paradigm: each trial shows a *prime* word followed by a *target* word, and
+the target is either semantically **related** to the prime (e.g. TABLE then
+CHAIR) or **unrelated** (e.g. RAKE then SPIDER). The participant presses one
+of two buttons on each trial to judge which. Luck's textbook chapter 2
+walks through processing one participant; chapter 3 repeats it across "10 of
+the 40 participants in the actual study" -- the same 10-participant subset
+used here (`Data/Luck/ch3` in a local checkout: ten
+`<id>_N400_preprocessed.set` EEGLAB recordings, already filtered/referenced,
+ready to be epoched, cleaned and averaged). Get the data itself from the
+textbook's own exercise-data archive
+([doi.org/10.18115/D50056](https://doi.org/10.18115/D50056)) or the full
+ERP CORE release
+([doi.org/10.18115/D5JW4R](https://doi.org/10.18115/D5JW4R)); it is not
+bundled with this repository. The textbook's own worked example measures
+the N400 at CPz (where it is typically largest) over roughly 200-600 ms;
+the template below measures a slightly narrower, nearby window (Cz, 300-500
+ms) as its own choice, not a reproduction of the book's exact numbers.
+
+**The bins.** `N400.alztemplate`'s `DefineBins` step imports the
+experiment's own bin descriptor (`BDF_N400.txt`, in ERPLAB's original BDF
+format, one condition per event-code set):
+
+```
+bin 1 "Prime word, related to subsequent target word"     : 111|112
+bin 2 "Prime word, unrelated to subsequent target word"    : 121|122
+bin 3 "Target word, related to previous prime, followed
+        by correct response"   : 211|212 and next(201) within [200,1500] ms
+bin 4 "Target word, unrelated to previous prime, followed
+        by correct response"   : 221|222 and next(201) within [200,1500] ms
+bin 5 "N400" = bin 4 - bin 3
+```
+
+Bins 3 and 4 both require a correct-response marker (`201`) within 200 to
+1500 ms of the target, excluding misses and implausibly fast guesses; `bin
+5` is the classic N400 contrast itself, unrelated minus related targets.
+
+**The template, step by step** (Home tab, **Grouping** is not needed here --
+this walkthrough has no between-subjects groups, see
+[Statistical analysis](#statistical-analysis)):
+
+1. **AutoGEDAI** denoises the continuous recording (GEDAI, generalized
+   eigenvalue decomposition against a leadfield reference), auto strength,
+   a 0.4 Hz high-pass, no automatic epoch/channel rejection at this stage.
+2. **DefineBins** applies the five bins above and epochs -200 to 800 ms
+   around each event.
+3. **Baseline** corrects to -100 to -10 ms pre-stimulus.
+4. **ArtefactDetect** flags epochs exceeding &plusmn;100 µV.
+5. **Average** produces one ERP per bin, including the `bin 4 - bin 3`
+   contrast wave.
+6. **Measure** quantifies mean amplitude, 300-500 ms, channel Cz, labelled
+   window `N400`.
+
+Import each participant's raw recording, apply the template once (drag it
+onto the first imported dataset, or right-click -> **Apply Template...**),
+check the result, then right-click that same processed branch and choose
+**Apply to All Raw Files...** to replay the identical six steps over the
+other nine recordings in one action -- rather than dragging the template
+onto each of the ten root nodes by hand. **Grand Average** across all ten,
+then the **Export/Report** tab's **ERP & Report** button writes the CSV and
+renders the companion Quarto report.
+
+**What actually got tested.** This particular `Measure` step defines one
+window (`N400`, Cz, 300-500 ms), applied to whichever bins the averaged
+dataset actually resolved a waveform for; in this run that produced a
+mean-amplitude value for each of the four *ordinary* bins for all ten
+subjects, but not for the `bin 5` contrast wave itself, so this report's own
+evidence for the N400 comes from the omnibus comparison across the four
+ordinary conditions below, not a separate one-sample-vs-zero test on the
+difference wave (adding a second `Measure` window row that targets the
+`N400` bin directly would additionally produce that framing -- see the
+[design table](#what-gets-tested-and-what-question-it-answers) above,
+"combination/difference bin"). With no groups assigned, this is the
+"three or more ordinary bins, no groups" row: a linear mixed model.
+
+Ten of ten subjects contributed a value in every one of the four
+conditions, so a real render of this export produced:
+
+| bin | *M* (µV) | *SD* | *n* |
+|---|---|---|---|
+| Prime, related | 0.178 | 1.647 | 10 |
+| Prime, unrelated | 0.186 | 2.027 | 10 |
+| Target, related | 3.563 | 2.247 | 10 |
+| Target, unrelated | 0.804 | 1.763 | 10 |
+
+The maximal linear mixed model (random intercept **and** slope per subject)
+did not converge to a non-singular fit with only 10 subjects x 4 conditions,
+so the report fell back to a random-intercept-only model, narrating that
+fallback rather than silently switching. That model still found a
+significant effect of bin, *F*(3.0, 27.0) = 19.95, *p* < .001, partial
+&eta;<sup>2</sup> = .689, 95% CI [.494, 1.000] (marginal *R*<sup>2</sup> =
+.348). Holm-corrected model-based pairwise contrasts (`emmeans`) narrowed
+that omnibus effect down to exactly three significant pairs, all involving
+one condition: Prime,related - Target,related (*p* < .001), Prime,unrelated
+- Target,related (*p* < .001), and Target,related - Target,unrelated (*p* <
+.001) -- every other pair, including Prime,related vs. Prime,unrelated, was
+not significant. A Friedman test on the same 10 complete-data subjects, run
+as a rank-based robustness check, agreed: &chi;<sup>2</sup>(3) = 18.12, *p*
+< .001. The report's own closing summary table lists this as the single
+test the export produced, still significant after Benjamini-Hochberg
+correction.
+
+**The question this answers, and what the numbers say.** Whether N400 mean
+amplitude at Cz differs across the four conditions -- and it does, with a
+very large effect (partial &eta;<sup>2</sup> = .689 is well past Cohen's
+"large" benchmark of .14; the wide CI reflects the small, 10-subject
+sample, not a weak effect). The pairwise table shows *why*: it is not that
+all four conditions differ, but that Target, related (M = 3.56 µV)
+stands apart from the other three, which do not differ from each other.
+Target, unrelated (M = 0.80 µV) is markedly less positive than
+Target, related in this 300-500 ms window, exactly the textbook N400
+pattern (Kappenman et al., 2021; Kutas & Hillyard, 1980) -- a semantically
+unrelated target elicits a larger centro-parietal negativity than a related
+one, while the two prime conditions (which carry no semantic relationship
+to score yet) sit indistinguishably near zero, as expected.
+
 ## References
 
 Scientific/methodological:
@@ -631,7 +806,23 @@ Scientific/methodological:
   [socialsci.libretexts.org](https://socialsci.libretexts.org/Bookshelves/Psychology/Biological_Psychology/Applied_Event-Related_Potential_Data_Analysis_(Luck)).
   DOI: [10.18115/D5QG92](https://doi.org/10.18115/D5QG92). Licensed CC BY 4.0.
   A practical, EEGLAB/ERPLAB-based reference for the preprocessing, averaging, and
-  scoring steps that Alakazam's transformations implement.
+  scoring steps that Alakazam's transformations implement. Its own worked N400
+  example, [`N400.alztemplate`](N400.alztemplate) ported to Alakazam, is the
+  [full worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
+  above.
+- Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J.
+  (2021). ERP CORE: An open resource for human event-related potential
+  research. *NeuroImage*, 225, 117465. DOI:
+  [10.1016/j.neuroimage.2020.117465](https://doi.org/10.1016/j.neuroimage.2020.117465).
+  The N400 experiment (and nine others) the [worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
+  above is drawn from; data via
+  [doi.org/10.18115/D5JW4R](https://doi.org/10.18115/D5JW4R).
+- Kutas, M., & Hillyard, S. A. (1980). Reading senseless sentences: Brain
+  potentials reflect semantic incongruity. *Science*, 207(4427), 203-205.
+  DOI: [10.1126/science.7350657](https://doi.org/10.1126/science.7350657).
+  The original discovery of the N400, the component the
+  [worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
+  above measures.
 - Lopez-Calderon, J., & Luck, S. J. (2014). ERPLAB: an open-source toolbox for
   the analysis of event-related potentials. *Frontiers in Human Neuroscience*,
   8, 213. [erpinfo.org/erplab](https://erpinfo.org/erplab). The methodological
