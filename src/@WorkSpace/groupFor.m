@@ -1,6 +1,6 @@
 function grp = groupFor(this, subject)
 %GROUPFOR  The between-subjects group label assigned to SUBJECT (see
-%   editGroups), or '' if none is assigned. Exactly what
+%   editSubjects), or '' if none is assigned. Exactly what
 %   collectEntriesWithField attaches to each entry's own .group field for
 %   the CSV exporters (exportMeasurementsCSV/exportSpectralCSV), and what
 %   generateQuartoReport branches a between-subjects/mixed design on once

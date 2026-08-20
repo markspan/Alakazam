@@ -15,7 +15,7 @@ classdef WorkSpaceTree < handle
 %
 %   The MATLAB-side node model is a flat id -> struct map (id, label,
 %   parentId, icon, file, canListEvents, canRecalculate, canApplyToAll,
-%   isRoot); the whole
+%   canApplyTemplate, isRoot); the whole
 %   set is pushed to the JS side as one Data snapshot on every change (via
 %   uihtml's Data property). Callback function handles
 %   (SelectionChangedFcn, NodeDroppedFcn, NodeDoubleClickedFcn,
@@ -130,13 +130,17 @@ classdef WorkSpaceTree < handle
         %ADDNODE  Add a node, returning its struct(Id,Name,UserData,IsRoot).
         %   PARENTID is another node's Id, or '' for a top-level node. OPTS
         %   is a struct with optional fields canListEvents, canRecalculate,
-        %   canApplyToAll, canExportErpset, isRoot (all default false).
+        %   canApplyToAll, canExportErpset, canApplyTemplate, isRoot.
+        %   canApplyTemplate defaults to TRUE (Apply Template is valid for
+        %   any ordinary dataset node, see onApplyTemplate); every other
+        %   flag defaults to false.
             if nargin < 6; opts = struct(); end
-            if ~isfield(opts, 'canListEvents');   opts.canListEvents   = false; end
-            if ~isfield(opts, 'canRecalculate');  opts.canRecalculate  = false; end
-            if ~isfield(opts, 'canApplyToAll');   opts.canApplyToAll   = false; end
-            if ~isfield(opts, 'canExportErpset'); opts.canExportErpset = false; end
-            if ~isfield(opts, 'isRoot');          opts.isRoot          = false; end
+            if ~isfield(opts, 'canListEvents');    opts.canListEvents    = false; end
+            if ~isfield(opts, 'canRecalculate');   opts.canRecalculate   = false; end
+            if ~isfield(opts, 'canApplyToAll');    opts.canApplyToAll    = false; end
+            if ~isfield(opts, 'canExportErpset');  opts.canExportErpset  = false; end
+            if ~isfield(opts, 'canApplyTemplate'); opts.canApplyTemplate = true; end
+            if ~isfield(opts, 'isRoot');           opts.isRoot           = false; end
 
             id = sprintf('n%d', this.NextId);
             this.NextId = this.NextId + 1;
@@ -146,6 +150,7 @@ classdef WorkSpaceTree < handle
                 'canRecalculate', logical(opts.canRecalculate), ...
                 'canApplyToAll', logical(opts.canApplyToAll), ...
                 'canExportErpset', logical(opts.canExportErpset), ...
+                'canApplyTemplate', logical(opts.canApplyTemplate), ...
                 'isRoot', logical(opts.isRoot));
             this.push();
             node = this.nodeStruct(id);
@@ -415,7 +420,7 @@ classdef WorkSpaceTree < handle
                 nodes{i} = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
                     'parentId', parentId, 'canListEvents', n.canListEvents, ...
                     'canRecalculate', n.canRecalculate, 'canApplyToAll', n.canApplyToAll, ...
-                    'canExportErpset', n.canExportErpset);
+                    'canExportErpset', n.canExportErpset, 'canApplyTemplate', n.canApplyTemplate);
             end
             selId = this.SelectedId;
             if isempty(selId); selId = []; end

@@ -10,8 +10,8 @@ function onRibbonAction(this, id)
             this.Workspace.save();
         case 'editWorkspace'
             this.Workspace.edit();
-        case 'editGroups'
-            this.Workspace.editGroups();
+        case 'editSubjects'
+            this.Workspace.editSubjects();
         case 'clearWorkspace'
             this.Workspace.rawclear();
         case 'settings'

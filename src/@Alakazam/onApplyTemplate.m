@@ -3,15 +3,30 @@ function onApplyTemplate(this)
 %   template (see onSaveTemplate) to the selected node -- replaying
 %   its saved sequence of (transformId, params) steps in order,
 %   exactly as if each had been run interactively from the ribbon.
-%   Available on ANY node (root or not, in either tree): the common
-%   case is running a whole saved pipeline on a freshly imported
-%   raw recording in one action, but applying a partial template on
-%   top of an already-processed node (or even a Grand Average) is
-%   equally valid -- there is nothing tree- or root-specific about
-%   "replay these steps here", unlike Save Template/Apply to All
+%   Available on any node in Tree or GrandAveragesTree (root or not):
+%   the common case is running a whole saved pipeline on a freshly
+%   imported raw recording in one action, but applying a partial
+%   template on top of an already-processed node (or even a Grand
+%   Average) is equally valid -- there is nothing tree- or root-specific
+%   about "replay these steps here", unlike Save Template/Apply to All
 %   Raw Files, which both act on "this branch" as a structural unit.
+%   NOT available in ReportsTree, though: a rendered report's own EEG is
+%   a synthetic struct (see Alakazam.persistReportNode) with none of the
+%   real fields (.data, .chanlocs, ...) a transformation expects, so
+%   applying steps to it would fail confusingly rather than doing
+%   anything meaningful -- same reasoning persistReportNode's own
+%   canListEvents/canRecalculate/canApplyToAll/canExportErpset already
+%   cover, just via a tree-level check here since WorkSpaceTree has no
+%   per-node "canApplyTemplate" opt to hook into (onSaveTemplate guards
+%   itself the same way, against everything but Workspace.Tree).
     node = this.Workspace.ActiveTree.SelectedNodes;
     if isempty(node)
+        return;
+    end
+    if isequal(this.Workspace.ActiveTree, this.Workspace.ReportsTree)
+        uialert(this.MainFigure, ['A rendered report is not a dataset, so a template ' ...
+            '(a sequence of transformation steps) cannot be applied to it. Select a ' ...
+            'subject or Grand Average node instead.'], 'Cannot apply template', 'Icon', 'warning');
         return;
     end
 

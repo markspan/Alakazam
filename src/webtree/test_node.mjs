@@ -30,16 +30,21 @@ const FAKE_ICON_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQ
 tree.setNodes([
     { id: 'a', label: 'RawImport', icon: 'raw', parentId: null },
     { id: 'b', label: 'Fourier1', icon: 'freq', parentId: 'a' },
-    { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false, canExportErpset: true },
+    { id: 'c', label: 'Average1', icon: 'time', parentId: 'a', canListEvents: false, canExportErpset: true, canApplyTemplate: true },
     { id: 'd', label: 'RawImport2', icon: 'raw', parentId: null },
     { id: 'e', label: 'FourierResult1', icon: FAKE_ICON_URI, parentId: 'a' },
-    { id: 'f', label: 'GrandAverage1', icon: 'grandAverage', parentId: null }
+    { id: 'f', label: 'GrandAverage1', icon: 'grandAverage', parentId: null },
+    // A report node (see Alakazam.persistReportNode): every canX flag false,
+    // including canApplyTemplate -- unlike an ordinary dataset node, a
+    // rendered report's EEG is a synthetic struct, so Apply Template must be
+    // disabled here rather than failing confusingly if clicked.
+    { id: 'g', label: 'Report1', icon: 'default', parentId: null, canApplyTemplate: false }
 ])
 
 // --- 1. rendering + icons ---
 const icons = container.querySelectorAll('.alz-icon')
-console.log(`icons rendered: ${icons.length} (expect 6)`)
-assert.strictEqual(icons.length, 6, 'one icon per node')
+console.log(`icons rendered: ${icons.length} (expect 7)`)
+assert.strictEqual(icons.length, 7, 'one icon per node')
 assert.ok(icons[0].innerHTML.includes('<svg'), 'key-based icon contains inline svg')
 
 // 'grandAverage' is its own dedicated icon (see alakazam-tree.js's ICONS
@@ -141,7 +146,7 @@ assert.ok(applyToAllItem.classList.contains('alz-menu-item-disabled'), 'Apply to
 const saveTemplateItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Save Template...')
 assert.ok(saveTemplateItem.classList.contains('alz-menu-item-disabled'), 'Save Template should be disabled when canApplyToAll is not set (same eligibility as Apply to All)')
 const applyTemplateItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Apply Template...')
-assert.ok(!applyTemplateItem.classList.contains('alz-menu-item-disabled'), 'Apply Template should always be enabled, regardless of node capability flags')
+assert.ok(!applyTemplateItem.classList.contains('alz-menu-item-disabled'), 'Apply Template should be enabled for an ordinary dataset node (canApplyTemplate:true)')
 const renameItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Rename')
 renameItem.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 console.log('after clicking Rename:', JSON.stringify(events))
@@ -156,6 +161,17 @@ const exportItemRaw = [...rawMenu.querySelectorAll('.alz-menu-item')].find(el =>
 assert.ok(exportItemRaw.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be disabled for a non-averaged node')
 tree._closeMenu()
 console.log('Export as ERPset gating (enabled for averaged, disabled otherwise): OK')
+
+// A report node (canApplyTemplate:false) must have Apply Template disabled
+// -- a rendered report has no real dataset fields for a transformation to
+// act on (see Alakazam.persistReportNode/onApplyTemplate).
+const leafReport = findLeafByLabel('Report1')
+leafReport.content.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 30 }))
+const reportMenu = window.document.querySelector('.alz-menu')
+const applyTemplateItemReport = [...reportMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Apply Template...')
+assert.ok(applyTemplateItemReport.classList.contains('alz-menu-item-disabled'), 'Apply Template should be disabled for a report node (canApplyTemplate:false)')
+tree._closeMenu()
+console.log('Apply Template gating (enabled for ordinary nodes, disabled for a report node): OK')
 
 console.log('\nREAL-DOM CHECKS OK (render/click/double-click/context-menu)\n')
 

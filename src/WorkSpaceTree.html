@@ -1322,7 +1322,8 @@ var AlakazamTree = (() => {
           canListEvents: !!n.canListEvents,
           canRecalculate: !!n.canRecalculate,
           canApplyToAll: !!n.canApplyToAll,
-          canExportErpset: !!n.canExportErpset
+          canExportErpset: !!n.canExportErpset,
+          canApplyTemplate: !!n.canApplyTemplate
         });
       }
       this._root.children = [];
@@ -1529,7 +1530,7 @@ var AlakazamTree = (() => {
         const row = document.createElement("div");
         row.className = "alz-menu-item";
         row.textContent = item.label;
-        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset;
+        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset || item.action === "applyTemplate" && !data.canApplyTemplate;
         if (disabled) {
           row.classList.add("alz-menu-item-disabled");
         } else {

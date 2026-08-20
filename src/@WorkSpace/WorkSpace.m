@@ -16,7 +16,7 @@ classdef WorkSpace < handle
         GrandAveragesTree % WorkSpaceTree, flat top-level grand-average nodes, hosted in Alakazam.GrandAveragesTreePanel
         ReportsTree       % WorkSpaceTree, flat top-level rendered-report nodes, hosted in Alakazam.ReportsTreePanel -- see Alakazam.persistReportNode
         ActiveTree        % WorkSpaceTree, whichever of Tree/GrandAveragesTree/ReportsTree was last interacted with -- see CreateTreeComponent
-        Groups            % struct('subject',{},'group',{}): between-subjects group assignment, see editGroups/groupFor
+        Groups            % struct('subject',{},'group',{},'person',{},'session',{}): per-raw-file metadata -- between-subjects group, and the person/session identity behind a multi-session recording (day 1 vs day 2, ...) -- see editSubjects/groupFor/personFor/sessionFor
         EEG
     end
     
@@ -36,7 +36,7 @@ classdef WorkSpace < handle
         %   there is only one place nargin is tested per case.
             this.Parent = myParent;
             this.CreateTreeComponent();
-            this.Groups = struct('subject', {}, 'group', {});
+            this.Groups = struct('subject', {}, 'group', {}, 'person', {}, 'session', {});
 
             if nargin == 1 || nargin == 2
                 if nargin == 2

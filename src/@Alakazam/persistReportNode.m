@@ -46,7 +46,7 @@ function newNode = persistReportNode(this, reportName, htmlFile, qmdFile)
     reportEEG.File = fullfile(folder, [stem '_node.mat']);
 
     opts = struct('canListEvents', false, 'canRecalculate', false, ...
-        'canApplyToAll', false, 'canExportErpset', false);
+        'canApplyToAll', false, 'canExportErpset', false, 'canApplyTemplate', false);
     newNode = this.Workspace.ReportsTree.addNode(reportName, '', 'default', reportEEG.File, opts);
     this.Workspace.ReportsTree.SelectedNodes = newNode;
     this.Workspace.ActiveTree = this.Workspace.ReportsTree;

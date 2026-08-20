@@ -5,16 +5,20 @@ function exportSpectralCSV(entries, targetFile)
 %
 %   ENTRIES is a struct array with .subject, .datasetType ('subject' or
 %   'grand_average'), .group (the between-subjects group assigned via
-%   WorkSpace.editGroups, '' if none) and .EEG (already loaded, carrying
-%   .spectralMeasures -- see SpectralMeasure.m and
-%   Alakazam.collectSpectralEntries).
+%   WorkSpace.editSubjects, '' if none), .person (which real person this
+%   raw file belongs to, defaults to .subject itself -- see
+%   WorkSpace.personFor), .session (an optional day/visit label, '' if
+%   none) and .EEG (already loaded, carrying .spectralMeasures -- see
+%   SpectralMeasure.m and Alakazam.collectSpectralEntries).
 %
 %   One row per (dataset x frequency x bin x channel x measure type), columns
-%   dataset,dataset_type,group,bin,channel,frequency_label,frequency_hz,
-%   reference,measure_type,value. measure_type is power / amplitude / snr /
-%   itc / phase (always) and coherence / phaselag (only when the frequency
-%   was measured against a reference channel), so every row's value column
-%   stays uniformly numeric with no per-type NA columns. Same tidy/long shape
+%   dataset,dataset_type,group,person_id,session,bin,channel,frequency_label,
+%   frequency_hz,reference,measure_type,value. measure_type is power /
+%   amplitude / snr / itc / phase (always) and coherence / phaselag (only
+%   when the frequency was measured against a reference channel), so every
+%   row's value column stays uniformly numeric with no per-type NA columns.
+%   person_id/session are metadata only so far -- see
+%   exportMeasurementsCSV's own header comment for why. Same tidy/long shape
 %   and quoting as exportMeasurementsCSV, so both drop into the same R
 %   workflow.
     fid = fopen(targetFile, 'w');
@@ -24,8 +28,8 @@ function exportSpectralCSV(entries, targetFile)
     end
     closeFile = onCleanup(@() fclose(fid));
 
-    fprintf(fid, ['dataset,dataset_type,group,bin,channel,frequency_label,frequency_hz,' ...
-        'reference,measure_type,value\n']);
+    fprintf(fid, ['dataset,dataset_type,group,person_id,session,bin,channel,frequency_label,' ...
+        'frequency_hz,reference,measure_type,value\n']);
 
     for i = 1:numel(entries)
         writeEntry(fid, entries(i));
@@ -36,6 +40,8 @@ function writeEntry(fid, entry)
     datasetField = csvField(entry.subject);
     typeField    = csvField(entry.datasetType);
     groupField   = csvField(entry.group);
+    personField  = csvField(entry.person);
+    sessionField = csvField(entry.session);
     EEG = entry.EEG;
 
     for w = 1:numel(EEG.spectralMeasures)
@@ -50,8 +56,8 @@ function writeEntry(fid, entry)
             binField = csvField(csvBinLabel(EEG, b));
             for c = 1:numel(m.channels)
                 chField = csvField(m.channels{c});
-                prefix = sprintf('%s,%s,%s,%s,%s,%s,%s,%s,', datasetField, typeField, groupField, ...
-                    binField, chField, labelField, freqField, refField);
+                prefix = sprintf('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,', datasetField, typeField, groupField, ...
+                    personField, sessionField, binField, chField, labelField, freqField, refField);
                 writeRow(fid, prefix, 'power',     m.power(c, b));
                 writeRow(fid, prefix, 'amplitude', m.amplitude(c, b));
                 writeRow(fid, prefix, 'snr',       m.snr(c, b));

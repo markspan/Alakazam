@@ -22,7 +22,7 @@ function load(this,~,~)
         TransformSettings.reset();
     end
 
-    % Between-subjects group assignment (see editGroups); absent on an
+    % Between-subjects group assignment (see editSubjects); absent on an
     % older-format .wksp file, which -- like TransformSettings above --
     % just means "none stored".
     if isfield(workspace, 'Groups')

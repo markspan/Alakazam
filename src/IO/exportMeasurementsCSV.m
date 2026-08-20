@@ -7,19 +7,28 @@ function exportMeasurementsCSV(entries, targetFile)
 %   Grand Average -- see Alakazam.onExportMeasurements, which resolves
 %   this via Workspace.Tree.rootOf), .datasetType ('subject' or
 %   'grand_average'), .group (the between-subjects group assigned via
-%   WorkSpace.editGroups, '' if none -- see collectEntriesWithField), and
-%   .EEG (the already-loaded dataset, carrying .measurements -- see
-%   Measure.m).
+%   WorkSpace.editSubjects, '' if none), .person (which real person this
+%   raw file belongs to -- defaults to .subject itself unless multiple
+%   raw files were explicitly linked as the same person's different
+%   sessions, see WorkSpace.personFor), .session (an optional day/visit
+%   label, '' if none -- see collectEntriesWithField), and .EEG (the
+%   already-loaded dataset, carrying .measurements -- see Measure.m).
 %
 %   One row per (dataset x window x bin x channel x measure type),
-%   columns dataset,dataset_type,group,bin,channel,window,measure_type,
-%   window_start_ms,window_stop_ms,value -- the same "tidy"/long shape
-%   exportGrandAveragesCSV.m uses, so both exports drop into the same R
-%   workflow (read.csv() + dplyr/ggplot2, no reshape needed). A "Peak"
-%   window contributes two rows per (bin, channel) -- measure_type
-%   peak_amplitude and peak_latency -- rather than two value columns, so
-%   every row's own value column stays uniformly numeric with no
-%   per-measure-type NA column needed.
+%   columns dataset,dataset_type,group,person_id,session,bin,channel,
+%   window,measure_type,window_start_ms,window_stop_ms,value -- the same
+%   "tidy"/long shape exportGrandAveragesCSV.m uses, so both exports drop
+%   into the same R workflow (read.csv() + dplyr/ggplot2, no reshape
+%   needed). person_id/session are metadata only so far -- every
+%   statistical test in the companion Quarto report (generateQuartoReport)
+%   still keys on dataset/group, not person_id/session, since treating a
+%   session as a genuine second within-subjects factor (crossed against
+%   bin) is a design the report engine does not build yet; they are
+%   there for a researcher's own custom analysis of the CSV in the
+%   meantime. A "Peak" window contributes two rows per (bin, channel) --
+%   measure_type peak_amplitude and peak_latency -- rather than two value
+%   columns, so every row's own value column stays uniformly numeric
+%   with no per-measure-type NA column needed.
 %
 %   Unlike exportGrandAveragesCSV's per-(bin,channel) vectorized fprintf
 %   (needed there because it writes a whole TIME SERIES per row group),
@@ -35,7 +44,8 @@ function exportMeasurementsCSV(entries, targetFile)
     end
     closeFile = onCleanup(@() fclose(fid));
 
-    fprintf(fid, 'dataset,dataset_type,group,bin,channel,window,measure_type,window_start_ms,window_stop_ms,value\n');
+    fprintf(fid, ['dataset,dataset_type,group,person_id,session,bin,channel,window,measure_type,' ...
+        'window_start_ms,window_stop_ms,value\n']);
 
     for i = 1:numel(entries)
         writeEntry(fid, entries(i));
@@ -43,9 +53,11 @@ function exportMeasurementsCSV(entries, targetFile)
 end
 
 function writeEntry(fid, entry)
-    datasetField = csvField(entry.subject);
-    typeField    = csvField(entry.datasetType);
-    groupField   = csvField(entry.group);
+    datasetField  = csvField(entry.subject);
+    typeField     = csvField(entry.datasetType);
+    groupField    = csvField(entry.group);
+    personField   = csvField(entry.person);
+    sessionField  = csvField(entry.session);
     EEG = entry.EEG;
 
     for w = 1:numel(EEG.measurements)
@@ -61,7 +73,8 @@ function writeEntry(fid, entry)
             binField = csvField(csvBinLabel(EEG, b));
             for c = 1:numel(win.channels)
                 chField = csvField(win.channels{c});
-                prefix = sprintf('%s,%s,%s,%s,%s,%s,', datasetField, typeField, groupField, binField, chField, windowField);
+                prefix = sprintf('%s,%s,%s,%s,%s,%s,%s,%s,', datasetField, typeField, groupField, ...
+                    personField, sessionField, binField, chField, windowField);
                 % start/stop stay the window's own search range for every
                 % measure -- for a band Area the integration span is
                 % width-ms centred on peak_latency, and a fractional

@@ -13,7 +13,7 @@ function loadReports(this)
 
     found = dir(fullfile(reportsDir, '*_node.mat'));
     opts = struct('canListEvents', false, 'canRecalculate', false, ...
-        'canApplyToAll', false, 'canExportErpset', false);
+        'canApplyToAll', false, 'canExportErpset', false, 'canApplyTemplate', false);
     for i = 1:numel(found)
         file = fullfile(found(i).folder, found(i).name);
         loaded = load(file, "EEG");

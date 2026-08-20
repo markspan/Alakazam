@@ -286,7 +286,8 @@ class AlakazamTree {
                 id: n.id, name: n.label, icon: n.icon || 'default',
                 expanded: n.expanded !== false, children: [], parent: null,
                 canListEvents: !!n.canListEvents, canRecalculate: !!n.canRecalculate,
-                canApplyToAll: !!n.canApplyToAll, canExportErpset: !!n.canExportErpset
+                canApplyToAll: !!n.canApplyToAll, canExportErpset: !!n.canExportErpset,
+                canApplyTemplate: !!n.canApplyTemplate
             })
         }
         this._root.children = []
@@ -542,14 +543,19 @@ class AlakazamTree {
             // 'saveTemplate' reuses canApplyToAll: same eligibility as "Apply
             // to All Raw Files" (a non-root branch in the Data & Analyses
             // tree) -- both act on "this branch" as a structural unit, see
-            // Alakazam.persistResultNode. 'applyTemplate' has no data-driven
-            // eligibility at all: it is valid for any node whatsoever (like
-            // rename/delete), so it is never disabled here.
+            // Alakazam.persistResultNode. 'applyTemplate' is valid for any
+            // ORDINARY dataset node (like rename/delete), so canApplyTemplate
+            // defaults to true MATLAB-side (see WorkSpaceTree.addNode) --
+            // only a report node (see Alakazam.persistReportNode/
+            // WorkSpace.loadReports) sets it false, since a rendered
+            // report's EEG is a synthetic struct with none of the real
+            // fields a transformation expects.
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
                 || (item.action === 'recalculate' && !data.canRecalculate)
                 || (item.action === 'applyToAll' && !data.canApplyToAll)
                 || (item.action === 'saveTemplate' && !data.canApplyToAll)
                 || (item.action === 'exportErpset' && !data.canExportErpset)
+                || (item.action === 'applyTemplate' && !data.canApplyTemplate)
             if (disabled) {
                 row.classList.add('alz-menu-item-disabled')
             } else {
