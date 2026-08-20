@@ -170,7 +170,16 @@ classdef AlakazamPlotter < handle
             % also catches a grand average of such results, whose id has been
             % renamed to the grand-average's name (see saveGrandAverage) but
             % which still carries the .ersp / .coherence map to draw.
-            if strcmpi(eeg.id, "TimeFrequency") || (isfield(eeg, "ersp") && ~isempty(eeg.ersp))
+            if strcmpi(eeg.id, "Report")
+                % A rendered Quarto/R statistics report (see
+                % Alakazam.persistReportNode), not a dataset at all -- its
+                % DataFormat is set to "EPOCHED" purely to route here (see
+                % persistReportNode's own comment), so this check must come
+                % before every DataFormat/DataType-based branch below.
+                view = ReportView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "ReportView", view);
+            elseif strcmpi(eeg.id, "TimeFrequency") || (isfield(eeg, "ersp") && ~isempty(eeg.ersp))
                 view = TimeFrequencyView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "TimeFrequencyView", view);

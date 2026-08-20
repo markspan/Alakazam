@@ -14,7 +14,9 @@ classdef WorkSpace < handle
         ExportsDirectory
         Tree              % WorkSpaceTree, the data & analyses browser, hosted in Alakazam.DataTreePanel
         GrandAveragesTree % WorkSpaceTree, flat top-level grand-average nodes, hosted in Alakazam.GrandAveragesTreePanel
-        ActiveTree        % WorkSpaceTree, whichever of Tree/GrandAveragesTree was last interacted with -- see CreateTreeComponent
+        ReportsTree       % WorkSpaceTree, flat top-level rendered-report nodes, hosted in Alakazam.ReportsTreePanel -- see Alakazam.persistReportNode
+        ActiveTree        % WorkSpaceTree, whichever of Tree/GrandAveragesTree/ReportsTree was last interacted with -- see CreateTreeComponent
+        Groups            % struct('subject',{},'group',{}): between-subjects group assignment, see editGroups/groupFor
         EEG
     end
     
@@ -34,6 +36,7 @@ classdef WorkSpace < handle
         %   there is only one place nargin is tested per case.
             this.Parent = myParent;
             this.CreateTreeComponent();
+            this.Groups = struct('subject', {}, 'group', {});
 
             if nargin == 1 || nargin == 2
                 if nargin == 2
@@ -86,6 +89,9 @@ classdef WorkSpace < handle
                     TransformSettings.loadFrom(DIRS.TransformSettings);
                 else
                     TransformSettings.reset();
+                end
+                if exist('DIRS','var') && isstruct(DIRS) && isfield(DIRS, 'Groups')
+                    this.Groups = this.groupsFromStored(DIRS.Groups);
                 end
             elseif nargin == 4
                 this.RawDirectory     = varargin{1};

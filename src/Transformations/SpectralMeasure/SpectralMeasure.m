@@ -182,24 +182,30 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
             Vc = poolWave(EEG, specs(c).members, trials);  % nsamp x nT
             X = tdft(Vc, fUse, t, tapers);                 % K x nT (raw)
 
-            Ek = mean(X, 2);                               % K x 1 evoked per taper
+            % ArtefactDetect rejects a trial by blanking its data to NaN in
+            % place, not by removing it from bindesc(b).trials -- so a
+            % rejected trial still reaches tdft here as a fully-NaN column
+            % of X. Every trial-pooling reduction below is 'omitnan' so one
+            % (or many) rejected trials drop out instead of poisoning the
+            % whole bin's result to NaN alongside dozens of good trials.
+            Ek = mean(X, 2, 'omitnan');                    % K x 1 evoked per taper
             amplitude(c, b) = coh1 * abs(Ek(1));           % calibrated (uV) via taper 0
             power(c, b)     = amplitude(c, b)^2;
             phase(c, b)     = angle(Ek(1));
-            itc(c, b)       = mean(abs(mean(X ./ max(abs(X), eps), 2)));
+            itc(c, b)       = mean(abs(mean(X ./ max(abs(X), eps), 2, 'omitnan')));
 
             if ~isempty(neigh)
                 Pf = mean(abs(Ek).^2);                     % raw evoked power (ratio use)
                 np = zeros(1, numel(neigh));
                 for q = 1:numel(neigh)
-                    np(q) = mean(abs(mean(tdft(Vc, neigh(q), t, tapers), 2)).^2);
+                    np(q) = mean(abs(mean(tdft(Vc, neigh(q), t, tapers), 2, 'omitnan')).^2);
                 end
                 snr(c, b) = Pf / mean(np);
             end
 
             if ~isempty(refIdx)
-                cross = sum(X(:) .* conj(Xref(:)));
-                den = sum(abs(X(:)).^2) * sum(abs(Xref(:)).^2);
+                cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
+                den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
                 if den > 0
                     coherence(c, b) = abs(cross)^2 / den;
                     phaselag(c, b)  = angle(cross);
@@ -279,7 +285,9 @@ function [spectrum, freqs] = evokedSpectrum(EEG, taper, df)
     for b = 1:nBins
         trials = binTrials(EEG, b);
         if isempty(trials); continue; end
-        evoked = mean(EEG.data(:, :, trials), 3);       % nChan x nsamp
+        % 'omitnan': see the matching comment in computeRow -- rejected
+        % trials are NaN-blanked in place, not removed from this list.
+        evoked = mean(EEG.data(:, :, trials), 3, 'omitnan');   % nChan x nsamp
         F = fft((evoked .* w).', nsamp).';              % nChan x nsamp
         spectrum(:, :, b) = (2 / g) * abs(F(:, 1:nF));
     end

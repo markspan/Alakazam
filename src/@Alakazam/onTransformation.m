@@ -22,9 +22,13 @@ function onTransformation(this, entry)
     try
         restoreDir = this.enterRepoRoot();
 
-        % Pointer is figure-wide (every dataset is a tab on the one
-        % shared MainFigure), so no per-tab lookup is needed here.
-        this.MainFigure.Pointer = "watch";
+        % A transformation's own options dialog (if it has one) already
+        % ran interactively before this point (feval below just computes),
+        % so a modal busy indicator here does not block anything the user
+        % still needs to interact with. Figure-wide (every dataset is a
+        % tab on the one shared MainFigure), so no per-tab lookup is
+        % needed here.
+        restoreBusy = beginBusy(this.MainFigure, sprintf("Running %s...", transformId));
 
         % Apply the transformation to the current dataset.
         [result.EEG, usedParams] = feval(transformId, this.Workspace.EEG);
@@ -38,11 +42,11 @@ function onTransformation(this, entry)
             % returned a graphics handle instead of a dataset (a
             % pure plot). Either way there is nothing to persist,
             % and -- unlike an actual failure -- nothing the user
-            % needs to see an error about. Still reset the
-            % pointer/focus exactly like the success/failure
-            % paths below do (previously left stuck on "watch"
-            % for the pure-plot case).
-            this.MainFigure.Pointer = "arrow";
+            % needs to see an error about. restoreBusy going out of
+            % scope at the end of this function closes the busy
+            % dialog either way, matching the success/failure paths
+            % below (previously this path left the cursor stuck on
+            % "watch" until manually reset here).
             this.restoreFocus();
             return;
         end
@@ -73,11 +77,9 @@ function onTransformation(this, entry)
             transformId, this.Workspace.ActiveTree.SelectedNodes);
 
         this.Plotter.plotCurrent();
-        this.MainFigure.Pointer = "arrow";
         this.restoreFocus();
 
     catch ME
-        this.MainFigure.Pointer = "arrow";
         this.restoreFocus();
         this.showTransformationError(transformId, ME);
     end

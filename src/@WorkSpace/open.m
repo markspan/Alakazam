@@ -1,6 +1,7 @@
 function open(this,~,~)
     this.Tree.clear();
     this.GrandAveragesTree.clear();
+    this.ReportsTree.clear();
     %% Read the ROOT directory for datafiles;
     % We opted to let each of the typeloaders traverse into the tree.
     % Make sure the workspace directories exist. A workspace copied from
@@ -53,4 +54,5 @@ function open(this,~,~)
     end
 
     this.loadGrandAverages();
+    this.loadReports();
 end

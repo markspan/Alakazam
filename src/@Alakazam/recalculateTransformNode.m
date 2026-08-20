@@ -45,8 +45,7 @@ function recalculateTransformNode(this, node, ownEEG)
     restoreStored = onCleanup(@() TransformSettings.set(transformId, previousStored));
 
     restoreDir = this.enterRepoRoot();
-    this.MainFigure.Pointer = "watch";
-    restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
+    restoreBusy = beginBusy(this.MainFigure, sprintf("Recalculating %s...", transformId));
 
     parentLoaded = load(parentFile, "EEG");
     try

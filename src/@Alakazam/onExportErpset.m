@@ -34,8 +34,7 @@ function onExportErpset(this)
     end
     targetFile = fullfile(pathName, fileName);
 
-    this.MainFigure.Pointer = 'watch';
-    restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
+    restoreBusy = beginBusy(this.MainFigure, 'Exporting ERPset...');
     try
         ERP = averagedToErpset(EEG);
         ERP.erpname  = char(node.Name);

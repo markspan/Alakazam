@@ -45,8 +45,9 @@ classdef Alakazam < handle
                                   % overflowing group now opens as a floating popup instead (see
                                   % AlakazamRibbon's PopupComponent), so this stays constant.
         TreeGrid        % uigridlayout cell reserved for the workspace tree area (split top/bottom)
-        DataTreePanel           % uipanel hosting WorkSpace.Tree (data & analyses), top half of TreeGrid
-        GrandAveragesTreePanel  % uipanel hosting WorkSpace.GrandAveragesTree, bottom half of TreeGrid
+        DataTreePanel           % uipanel hosting WorkSpace.Tree (data & analyses), top third of TreeGrid
+        GrandAveragesTreePanel  % uipanel hosting WorkSpace.GrandAveragesTree, middle third of TreeGrid
+        ReportsTreePanel        % uipanel hosting WorkSpace.ReportsTree, bottom third of TreeGrid
         PlotsTabGroup   % uitabgroup, one uitab per open dataset
         TileGrid        % uigridlayout, sibling of PlotsTabGroup in the same cell -- see setPlotsViewMode/retile
         PlotsViewMode = "tabs" % "tabs", "grid" or "stack"; see setPlotsViewMode

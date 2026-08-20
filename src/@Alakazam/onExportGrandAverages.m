@@ -27,8 +27,7 @@ function onExportGrandAverages(this)
     end
     targetFile = fullfile(pathName, fileName);
 
-    this.MainFigure.Pointer = 'watch';
-    restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
+    restoreBusy = beginBusy(this.MainFigure, 'Exporting grand averages...');
     try
         exportGrandAveragesCSV(nodes, targetFile);
     catch err

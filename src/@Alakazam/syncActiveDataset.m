@@ -29,7 +29,7 @@ function syncActiveDataset(this, file)
     catch
         return; % the tab's own file is gone/unreadable; leave Workspace.EEG as-is
     end
-    for tree = [this.Workspace.Tree, this.Workspace.GrandAveragesTree]
+    for tree = [this.Workspace.Tree, this.Workspace.GrandAveragesTree, this.Workspace.ReportsTree]
         nodes = tree.allNodes();
         if isempty(nodes)
             continue;

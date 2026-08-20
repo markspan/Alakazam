@@ -2,5 +2,6 @@
   "RawDirectory": "~/Documents/GitHub/Alakazam/Data/C3/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
-  "TransformSettings": {}
+  "TransformSettings": {},
+  "Groups": []
 }

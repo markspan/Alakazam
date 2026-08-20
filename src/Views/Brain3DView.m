@@ -25,7 +25,7 @@ classdef Brain3DView < handle
 %       mode is selected. Switching into it the first time (or onto a
 %       bin not yet computed) is noticeably slower than scalp mode --
 %       leadfield/inverse computation, not just a redraw -- shown with a
-%       watch cursor.
+%       modal busy indicator (see ensureSourceReady/beginBusy).
 %
 %   The 3D-mesh sibling of ScalpDistributionView: same shared resolution
 %   (TransTools.ResolveScalpDistribution, via the Brain3D transformation
@@ -307,10 +307,11 @@ classdef Brain3DView < handle
         %ENSURESOURCEREADY  Make sure SourceLeadfield/SourceModel (built
         %   once per channel set) and SourcePower (recomputed whenever
         %   SelectedBin changes) are ready for the CURRENT bin. Shows a
-        %   watch cursor while computing -- both steps can take a real
-        %   moment (leadfield: several thousand cortical points x N
-        %   electrodes; the inverse itself is a fast matrix multiply once
-        %   the leadfield exists, see TransTools.ComputeSourceEstimate).
+        %   modal busy indicator while computing (see beginBusy) -- both
+        %   steps can take a real moment (leadfield: several thousand
+        %   cortical points x N electrodes; the inverse itself is a fast
+        %   matrix multiply once the leadfield exists, see
+        %   TransTools.ComputeSourceEstimate).
             eeg = this.EEG;
             scalpLabels = {eeg.ScalpChanlocs.labels};
 
@@ -324,8 +325,7 @@ classdef Brain3DView < handle
             end
 
             fig = ancestor(this.Axes, "figure");
-            fig.Pointer = "watch";
-            restorePointer = onCleanup(@() set(fig, "Pointer", "arrow"));
+            restoreBusy = beginBusy(fig, "Computing source estimate...");
 
             % Reorder this bin's channel-by-time data to SourceResolvedLabels'
             % own order -- REQUIRED, not optional, see

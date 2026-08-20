@@ -1,5 +1,5 @@
 function onExportMeasurements(this)
-%ONEXPORTMEASUREMENTS  Ribbon callback (Measurements tab): export
+%ONEXPORTMEASUREMENTS  Ribbon callback (Export/Report tab): export
 %   every Measure result in the workspace -- in EITHER tree, a
 %   subject's own branch or a Grand Average's -- to one long-
 %   format, R-compatible CSV (see exportMeasurementsCSV). Same
@@ -34,8 +34,7 @@ function onExportMeasurements(this)
     end
     targetFile = fullfile(pathName, fileName);
 
-    this.MainFigure.Pointer = 'watch';
-    restorePointer = onCleanup(@() set(this.MainFigure, 'Pointer', 'arrow'));
+    restoreBusy = beginBusy(this.MainFigure, 'Exporting measurements...');
     try
         exportMeasurementsCSV(entries, targetFile);
     catch err
@@ -55,23 +54,72 @@ function onExportMeasurements(this)
     % user just exported.
     reportNote = '';
     try
-        % Generate the report text FIRST, before touching the file: opening
-        % (and so truncating) the target file before generateQuartoReport
-        % has actually succeeded would leave an empty, unexplained .qmd
-        % behind if it throws -- exactly what a silent catch below used to
-        % produce, with no way to tell why.
-        qmdText = generateQuartoReport(entries, fileName);
         [~, stem] = fileparts(fileName);
-        qmdFile = fullfile(pathName, [stem '.qmd']);
+        reportsDir = this.Workspace.reportsDirectory();
+        if ~exist(reportsDir, 'dir')
+            mkdir(reportsDir);
+        end
+        % A timestamp, not just STEM, in both the file name and the tree
+        % label below: reports live in their own fixed ReportsDirectory
+        % now rather than next to the CSV, so two exports named the same
+        % (e.g. the dialog's own remembered "measurements.csv" default)
+        % would otherwise silently overwrite each other's report with no
+        % warning -- unlike the CSV itself, which still gets uiputfile's
+        % own overwrite prompt.
+        stamp = datetime('now');
+        stampTxt = char(string(stamp, 'yyyyMMdd_HHmmss'));
+
+        % The report's own read_csv() call resolves its CSV filename
+        % relative to the .qmd's own folder (ReportsDirectory), not
+        % TARGETFILE's -- copy the CSV in alongside it (under the same
+        % timestamped stem, so it can never collide with a different
+        % export's own copy) rather than pointing the report at a
+        % relative "../" back to wherever the analyst happened to save
+        % it: that path would break the moment the report is shared/
+        % moved on its own, and would silently start reading a DIFFERENT
+        % file's contents if a later export overwrote the same CSV name
+        % in place. This keeps each report a fully self-contained
+        % snapshot of the data it was actually built from.
+        reportCsvName = [stem '_' stampTxt '.csv'];
+        [copyOk, copyMsg] = copyfile(targetFile, fullfile(reportsDir, reportCsvName));
+        if ~copyOk
+            throw(MException('Alakazam:onExportMeasurements', ...
+                'Could not copy the CSV into the Reports folder: %s', copyMsg));
+        end
+
+        % Generate the report text FIRST, before touching the .qmd file:
+        % opening (and so truncating) it before generateQuartoReport has
+        % actually succeeded would leave an empty, unexplained .qmd
+        % behind if it throws -- exactly what a silent catch below used
+        % to produce, with no way to tell why.
+        qmdText = generateQuartoReport(entries, reportCsvName);
+        qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         fid = fopen(qmdFile, 'w');
         if fid < 0
             throw(MException('Alakazam:onExportMeasurements', 'Could not open "%s" for writing.', qmdFile));
         end
         closeFile = onCleanup(@() fclose(fid));
         fwrite(fid, qmdText, 'char');
-        reportNote = sprintf(['\n\nA companion Quarto report (tidyverse + ggplot2 + rstatix + gt, ' ...
-            'tailored to your bin design) was written next to it:\n%s\n\nRender it with:\n' ...
-            'quarto render "%s"'], qmdFile, qmdFile);
+        clear closeFile;   % close now, not at function exit: renderQuartoReport needs to read this file back next
+
+        % Best effort, same "must not lose what already succeeded" spirit
+        % as this whole block: if quarto/R are not on this machine, or the
+        % render itself fails, fall back to exactly the old behaviour
+        % (just the .qmd, with the manual render command) rather than
+        % losing the .qmd note entirely.
+        [htmlFile, renderError] = renderQuartoReport(qmdFile);
+        if ~isempty(htmlFile)
+            reportLabel = sprintf('Report (%s) - %s', stem, string(stamp, 'dd-MMM-yyyy HH:mm'));
+            this.persistReportNode(reportLabel, htmlFile, qmdFile);
+            this.Plotter.plotCurrent();
+            reportNote = sprintf(['\n\nA companion Quarto report was rendered automatically and saved to ' ...
+                'the Reports folder: see "%s" in the Reports tree.'], reportLabel);
+        else
+            reportNote = sprintf(['\n\nA companion Quarto report (tidyverse + ggplot2 + rstatix + gt, ' ...
+                'tailored to your bin design) was written to the Reports folder:\n%s\n\n' ...
+                '(Not rendered automatically: %s)\n\nRender it yourself with:\n' ...
+                'quarto render "%s"'], qmdFile, renderError, qmdFile);
+        end
     catch ME
         % Surfaced in the completion dialog below, not swallowed: a bare
         % `catch; reportNote = '';` here used to hide the real reason

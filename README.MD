@@ -67,12 +67,16 @@ Event-Related Potential Data Analysis* (see [References](#references)).
   [Transformations](#transformations) and [3D brain view](#3d-brain-view));
   grand averaging across subjects is a separate mechanism with its own tree
   and dialog.
-- **Design-aware statistical reporting.** Exporting ERP measurements also
-  writes a companion Quarto report: one statistical test per window and
-  measure type, chosen to fit the actual design (descriptive statistics,
-  a paired test, a repeated-measures ANOVA, or a one-sample test against
-  zero for a difference bin), with APA-styled tables and violin plots
-  (see [Statistical analysis](#statistical-analysis)).
+- **Design-aware statistical reporting.** Exporting ERP or Spectral Measure
+  results also writes a companion Quarto/R report to a persistent Reports
+  folder: one statistical test per window/frequency and measure type,
+  chosen to fit the actual design -- within-subjects (descriptive
+  statistics, a paired test, a repeated-measures ANOVA), between-subjects
+  or mixed once subjects are assigned to groups (independent-samples test,
+  one-way ANOVA, mixed ANOVA), or a one-sample test against zero for a
+  difference bin -- with APA-styled tables and violin plots. It is a real,
+  human-editable Quarto document underneath, not a fixed template (see
+  [Statistical analysis](#statistical-analysis)).
 - **Session workspaces.** Working directories and the processing tree are
   saved and reloaded as a workspace.
 
@@ -206,7 +210,7 @@ The current library:
 | `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real MNE source estimate (see [3D brain view](#3d-brain-view)). |
 | `Measure` | Quantifies ERP components in named time windows: mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency), on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference, [Measurement export](#measurement-export) and [Statistical analysis](#statistical-analysis). |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
-| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Measurements tab's **Spectral** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
+| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT: the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
 | `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
 
@@ -277,7 +281,7 @@ pipeline can be defined once and replayed across a study with Apply to All
 Raw Files or a saved template (see [Key features](#key-features)), no need
 to re-run Measure by hand on every subject.
 
-The **Measurements** ribbon tab's **ERP** export button walks the whole
+The **Export/Report** ribbon tab's **ERP & Report** button walks the whole
 workspace (every subject branch and every Grand Average, in either tree) for
 a Measure result and writes one long-format, R-compatible CSV: one row per
 dataset x window x bin x channel x measure type (`mean_amplitude`,
@@ -285,13 +289,15 @@ dataset x window x bin x channel x measure type (`mean_amplitude`,
 `area_positive` / `area_negative`, `fractional_peak_latency`,
 `fractional_area_latency`; a measure that yields several values, such as Peak
 or a peak-locked Area, contributes one row per value, so the CSV's own `value`
-column stays uniformly numeric).
+column stays uniformly numeric), plus a `group` column (see
+[Groups](#groups-setting-up-a-between-subjects-or-mixed-design), blank unless
+subjects have been assigned one).
 The same bulk-export-everything idea as **Export Grand Averages...** (see
 [`exportGrandAveragesCSV.m`](src/IO/exportGrandAveragesCSV.m)), implemented in
 [`exportMeasurementsCSV.m`](src/IO/exportMeasurementsCSV.m). The full window/
 measure reference, with worked examples, is
 [`measure.md`](src/Transformations/Measure/measure.md). The same button also
-writes a companion statistical report next to the CSV, see
+renders a companion statistical report, see
 [Statistical analysis](#statistical-analysis).
 
 ![ScreenshotERP](Screenshots/ERP.jpg)
@@ -304,53 +310,122 @@ writes a companion statistical report next to the CSV, see
 
 ## Statistical analysis
 
-Exporting Measure results (the **Measurements** tab's **ERP** button, see
-[Measurement export](#measurement-export)) writes a companion
-[Quarto](https://quarto.org/) report, `<name>.qmd`, next to the CSV.
-Rendering it (`quarto render <name>.qmd`, self-contained HTML) produces a
-short, APA-styled results report, not just a table.
+Exporting Measure or Spectral Measure results (the **Export/Report** ribbon
+tab's **ERP & Report** and **Spectral & Report** buttons, see
+[Measurement export](#measurement-export) and
+[Frequency analysis](#frequency-analysis-frequency-tagging--rift)) writes a
+companion [Quarto](https://quarto.org/) report, alongside a private copy of
+its own CSV so the report stays reproducible even if the original export is
+later overwritten, both saved into a dedicated **Reports** folder inside the
+workspace's Exports directory. Unlike an ordinary export, a rendered report
+is not a one-off file to go hunting for: it gets its own node in a third
+workspace tree (**Reports**, alongside **Data & Analyses** and **Grand
+Averages**), which survives closing and reopening the workspace, and an
+**Open in browser** button for viewing it with full styling (the app's own
+embedded viewer is a narrower, older browser than a real one, so long tables
+and a sticky table of contents render better outside it). Rendering
+(`quarto render <name>.qmd`, self-contained HTML) produces a short,
+APA-styled results report, not just a table: tables in three-line APA
+format, violin plots showing the actual distribution rather than just a bar
+and an error bar, and narrative prose ("A repeated-measures ANOVA revealed a
+significant effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
 
-The report is design-aware: it is built at generation time in MATLAB,
-where the actual bin structure is still fully known (`EEG.bindesc`, not
-recoverable from the flat CSV alone), so it can choose the statistical
-test each window and measure type actually calls for, rather than one
-generic script re-discovering the design at runtime. One section per
-window and measure type:
+### What gets tested, and what question it answers
 
-- **one ordinary bin**: descriptive statistics only, since no comparison
-  is possible;
-- **two ordinary bins**: a paired *t*-test with Cohen's *dz*, a Wilcoxon
-  signed-rank robustness check, and a Shapiro-Wilk normality note;
-- **three or more ordinary bins**: a repeated-measures ANOVA (Type III
-  sum of squares) with Holm-corrected pairwise paired *t*-tests and
-  Cohen's *dz* per pair, plus a Friedman test robustness check;
-- **each combination (difference) bin**, separately: for an amplitude or
-  area measure, a one-sample *t*-test (and Wilcoxon) against zero, since
-  zero is the natural "no difference" reference for an amplitude/area
-  contrast; kept out of the omnibus test above, because a combination
-  bin's scores are a linear combination of the other bins', not an
-  independent condition. A latency measure (peak, fractional peak, or
-  fractional area latency) has no such natural zero to test against, so a
-  combination bin's own latency is reported as descriptive statistics
-  only, with no test.
+The report is design-aware: it is built at generation time in MATLAB, where
+the actual bin structure (`EEG.bindesc`) and, once assigned, each subject's
+between-subjects group (see [Groups](#groups-setting-up-a-between-subjects-or-mixed-design)
+below) are both still known -- neither is recoverable from the flat CSV
+alone -- so it can choose the statistical test each window/frequency x
+measure-type combination actually calls for, rather than one generic script
+re-discovering the design at runtime. One section per window (ERP) or named
+frequency (Spectral) x measure type:
 
-Every test's own key p-value also feeds one final cross-group summary
-table, corrected for multiple comparisons (Benjamini-Hochberg) across
-every channel, window and measure-type group the export produced, not
-just within one group's own pairwise comparisons. Tables are rendered in
-APA style (three-line format: a rule above the header, one below it, one
-at the foot, no vertical rules); plots are violins, showing the actual
-distribution rather than just a bar and an error bar, with each
-subject's own connecting line and jittered point layered on top for the
-repeated-measures designs. Each channel's own analysis runs inside its
-own error boundary, so an edge case on one channel (too few usable
-subjects for a normality check, say) is reported for that one channel
-alone and does not stop the rest of the report from rendering.
+| Design | Test(s) | Question it answers |
+|---|---|---|
+| One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
+| Two ordinary bins | Paired *t*-test + Cohen's *dz*, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
+| Three or more ordinary bins | Repeated-measures ANOVA (Type III) + Holm-corrected pairwise paired *t*-tests + Cohen's *dz* per pair, Friedman test robustness check | Does this measure differ across conditions, within subjects? Which specific pairs of conditions differ? |
+| One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d*, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
+| One ordinary bin, **3+ groups** assigned | One-way ANOVA + Tukey-corrected pairwise comparisons | Does this measure differ between the groups? Which pairs of groups differ? |
+| Two or more ordinary bins, **groups** assigned | Mixed (split-plot) ANOVA -- within: bin, between: group -- reporting the bin main effect, the group main effect and their interaction, + Holm-corrected within-group and between-group pairwise comparisons | Does the **condition effect itself differ between groups** (the interaction -- usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
+| Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero | Is this effect (a priming effect, an oddball effect, ...) actually present? |
+| Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against* -- see below) |
+| Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test -- see below) |
+| Combination/difference bin (amplitude/area/power/...), **groups** assigned | One-sample test **within each group** + independent-samples test of the difference score **between groups** | Does the effect exist within each group? Does the effect's **size** differ between groups (e.g. "is the priming effect different in patients than in controls")? |
+| Combination/difference bin, a **latency**, **groups** assigned | Independent-samples test **between groups** only (still no vs.-zero test) | Does the effect's *timing* differ between groups? |
+| Combination/difference bin, **circular**, **groups** assigned | Descriptive statistics only, per group | (still no linear test is valid, one-sample or between-groups) |
 
-Rendering the report needs Quarto plus R with the tidyverse, rstatix,
-ggpubr and gt packages (installed automatically by the report's own setup
-step on first render). Generated by
-[`generateQuartoReport.m`](src/IO/generateQuartoReport.m).
+A combination bin's own test is always kept separate from the omnibus test
+over the ordinary bins above it, even when both are in the same report: its
+scores are a linear combination of the other bins' scores, not an
+independent condition, so folding it into the same ANOVA would be
+statistically invalid. A **latency** has no natural "zero" to test *against*
+(zero would mean "no difference" for an amplitude; it means nothing of the
+kind for a point in time), which is why it drops the one-sample test but
+keeps the between-groups one -- a latency is still an ordinary linear
+quantity, groups can still be validly compared on it. A **circular**
+quantity (phase/phaselag, an angle wrapping at &plusmn;&pi; radians) drops
+*every* test, one-sample and between-groups alike, since neither is valid
+for circular data without dedicated circular-statistics machinery this
+generator does not have.
+
+Every section's own key test result also feeds one final cross-report
+summary table, Benjamini-Hochberg (BH/FDR) corrected across every channel,
+window/frequency and measure-type test the whole export produced, not just
+within one section's own pairwise comparisons. Each channel's own analysis
+runs inside its own error boundary, so an edge case on one channel (too few
+usable subjects for a normality check, missing data for that channel only,
+...) is reported for that one channel alone and does not stop the rest of
+the report from rendering.
+
+### Groups: setting up a between-subjects or mixed design
+
+Every design starts out within-subjects: every bin/condition is assumed to
+be measured on every subject, matched by `dataset` in the CSV. To ask a
+between-subjects question instead ("do patients and controls differ"),
+assign each subject to a group first, via **Edit Groups...** (Home ribbon
+tab, next to Edit WorkSpace): one row per subject -- every root node in the
+Data & Analyses tree -- with a free-text group label; leave it blank for "no
+group". A subject left blank is excluded from every group-based test (with a
+count and a reason in the rendered report), but still counted normally in a
+report that turns out to have no groups active at all. Like the workspace's
+own directories, group assignment lives only in this session until saved
+with **Save WorkSpace**.
+
+Once at least two distinct group labels are actually in use, both exporters
+add a `group` column to their CSV, and `generateQuartoReport` switches every
+relevant section from its within-subjects test to the matching
+between-subjects or mixed one in the table above -- automatically, from the
+data, with nothing else to configure. A workspace where nobody has been
+assigned a group (or everybody shares the same one label) renders exactly as
+it always has.
+
+### It's just R and Quarto underneath
+
+The generated `.qmd` is an ordinary, human-editable Quarto document, not a
+locked report format: every test in the table above is a plain
+`tidyverse`/`rstatix`/`ggpubr`/`gt` call over a `dat` tibble read straight
+from the CSV copy sitting next to it. Open the `.qmd` itself (in the Reports
+folder, next to its `.html` and its own CSV copy) in RStudio, VS Code, or any
+text editor, and add, change, or remove anything -- a different test, a
+Bayesian alternative
+(`BayesFactor`, `brms`), a mixed-effects model (`lme4`/`lmerTest`) instead of
+repeated-measures ANOVA, a custom plot, a subset of channels or subjects,
+extra covariates joined in from elsewhere -- exactly as in any other
+Quarto/R document, then render it again (`quarto render <name>.qmd`, or the
+"Render" button in RStudio/VS Code). The auto-generated report is a
+statistically-considered starting point for this specific export's own
+design, tailored to it rather than generic, but it is not the last word on
+it: if a test exists in R, it can go in this report.
+
+If Quarto or R (with the tidyverse, rstatix, ggpubr and gt packages --
+installed automatically by the report's own setup step on first render) are
+not found on this machine, the `.qmd` and its CSV are still written and the
+export still succeeds; render it manually once they are available (the
+export's completion dialog gives the exact command).
+
+Generated by [`generateQuartoReport.m`](src/IO/generateQuartoReport.m).
 
 ## Frequency analysis (frequency tagging / RIFT)
 
@@ -388,10 +463,15 @@ coherence between each channel and a reference (photodiode) as a per-channel
 The reference is optional (not every recording has a photodiode), so power /
 SNR / phase-locking are always available and coherence is added when a
 reference is set. Results export to one long-format, R-compatible CSV via the
-Measurements tab's **Spectral** button
-([`exportSpectralCSV.m`](src/IO/exportSpectralCSV.m)); like any transformation, a
-whole tagging pipeline can be replayed across a study with Apply to All Raw
-Files or a saved template. The full reference is the
+Export/Report tab's **Spectral & Report** button
+([`exportSpectralCSV.m`](src/IO/exportSpectralCSV.m)), which also renders a
+companion statistical report for it (see
+[Statistical analysis](#statistical-analysis)) -- phase and phaselag are
+reported descriptively only where a test would not be statistically valid
+(see that section), power/amplitude/SNR/ITC/coherence get the full
+within-subjects/between-subjects/mixed treatment like any ERP measure. Like
+any transformation, a whole tagging pipeline can be replayed across a study
+with Apply to All Raw Files or a saved template. The full reference is the
 [`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)
 header.
 
@@ -449,8 +529,11 @@ stimuli. Stimulus-locked.
    the `erp_components_mean_amplitude` battery. Read the `Rare` bin for the P300
    itself, and the `Rare-Freq` bin for the oddball effect.
 6. **Grand Average** across subjects, then export for one long-format CSV and a
-   companion statistical report (the **Measurements** ribbon tab's **ERP**
-   button, see [Statistical analysis](#statistical-analysis)).
+   companion statistical report (the **Export/Report** ribbon tab's **ERP &
+   Report** button, see [Statistical analysis](#statistical-analysis)). If
+   subjects belong to different groups (e.g. patients vs. controls), assign
+   them first with **Edit Groups...** to get a between-subjects/mixed
+   comparison instead of a within-subjects one.
 
 ### How to do an LRP analysis (response-locked)
 
@@ -534,9 +617,9 @@ required.
 4. **Average**.
 5. **Measure**: Load the `mmn` preset (Fz, 150 to 250 ms, mean amplitude,
    negative), and read the `MMN` difference bin (bin 3) at Fz.
-6. **Grand Average**, then export via the **Measurements** tab's **ERP**
-   button. Since `MMN` is a difference bin measured as mean amplitude, the
-   companion statistical report tests it against zero (see
+6. **Grand Average**, then export via the **Export/Report** tab's **ERP &
+   Report** button. Since `MMN` is a difference bin measured as mean
+   amplitude, the companion statistical report tests it against zero (see
    [Statistical analysis](#statistical-analysis)), the natural way to ask
    whether the mismatch response is actually present.
 

@@ -13,6 +13,7 @@ function loadSETFile(this, name)
         EEG = loaded.EEG;
     else
         % No cache yet, or the raw file is newer: (re)read it.
+        restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
         EEG = pop_loadset(name, this.RawDirectory);
         EEG = eeg_checkset(EEG);
         EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;

@@ -11,6 +11,7 @@ function loadMATFile(this, name)
 %   see registerRootNode.
     [id, matfilename, rawfilename] = this.resolveCachePaths(name);
 
+    restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
     load(rawfilename, 'EEG');
     EEG.File = matfilename;
     EEG.FileName = rawfilename;

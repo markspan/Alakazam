@@ -12,6 +12,7 @@ function loadBVAFile(this, name)
         EEG = loaded.EEG;
     else
         % No cache yet, or the raw file is newer: (re)read it.
+        restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
         EEG = pop_loadbv(this.RawDirectory, name);
         % eeg_checkset on every fresh read, not just a cache refresh: this
         % used to be commented out on the "no cache yet" path only, so a

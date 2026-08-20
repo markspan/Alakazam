@@ -19,6 +19,7 @@ function loadERPFile(this, name)
     end
 
     if reread
+        restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
         loaded = load(erpfilename, '-mat');
         if ~isfield(loaded, 'ERP')
             error('Alakazam:loadERPFile', ...

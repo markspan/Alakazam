@@ -6,11 +6,13 @@ function exportMeasurementsCSV(entries, targetFile)
 %   own name for a Data & Analyses node, or the node's own name for a
 %   Grand Average -- see Alakazam.onExportMeasurements, which resolves
 %   this via Workspace.Tree.rootOf), .datasetType ('subject' or
-%   'grand_average'), and .EEG (the already-loaded dataset, carrying
-%   .measurements -- see Measure.m).
+%   'grand_average'), .group (the between-subjects group assigned via
+%   WorkSpace.editGroups, '' if none -- see collectEntriesWithField), and
+%   .EEG (the already-loaded dataset, carrying .measurements -- see
+%   Measure.m).
 %
 %   One row per (dataset x window x bin x channel x measure type),
-%   columns dataset,dataset_type,bin,channel,window,measure_type,
+%   columns dataset,dataset_type,group,bin,channel,window,measure_type,
 %   window_start_ms,window_stop_ms,value -- the same "tidy"/long shape
 %   exportGrandAveragesCSV.m uses, so both exports drop into the same R
 %   workflow (read.csv() + dplyr/ggplot2, no reshape needed). A "Peak"
@@ -33,7 +35,7 @@ function exportMeasurementsCSV(entries, targetFile)
     end
     closeFile = onCleanup(@() fclose(fid));
 
-    fprintf(fid, 'dataset,dataset_type,bin,channel,window,measure_type,window_start_ms,window_stop_ms,value\n');
+    fprintf(fid, 'dataset,dataset_type,group,bin,channel,window,measure_type,window_start_ms,window_stop_ms,value\n');
 
     for i = 1:numel(entries)
         writeEntry(fid, entries(i));
@@ -43,6 +45,7 @@ end
 function writeEntry(fid, entry)
     datasetField = csvField(entry.subject);
     typeField    = csvField(entry.datasetType);
+    groupField   = csvField(entry.group);
     EEG = entry.EEG;
 
     for w = 1:numel(EEG.measurements)
@@ -58,7 +61,7 @@ function writeEntry(fid, entry)
             binField = csvField(csvBinLabel(EEG, b));
             for c = 1:numel(win.channels)
                 chField = csvField(win.channels{c});
-                prefix = sprintf('%s,%s,%s,%s,%s,', datasetField, typeField, binField, chField, windowField);
+                prefix = sprintf('%s,%s,%s,%s,%s,%s,', datasetField, typeField, groupField, binField, chField, windowField);
                 % start/stop stay the window's own search range for every
                 % measure -- for a band Area the integration span is
                 % width-ms centred on peak_latency, and a fractional

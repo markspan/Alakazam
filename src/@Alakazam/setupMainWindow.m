@@ -23,15 +23,19 @@ function setupMainWindow(this)
 %   the same "build hidden, reveal once populated" ordering the old
 %   AppContainer/ToolGroup shells required.
 %
-%   TreeGrid itself is split top/bottom into two titled panels --
-%   DataTreePanel (data & analyses) and GrandAveragesTreePanel --
-%   each hosting its own separate WorkSpaceTree instance (see
-%   WorkSpace.CreateTreeComponent): grand averages combine several
-%   subjects' results, so they never belonged nested under any
+%   TreeGrid itself is split into three titled panels, stacked top to
+%   bottom -- DataTreePanel (data & analyses), GrandAveragesTreePanel and
+%   ReportsTreePanel -- each hosting its own separate WorkSpaceTree
+%   instance (see WorkSpace.CreateTreeComponent): grand averages combine
+%   several subjects' results, so they never belonged nested under any
 %   single subject's branch, and lived in the same tree only as an
-%   awkward always-present "Grand Averages" root node. Two real
-%   trees read more clearly and let WorkSpace.GrandAveragesTree
-%   hold flat, top-level grand-average nodes directly.
+%   awkward always-present "Grand Averages" root node; a rendered Quarto
+%   report (Alakazam.persistReportNode) similarly is not "produced by"
+%   any one dataset the way an ordinary transformation result is (an
+%   export can summarise many datasets at once -- see
+%   collectMeasurementEntries), so it does not belong nested under one
+%   either. Three real trees read more clearly than forcing either kind
+%   into Data & Analyses's own per-subject branches.
     this.MainFigure = uifigure( ...
         "Name",   "Alakazam", ...
         "Tag",    "AlakazamApp", ...
@@ -62,11 +66,14 @@ function setupMainWindow(this)
     this.Ribbon = AlakazamRibbon(this.ToolbarGrid, fullfile(this.RootDir, "Transformations"), ...
         "ItemPushedFcn", @(id) this.onRibbonAction(id));
 
-    % Row 2 is a thin draggable splitter between the two trees (see
-    % beginTreesSplitResize/dragTreesSplitResize/endTreesSplitResize),
-    % the same hand-rolled pattern as the tree/plots splitter below --
-    % a plain uigridlayout has no built-in resizable divider either way.
-    this.TreeGrid = uigridlayout(this.MainGrid, [3 1], "RowHeight", {'2x', 3, '1x'}, ...
+    % Rows 2 and 4 are thin draggable splitters, one between each
+    % adjacent pair of trees (see beginTreesSplitResize/
+    % dragTreesSplitResize/endTreesSplitResize for the Data & Analyses /
+    % Grand Averages one, beginReportsSplitResize/dragReportsSplitResize/
+    % endReportsSplitResize for the Grand Averages / Reports one below
+    % it), the same hand-rolled pattern as the tree/plots splitter below
+    % -- a plain uigridlayout has no built-in resizable divider either way.
+    this.TreeGrid = uigridlayout(this.MainGrid, [5 1], "RowHeight", {'2x', 3, '1x', 3, '1x'}, ...
         "Padding", [0 0 0 0], "RowSpacing", 0);
     this.TreeGrid.Layout.Row = 2;
     this.TreeGrid.Layout.Column = 1;
@@ -81,6 +88,14 @@ function setupMainWindow(this)
 
     this.GrandAveragesTreePanel = uipanel(this.TreeGrid, "Title", "Grand Averages", "FontWeight", "bold");
     this.GrandAveragesTreePanel.Layout.Row = 3;
+
+    reportsSplitter = uipanel(this.TreeGrid, "BorderType", "none", ...
+        "BackgroundColor", [.75 .75 .75], ...
+        "ButtonDownFcn", @(~, ~) this.beginReportsSplitResize());
+    reportsSplitter.Layout.Row = 4;
+
+    this.ReportsTreePanel = uipanel(this.TreeGrid, "Title", "Reports", "FontWeight", "bold");
+    this.ReportsTreePanel.Layout.Row = 5;
 
     splitter = uipanel(this.MainGrid, "BorderType", "none", ...
         "BackgroundColor", [.75 .75 .75], ...

@@ -39,8 +39,7 @@ function onApplyTemplate(this)
     end
 
     restoreDir = this.enterRepoRoot();
-    this.MainFigure.Pointer = "watch";
-    restorePointer = onCleanup(@() set(this.MainFigure, "Pointer", "arrow"));
+    restoreBusy = beginBusy(this.MainFigure, "Applying template...");
 
     % Rebuild the whole tree the template captured: apply each node to its
     % recorded parent's result, with the selected node standing in for the
