@@ -5,9 +5,11 @@ classdef SpectralMeasureView < handle
 %   EEG.specFreqs, computed by SpectralMeasure), with a dashed marker at each
 %   named frequency and its measured SNR annotated. Up/down arrows step the
 %   channel; left/right step the bin (for multi-bin data) -- the same
-%   interaction model FourierView/EpochView/AverageView use. Zoom/pan
-%   buttons and mouse-wheel channel stepping: see ZoomPanButtons/onWheel,
-%   shared with FourierView.
+%   interaction model FourierView/EpochView/AverageView use. Every step also
+%   has a visible, clickable button (channel and bin alike, not just
+%   keyboard/wheel), plus x/y zoom sliders (a zoom level, once set, survives
+%   a channel/bin change instead of resetting), pan and mouse-wheel channel
+%   stepping: see ZoomPanButtons/onWheel, shared with FourierView.
 %
 %   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMPANBUTTONS.
 
@@ -20,7 +22,7 @@ classdef SpectralMeasureView < handle
         EEG
         Grid
         Axes
-        Buttons     % ZoomPanButtons, the zoom/pan/bin-step row
+        Buttons     % ZoomPanButtons, the zoom/pan/bin-step row + sliders
         Channel = 1
         CurrentBin = 1
     end
@@ -29,7 +31,7 @@ classdef SpectralMeasureView < handle
         function this = SpectralMeasureView(fig, eeg)
             this.Figure = fig;
             this.EEG    = eeg;
-            this.Grid = uigridlayout(fig, [2 1], "RowHeight", {'1x', 32}, ...
+            this.Grid = uigridlayout(fig, [4 1], "RowHeight", {'1x', 30, 24, 24}, ...
                 "Padding", [2 2 2 2], "RowSpacing", 2);
             this.Axes = uiaxes(this.Grid);
             this.Axes.Layout.Row = 1;
@@ -38,8 +40,12 @@ classdef SpectralMeasureView < handle
             if size(eeg.spectrum, 3) > 1
                 stepFcn = @(delta) this.binStep(delta);
             end
-            this.Buttons = ZoomPanButtons(this.Grid, 2, this.Axes, eeg.srate / 2, ...
-                @() this.notifyActivated(), stepFcn);
+            channelStepFcn = [];
+            if size(eeg.spectrum, 1) > 1
+                channelStepFcn = @(delta) this.channelStep(delta);
+            end
+            this.Buttons = ZoomPanButtons(this.Grid, [2 3 4], this.Axes, eeg.srate / 2, ...
+                @() this.notifyActivated(), stepFcn, channelStepFcn, 'Bin');
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -75,14 +81,23 @@ classdef SpectralMeasureView < handle
             hold(ax, "off");
 
             titleStr = sprintf("Channel %i: %s", this.Channel, curLabel);
-            if size(this.EEG.spectrum, 3) > 1
-                titleStr = sprintf('%s   (Bin: %s)', titleStr, binLabel(this.EEG, this.CurrentBin));
+            nbin = size(this.EEG.spectrum, 3);
+            if nbin > 1
+                % "i of N" alongside the label, not just the label alone --
+                % see FourierView's own redraw() for why (unambiguous even
+                % when the label text does not obviously change).
+                titleStr = sprintf('%s   (Bin %i of %i: %s)', titleStr, ...
+                    this.CurrentBin, nbin, binLabel(this.EEG, this.CurrentBin));
             end
             title(ax, titleStr);
             xlabel(ax, "Frequency (Hz)");
             ylabel(ax, "Evoked amplitude");
-            xlim(ax, [0, floor(this.EEG.srate / 2)]);
-            ylim(ax, [0, top]);
+
+            % x-limits are owned by this.Buttons (persists zoom/pan across a
+            % channel/bin change); y-limits go through applyYZoom so the
+            % y-zoom slider's level, not just the absolute range, survives
+            % too -- see ZoomPanButtons' own header comment.
+            this.Buttons.applyYZoom(top);
         end
 
         function onKey(this, event)
@@ -120,6 +135,15 @@ classdef SpectralMeasureView < handle
         function binStep(this, delta)
             nBins = size(this.EEG.spectrum, 3);
             this.CurrentBin = min(nBins, max(1, this.CurrentBin + delta));
+            this.redraw();
+        end
+
+        function channelStep(this, delta)
+        %CHANNELSTEP  Button-row equivalent of the up/down arrow keys (see
+        %   onKey), for the "C^"/"Cv" pair ZoomPanButtons builds when given
+        %   a non-empty channelStepFcn.
+            nchan = size(this.EEG.spectrum, 1);
+            this.Channel = min(nchan, max(1, this.Channel - delta));
             this.redraw();
         end
     end

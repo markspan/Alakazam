@@ -20,6 +20,14 @@ classdef AlakazamSettings < handle
 %   choices cell array). Everything else - the editor row, the default, the
 %   persistence - follows automatically.
 %
+%   Frequency bands (FourierView's shaded bands) are a separate store, not a
+%   schema setting: they are a variable-length list of records (label,
+%   loFreq, hiFreq, color), which does not fit the schema's one-scalar-
+%   per-key shape. GETBANDS/SETBANDS read and write Values.bands directly;
+%   SettingsDialog builds their own dedicated "Frequency bands" tab (a
+%   row-per-band editor with Add/Remove) rather than going through the
+%   generic per-setting-type control the rest of the dialog uses.
+%
 %   See also SETTINGSDIALOG.
 
     properties (Constant, Access = private)
@@ -72,6 +80,34 @@ classdef AlakazamSettings < handle
         %RELOAD  Discard the cached singleton (e.g. after resetting prefs).
             AlakazamSettings.instance().refresh();
         end
+
+        function bands = getBands()
+        %GETBANDS  The frequency-band list (label/loFreq/hiFreq/color struct
+        %   array) FourierView shades its power spectrum with.
+            bands = AlakazamSettings.instance().Values.bands;
+        end
+
+        function setBands(bands)
+        %SETBANDS  Replace the frequency-band list in memory (call save() to
+        %   persist). BANDS may be empty (0x0 struct with the right fields,
+        %   or []) to mean "no shaded bands", not "use the defaults".
+            obj = AlakazamSettings.instance();
+            obj.Values.bands = AlakazamSettings.normalizeBands(bands);
+        end
+
+        function bands = defaultBands()
+        %DEFAULTBANDS  The standard EEG bands, shaded in shades of the same
+        %   blue (#4a7fc9, see dialogChromeColors) used throughout the rest
+        %   of the UI: light for the low, slow bands, darkening through the
+        %   accent blue itself (Alpha) to a dark navy for Gamma.
+            bands = struct('label', {}, 'loFreq', {}, 'hiFreq', {}, 'color', {});
+            bands(end + 1) = AlakazamSettings.bandDef('Sub-Delta', 0,    0.5,  [0.839 0.894 0.961]);
+            bands(end + 1) = AlakazamSettings.bandDef('Delta',     0.5,  3.5,  [0.663 0.776 0.910]);
+            bands(end + 1) = AlakazamSettings.bandDef('Theta',     3.5,  7.5,  [0.435 0.627 0.839]);
+            bands(end + 1) = AlakazamSettings.bandDef('Alpha',     7.5,  12.5, [0.290 0.498 0.788]);
+            bands(end + 1) = AlakazamSettings.bandDef('Beta',      12.5, 30,   [0.180 0.361 0.541]);
+            bands(end + 1) = AlakazamSettings.bandDef('Gamma',     30,   100,  [0.102 0.227 0.361]);
+        end
     end
 
     methods (Access = private)
@@ -115,6 +151,36 @@ classdef AlakazamSettings < handle
                     end
                 end
             end
+
+            if isfield(stored, 'bands')
+                values.bands = AlakazamSettings.normalizeBands(stored.bands);
+            else
+                values.bands = AlakazamSettings.defaultBands();
+            end
+        end
+
+        function bands = normalizeBands(raw)
+        %NORMALIZEBANDS  RAW (a struct array fresh from jsondecode, or one
+        %   already built via bandDef) coerced to the canonical
+        %   label/loFreq/hiFreq/color shape, with color as a 1x3 double.
+        %   jsondecode turns a JSON "[]" into 0x0 double, not a 0x0 struct,
+        %   so that (deliberately empty -- see setBands) case is handled
+        %   explicitly rather than falling through to a field access.
+            template = struct('label', {}, 'loFreq', {}, 'hiFreq', {}, 'color', {});
+            if isempty(raw)
+                bands = template;
+                return;
+            end
+            bands = template;
+            for i = 1:numel(raw)
+                r = raw(i);
+                bands(i) = AlakazamSettings.bandDef(char(string(r.label)), ...
+                    double(r.loFreq), double(r.hiFreq), double(r.color(:)'));
+            end
+        end
+
+        function b = bandDef(label, loFreq, hiFreq, color)
+            b = struct('label', label, 'loFreq', loFreq, 'hiFreq', hiFreq, 'color', color);
         end
 
         function tabs = defineSchema()

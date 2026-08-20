@@ -3,9 +3,15 @@ classdef SettingsDialog < handle
 %
 %   SettingsDialog builds its whole UI from AlakazamSettings.schema(): one tab
 %   per schema tab, a titled panel per section, and one labelled control per
-%   setting (checkbox / numeric / text / dropdown by type). Save writes the
-%   values back to AlakazamSettings, persists them, closes the window and runs
-%   an optional callback so open views can refresh; Cancel just closes.
+%   setting (checkbox / numeric / text / dropdown by type). Plus one further
+%   tab, "Frequency bands", NOT schema-driven (AlakazamSettings.getBands/
+%   setBands are a separate array-valued store, not a scalar schema setting
+%   -- see AlakazamSettings' own header comment): a row-per-band editor with
+%   a label field, start/stop frequency fields, a colour-picker button and a
+%   remove button, plus an "Add band" button, built by buildBandsTab/
+%   rebuildBandsList. Save writes the values back to AlakazamSettings,
+%   persists them, closes the window and runs an optional callback so open
+%   views can refresh; Cancel just closes.
 %
 %   Usage:
 %       SettingsDialog();                 % standalone
@@ -17,6 +23,9 @@ classdef SettingsDialog < handle
         Fig
         Fields = struct('tab', {}, 'section', {}, 'key', {}, 'type', {}, 'handle', {})
         OnSave = []
+
+        BandsList           % uigridlayout the band rows are rebuilt into
+        BandRows = struct('LabelField', {}, 'LoField', {}, 'HiField', {}, 'ColorBtn', {})
     end
 
     properties (Constant, Access = private)
@@ -67,6 +76,7 @@ classdef SettingsDialog < handle
             for t = 1:numel(tabs)
                 this.buildTab(tabgroup, tabs(t));
             end
+            this.buildBandsTab(tabgroup);
 
             % Button row: Save / Cancel, right-aligned.
             buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, ...
@@ -180,6 +190,128 @@ classdef SettingsDialog < handle
             this.wireEnable(items, byKey);
         end
 
+        function buildBandsTab(this, tabgroup)
+        %BUILDBANDSTAB  The "Frequency bands" tab: an explanatory blurb, a
+        %   scrollable row-per-band editor (see rebuildBandsList) and an
+        %   "Add band" button. Not schema-driven, unlike every other tab --
+        %   see this class's own header comment and AlakazamSettings' for
+        %   why bands need their own store.
+            tab = uitab(tabgroup, 'Title', 'Frequency bands');
+            outer = uigridlayout(tab, [3 1], 'RowHeight', {'fit', '1x', 'fit'}, ...
+                'Padding', [10 10 10 10], 'RowSpacing', 6);
+
+            uilabel(outer, 'Text', [ ...
+                'Bands FourierView shades under the power spectrum. Edit the label, ' ...
+                'start/stop frequency (Hz) or colour of a band, or add/remove one.'], ...
+                'WordWrap', 'on');
+
+            this.BandsList = uigridlayout(outer, [1 1], 'Scrollable', 'on', 'Padding', [0 0 0 0]);
+            this.BandsList.Layout.Row = 2;
+
+            addRow = uigridlayout(outer, [1 2], 'ColumnWidth', {120, '1x'}, 'Padding', [0 0 0 0]);
+            addRow.Layout.Row = 3;
+            uibutton(addRow, 'Text', 'Add band', 'ButtonPushedFcn', @(~, ~) this.onAddBand());
+
+            this.rebuildBandsList(AlakazamSettings.getBands());
+        end
+
+        function rebuildBandsList(this, bands)
+        %REBUILDBANDSLIST  Replace BandsList's contents with one row per
+        %   entry in BANDS (a label/loFreq/hiFreq/color struct array), plus
+        %   a header row. Rebuilt wholesale on Add/Remove rather than
+        %   inserting/deleting a single row in place: uigridlayout's row
+        %   count is fixed at construction, so a variable-length list needs
+        %   a fresh grid each time the count changes anyway, and this way
+        %   there is exactly one code path (used by buildBandsTab too) that
+        %   lays a band list out, not two that can drift apart.
+            delete(this.BandsList.Children);
+            n = numel(bands);
+            grid = uigridlayout(this.BandsList, [n + 1, 1], ...
+                'RowHeight', [{'fit'}, repmat({36}, 1, n)], 'Padding', [0 4 0 4], 'RowSpacing', 4);
+
+            header = uigridlayout(grid, [1 5], 'ColumnWidth', {'1x', 90, 90, 60, 32}, ...
+                'Padding', [0 0 0 0], 'ColumnSpacing', 6);
+            header.Layout.Row = 1;
+            uilabel(header, 'Text', 'Label', 'FontWeight', 'bold');
+            uilabel(header, 'Text', 'Start (Hz)', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+            uilabel(header, 'Text', 'Stop (Hz)', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+            uilabel(header, 'Text', 'Colour', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+            uilabel(header, 'Text', '');
+
+            this.BandRows = struct('LabelField', {}, 'LoField', {}, 'HiField', {}, 'ColorBtn', {});
+            for i = 1:n
+                row = uigridlayout(grid, [1 5], 'ColumnWidth', {'1x', 90, 90, 60, 32}, ...
+                    'Padding', [0 0 0 0], 'ColumnSpacing', 6);
+                row.Layout.Row = i + 1;
+                labelField = uieditfield(row, 'text', 'Value', bands(i).label);
+                loField = uieditfield(row, 'numeric', 'Value', bands(i).loFreq, 'Limits', [0 Inf]);
+                hiField = uieditfield(row, 'numeric', 'Value', bands(i).hiFreq, 'Limits', [0 Inf]);
+                colorBtn = uibutton(row, 'Text', '', 'BackgroundColor', bands(i).color, ...
+                    'Tooltip', 'Pick colour', 'ButtonPushedFcn', @(src, ~) this.onPickColor(src));
+                uibutton(row, 'Text', char(215), 'Tooltip', 'Remove this band', ...
+                    'ButtonPushedFcn', @(~, ~) this.onRemoveBand(i));
+                this.BandRows(end + 1) = struct('LabelField', labelField, 'LoField', loField, ...
+                    'HiField', hiField, 'ColorBtn', colorBtn);
+            end
+        end
+
+        function onPickColor(~, btn)
+        %ONPICKCOLOR  Open the platform colour picker, seeded with the
+        %   button's current swatch colour; Cancel (uisetcolor returns the
+        %   scalar 0, not an RGB triple) leaves it unchanged.
+            c = uisetcolor(btn.BackgroundColor, 'Band colour');
+            if ~isequal(c, 0)
+                btn.BackgroundColor = c;
+            end
+        end
+
+        function onAddBand(this)
+            bands = this.collectBandRows();
+            bands(end + 1) = struct('label', 'New band', 'loFreq', 0, 'hiFreq', 1, ...
+                'color', [0.290 0.498 0.788]);
+            this.rebuildBandsList(bands);
+        end
+
+        function onRemoveBand(this, index)
+            bands = this.collectBandRows();
+            bands(index) = [];
+            this.rebuildBandsList(bands);
+        end
+
+        function bands = collectBandRows(this)
+        %COLLECTBANDROWS  The band list as currently shown in BandRows'
+        %   live controls (not yet validated or persisted).
+            n = numel(this.BandRows);
+            bands = struct('label', {}, 'loFreq', {}, 'hiFreq', {}, 'color', {});
+            for i = 1:n
+                r = this.BandRows(i);
+                bands(i) = struct('label', char(r.LabelField.Value), ...
+                    'loFreq', r.LoField.Value, 'hiFreq', r.HiField.Value, ...
+                    'color', r.ColorBtn.BackgroundColor);
+            end
+        end
+
+        function ok = validateBands(this, bands)
+        %VALIDATEBANDS  Every band needs a non-blank label and a stop
+        %   frequency strictly above its start frequency; alerts and
+        %   returns false on the first violation, matching the validation
+        %   style SpectralMeasureDialog's own onOK uses.
+            ok = true;
+            for i = 1:numel(bands)
+                if isempty(strtrim(bands(i).label))
+                    uialert(this.Fig, sprintf('Band %d needs a label.', i), 'Check the frequency bands');
+                    ok = false;
+                    return;
+                end
+                if ~(bands(i).hiFreq > bands(i).loFreq)
+                    uialert(this.Fig, sprintf('Band "%s": stop frequency must be greater than start frequency.', ...
+                        bands(i).label), 'Check the frequency bands');
+                    ok = false;
+                    return;
+                end
+            end
+        end
+
         function addField(this, tab, section, item, handle)
             this.Fields(end + 1) = struct('tab', tab, 'section', section, ...
                 'key', item.key, 'type', item.type, 'handle', handle);
@@ -255,6 +387,10 @@ classdef SettingsDialog < handle
         end
 
         function onSaveClicked(this)
+            bands = this.collectBandRows();
+            if ~this.validateBands(bands)
+                return;
+            end
             for i = 1:numel(this.Fields)
                 f = this.Fields(i);
                 switch f.type
@@ -265,6 +401,7 @@ classdef SettingsDialog < handle
                 end
                 AlakazamSettings.set(f.tab, f.section, f.key, value);
             end
+            AlakazamSettings.setBands(bands);
             AlakazamSettings.save();
             this.close();
             if ~isempty(this.OnSave)
