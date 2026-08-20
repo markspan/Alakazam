@@ -3,11 +3,13 @@ classdef FourierView < handle
 %
 %   FourierView draws one channel's power spectrum at a time, with the
 %   frequency bands shaded (from AlakazamSettings.getBands, user-editable on
-%   the Settings dialog's own "Frequency bands" tab -- see drawBands), and
-%   steps through channels with the up/down arrow keys -- left/right step
-%   the trial/bin, for multi-trial data -- the same interaction model
-%   EpochView and AverageView already
-%   use for time-domain data. Every one of those steps also has a visible,
+%   the Settings dialog's own "Frequency bands" tab -- see drawBands) and,
+%   optionally, a light moving-average smoothing over the plotted spectrum
+%   (the "Smooth spectrum" checkbox on the Settings dialog's "Graphics" tab
+%   -- see redraw), and steps through channels with the up/down arrow keys
+%   -- left/right step the trial/bin, for multi-trial data -- the same
+%   interaction model EpochView and AverageView already use for time-domain
+%   data. Every one of those steps also has a visible,
 %   clickable button (see ZoomPanButtons' own header comment), not just a
 %   keyboard/wheel shortcut, so the control is discoverable without having
 %   to already know the keyboard convention. Replaces the previous
@@ -105,6 +107,12 @@ classdef FourierView < handle
             delete(allchild(ax));
             freqs    = this.EEG.freqs;
             spectrum = reshape(this.EEG.data(this.Channel, :, this.CurrentTrial), 1, []);
+            if AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
+                % Smoothed once, here, before either the line or the band
+                % shading is drawn: both should show the same trend, not a
+                % smoothed line over raw-jagged band fills.
+                spectrum = movmean(spectrum, 5);
+            end
 
             hold(ax, "on");
             this.drawBands(ax, freqs, spectrum);
