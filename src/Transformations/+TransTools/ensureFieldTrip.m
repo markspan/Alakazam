@@ -1,5 +1,13 @@
-function ensureFieldTrip()
+function ensureFieldTrip(featureLabel)
 %ENSUREFIELDTRIP  Make sure FieldTrip is on the path, with consent.
+%   FEATURELABEL names the calling feature in the consent dialog (default
+%   'Source-estimate mode', Brain3DView's own wording, kept as the default
+%   so its two existing call sites need no change); ClusterStats passes its
+%   own name so the prompt reads correctly there too -- FieldTrip is a
+%   single shared, already-lazily-installed dependency, not a
+%   per-feature one, so this stays one function rather than a copy per
+%   caller.
+%
 %   FieldTrip is only needed for Brain3DView's optional "Source estimate"
 %   mode (TransTools.BuildSourceForwardModel/ComputeSourceEstimate) -- the
 %   default "Scalp projection" mode (TransTools.DrawBrainMap) needs
@@ -23,6 +31,10 @@ function ensureFieldTrip()
 %   reproducible across a project's lifetime rather than silently
 %   shifting under an analyst whenever a new FieldTrip snapshot appears.
 %   Update FieldTripUrl by hand when a refresh is actually wanted.
+    if nargin < 1 || isempty(featureLabel)
+        featureLabel = 'Source-estimate mode';
+    end
+
     if ~isempty(which('ft_defaults'))
         return; % already available this session
     end
@@ -45,7 +57,7 @@ function ensureFieldTrip()
     % the same "optional heavy download, consent-gated" pattern, not
     % (yet) migrated to a uiconfirm anywhere in this codebase.
     answer = questdlg([ ...
-        'Source-estimate mode needs the FieldTrip toolbox, which was not found ', ...
+        featureLabel ' needs the FieldTrip toolbox, which was not found ', ...
         'on the MATLAB path.', newline, newline, ...
         'FieldTrip is free, open-source (GPLv2/v3) research software from the ', ...
         'Donders Institute. This downloads the full release (about 400 MB, ', ...
@@ -56,12 +68,12 @@ function ensureFieldTrip()
         'Download and install', 'Cancel', 'Download and install');
 
     if ~strcmp(answer, 'Download and install')
-        throw(MException('Alakazam:FieldTripMissing', ...
-            ['FieldTrip is required for source-estimate mode, and was not found ' ...
+        throw(MException('Alakazam:FieldTripMissing', sprintf([ ...
+            'FieldTrip is required for %s, and was not found ' ...
              'on the MATLAB path. Its installation was declined. Install it ' ...
              'manually from https://www.fieldtriptoolbox.org/download/ (add the ' ...
              'unzipped folder to your MATLAB path, then run ft_defaults once), or ' ...
-             'try source-estimate mode again and accept the download prompt.']));
+             'try again and accept the download prompt.'], featureLabel)));
     end
 
     EEGLabEnvironment.installFromZip(fieldTripUrl, 'fieldtrip', 'ft_defaults.m');

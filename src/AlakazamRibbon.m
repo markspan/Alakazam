@@ -339,7 +339,8 @@ classdef AlakazamRibbon < handle
                 struct('title', 'Group Averages', 'items', {this.grandAverageItems(iconsDir)})};
 
             measurementsGroups = { ...
-                struct('title', 'Batch Export', 'items', {this.measurementsItems(iconsDir)})};
+                struct('title', 'Batch Export', 'items', {this.measurementsItems(iconsDir)}), ...
+                struct('title', 'Cluster Statistics', 'items', {this.clusterStatsItems(iconsDir)})};
 
             tabs = { ...
                 struct('id', 'home', 'title', 'Alakazam', 'groups', {homeGroups}), ...
@@ -448,6 +449,24 @@ classdef AlakazamRibbon < handle
                 struct('id', 'exportGrandAverages', 'label', 'Export Grand Averages...', ...
                 'tooltip', 'Export every Grand Average to one R-compatible, long-format CSV', ...
                 'icon', exportIcon)};
+        end
+
+        function items = clusterStatsItems(this, iconsDir)
+        %CLUSTERSTATSITEMS  "Cluster Test..." launcher for cluster-based
+        %   permutation testing (ClusterStats.m, wrapping FieldTrip's
+        %   ft_timelockstatistics): tests a contrast across the whole
+        %   scalp and epoch at once, correcting for multiple comparisons
+        %   by exploiting spatiotemporal contiguity rather than a fixed
+        %   per-channel/per-window correction -- the "where/when does this
+        %   effect actually show up" complement to the Export/Report tab's
+        %   pre-chosen-window statistics. Icon: a grid of points with one
+        %   contiguous block circled and filled solid, the rest faint --
+        %   the cluster-vs-noise idea the feature itself implements.
+            items = {struct('id', 'clusterStats', 'label', 'Cluster Test...', ...
+                'tooltip', ['Cluster-based permutation test (Maris & Oostenveld, 2007) across every ' ...
+                    'channel and time point at once, correcting for multiple comparisons by exploiting ' ...
+                    'spatiotemporal contiguity -- needs FieldTrip (downloaded on first use, with consent)'], ...
+                'icon', this.encodeSvgFile(fullfile(iconsDir, 'ClusterStats.svg')))};
         end
 
         function items = measurementsItems(this, iconsDir)

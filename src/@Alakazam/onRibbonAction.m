@@ -20,6 +20,8 @@ function onRibbonAction(this, id)
             this.openSettings();
         case 'defineGrandAverage'
             this.onDefineGrandAverage();
+        case 'clusterStats'
+            this.onClusterStats();
         case 'exportGrandAverages'
             this.onExportGrandAverages();
         case 'exportMeasurements'
