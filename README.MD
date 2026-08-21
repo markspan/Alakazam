@@ -19,7 +19,10 @@ epoching, artefact removal, averaging, ...) produces a new child node.
 
 The methodological approach follows established, reproducible ERP/EEG
 practice as described in Steven J. Luck's open textbook *Applied
-Event-Related Potential Data Analysis* (see [References](#references)).
+Event-Related Potential Data Analysis*, and in Pütz, Span & Lorist (2025),
+a STAR Protocols paper walking through the same end-to-end design-record-
+preprocess-export workflow Alakazam is built around (see
+[References](#references)).
 
 ## Key features
 
@@ -438,7 +441,9 @@ not stop the rest of the report from rendering.
 
 Every design starts out within-subjects: every bin/condition is assumed to
 be measured on every subject, matched by `dataset` in the CSV. To ask a
-between-subjects question instead ("do patients and controls differ"),
+between-subjects question instead ("do patients and controls differ" --
+see Kappenman & Luck, 2015, on the extra methodological care this kind of
+clinical-population comparison needs, in [References](#references)),
 assign each subject to a group first, via **Grouping...** (the Home ribbon
 tab's own **Design** group) -- the "Edit Subjects" dialog: one row per
 subject -- every root node in the Data & Analyses tree -- with a free-text
@@ -842,9 +847,16 @@ ms) as its own choice, not a reproduction of the book's exact numbers.
 **Building the template.** `N400.alztemplate` is six ordinary transformations
 chained together, in the order you would run them by hand the first time;
 saving that chain as a template (**Save Template...**) is what turns "the
-steps I just ran on subject 1" into "the recipe every subject gets". Built
-fresh from an imported raw recording, Home tab, each step's own options
-dialog would ask for:
+steps I just ran on subject 1" into "the recipe every subject gets". The
+order itself -- denoise, then epoch/baseline, then reject, then average --
+is not arbitrary: artefact correction (a nonlinear operation) has to happen
+before artefact rejection and averaging for its own result to be
+meaningful, whereas the purely linear steps (filtering, re-referencing,
+baselining, averaging) commute freely, exactly the ordering rationale Luck
+lays out in [Order of processing
+steps](https://erpinfo.org/order-of-steps) (see
+[References](#references)). Built fresh from an imported raw recording,
+Home tab, each step's own options dialog would ask for:
 
 1. **AutoGEDAI** (denoise). Its dialog has three groups of options:
    *Denoising* -- **Strength** (`auto`/`auto+`/`auto-`, this template leaves
@@ -1041,6 +1053,14 @@ Scientific/methodological:
   example, [`N400.alztemplate`](N400.alztemplate) ported to Alakazam, is the
   [full worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
   above.
+- Pütz, C., Span, M., & Lorist, M. M. (2025). Protocol for designing,
+  conducting, and analyzing event-related potentials in human participants.
+  *STAR Protocols*, 6(2), 103835. DOI:
+  [10.1016/j.xpro.2025.103835](https://doi.org/10.1016/j.xpro.2025.103835).
+  A step-by-step protocol covering the same end-to-end workflow Alakazam is
+  built around: designing an ERP task, recording and preprocessing the EEG
+  (MATLAB, EEGLAB/FieldTrip), and exporting ERP measures for statistical
+  analysis.
 - Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J.
   (2021). ERP CORE: An open resource for human event-related potential
   research. *NeuroImage*, 225, 117465. DOI:
@@ -1048,6 +1068,14 @@ Scientific/methodological:
   The N400 experiment (and nine others) the [worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
   above is drawn from; data via
   [doi.org/10.18115/D5JW4R](https://doi.org/10.18115/D5JW4R).
+- Kappenman, E. S., & Luck, S. J. (2016). Best practices for event-related
+  potential research in clinical populations. *Biological Psychiatry:
+  Cognitive Neuroscience and Neuroimaging*, 1(2), 110-115. DOI:
+  [10.1016/j.bpsc.2015.11.007](https://doi.org/10.1016/j.bpsc.2015.11.007).
+  The methodological considerations (component isolation, artefact rates,
+  measurement choice, construct validity across groups) behind
+  [Groups](#groups-setting-up-a-between-subjects-or-mixed-design)' own
+  patients-vs-controls framing above.
 - Kutas, M., & Hillyard, S. A. (1980). Reading senseless sentences: Brain
   potentials reflect semantic incongruity. *Science*, 207(4427), 203-205.
   DOI: [10.1126/science.7350657](https://doi.org/10.1126/science.7350657).
@@ -1061,6 +1089,13 @@ Scientific/methodological:
   BINLISTER), `Average`'s contrast-bin handling, and `GrandAverage`'s
   weighted grand-average option; not a runtime dependency, ERPLAB itself is
   not called.
+- Luck, S. J. Order of processing steps (excerpted from *An Introduction to
+  the Event-Related Potential Technique*, 2nd ed., 2014).
+  [erpinfo.org/order-of-steps](https://erpinfo.org/order-of-steps). The
+  linear-vs-nonlinear-operations rationale behind the fixed step order
+  (denoise/correct, then epoch and baseline, then reject, then average)
+  every worked pipeline in this README, and `N400.alztemplate` itself,
+  follows.
 - Toffanin, P., de Jong, R., Johnson, A., & Martens, S. (2009). Using frequency
   tagging to quantify attentional deployment in a visual divided attention
   task. *International Journal of Psychophysiology*, 72(3), 289-298. DOI:
