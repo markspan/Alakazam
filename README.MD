@@ -326,6 +326,13 @@ renders a companion statistical report, see
 
 ![ScreenshotTF](Screenshots/TimeFrequency.jpg)
 
+![ScreenshotB3D](Screenshots/Brain3d.jpg)
+
+![ScreenshotFourier](Screenshots/Fourier.jpg)
+
+![ScreenshotCoh](Screenshots/Coherence.jpg)
+
+
 <details>
 <summary><strong>Statistical analysis</strong> (click to expand)</summary>
 
