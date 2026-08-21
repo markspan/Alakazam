@@ -1,0 +1,26 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Sharp fronto-central negativity peaking within roughly 0 to 100 ms after an erroneous response, maximal at FCz/Cz. Followed by the error positivity (Pe) around 200 to 400 ms.",
+    "meaning": "Reflects rapid performance monitoring and error detection by medial frontal cortex (anterior cingulate). It is automatic and can arise before the error is consciously recognised; linked to conflict monitoring and reinforcement-learning prediction error.",
+    "task": "Speeded choice tasks that induce errors (flanker, Stroop, Go/NoGo), scored on error trials, often as an error-minus-correct difference.",
+    "note": "Assumes response-locked averages of error trials (time 0 = the response), so the window sits just after the response. Measured here against a pre-response baseline (-400 to -200 ms), the usual ERN convention; a sharper peak (negative) measure at FCz is a common alternative."
+  },
+  "rows": [
+    {
+      "label": "ERN",
+      "start": 0,
+      "stop": 100,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 0,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "areaMode": "Signed",
+      "baseline": "-400 -200",
+      "refChannel": "",
+      "channels": "FCz"
+    }
+  ]
+}

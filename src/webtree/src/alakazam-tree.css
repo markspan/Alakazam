@@ -1,0 +1,66 @@
+.alz-icon { display: inline-flex; align-items: center; margin-right: 4px; vertical-align: middle; }
+.alz-icon-img { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; display: block; }
+
+/* Tree rows: modern flat look, replacing yy-tree's own boxy/grey defaults
+   (fixed-100px-width name boxes, barely-distinguishable selection shade --
+   see alakazam-tree.js's TREE_STYLES header comment). Selection
+   highlighting is our own alz-row-selected class on the whole row
+   (leaf.content), not yy-tree's own -select class (name span only, left
+   inert via TREE_STYLES.selectStyles) -- see _applySelectionHighlight. */
+.yy-tree-leaf { margin-top: 1px; }
+.yy-tree-content { transition: background-color 0.1s ease; }
+.yy-tree-content:hover:not(.alz-row-selected) { background: #eaf0fb; }
+.alz-row-selected { background: #4a7fc9; }
+.alz-row-selected .yy-tree-name { color: #fff; }
+.yy-tree-name { color: #222; }
+
+.alz-menu {
+    position: absolute; z-index: 1000; background: #fff; border: 1px solid #999;
+    border-radius: 4px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3); font: 12px sans-serif;
+    min-width: 140px; padding: 2px 0;
+}
+.alz-menu-item { padding: 4px 12px; cursor: pointer; white-space: nowrap; }
+.alz-menu-item:hover { background: #eaf0fb; }
+.alz-menu-item-disabled { color: #999; cursor: default; }
+.alz-menu-item-disabled:hover { background: none; }
+.alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }
+
+/* While a branch is being dragged, show a "copy"/apply cursor everywhere,
+   not the native browser "move" cursor -- a drop never moves the node, it
+   always applies its transformations to the dropped-on dataset (see
+   alakazam-tree.js's file header comment). Applied to <html> (not just the
+   dragged element) because yy-tree's Input._pickup() reparents the dragged
+   row to document.body and positions it under the pointer, so the pointer
+   is constantly over other rows/whitespace, not just the dragged node
+   itself; !important is needed to beat TREE_STYLES' own inline
+   cursor:pointer on .yy-tree-name/.yy-tree-content. */
+html.alz-dragging, html.alz-dragging * { cursor: copy !important; }
+
+/* While MATLAB is off computing the result of a drop (evaluateDroppedBranch
+   can run a real transformation, so this can take a moment), swap to the
+   OS-native busy cursor -- on this app's target platform (Windows), the
+   browser's cursor:wait keyword renders as Windows' own animated "busy"
+   ring/hourglass, so no custom animated-cursor image asset is needed (a
+   CSS cursor:url() pointing at an animated GIF/cursor resource generally
+   does not animate across browsers, unlike the native OS cursor). Cleared
+   by bridge.js's applyData the moment MATLAB pushes fresh tree state back;
+   WorkSpaceTree.notifyDropHandled (called via onCleanup from
+   Alakazam.onNodeDropped) guarantees that push happens for every drop
+   outcome -- a real transformation, an ignored drop, or an error -- so
+   this can never get stuck on. */
+html.alz-busy, html.alz-busy * { cursor: wait !important; }
+
+/* The node currently under the drag -- i.e. whichever dataset would
+   actually receive the dropped branch's transformations if released right
+   now (see alakazam-tree.js's _onDragPointerMove). A dashed outline (not
+   just a background tint) so it stays visible layered over both the hover
+   tint and the solid-blue alz-row-selected background. */
+.alz-drop-target { outline: 2px dashed #4a7fc9; outline-offset: -2px; background: rgba(74, 127, 201, 0.18); }
+
+/* Reserves the dragged row's vertical space so the rest of the tree stays put
+   while a node is being dragged (see alakazam-tree.js's _pickup wrap): without
+   it, yy-tree floating the row out to document.body collapses its slot and
+   shifts every row below, moving the drop target the user is aiming at. An
+   inert spacer -- not a .yy-tree-leaf, so yy-tree's own leaf traversal
+   (_getChildren) ignores it; its height is set inline to the dragged row's. */
+.alz-drag-placeholder { pointer-events: none; }

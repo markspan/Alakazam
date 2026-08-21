@@ -1,0 +1,10 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+let infrequent = {"11" "22" "33" "44" "55"}
+let frequent = "??" not infrequent
+bin 1 "infrequent"  infrequent and next("201") within (200,1201] ms
+bin 2 "Unrelated"   frequent   and next("201") within (200,1201] ms
+bin 3 "Effect"     = bin 1 - bin 2

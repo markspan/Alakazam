@@ -1,0 +1,1 @@
+{"Name":"ERP Measure","Description":"Quantify ERP components (mean/peak amplitude, peak latency, area, fractional latency) in named time windows","Entry":"Measure.m","Icon":"Measure.png","Section":"4. Frequency and Component Analysis","Category":"ERP"}

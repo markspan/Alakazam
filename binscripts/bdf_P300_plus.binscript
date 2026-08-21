@@ -1,0 +1,21 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+let rare = {11,22,33,44,55}
+let frequent = "??" not rare
+%
+let correct = next(201) within [200,1000] ms
+%
+% Exactly two events back = the immediately preceding trial's stimulus
+% (stim, resp, stim, resp, ...), regardless of RT/ITI jitter.
+
+let precededByRare     = prev(rare)     within [-2,-1] events
+let precededByFrequent = prev(frequent) within [-2,-1] events
+%
+% The immediately preceding trial's own response, likewise unaffected by
+% jitter -- one event back from the current stimulus.
+let precededCorrect = prev(201) within [-1,-1] events
+%
+bin 1 "rare (c), preceded by rare (c)"     rare and correct and precededByRare and precededCorrect
+bin 2 "rare (c), preceded by frequent (c)" rare and correct and precededByFrequent and precededCorrect
+bin 3 "frequent (c), preceded by rare (c)"     frequent and correct and precededByRare and precededCorrect
+bin 4 "frequent (c), preceded by frequent (c)" frequent and correct and precededByFrequent and precededCorrect

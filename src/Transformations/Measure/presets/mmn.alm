@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Fronto-central negativity around 150 to 250 ms (measured here at Fz), isolated as the deviant-minus-standard difference wave; its polarity inverts at the mastoids.",
+    "meaning": "A pre-attentive, automatic index of auditory deviance detection and echoic sensory memory, often framed as a prediction-error signal. It arises without attention to the sounds.",
+    "task": "Auditory oddball paradigms, typically passive (attention directed away from the tones), including roving-standard designs; a marker of auditory discrimination."
+  },
+  "rows": [
+    {
+      "label": "MMN",
+      "start": 150,
+      "stop": 250,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Fz"
+    }
+  ]
+}

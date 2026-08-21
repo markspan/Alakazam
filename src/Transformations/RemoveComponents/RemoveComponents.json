@@ -1,0 +1,1 @@
+{"Name":"ICA","Description":"Manually subtract ICA components chosen by hand","Entry":"RemoveComponents.m","Icon":"RemoveComponents.png","Section":"2. Artifact Rejection / Reduction","Category":"EOG"}

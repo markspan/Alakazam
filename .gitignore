@@ -1,11 +1,41 @@
+# ── OS / editor cruft ────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.asv
+*.m~
+
+# ── MATLAB generated ─────────────────────────────────────────────────
+*.mex*
+slprj/
+codegen/
+
+# ── Data, cache and exports (never committed) ────────────────────────
+# These live outside version control; see dependencies.md.
+Data/
 *.mat
 *.csv
-*.asv
-*.Rhistory
-*.BLE
-Data/Data
-+uiextras/+jTree/Tree2.m
-ga.txt
 *.erp
 *.i
-Data
+*.Rhistory
+*.BLE
+ga.txt
+
+# ── Vendored toolkits (kept locally, obtained externally) ────────────
+# The app expects these on the MATLAB path at runtime. They are NOT
+# tracked here; see dependencies.md for versions and sources.
+/eeglab/
+/eeglab2024.2/
+/eeglabolder/
+
+# ── Stray working folders ────────────────────────────────────────────
+/dummy/
++uiextras/+jTree/Tree2.m
+
+# ── src/webtree/ (WorkSpaceTree.m's JS build tooling) ─────────────────
+# The build OUTPUT is vendored at src/WorkSpaceTree.html; node_modules and
+# the intermediate (pre-inlining) bundle are not committed. See
+# src/webtree/README.md to rebuild.
+src/webtree/node_modules/
+src/webtree/dist/

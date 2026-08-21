@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Early positive deflection peaking around 80 to 130 ms, maximal over lateral occipital and occipitotemporal scalp (measured here at Oz). The first major exogenous visual component after stimulus onset.",
+    "meaning": "Indexes early visual sensory and perceptual processing in extrastriate cortex. Amplitude is enhanced by spatial attention (sensory gain control) and grows with stimulus luminance and contrast.",
+    "task": "Visual paradigms: spatial attention cueing (for example Posner), visual detection and discrimination, and passive viewing of visual stimuli."
+  },
+  "rows": [
+    {
+      "label": "P1",
+      "start": 80,
+      "stop": 130,
+      "measure": "Peak",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 2,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Oz"
+    }
+  ]
+}

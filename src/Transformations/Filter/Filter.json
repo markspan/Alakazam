@@ -1,0 +1,1 @@
+{"Name":"Filter","Description":"FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering (EEGLAB firfilt); each set by a frequency and a dB rating","Entry":"Filter.m","Icon":"Filter.png","Section":"1. Preprocessing","Category":"EEG"}

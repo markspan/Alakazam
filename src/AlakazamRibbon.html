@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: sans-serif; font-size: 12px; }
+#ribbon { width: 100%; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+
+.alz-tabstrip { display: flex; border-bottom: 1px solid #999; background: #f0f0f0; flex: none; }
+.alz-tab {
+    padding: 9px 4px; cursor: pointer;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+/* Per-tab shades of blue; keyed off the tab's own id (see alzRender) --
+   .alz-active always wins regardless of shade, since it matches on two
+   classes (higher specificity) rather than one. Tools/Grand Average now
+   match the tree's own 'raw'/'grandAverage' icon colours exactly (see
+   src/webtree/src/alakazam-tree.js's ICONS map and migration.md) --
+   Grand Average deliberately the darker of the two (it was the lighter
+   shade before, which read backwards next to Tools). */
+.alz-tab-home { background: #4a7fc9; }
+.alz-tab-tools { background: #6fa8dc; }
+.alz-tab-grandAverage { background: #2e5c8a; }
+.alz-tab-measurements { background: #3f6fa8; }
+.alz-tab:hover { filter: brightness(1.12); }
+/* #f5f5f5 matches uifigure's default Color (the window background, see
+   Alakazam.setupMainWindow) so the selected tab blends into the window
+   instead of standing out white. */
+.alz-tab.alz-active { background: #f5f5f5; color: #333; font-weight: bold; border-bottom: 2px solid #4472c4; }
+
+.alz-content { flex: 1; overflow-x: auto; overflow-y: auto; display: flex; align-items: flex-start; padding: 3px; box-sizing: border-box; }
+.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 320px; }
+.alz-group-items { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
+/* padding-left/right (not just padding-top) matters here specifically because a
+   group's own width (.alz-group, flex-direction: column, children stretched to
+   its own width) is max(its icon row's natural width, this title's natural
+   width) -- so when the LABEL is the wider of the two, its text otherwise sits
+   flush against the group's own edges with no breathing room. Symmetric since
+   the text itself is centered. */
+.alz-group-title { text-align: center; font-size: 11px; color: #fff; background: #2e5c8a; border-top: 1px solid #ddd; padding: 2px 6px 0 6px; margin-top: 2px; }
+
+.alz-item {
+    width: 62px; height: 60px; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    cursor: pointer; border: 1px solid transparent; border-radius: 3px; padding: 2px; text-align: center;
+}
+.alz-item:hover { background: #e0e0ff; border-color: #99a; }
+.alz-item img { width: 32px; height: 32px; margin-bottom: 1px; }
+/* Up to 2 lines before truncating with an ellipsis (rather than 1, which cut
+   longer labels like "ERP & Report"/"Spectral & Report" off abruptly): the
+   line-clamp box model is the standard way to combine wrapping with a hard
+   cap, matched by .alz-item's own +10px height increase above so a 2-line
+   label has room to actually show both lines instead of being clipped by
+   the item's own bounding box. */
+.alz-item-label {
+    font-size: 10px; line-height: 1.1;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Collapsible group: a category with more than one full-size row of transforms
+   always shows just its first row, plus an expander bar directly below the
+   icons. Clicking the bar no longer unfolds the group in place (that used to
+   require MATLAB growing the whole ribbon row to fit -- see
+   AlakazamRibbon.m's class doc) -- it now opens a floating popup positioned
+   by MATLAB right under this group, over the plots area, so the row here
+   stays a constant, capped height regardless of expand state. */
+.alz-group.collapsible .alz-group-items { max-height: 62px; overflow: hidden; }
+/* The title bar of a collapsible group doubles as its popup-open control, so
+   it is exactly as tall as any other group's title (ribbon height is constant). */
+.alz-group-title.expandable { cursor: pointer; user-select: none; }
+.alz-group-title.expandable:hover { filter: brightness(1.18); }
+.alz-group-title.expandable.alz-popup-open { filter: brightness(1.18); }
+</style>
+</head>
+<body>
+<div id="ribbon">
+    <div class="alz-tabstrip" id="alzTabStrip"></div>
+    <div class="alz-content" id="alzContent"></div>
+</div>
+<script>
+// AlakazamRibbon.html -- self-contained uihtml page for the Alakazam control
+// strip (Home / Tools / Grand Average). Hand-written directly (no build
+// step, unlike WorkSpaceTree.html/webtree/): a ribbon is plain HTML/CSS
+// flexbox and vanilla JS event handling, with no third-party JS library
+// needed the way yy-tree was for the tree's drag-and-drop.
+//
+// Data shape from MATLAB (htmlComponent.Data), see AlakazamRibbon.m:
+//   { tabs: [ { id, title, groups: [ { title, items: [
+//         {id, label, tooltip, icon: 'data:image/png;base64,...'}, ...
+//     ] }, ... ] }, ... ],
+//     activeTab: <id> }
+// Events sent to MATLAB (htmlComponent.sendEventToMATLAB(name, payload)):
+//   itemPushed    {id}
+//   tabChanged    {id}
+//   groupExpand   {tabId, groupIndex, left, top, width, height} -- see
+//                 alzWireTitleExpander; MATLAB positions its own floating
+//                 popup component from this rect, this page never grows.
+//   groupCollapse {}
+
+var alzData = null;
+var alzActiveTab = null;
+var alzComponent = null;
+var alzOpenGroupTitleEl = null;   // the .alz-group-title currently showing 'popup open' styling, or null
+
+function alzRender(data) {
+    alzData = data || { tabs: [] };
+    alzActiveTab = alzData.activeTab || (alzData.tabs[0] && alzData.tabs[0].id);
+
+    var tabStrip = document.getElementById('alzTabStrip');
+    tabStrip.innerHTML = '';
+    alzData.tabs.forEach(function (tab) {
+        var el = document.createElement('div');
+        el.className = 'alz-tab alz-tab-' + tab.id + (tab.id === alzActiveTab ? ' alz-active' : '');
+        el.textContent = tab.title;
+        el.addEventListener('click', function () {
+            // Mutate alzData.activeTab (not just the alzActiveTab local),
+            // since alzRender() re-derives alzActiveTab from
+            // alzData.activeTab on every call -- setting only the local
+            // here got immediately clobbered back to the original tab by
+            // that re-derivation, so clicking Tools/Grand Average always
+            // snapped straight back to Home.
+            alzClosePopup();   // switching tabs closes any open group popup
+            alzData.activeTab = tab.id;
+            alzRender(alzData);
+            alzSendEvent('tabChanged', { id: tab.id });
+        });
+        tabStrip.appendChild(el);
+    });
+
+    alzRenderContent();
+}
+
+function alzRenderContent() {
+    var content = document.getElementById('alzContent');
+    content.innerHTML = '';
+    alzOpenGroupTitleEl = null;   // old DOM discarded below, so any 'popup open' styling goes with it
+    var tab = (alzData.tabs || []).find(function (t) { return t.id === alzActiveTab; });
+    if (!tab) { return; }
+
+    (tab.groups || []).forEach(function (group, groupIndex) {
+        var groupEl = document.createElement('div');
+        groupEl.className = 'alz-group';
+        var items = group.items || [];
+
+        var itemsEl = document.createElement('div');
+        itemsEl.className = 'alz-group-items';
+        items.forEach(function (item) {
+            itemsEl.appendChild(alzBuildItem(item));
+        });
+        groupEl.appendChild(itemsEl);
+
+        // More than one full-size row of transforms -> cap to the first row;
+        // the group's own title bar (just below the icons) doubles as the
+        // control that opens the rest in a floating popup (see
+        // alzWireTitleExpander), so every group keeps the same height
+        // whether or not it has overflow (see the .collapsible CSS).
+        var titleEl = document.createElement('div');
+        titleEl.className = 'alz-group-title';
+        if (items.length > ALZ_PER_ROW) {
+            groupEl.classList.add('collapsible');
+            titleEl.classList.add('expandable');
+            alzWireTitleExpander(groupEl, titleEl, group.title, groupIndex, items.length - ALZ_PER_ROW);
+        } else {
+            titleEl.textContent = group.title;
+        }
+        groupEl.appendChild(titleEl);
+
+        content.appendChild(groupEl);
+    });
+}
+
+// Full-size icons that fit in one row at the group's max width (see the
+// .alz-group max-width and .alz-item width in the CSS above).
+var ALZ_PER_ROW = 6;
+
+function alzClosePopup() {
+    // Ask MATLAB to close its floating popup, if one is open, and reset this
+    // page's own 'popup open' title styling. Safe to call unconditionally.
+    if (alzOpenGroupTitleEl) {
+        alzOpenGroupTitleEl.classList.remove('alz-popup-open');
+        alzOpenGroupTitleEl = null;
+        alzSendEvent('groupCollapse', {});
+    }
+}
+
+function alzWireTitleExpander(groupEl, titleEl, title, groupIndex, hiddenCount) {
+    // The title bar doubles as the popup-open control for a collapsible
+    // group. Clicking it reports this group's own on-page rect to MATLAB,
+    // which positions and reveals a floating popup directly under it (see
+    // AlakazamRibbon.m's showPopup) -- nothing on this page resizes.
+    // Clicking the already-open group's title again just closes it.
+    titleEl.textContent = title + '  ▾ ' + hiddenCount + ' more';
+    titleEl.title = 'Show all tools';
+    titleEl.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (alzOpenGroupTitleEl === titleEl) {
+            alzClosePopup();
+            return;
+        }
+        alzClosePopup();   // close whichever other group's popup was open, if any
+        var rect = groupEl.getBoundingClientRect();
+        alzOpenGroupTitleEl = titleEl;
+        titleEl.classList.add('alz-popup-open');
+        alzSendEvent('groupExpand', {
+            tabId: alzActiveTab, groupIndex: groupIndex,
+            left: rect.left, top: rect.top, width: rect.width, height: rect.height
+        });
+    });
+}
+
+function alzBuildItem(item) {
+    var itemEl = document.createElement('div');
+    itemEl.className = 'alz-item';
+    itemEl.title = item.tooltip || '';
+
+    if (item.icon) {
+        var img = document.createElement('img');
+        img.src = item.icon;
+        itemEl.appendChild(img);
+    }
+
+    var label = document.createElement('div');
+    label.className = 'alz-item-label';
+    label.textContent = item.label;
+    itemEl.appendChild(label);
+
+    itemEl.addEventListener('click', function () {
+        alzClosePopup();   // a choice was made on the main row: close any open group popup too
+        alzSendEvent('itemPushed', { id: item.id });
+    });
+    return itemEl;
+}
+
+function alzSendEvent(name, payload) {
+    if (alzComponent) {
+        alzComponent.sendEventToMATLAB(name, payload);
+    }
+}
+
+function setup(htmlComponent) {
+    alzComponent = htmlComponent;
+    alzRender(htmlComponent.Data);
+    htmlComponent.addEventListener('DataChanged', function () {
+        alzRender(htmlComponent.Data);
+    });
+}
+</script>
+</body>
+</html>

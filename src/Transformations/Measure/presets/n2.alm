@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Fronto-central negativity around 200 to 350 ms (measured here at FCz). A family of subcomponents (N2a/MMN, N2b, N2c, and the posterior N2pc).",
+    "meaning": "Linked to cognitive control: conflict monitoring, response inhibition, and the detection of novelty or mismatch. The posterior N2pc indexes the spatial selection of a target.",
+    "task": "Go/NoGo, flanker and Stroop conflict tasks, visual search (N2pc), and oddball paradigms."
+  },
+  "rows": [
+    {
+      "label": "N2",
+      "start": 200,
+      "stop": 350,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "FCz"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Positive deflection around 150 to 250 ms with a fronto-central maximum (measured here at Cz), forming the second half of the N1 to P2 complex.",
+    "meaning": "Associated with early stimulus classification and feature detection, perceptual salience, and the allocation of attention to target features.",
+    "task": "Target and feature detection, feature-based attention, and stimulus repetition or priming."
+  },
+  "rows": [
+    {
+      "label": "P2",
+      "start": 150,
+      "stop": 250,
+      "measure": "Mean Amplitude",
+      "polarity": "Positive",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "Cz"
+    }
+  ]
+}
