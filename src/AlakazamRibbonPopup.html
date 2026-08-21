@@ -34,13 +34,19 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 /* Matches AlakazamRibbon.html's .alz-item exactly, so an item looks
    identical whether it's showing in the main row or in this popup. */
 .pop-item {
-    width: 62px; height: 50px; box-sizing: border-box;
+    width: 62px; height: 60px; box-sizing: border-box;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
     cursor: pointer; border: 1px solid transparent; border-radius: 3px; padding: 2px; text-align: center;
 }
 .pop-item:hover { background: #e0e0ff; border-color: #99a; }
 .pop-item img { width: 32px; height: 32px; margin-bottom: 1px; }
-.pop-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+/* Matches AlakazamRibbon.html's own .alz-item-label 2-line clamp exactly --
+   see its comment for why. */
+.pop-item-label {
+    font-size: 10px; line-height: 1.1;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 </style>
 </head>
 <body>

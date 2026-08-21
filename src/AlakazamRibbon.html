@@ -42,13 +42,23 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-group-title { text-align: center; font-size: 11px; color: #fff; background: #2e5c8a; border-top: 1px solid #ddd; padding: 2px 6px 0 6px; margin-top: 2px; }
 
 .alz-item {
-    width: 62px; height: 50px; box-sizing: border-box;
+    width: 62px; height: 60px; box-sizing: border-box;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
     cursor: pointer; border: 1px solid transparent; border-radius: 3px; padding: 2px; text-align: center;
 }
 .alz-item:hover { background: #e0e0ff; border-color: #99a; }
 .alz-item img { width: 32px; height: 32px; margin-bottom: 1px; }
-.alz-item-label { font-size: 10px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+/* Up to 2 lines before truncating with an ellipsis (rather than 1, which cut
+   longer labels like "ERP & Report"/"Spectral & Report" off abruptly): the
+   line-clamp box model is the standard way to combine wrapping with a hard
+   cap, matched by .alz-item's own +10px height increase above so a 2-line
+   label has room to actually show both lines instead of being clipped by
+   the item's own bounding box. */
+.alz-item-label {
+    font-size: 10px; line-height: 1.1;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 
 /* Collapsible group: a category with more than one full-size row of transforms
    always shows just its first row, plus an expander bar directly below the
@@ -57,7 +67,7 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
    AlakazamRibbon.m's class doc) -- it now opens a floating popup positioned
    by MATLAB right under this group, over the plots area, so the row here
    stays a constant, capped height regardless of expand state. */
-.alz-group.collapsible .alz-group-items { max-height: 52px; overflow: hidden; }
+.alz-group.collapsible .alz-group-items { max-height: 62px; overflow: hidden; }
 /* The title bar of a collapsible group doubles as its popup-open control, so
    it is exactly as tall as any other group's title (ribbon height is constant). */
 .alz-group-title.expandable { cursor: pointer; user-select: none; }

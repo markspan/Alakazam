@@ -14,6 +14,8 @@ function onRibbonAction(this, id)
             this.Workspace.editSubjects();
         case 'clearWorkspace'
             this.Workspace.rawclear();
+        case 'clearOtherAnalyses'
+            this.onClearOtherAnalyses();
         case 'settings'
             this.openSettings();
         case 'defineGrandAverage'

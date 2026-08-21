@@ -701,39 +701,113 @@ the N400 at CPz (where it is typically largest) over roughly 200-600 ms;
 the template below measures a slightly narrower, nearby window (Cz, 300-500
 ms) as its own choice, not a reproduction of the book's exact numbers.
 
-**The bins.** `N400.alztemplate`'s `DefineBins` step imports the
-experiment's own bin descriptor (`BDF_N400.txt`, in ERPLAB's original BDF
-format, one condition per event-code set):
+**Building the template.** `N400.alztemplate` is six ordinary transformations
+chained together, in the order you would run them by hand the first time;
+saving that chain as a template (**Save Template...**) is what turns "the
+steps I just ran on subject 1" into "the recipe every subject gets". Built
+fresh from an imported raw recording, Home tab, each step's own options
+dialog would ask for:
 
-```
-bin 1 "Prime word, related to subsequent target word"     : 111|112
-bin 2 "Prime word, unrelated to subsequent target word"    : 121|122
-bin 3 "Target word, related to previous prime, followed
-        by correct response"   : 211|212 and next(201) within [200,1500] ms
-bin 4 "Target word, unrelated to previous prime, followed
-        by correct response"   : 221|222 and next(201) within [200,1500] ms
-bin 5 "N400" = bin 4 - bin 3
-```
+1. **AutoGEDAI** (denoise). Its dialog has three groups of options:
+   *Denoising* -- **Strength** (`auto`/`auto+`/`auto-`, this template leaves
+   it at `auto`: GEDAI's own SENSAI signal/artefact-subspace thresholding
+   decides how aggressively to separate brain signal from noise, rather than
+   a fixed cutoff), a **Leadfield matrix** (`precomputed`, matching channels
+   to GEDAI's own bundled 10-5 template by label alone -- `interpolated`
+   would additionally need real 3-D electrode positions, not necessary
+   here), and a **Low-cut frequency** of `0.4` Hz (GEDAI's own high-pass,
+   separate from running a general-purpose `Filter` step first). *Bad epoch/
+   channel rejection* -- both left off (`no`) here: ArtefactDetect, three
+   steps later, is where this template does its rejection, explicitly and
+   visibly, rather than silently inside the denoiser. *Performance* --
+   **Use parallel processing**, left at `no` (only meaningful with a GPU
+   present anyway). GEDAI is a separate, non-commercially-licensed EEGLAB
+   plugin (Ros et al., 2025); the first run on a machine without it prompts
+   to download it, with consent, before anything else happens.
+2. **DefineBins** (epoch and label the trials). Two fields: an **epoch**
+   window, `-200` to `800` ms around each matched event (so every trial's
+   epoch spans 200 ms of pre-stimulus baseline material through 800 ms
+   post-stimulus), and the bin **script** itself -- imported here from the
+   experiment's own bin descriptor (`BDF_N400.txt`, ERPLAB's original BDF
+   format, one condition per event-code set) rather than typed by hand:
+   ```
+   bin 1 "Prime word, related to subsequent target word"     : 111|112
+   bin 2 "Prime word, unrelated to subsequent target word"    : 121|122
+   bin 3 "Target word, related to previous prime, followed
+           by correct response"   : 211|212 and next(201) within [200,1500] ms
+   bin 4 "Target word, unrelated to previous prime, followed
+           by correct response"   : 221|222 and next(201) within [200,1500] ms
+   bin 5 "N400" = bin 4 - bin 3
+   ```
+   Bins 1-2 are the prime words themselves (marker sets `111|112`/`121|122`),
+   split by whether the *target* that follows them will be related or
+   unrelated. Bins 3-4 are those target words, each additionally requiring
+   `next(201) within [200,1500] ms` -- the [bin
+   language](#how-to-walkthroughs)'s relation syntax for "a `201` (correct-
+   response) marker follows within 200 to 1500 ms" -- so a missed or
+   implausibly fast trial is excluded from the scored data rather than
+   silently averaged in. `bin 5` is a **combination bin**
+   (`bin 4 - bin 3`, no marker of its own): the classic N400 contrast,
+   unrelated minus related targets, built once here so every later step
+   (Average, Measure, the statistics report) can treat it exactly like any
+   other condition.
+3. **Baseline** (pre-stimulus correction). Two fields, **Start**/**Stop** in
+   ms: `-100` to `-10`. Every channel's own mean over that interval, in
+   every trial, is subtracted from the whole epoch -- the ordinary ERP
+   baseline correction, done once here on single-trial data (distinct from
+   `Measure`'s own *optional*, later, per-window baseline -- see step 6).
+4. **ArtefactDetect** (reject bad trials). The dialog actually offers four
+   detectors (Absolute threshold, Step function, Moving-window peak-to-peak,
+   Sample-to-sample -- ERPLAB's own set), any combination of them, and a
+   choice of rejecting the whole epoch or just the offending channel when
+   one trips. This template uses the simplest: **Absolute threshold**,
+   **Minimum**/**Maximum** = `-100`/`100` µV, whole-epoch scope -- any
+   single sample outside &plusmn;100 µV, on any channel, rejects that
+   trial's epoch entirely (the rejected data is set to `NaN`, which
+   `Average` omits rather than treating as a real zero).
+5. **Average**. No options beyond acknowledging the input (`Param: Init`
+   here is just that acknowledgement, not a real setting): it produces one
+   ERP per bin, over the trials that survived step 4, automatically
+   including bin 5's own difference wave (computed from bins 3 and 4's
+   *already-averaged* waveforms, not their raw trials -- see
+   [Average](#transformations) above) once both of those have resolved.
+6. **Measure** (turn the waveform into numbers). This is the step that
+   decides what actually gets exported and tested, so it is worth knowing
+   the full shape of what it can ask for, not just what this one template
+   happens to use. Each row of its window table names a **measure type**:
+   **Mean Amplitude** (the average of the waveform over the window -- the
+   default recommendation for most component analyses: unbiased by noise or
+   window length, unlike a raw peak), **Peak** (the single most extreme
+   sample's amplitude *and* latency, by **Polarity**), **Area** (a
+   trapezoidal integral, `Signed`/`Rectified`/`Positive`/`Negative`, either
+   over the whole window or a peak-locked band `Width` ms wide), and the two
+   robust timing measures, **Fractional Peak Latency** and **Fractional
+   Area Latency** (the time reaching a chosen **Fraction**, e.g. `0.5`, of
+   the peak or of the window's cumulative area -- the latter is the
+   recommended onset/timing measure over raw peak latency). A **Local pts**
+   setting (0 = the absolute extreme; N &ge; 1 = the most extreme *local*
+   peak) guards the peak-based measures against a window-edge sample or a
+   lone noise spike; an optional **Reference channel** locks Peak/band-Area
+   latency to one channel so every other listed channel shares it instead of
+   each drifting to its own local peak; **Channels** accepts several labels,
+   blank for "every channel", and `{A B C}` to pool a region of interest
+   into one NaN-tolerant mean; and every row can carry its own optional
+   **Baseline (ms)** interval, independent of step 3's whole-epoch one.
 
-Bins 3 and 4 both require a correct-response marker (`201`) within 200 to
-1500 ms of the target, excluding misses and implausibly fast guesses; `bin
-5` is the classic N400 contrast itself, unrelated minus related targets.
-
-**The template, step by step** (Home tab, **Grouping** is not needed here --
-this walkthrough has no between-subjects groups, see
-[Statistical analysis](#statistical-analysis)):
-
-1. **AutoGEDAI** denoises the continuous recording (GEDAI, generalized
-   eigenvalue decomposition against a leadfield reference), auto strength,
-   a 0.4 Hz high-pass, no automatic epoch/channel rejection at this stage.
-2. **DefineBins** applies the five bins above and epochs -200 to 800 ms
-   around each event.
-3. **Baseline** corrects to -100 to -10 ms pre-stimulus.
-4. **ArtefactDetect** flags epochs exceeding &plusmn;100 µV.
-5. **Average** produces one ERP per bin, including the `bin 4 - bin 3`
-   contrast wave.
-6. **Measure** quantifies mean amplitude, 300-500 ms, channel Cz, labelled
-   window `N400`.
+   This template defines exactly **one** window: Label `N400`, Start/Stop
+   `300`/`500` ms, Measure `Mean Amplitude`, Polarity `Negative`, Channels
+   `Cz` -- Width/Local pts/Fraction/Area mode/Baseline/Reference channel are
+   all left blank, since none of them apply to Mean Amplitude (the dialog
+   greys them out for exactly that reason; Polarity specifically is stored
+   on the row but, per Mean Amplitude's own definition, plays no part in the
+   computed number -- it is carried over here from where this window
+   started, the `n400` single-component preset in
+   [`measure.md`](src/Transformations/Measure/measure.md)'s own preset
+   library, which records the component's usual negative-going direction as
+   documentation even though this particular measure ignores it). Every
+   bin gets this same 300-500 ms Cz mean, uniformly, including
+   the `N400` combination bin from step 2 -- there is no separate "which
+   bins to measure" setting.
 
 Import each participant's raw recording, apply the template once (drag it
 onto the first imported dataset, or right-click -> **Apply Template...**),
@@ -744,18 +818,22 @@ onto each of the ten root nodes by hand. **Grand Average** across all ten,
 then the **Export/Report** tab's **ERP & Report** button writes the CSV and
 renders the companion Quarto report.
 
-**What actually got tested.** This particular `Measure` step defines one
-window (`N400`, Cz, 300-500 ms), applied to whichever bins the averaged
-dataset actually resolved a waveform for; in this run that produced a
-mean-amplitude value for each of the four *ordinary* bins for all ten
-subjects, but not for the `bin 5` contrast wave itself, so this report's own
-evidence for the N400 comes from the omnibus comparison across the four
-ordinary conditions below, not a separate one-sample-vs-zero test on the
-difference wave (adding a second `Measure` window row that targets the
-`N400` bin directly would additionally produce that framing -- see the
-[design table](#what-gets-tested-and-what-question-it-answers) above,
-"combination/difference bin"). With no groups assigned, this is the
-"three or more ordinary bins, no groups" row: a linear mixed model.
+**What actually got tested.** `Measure` defines one window (`N400`, Cz,
+300-500 ms), applied to every bin the averaged dataset resolved a waveform
+for, including `bin 5` -- so it does measure the `N400` contrast wave, not
+just the four ordinary bins, and `generateQuartoReport` does give it its own
+section testing it against zero (see below), exactly the
+[design table](#what-gets-tested-and-what-question-it-answers)'s
+"combination/difference bin" row -- and, had subjects been assigned to
+groups via **Grouping...**, would instead test it within each group and
+between them, the same row's "groups assigned" variant. (An earlier render
+of this exact export, cached before `bin 5` was added to this template,
+predated the combo bin and only showed the omnibus test below; the numbers
+here are from a fresh run against the current, five-bin template --
+recompute your own via **Recalculate** on the `DefineBins` node if an old
+cache is still missing it.) With no groups assigned, the four ordinary
+bins still get the "three or more ordinary bins, no groups" row: a linear
+mixed model.
 
 Ten of ten subjects contributed a value in every one of the four
 conditions, so a real render of this export produced:
@@ -780,9 +858,18 @@ one condition: Prime,related - Target,related (*p* < .001), Prime,unrelated
 .001) -- every other pair, including Prime,related vs. Prime,unrelated, was
 not significant. A Friedman test on the same 10 complete-data subjects, run
 as a rank-based robustness check, agreed: &chi;<sup>2</sup>(3) = 18.12, *p*
-< .001. The report's own closing summary table lists this as the single
-test the export produced, still significant after Benjamini-Hochberg
-correction.
+< .001.
+
+The `N400` combination bin (`bin 4 - bin 3`, unrelated minus related
+targets) gets its own section, separate from the omnibus test above, tested
+against zero: *M* = -2.79 µV, *SD* = 1.69, *n* = 10, one-sample
+*t*(9) = -5.21, *p* < .001, Cohen's *dz* = -1.65 -- a very large effect, in
+the expected negative-going direction (the rendered report additionally
+backs this with a bootstrapped confidence interval on *dz* and a Bayes
+Factor, both computed at render time by the R packages, not reproduced
+here). The report's own closing summary table lists both of these as the
+two tests the export produced, both still significant after
+Benjamini-Hochberg correction.
 
 **The question this answers, and what the numbers say.** Whether N400 mean
 amplitude at Cz differs across the four conditions -- and it does, with a
@@ -796,7 +883,11 @@ Target, related in this 300-500 ms window, exactly the textbook N400
 pattern (Kappenman et al., 2021; Kutas & Hillyard, 1980) -- a semantically
 unrelated target elicits a larger centro-parietal negativity than a related
 one, while the two prime conditions (which carry no semantic relationship
-to score yet) sit indistinguishably near zero, as expected.
+to score yet) sit indistinguishably near zero, as expected. The `N400`
+combination bin's own vs-zero test is the direct, single-number version of
+the same finding: the priming effect itself (unrelated minus related) is
+reliably below zero across subjects, not just different-looking in an
+omnibus sense.
 
 ## References
 
