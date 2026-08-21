@@ -1,15 +1,7 @@
 function downloadLuckData(fileIds, targetDir)
 %DOWNLOADLUCKDATA  Download and extract the Luck-textbook example data
-%   into Data/Luck. Anonymous: no Google account, no API key, no Google
-%   Cloud project of any kind -- the data is shared as one or more zip
-%   files (see "Preparing the shared files" below), and downloading an
-%   already-known public file has never needed a key at all (Google only
-%   gates the Drive API itself behind a key, for LISTING a folder's
-%   contents -- fetching a file you already have the ID for is a plain
-%   anonymous request, the same one Drive's own "Download" button makes).
-%   Safe: this only ever performs a read-only GET against each file's own
-%   content URL, then extracts it -- it cannot modify or delete anything
-%   on Drive.
+%   into Data/Luck. The data is shared as one or more zip
+%   files.
 %
 %   downloadLuckData() downloads FILEIDS (see below) into
 %   <repo root>/Data/Luck, extracting every zip into the same folder.
@@ -23,30 +15,7 @@ function downloadLuckData(fileIds, targetDir)
 %   re-downloaded); delete the folder first (or pass a different
 %   TARGETDIR) to force a fresh fetch.
 %
-%   Handles Google Drive's "can't scan this file for viruses" warning
-%   page automatically -- served instead of the real content for files
-%   over roughly 100 MB, which each of these zips likely is: a first
-%   attempt that comes back looking like an HTML page rather than real
-%   zip data is retried with the confirmation token that warning page
-%   itself supplies.
-%
 %   ---------------------------------------------------------------------
-%   Preparing the shared files (a one-time step for whoever is
-%   distributing the data; no Google Cloud project, API key, or billing
-%   of any kind is needed):
-%
-%   1. In Drive's own web UI, select the Luck folder's contents and
-%      choose Download -- Drive zips it for you (splitting into several
-%      zip files itself, if the selection is too large for one), using
-%      your own logged-in session, not a script, so no key is needed for
-%      this step either.
-%   2. Upload each .zip file back to Drive.
-%   3. For each one: right-click it -> Share -> "Anyone with the link" ->
-%      Viewer.
-%   4. For each one: right-click it -> Get link. The URL looks like
-%      https://drive.google.com/file/d/THIS_PART/view?usp=sharing --
-%      THIS_PART is the file ID. Put every one of them in FILEIDS below
-%      (or pass them as the first argument).
 %
 %   See also: STARTALAKAZAM.
     if nargin < 1 || isempty(fileIds)
