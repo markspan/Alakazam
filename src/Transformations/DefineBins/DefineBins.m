@@ -508,9 +508,12 @@ function [ctx, order] = buildContext(EEG)
         typ(i) = canonType(ev(i).type);
     end
     [latS, order] = sort(lat);
-    ctx.lat   = latS;
-    ctx.typ   = typ(order);
-    ctx.srate = EEG.srate;
+    ctx.lat    = latS;
+    ctx.typ    = typ(order);
+    ctx.srate  = EEG.srate;
+    % sort() puts NaN-latency events (no timestamp) last; windowRange's
+    % binary search only ever needs the real, ascending-sorted prefix.
+    ctx.nValid = sum(~isnan(latS));
 end
 
 function s = canonType(t)
@@ -619,17 +622,27 @@ function [tf, cap] = evalRel(node, p, ctx)
 
     switch node.quant
         case 'next'
-            for q = p+1:n
+            qHi = n;
+            if ~isempty(iv); [~, qHi] = windowRange(p, ctx, iv); qHi = min(qHi, n); end
+            for q = p+1:qHi
                 if evalNode(matcher, q, ctx); found = q; break; end
             end
         case 'prev'
-            for q = p-1:-1:1
+            qLo = 1;
+            if ~isempty(iv); [qLo, ~] = windowRange(p, ctx, iv); qLo = max(qLo, 1); end
+            for q = p-1:-1:qLo
                 if evalNode(matcher, q, ctx); found = q; break; end
             end
         case 'adjacent'
             if p+1 <= n && evalNode(matcher, p+1, ctx); found = p+1; end
         case 'any'
-            for q = 1:n
+            % 'any' always carries a window (the parser requires it, see
+            % pRelation), so its candidates are always a contiguous slice
+            % of ctx.lat -- pruning to that slice via windowRange is what
+            % keeps any(...) within (...) from re-scanning the whole
+            % recording for every single event it is tested against.
+            [qLo, qHi] = windowRange(p, ctx, iv);
+            for q = max(qLo, 1):min(qHi, n)
                 if q ~= p && evalNode(matcher, q, ctx) ...
                         && inInterval(delta(q, p, ctx, iv), iv)
                     found = q; break;
@@ -646,6 +659,68 @@ function [tf, cap] = evalRel(node, p, ctx)
             cap = ctx.lat(found);
         end
     end
+end
+
+function [qLo, qHi] = windowRange(p, ctx, iv)
+%WINDOWRANGE  The contiguous index range (into ctx.lat's ascending order)
+%   that could possibly satisfy IV relative to event P. next/prev/any all
+%   still re-check every candidate they actually visit with the exact
+%   inInterval test afterwards, so this only needs to be a safe
+%   (inclusive-bound) superset, not exact -- but restricting next/prev/any
+%   to it is what turns a 'within (lo,hi]' window (used by nearly every
+%   real DefineBins script) into a scan bounded by how many events fall in
+%   that window, rather than an unconditional scan of the whole recording
+%   for every one of its own events -- e.g. a "no response" bin (not
+%   next(code) within (0,2000] ms), previously the worst case, used to keep
+%   hunting for a same next(code) match arbitrarily far past the window
+%   before finally giving up on it.
+    if strcmp(iv.unit, 'events')
+        % Ordinal distance, not elapsed time: the range is just an index
+        % offset from p, no latency lookup needed.
+        qLo = p + iv.lo;
+        qHi = p + iv.hi;
+        return;
+    end
+    if strcmp(iv.unit, 'samples')
+        loLat = ctx.lat(p) + iv.lo;
+        hiLat = ctx.lat(p) + iv.hi;
+    else
+        loLat = ctx.lat(p) + iv.lo / 1000 * ctx.srate;
+        hiLat = ctx.lat(p) + iv.hi / 1000 * ctx.srate;
+    end
+    qLo = lowerBoundIdx(ctx.lat, ctx.nValid, loLat);
+    qHi = upperBoundIdx(ctx.lat, ctx.nValid, hiLat);
+end
+
+function idx = lowerBoundIdx(sortedLat, nValid, target)
+%LOWERBOUNDIDX  First index in sortedLat(1:nValid) with sortedLat(i) >=
+%   target (nValid + 1 if none). Binary search, so a window lookup costs
+%   O(log n) rather than the O(n) linear scan it is replacing.
+    lo = 1; hi = nValid + 1;
+    while lo < hi
+        mid = floor((lo + hi) / 2);
+        if sortedLat(mid) >= target
+            hi = mid;
+        else
+            lo = mid + 1;
+        end
+    end
+    idx = lo;
+end
+
+function idx = upperBoundIdx(sortedLat, nValid, target)
+%UPPERBOUNDIDX  Last index in sortedLat(1:nValid) with sortedLat(i) <=
+%   target (0 if none).
+    lo = 0; hi = nValid;
+    while lo < hi
+        mid = ceil((lo + hi + 1) / 2);
+        if sortedLat(mid) <= target
+            lo = mid;
+        else
+            hi = mid - 1;
+        end
+    end
+    idx = lo;
 end
 
 function d = delta(q, p, ctx, iv)
