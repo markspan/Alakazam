@@ -18,8 +18,13 @@ function loadERPFile(this, name)
         reread = dir(erpfilename).datenum > dir(matfilename).datenum; % raw newer than cache
     end
 
+    % Covers both branches below (an onCleanup handle, not scoped to the
+    % if/else): reading the cache can itself be slow for a large dataset,
+    % so it needs the same busy indicator as a fresh raw-file read, not
+    % just the "no cache yet" path.
+    restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
+
     if reread
-        restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
         loaded = load(erpfilename, '-mat');
         if ~isfield(loaded, 'ERP')
             error('Alakazam:loadERPFile', ...
@@ -28,11 +33,15 @@ function loadERPFile(this, name)
         EEG = erpsetToAveraged(loaded.ERP);
         EEG.id   = id;
         EEG.File = matfilename;
-        save(matfilename, 'EEG', '-v7.3');
+        saveEegCache(matfilename, EEG, '-v7.3');
         this.EEG = EEG;
     else
-        loaded = load(matfilename, 'EEG');
-        this.EEG = loaded.EEG;
+        % Cache is at least as new as the raw file: this.EEG only needs to
+        % be a real, fully-loaded dataset once the analyst actually opens
+        % this node (loadAndPlotNode does a fresh load then, overwriting
+        % this regardless) -- registerRootNode itself only reads a
+        % handful of scalar fields, so a cheap sidecar read is enough here.
+        this.EEG = eegProxyFromCacheInfo(readEegCacheInfo(matfilename));
         this.EEG.id   = id;
         this.EEG.File = matfilename;
     end

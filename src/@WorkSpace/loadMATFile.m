@@ -18,7 +18,7 @@ function loadMATFile(this, name)
     EEG.id = id;
 
     if ~exist(matfilename, 'file')
-        save(matfilename, 'EEG');
+        saveEegCache(matfilename, EEG);
     end
     if ~isfield(EEG, 'DataFormat')
         EEG.DataFormat = 'CONTINUOUS';

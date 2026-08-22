@@ -64,9 +64,8 @@ function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~
         WorkSpaceTree.iconForResult(resultEEG, transRoot), resultEEG.File, opts);
     this.Workspace.ActiveTree.SelectedNodes = newNode;
 
-    % Persist to disk under the variable name "EEG" and adopt it as the
-    % workspace's current dataset.
-    EEG = resultEEG; % saved to disk under the variable name "EEG"
-    save(resultEEG.File, "EEG");
+    % Persist to disk (under the variable name "EEG", plus a JSON sidecar
+    % -- see saveEegCache) and adopt it as the workspace's current dataset.
+    saveEegCache(resultEEG.File, resultEEG);
     this.Workspace.EEG = resultEEG;
 end

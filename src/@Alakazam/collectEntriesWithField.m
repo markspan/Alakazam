@@ -4,15 +4,20 @@ function entries = collectEntriesWithField(this, fieldName)
 %   .datasetType ('subject'/'grand_average'), .group (see
 %   WorkSpace.groupFor/editSubjects), .person (WorkSpace.personFor,
 %   defaults to .subject itself -- see its own header comment), .session
-%   (WorkSpace.sessionFor) and .EEG (already loaded). Loads every node's
-%   own .mat to check for FIELDNAME, the same "load and check" approach
-%   findGrandAverageCandidates uses.
+%   (WorkSpace.sessionFor) and .EEG (already loaded).
 %
 %   Shared by collectMeasurementEntries (FIELDNAME = "measurements", see
 %   onExportMeasurements/exportMeasurementsCSV) and collectSpectralEntries
 %   (FIELDNAME = "spectralMeasures", see onExportSpectral/
 %   exportSpectralCSV) -- previously two separately-maintained, otherwise
 %   byte-identical copies of this same walk.
+%
+%   Checks each node's JSON cache sidecar (readEegCacheInfo) for FIELDNAME
+%   before loading it in full: most nodes in a processing tree are
+%   continuous intermediate steps (Filter, ArtefactDetect, ...), often
+%   100+ MB apiece, that were never going to carry a Measure/SpectralMeasure
+%   result -- a full load is only actually needed for the (few) nodes that
+%   do.
 %
 %   .group/.session are always '' for a grand_average entry, and .person
 %   is always its own node name (not looked up): a grand average is
@@ -30,10 +35,10 @@ function entries = collectEntriesWithField(this, fieldName)
         if exist(node.UserData, "file") ~= 2
             continue; % a node can outlive its file -- see loadNodeEEG's own note
         end
-        loaded = load(node.UserData, "EEG");
-        if ~isfield(loaded.EEG, fieldName)
+        if ~ismember(fieldName, readEegCacheInfo(node.UserData).fieldNames)
             continue;
         end
+        loaded = load(node.UserData, "EEG");
         subjectNode = this.Workspace.Tree.rootOf(node.Id);
         if isempty(subjectNode)
             subject = node.Name; % defensive fallback; rootOf should always find at least node itself
@@ -51,10 +56,10 @@ function entries = collectEntriesWithField(this, fieldName)
         if exist(node.UserData, "file") ~= 2
             continue;
         end
-        loaded = load(node.UserData, "EEG");
-        if ~isfield(loaded.EEG, fieldName)
+        if ~ismember(fieldName, readEegCacheInfo(node.UserData).fieldNames)
             continue;
         end
+        loaded = load(node.UserData, "EEG");
         entries(end + 1) = struct('subject', node.Name, 'datasetType', 'grand_average', ...
             'group', '', 'person', node.Name, 'session', '', 'EEG', loaded.EEG); %#ok<AGROW>
     end

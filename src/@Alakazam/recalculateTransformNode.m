@@ -94,8 +94,7 @@ function recalculateTransformNode(this, node, ownEEG)
     end
 
     for i = 1:numel(plan)
-        EEG = plan(i).EEG; % saved to disk under the variable name "EEG"
-        save(plan(i).file, "EEG");
+        saveEegCache(plan(i).file, plan(i).EEG);
         % A currently open tab/tile for this file would otherwise
         % keep showing its pre-edit content (plotCurrent reuses an
         % already-open tab rather than rebuilding it) -- closing

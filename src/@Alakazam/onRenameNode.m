@@ -27,8 +27,8 @@ function onRenameNode(this)
     if isempty(EEG)
         return;
     end
-    EEG.id = newName; % saved to disk under the variable name "EEG"
-    save(file, "EEG");
+    EEG.id = newName;
+    saveEegCache(file, EEG);
 
     this.Workspace.ActiveTree.renameNode(node.Id, newName);
 

@@ -19,7 +19,7 @@ function saveGrandAverage(this, spec, existingNode)
     end
     safeName = matlab.lang.makeValidName(spec.name);
     EEG.File = fullfile(gaDir, [safeName '.mat']);
-    save(EEG.File, "EEG");
+    saveEegCache(EEG.File, EEG);
 
     if isempty(existingNode)
         % 'grandAverage', not WorkSpaceTree.iconFor(EEG.DataType)

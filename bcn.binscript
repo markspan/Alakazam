@@ -1,0 +1,12 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+let rare = {"s11" "s22" "s33" "s44" "s55"}
+let frequent = "s??" not rare
+
+bin 1 "Rare, Correct"    rare and next("S201") within (200,1500] ms
+bin 2 "Rare, Incorrect"  rare and next("S202") within (200,1500] ms
+bin 3 "Frequent, Correct"  frequent and next("S201") within (200,1500] ms
+bin 4 "Frequent, Incorrect" frequent and next("S202") within (200,1500] ms

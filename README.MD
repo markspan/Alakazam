@@ -19,9 +19,10 @@ epoching, artefact removal, averaging, ...) produces a new child node.
 
 The methodological approach follows established, reproducible ERP/EEG
 practice as described in Steven J. Luck's open textbook *Applied
-Event-Related Potential Data Analysis*, and in Pütz, Span & Lorist (2025),
+Event-Related Potential Data Analysis*, in Pütz, Span & Lorist (2025),
 a STAR Protocols paper walking through the same end-to-end design-record-
-preprocess-export workflow Alakazam is built around (see
+preprocess-export workflow Alakazam is built around, and in the field's own
+current publication standards, Keil et al. (2014) (see
 [References](#references)).
 
 ## Key features
@@ -442,7 +443,7 @@ not stop the rest of the report from rendering.
 Every design starts out within-subjects: every bin/condition is assumed to
 be measured on every subject, matched by `dataset` in the CSV. To ask a
 between-subjects question instead ("do patients and controls differ" --
-see Kappenman & Luck, 2015, on the extra methodological care this kind of
+see Kappenman & Luck, 2016, on the extra methodological care this kind of
 clinical-population comparison needs, in [References](#references)),
 assign each subject to a group first, via **Grouping...** (the Home ribbon
 tab's own **Design** group) -- the "Edit Subjects" dialog: one row per
@@ -521,8 +522,10 @@ lands at the same site/latency in your own data.
 
 Testing every channel x time point individually would need thousands of
 individual comparisons, either hopelessly conservative to correct for
-properly or badly underpowered. Cluster-based permutation testing (Maris &
-Oostenveld, 2007) sidesteps that by exploiting a real property of EEG: a
+properly or badly underpowered -- the mass-univariate multiple-comparisons
+problem Groppe, Urbach & Kutas (2011) survey across the several corrections
+in common use. Cluster-based permutation testing (Maris & Oostenveld, 2007)
+sidesteps that by exploiting a real property of EEG: a
 genuine effect is never one isolated point, it is smeared across
 neighbouring electrodes and adjacent samples. It groups contiguous
 above-threshold points into spatiotemporal clusters, sums the test
@@ -560,11 +563,12 @@ later pass rather than half-built now.
 
 The options below the contrast picker come with sensible defaults, each
 with its own plain-language tooltip: **Correction method** defaults to
-**TFCE** (Threshold-Free Cluster Enhancement), which avoids having to pick
-an arbitrary cluster-forming threshold at all -- the classic fixed-threshold
-recipe is offered too, for anyone who wants the textbook Maris & Oostenveld
-method specifically. **Permutations** defaults to 1000; if that count is
-already close to the design's own exhaustive limit (every subject
+**TFCE** (Threshold-Free Cluster Enhancement; Smith & Nichols, 2009), which
+avoids having to pick an arbitrary cluster-forming threshold at all -- the
+classic fixed-threshold recipe is offered too, for anyone who wants the
+textbook Maris & Oostenveld method specifically. **Permutations** defaults
+to 1000; if that count is already close to the design's own exhaustive
+limit (every subject
 contributes exactly one real/comparison pair, so the exhaustive count is a
 bounded 2^subjects sign-flips), it is automatically upgraded to FieldTrip's
 own exhaustive `'all'` rather than a merely-close-to-it random sample, the
@@ -855,7 +859,11 @@ meaningful, whereas the purely linear steps (filtering, re-referencing,
 baselining, averaging) commute freely, exactly the ordering rationale Luck
 lays out in [Order of processing
 steps](https://erpinfo.org/order-of-steps) (see
-[References](#references)). Built fresh from an imported raw recording,
+[References](#references)). `Filter`'s own choice of a zero-phase FIR
+windowed-sinc design, with the filter order and transition band picked
+automatically from the requested frequency and stopband attenuation rather
+than left for the analyst to guess, follows the practical guidance in
+Widmann, Schröger & Maess (2015). Built fresh from an imported raw recording,
 Home tab, each step's own options dialog would ask for:
 
 1. **AutoGEDAI** (denoise). Its dialog has three groups of options:
@@ -1061,6 +1069,14 @@ Scientific/methodological:
   built around: designing an ERP task, recording and preprocessing the EEG
   (MATLAB, EEGLAB/FieldTrip), and exporting ERP measures for statistical
   analysis.
+- Keil, A., Debener, S., Gratton, G., Junghöfer, M., Kappenman, E. S., Luck,
+  S. J., Luu, P., Miller, G. A., & Yee, C. M. (2014). Committee report:
+  Publication guidelines and recommendations for studies using
+  electroencephalography and magnetoencephalography. *Psychophysiology*,
+  51(1), 1-21. DOI:
+  [10.1111/psyp.12147](https://doi.org/10.1111/psyp.12147). The field's
+  current publication standards behind the [Overview](#overview)'s own
+  "established, reproducible ERP/EEG practice" framing above.
 - Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J.
   (2021). ERP CORE: An open resource for human event-related potential
   research. *NeuroImage*, 225, 117465. DOI:
@@ -1096,6 +1112,13 @@ Scientific/methodological:
   (denoise/correct, then epoch and baseline, then reject, then average)
   every worked pipeline in this README, and `N400.alztemplate` itself,
   follows.
+- Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for
+  electrophysiological data -- a practical approach. *Journal of
+  Neuroscience Methods*, 250, 34-46. DOI:
+  [10.1016/j.jneumeth.2014.08.002](https://doi.org/10.1016/j.jneumeth.2014.08.002).
+  The practical rationale behind `Filter`'s own zero-phase FIR windowed-sinc
+  design and its automatic choice of filter order and transition band from
+  just a frequency and a stopband attenuation.
 - Toffanin, P., de Jong, R., Johnson, A., & Martens, S. (2009). Using frequency
   tagging to quantify attentional deployment in a visual divided attention
   task. *International Journal of Psychophysiology*, 72(3), 289-298. DOI:
@@ -1122,6 +1145,25 @@ Scientific/methodological:
   [research.ics.aalto.fi/ica/fastica](https://research.ics.aalto.fi/ica/fastica/).
   Used by `AutoEyeICA` when installed (falls back to `pop_runica`'s own
   default algorithm otherwise).
+- Maris, E., & Oostenveld, R. (2007). Nonparametric statistical testing of
+  EEG- and MEG-data. *Journal of Neuroscience Methods*, 164(1), 177-190.
+  DOI:
+  [10.1016/j.jneumeth.2007.03.024](https://doi.org/10.1016/j.jneumeth.2007.03.024).
+  The cluster-based permutation method **Cluster Test...** implements (see
+  [Cluster statistics](#cluster-statistics-whole-scalp-whole-epoch-testing)).
+- Groppe, D. M., Urbach, T. P., & Kutas, M. (2011). Mass univariate analysis
+  of event-related brain potentials/fields I: A critical tutorial review.
+  *Psychophysiology*, 48(12), 1711-1725. DOI:
+  [10.1111/j.1469-8986.2011.01273.x](https://doi.org/10.1111/j.1469-8986.2011.01273.x).
+  A tutorial survey of the multiple-comparisons problem cluster-based
+  permutation testing addresses, and the alternative corrections available
+  for it.
+- Smith, S. M., & Nichols, T. E. (2009). Threshold-free cluster enhancement:
+  addressing problems of smoothing, threshold dependence and localisation in
+  cluster inference. *NeuroImage*, 44(1), 83-98. DOI:
+  [10.1016/j.neuroimage.2008.03.061](https://doi.org/10.1016/j.neuroimage.2008.03.061).
+  TFCE, **Cluster Test...**'s default correction method (see
+  [Cluster statistics](#cluster-statistics-whole-scalp-whole-epoch-testing)).
 - Oostenveld, R., Fries, P., Maris, E., & Schoffelen, J.-M. (2011). FieldTrip:
   open source software for advanced analysis of MEG, EEG, and invasive
   electrophysiological data. *Computational Intelligence and Neuroscience*,

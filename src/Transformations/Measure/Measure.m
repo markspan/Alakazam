@@ -15,11 +15,11 @@ function [EEG, options] = Measure(input, varargin)
 %       reference channel" mode); without one, every channel is searched
 %       independently.
 %     * Area -- the area (uV.ms) over either the whole window (.width 0 or
-%       blank) or a peak-locked band .width ms wide centred on the located
+%       blank) or a peak-locked band .width ms wide centered on the located
 %       peak (.width > 0). .areaMode picks how: 'signed' (numerical
 %       integration, negatives subtract), 'rectified' (|v|), 'positive'
 %       (only above 0) or 'negative' (only below 0). A peak-band Area also
-%       reports the peak's amplitude and latency, and honours a reference
+%       reports the peak's amplitude and latency, and honors a reference
 %       channel the same way Peak does. (The old Integral = signed whole-
 %       window Area; the old Peak Area = signed peak-band Area; both still
 %       replay, folded into Area.)

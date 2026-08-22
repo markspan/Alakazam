@@ -172,15 +172,26 @@ classdef Alakazam < handle
             this.setupMainWindow();
             this.Plotter = AlakazamPlotter(this);
 
-            % Create the workspace (this builds the tree into TreeGrid and
+            % Create the workspace (its constructor builds the tree into
+            % TreeGrid; .open() below is the separate step that actually
             % loads the data).
             if isempty(varargin)
                 this.Workspace = WorkSpace(this);
             else
                 this.Workspace = WorkSpace(this, varargin{1});
             end
-            this.Workspace.open();
+
+            % Shown here, not after .open(): the tree is already attached
+            % to TreeGrid (setupMainWindow's own "build hidden, reveal once
+            % populated" requirement, satisfied by the constructor above),
+            % so nothing further needs to stay hidden -- and showing the
+            % window now is what lets beginBusy (called by every loader
+            % .open() runs, e.g. loadSETFile) put up a real "Loading
+            % <file>..." progress dialog for each raw file during startup,
+            % instead of silently falling back to a watch cursor on a
+            % figure nobody can see yet.
             this.MainFigure.Visible = "on";
+            this.Workspace.open();
 
             % Optional debug aid: expose this instance in the base workspace as
             % "AlakazamInst" (otherwise it is only reachable via "ans", which is

@@ -56,7 +56,6 @@ function newNode = persistReportNode(this, reportName, htmlFile, qmdFile)
     % re-selecting this node later in the same session (e.g. after
     % closing its tab) reloads correctly via the ordinary
     % loadNodeEEG/loadAndPlotNode path with no special-casing needed there.
-    EEG = reportEEG;
-    save(reportEEG.File, "EEG");
+    saveEegCache(reportEEG.File, reportEEG);
     this.Workspace.EEG = reportEEG;
 end

@@ -39,22 +39,36 @@ function treeTraverse(this, id, branchDir, currentParentNode)
 
         % Check if the file has a '.mat' extension.
         if length(file.name) > 3 && strcmpi(file.name(end-2:end), 'mat')
-            % Load the EEG structure from the .mat file. The file's
-            % REAL, current, just-verified-to-exist location -- not
-            % data.EEG.File -- is what the tree node points at: EEG.File
-            % is whatever was baked into the .mat at the moment it was
-            % saved, which is only ever correct on the machine/username
-            % that created it. A workspace copied to another computer (or
-            % even just a different Windows profile on the same machine)
-            % keeps its files at the same path RELATIVE to the workspace's
-            % own Cache directory, so deriving the node's file from where
-            % it was actually just found on disk is what makes the tree
-            % portable; trusting the stored field reintroduces the old
-            % machine's absolute path and everything downstream (loading,
-            % renaming, recalculating, ...) breaks looking for a folder
-            % that only ever existed on that other computer.
+            % The file's REAL, current, just-verified-to-exist location --
+            % not a stored .File field -- is what the tree node points at:
+            % a stored .File is whatever was baked into the .mat at the
+            % moment it was saved, which is only ever correct on the
+            % machine/username that created it. A workspace copied to
+            % another computer (or even just a different Windows profile
+            % on the same machine) keeps its files at the same path
+            % RELATIVE to the workspace's own Cache directory, so deriving
+            % the node's file from where it was actually just found on
+            % disk is what makes the tree portable; trusting the stored
+            % field reintroduces the old machine's absolute path and
+            % everything downstream (loading, renaming, recalculating,
+            % ...) breaks looking for a folder that only ever existed on
+            % that other computer.
             actualFile = fullfile(file.folder, file.name);
-            data = load(actualFile, 'EEG');
+
+            % Reads the file's small JSON cache sidecar (see
+            % readEegCacheInfo/saveEegCache) rather than loading the .mat
+            % itself: rebuilding the tree from disk on every startup used
+            % to fully load EVERY node of EVERY subject's processing
+            % history just to read a handful of scalar fields, on cache
+            % trees that run to tens of GB, almost none of it needed here
+            % -- the actual EEG data is only loaded when a node is opened.
+            info = readEegCacheInfo(actualFile);
+
+            % A minimal stand-in for the loaded EEG struct optsFor/
+            % iconForResult actually read from -- keeps those two shared
+            % functions unchanged (and still correct for their other
+            % callers, which do pass a real, fully-loaded EEG).
+            proxyEEG = eegProxyFromCacheInfo(info);
 
             % Create a new tree node with the EEG id and file data, iconned
             % by the transformation that produced it (falling back to data
@@ -77,10 +91,10 @@ function treeTraverse(this, id, branchDir, currentParentNode)
             % items permanently disabled for a workspace's entire existing
             % history.
             transRoot = fullfile(this.Parent.RootDir, 'Transformations');
-            opts = WorkSpaceTree.optsFor(data.EEG);
+            opts = WorkSpaceTree.optsFor(proxyEEG);
             opts.canApplyToAll = true;
-            newNode = this.Tree.addNode(data.EEG.id, currentParentNode.Id, ...
-                WorkSpaceTree.iconForResult(data.EEG, transRoot), actualFile, opts);
+            newNode = this.Tree.addNode(info.id, currentParentNode.Id, ...
+                WorkSpaceTree.iconForResult(proxyEEG, transRoot), actualFile, opts);
 
             % Extract the file name without the extension for recursion.
             [~, name, ~] = fileparts(file.name);

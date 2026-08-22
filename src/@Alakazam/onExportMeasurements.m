@@ -6,15 +6,12 @@ function onExportMeasurements(this)
 %   "one button, everything I've computed" bulk-export idea as
 %   onExportGrandAverages.
 %
-%   Loads every node in both trees to check for EEG.measurements
-%   (a Measure result), same "load and check" pattern
-%   findGrandAverageCandidates already uses. For a Data & Analyses
-%   node, the exported "subject" is its own root ancestor's name
-%   (Workspace.Tree.rootOf, built for Apply to All Raw Files/Save
-%   Template) -- the raw recording the branch descends from, not
-%   the Measure node's own generic "Measure..." tree label; a
-%   Grand Average node uses its own name directly (it has no
-%   root/raw-file ancestor the same way).
+%   For a Data & Analyses node, the exported "subject" is its own root
+%   ancestor's name (Workspace.Tree.rootOf, built for Apply to All Raw
+%   Files/Save Template) -- the raw recording the branch descends from,
+%   not the Measure node's own generic "Measure..." tree label; a Grand
+%   Average node uses its own name directly (it has no root/raw-file
+%   ancestor the same way).
     entries = this.collectMeasurementEntries();
     if isempty(entries)
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.

@@ -73,6 +73,7 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
         loaded = load(sourceFiles{i}, 'EEG');
         subjects{i} = loaded.EEG;
     end
+    subjects = restrictToScalpChannels(subjects);
     validateCompatibility(subjects, sourceFiles, contrast);
 
     [timelocks, design, ivar, uvar, statistic] = buildDesign(subjects, contrast);
@@ -88,9 +89,9 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
         opts.numrandomization, contrast.mode, numel(subjects));
 
     TransTools.ensureFieldTrip('Cluster Statistics');
-    elec = buildElec(subjects{1});
+    [elec, chanlocs] = buildElec(subjects{1});
     neighbours = buildNeighbours(elec);
-    layout = buildLayout(elec);
+    layout = buildLayout(chanlocs);
 
     cfg = struct();
     cfg.method           = 'montecarlo';
@@ -212,6 +213,33 @@ function validateCompatibility(subjects, sourceFiles, contrast)
     end
 end
 
+function subjects = restrictToScalpChannels(subjects)
+%RESTRICTTOSCALPCHANNELS  Drop peripheral channels (EOG/ECG/EMG/... --
+%   channelTypeFromLabel's own catalogue) from every subject before
+%   electrode positions or the FieldTrip design are built from them: a
+%   cluster is a spatial extent across scalp neighbours, and a peripheral
+%   channel has no scalp position and no neighbours to begin with, so it
+%   was never a meaningful part of that extent -- unlike SelectData (a
+%   general-purpose, manual step the analyst may or may not have run
+%   first), this always applies here, the same way ScalpDistribution/
+%   eegChannelMask already exclude peripherals from a scalp-only display
+%   automatically rather than requiring it to be done by hand upstream.
+%
+%   The mask is computed once, from the first subject's own labels, and
+%   applied identically to every subject -- validateCompatibility (called
+%   right after this) is what actually enforces that every subject shares
+%   the same channel set, so there is nothing to reconcile per-subject here.
+    labels = {subjects{1}.chanlocs.labels};
+    isScalp = cellfun(@(l) isempty(channelTypeFromLabel(l)), labels);
+    if all(isScalp)
+        return; % nothing to drop
+    end
+    for i = 1:numel(subjects)
+        subjects{i}.chanlocs = subjects{i}.chanlocs(isScalp);
+        subjects{i}.data     = subjects{i}.data(isScalp, :, :);
+    end
+end
+
 function [timelocks, design, ivar, uvar, statistic] = buildDesign(subjects, contrast)
     nSubjects = numel(subjects);
     switch contrast.mode
@@ -248,31 +276,32 @@ function [timelocks, design, ivar, uvar, statistic] = buildDesign(subjects, cont
     end
 end
 
-function elec = buildElec(referenceEEG)
+function [elec, chanlocs] = buildElec(referenceEEG)
 %BUILDELEC  A FieldTrip 'elec' struct (.label, .elecpos, .chanpos, .unit)
-%   built from the reference subject's own channel positions, auto-filled
-%   from the standard 10-5 template (same mechanism AutoEyeICA already
-%   uses -- see TransTools.FillChanlocs/Dipfit1005File). Shared by
-%   buildNeighbours (channel adjacency) and buildLayout (2D plotting
-%   positions) so position-resolution only happens once per test.
-%
-%   FillChanlocs is fed a minimal, freshly-built stub struct (.chanlocs +
-%   .nbchan only), not REFERENCEEEG itself: an Averaged dataset has already
-%   been reshaped away from a full EEGLAB-native struct (Average.m collapses
-%   .data from channels x samples x TRIALS to channels x samples x BINS,
-%   among other changes) and cannot be assumed to still carry every field
-%   pop_chanedit's own 'lookup' path touches (confirmed the hard way:
-%   it reads EEG.nbchan directly and throws "Unrecognized field name" on
-%   an Averaged struct that predates any nbchan handling) -- AutoGEDAI/
-%   AutoEyeICA never hit this because they run on a still EEGLAB-native
-%   continuous dataset, immediately after import.
-    stub = struct('chanlocs', referenceEEG.chanlocs, 'nbchan', numel(referenceEEG.chanlocs));
-    EEG = TransTools.FillChanlocs(stub, 'Alakazam:ClusterStats', ...
+%   built from the reference subject's channels, positioned via
+%   TransTools.TemplateScalpLocs -- the exact same standard 10-5 template
+%   lookup ScalpDistribution/Brain3D/CoherenceTopography/RemoveComponents
+%   already use for their own scalp maps. Deliberately NOT
+%   TransTools.FillChanlocs: FillChanlocs trusts a dataset's own
+%   pre-existing chanlocs.X/Y/Z when every channel already has one (its
+%   template lookup only fires for a channel missing a position) -- fine
+%   for AutoGEDAI/AutoEyeICA, which only need channels positioned somehow,
+%   but if a dataset's own original positions came from a different
+%   source/convention than the dipfit template (e.g. the raw import's own
+%   electrode file), the resulting layout comes out in a different, wrong
+%   orientation from every other scalp map in Alakazam -- confirmed: this
+%   is what produced a real, reproducible 45-degree-rotated cluster-report
+%   topoplot even after buildLayout's own projection math was verified
+%   correct in isolation. TemplateScalpLocs always re-derives fresh
+%   positions from the template file itself, by label, so this always
+%   agrees with those other views regardless of what the dataset's own
+%   chanlocs originally carried. CHANLOCS (the positioned channels
+%   themselves) is returned too, for buildLayout's own 2D projection.
+    [locs, hasPos] = TransTools.TemplateScalpLocs(referenceEEG.chanlocs, ...
         TransTools.Dipfit1005File('Alakazam:ClusterStats'));
 
-    positioned = ~arrayfun(@(c) isempty(c.X) || isnan(c.X), EEG.chanlocs);
-    if nnz(positioned) < numel(EEG.chanlocs)
-        unpositioned = {EEG.chanlocs(~positioned).labels};
+    if ~all(hasPos)
+        unpositioned = {locs(~hasPos).labels};
         throw(MException('Alakazam:ClusterStats', sprintf( ...
             ['Channel(s) %s have no standard 10-5 scalp position, so a channel-' ...
              'adjacency structure cannot be built. Rename them to standard 10-5 labels, ' ...
@@ -280,9 +309,10 @@ function elec = buildElec(referenceEEG)
             strjoin(unpositioned, ', '))));
     end
 
+    chanlocs = locs;
     elec = struct();
-    elec.label   = {EEG.chanlocs.labels}';
-    elec.elecpos = [[EEG.chanlocs.X]', [EEG.chanlocs.Y]', [EEG.chanlocs.Z]'];
+    elec.label   = {locs.labels}';
+    elec.elecpos = [[locs.X]', [locs.Y]', [locs.Z]'];
     elec.chanpos = elec.elecpos;
     elec.unit    = 'mm';
 end
@@ -302,29 +332,58 @@ function neighbours = buildNeighbours(elec)
     neighbours = ft_prepare_neighbours(ncfg);
 end
 
-function layout = buildLayout(elec)
+function layout = buildLayout(chanlocs)
 %BUILDLAYOUT  2D channel positions (for a topographic plot of where a
-%   cluster sits) via ft_prepare_layout's own projection of the 3-D
-%   electrode positions -- the same, well-tested projection FieldTrip's
-%   own topoplot functions use, rather than reimplementing an azimuthal
-%   projection by hand. LAYOUT.label/.pos are trimmed down to real
-%   channels only: ft_prepare_layout always appends a couple of
-%   plotting-only placeholder rows (COMNT, SCALE) with no real channel
-%   behind them, which a caller joining this against real channel data
-%   would otherwise silently carry through as unmatched/NaN rows.
-%   .outline (head/nose/ears contour line segments, each an Nx2 matrix) is
-%   kept as FieldTrip returns it, purely for drawing a recognisable head
-%   outline behind the electrode scatter.
-    lcfg = struct();
-    lcfg.elec = elec;
-    lcfg.feedback = 'no';
-    raw = ft_prepare_layout(lcfg);
+%   cluster sits), via the exact same readlocs()+pol2cart()+rotation
+%   pipeline TransTools.DrawScalpMap already uses to draw every other
+%   scalp map in Alakazam (see its own header comment for the full
+%   derivation) -- deliberately NOT a hand-derived spherical-to-polar
+%   projection from X/Y/Z, and NOT ft_prepare_layout's own projection:
+%   both were tried and shown wrong. A naive conversion from X/Y/Z looks
+%   plausible (it agrees with this pipeline for a fresh template lookup)
+%   but is not guaranteed to, because readlocs()/convertlocs's own
+%   recomputation of angle/radius from X/Y/Z does not always match a
+%   template file's raw theta (DrawScalpMap's own comment: the
+%   standard_1005.elc template's raw .theta for T7/T8 puts them at the
+%   front/back midline, not the ears, until routed through this exact
+%   readlocs call) -- and ft_prepare_layout's own auto-detected rotation
+%   is separately unreliable (confirmed: correct for one channel set in
+%   testing, genuinely rotated 45 degrees on a real dataset). Reusing
+%   DrawScalpMap's own verified-against-real-topoplot() pipeline avoids
+%   re-deriving (and re-risking) this a third time, and guarantees this
+%   report's topoplot is always in the same orientation as every other
+%   scalp map in Alakazam.
+    [~, ~, Th, Rd, indices] = readlocs(chanlocs);
+    theta  = deg2rad(Th);
+    radius = Rd;
+    [a, b] = pol2cart(theta, radius);
+    horiz  =  a;   % DrawScalpMap's own 90-degree-clockwise correction --
+    vert   = -b;   % see its header comment for why (topoplot's raw output
+                    % plots anterior-posterior horizontally, not "nose up").
 
-    real = ~ismember(raw.label, {'COMNT', 'SCALE'});
+    allLabels = {chanlocs.labels}';
     layout = struct();
-    layout.label   = raw.label(real);
-    layout.pos     = raw.pos(real, :);
-    layout.outline = raw.outline;
+    layout.label   = allLabels(indices);
+    layout.pos     = [horiz(:), vert(:)];
+    layout.outline = headOutline();
+end
+
+function outline = headOutline()
+%HEADOUTLINE  Head/nose/ear contour segments (each an Nx2 matrix) in the
+%   same (x,y) convention as buildLayout's electrode positions (0.5 =
+%   head edge), purely for drawing a recognisable outline behind the
+%   electrode scatter.
+    headR = 0.5;
+    th = linspace(0, 2 * pi, 100)';
+    headCircle = [headR * cos(th), headR * sin(th)];
+
+    nose = [-0.08, headR; 0, headR + 0.08; 0.08, headR];
+
+    earTh = linspace(-pi / 2, pi / 2, 20)';
+    rightEar = [headR + 0.05 * cos(earTh), 0.15 * sin(earTh)];
+    leftEar  = [-(headR + 0.05 * cos(earTh)), 0.15 * sin(earTh)];
+
+    outline = {headCircle, nose, leftEar, rightEar};
 end
 
 function name = displayNameFor(file)

@@ -27,18 +27,25 @@ classdef label
             obj.PFigure = get(get(hAxes, 'Parent'), 'Parent');
             h = ylim(hAxes);
 
+            % lab is a plain label (a char row vector or a scalar string,
+            % not a cell -- every current caller passes one directly), so
+            % 'Interpreter','none' is what keeps it literal text rather
+            % than TeX markup (an underscore etc. would otherwise be
+            % interpreted rather than shown).
             if isempty(mcallback) && isempty(ucallback)
                 obj.VPatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
                     'Parent', hAxes, ...
                     varargin{:} );
-                text(pos, h(2) - (.015 * (max(h)-min(h))), lab{1}, 'FontSize', 8, 'Color', col/1.5);
+                text(pos, h(2) - (.015 * (max(h)-min(h))), lab, ...
+                    'Parent', hAxes, 'FontSize', 8, 'Color', col/1.5, 'Interpreter', 'none');
             else
                 obj.VPatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
                     'ButtonDownFcn', @obj.buttondn, ...
                     'Parent', hAxes, ...
                     varargin{:} );
 
-                text(pos, h(2) + (.015 * (max(h)-min(h))), lab{1}, 'FontSize', 8, 'Color', col/1.5);
+                text(pos, h(2) + (.015 * (max(h)-min(h))), lab, ...
+                    'Parent', hAxes, 'FontSize', 8, 'Color', col/1.5, 'Interpreter', 'none');
             end
         end
 

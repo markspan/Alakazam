@@ -354,7 +354,15 @@ classdef SignalView < handle
             s = this.ChannelSlider.Value;
             winHi = fullLo + windowHeight + s * travel;
             winLo = winHi - windowHeight;
-            yl = [winLo, winHi];
+            % A small margin, same idea as computeStacking's own FixedYLim
+            % margin: without it, the window fits the visible lanes exactly,
+            % so an event label anchored to the bottom (drawPointEvents) lands
+            % right on top of the lowest visible channel's own trace instead
+            % of in a clear gap below it -- easy to miss on a montage with
+            % more than MaxVisibleChannels channels (this path is only taken
+            % once channel scrolling kicks in).
+            margin = windowHeight / 50;
+            yl = [winLo - margin, winHi + margin];
         end
 
         function applyAxisLabels(this, eeg)
@@ -484,11 +492,7 @@ classdef SignalView < handle
                 overlay.EventTime  = eeg.times(max(1, round(latency(isPoint))));
 
                 isArea = dur > 0;
-                codes = repmat("-", 1, numel(eeg.event));
-                if isfield(eeg.event, "type")
-                    codes = string({eeg.event.type});
-                end
-                overlay.AreaLabel = codes(isArea) + " - " + types(isArea);
+                overlay.AreaLabel = types(isArea);
                 overlay.AreaTime  = eeg.times(max(1, floor(latency(isArea))));
                 overlay.AreaDur   = dur(isArea) / eeg.srate;
             catch
@@ -518,6 +522,7 @@ classdef SignalView < handle
                 cursor(this.Axes, times(r), [], [], ...
                     'Color', [.1 .3 .8 .5], 'LineStyle', ':', ...
                     'Label', labels(r), ...
+                    'Interpreter', 'none', ... % event codes are literal text, not TeX markup (a code with an underscore, e.g. "S_112", would otherwise render as a subscript, or vanish entirely for other TeX-special characters)
                     'LabelVerticalAlignment', 'bottom', ...
                     'LabelHorizontalAlignment', 'center', ...
                     'LabelOrientation', 'horizontal', 'FontSize', 8, ...

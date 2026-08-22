@@ -6,13 +6,23 @@ function loadBVAFile(this, name)
 %   Transformations, and adds those too -- see registerRootNode.
     [id, matfilename, bvafilename] = this.resolveCachePaths(name);
 
+    % Covers both branches below (an onCleanup handle, not scoped to the
+    % if/else): reading the cache can itself be slow for a large dataset,
+    % so it needs the same busy indicator as a fresh raw-file read, not
+    % just the "no cache yet" path.
+    restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
+
     if exist(matfilename, 'file') == 2 && dir(bvafilename).datenum <= dir(matfilename).datenum
-        % Cache is at least as new as the raw file: read the cache.
-        loaded = load(matfilename, 'EEG');
-        EEG = loaded.EEG;
+        % Cache is at least as new as the raw file: this.EEG only needs to
+        % be a real, fully-loaded dataset once the analyst actually opens
+        % this node (loadAndPlotNode does a fresh load then, overwriting
+        % this regardless) -- registerRootNode itself only reads a
+        % handful of scalar fields, so a cheap sidecar read is enough
+        % here, sparing every already-cached root recording (these can run
+        % to 100+ MB) a full load on every single startup.
+        EEG = eegProxyFromCacheInfo(readEegCacheInfo(matfilename));
     else
         % No cache yet, or the raw file is newer: (re)read it.
-        restoreBusy = beginBusy(this.Parent.MainFigure, sprintf("Loading %s...", name)); %#ok<NASGU>
         EEG = pop_loadbv(this.RawDirectory, name);
         % eeg_checkset on every fresh read, not just a cache refresh: this
         % used to be commented out on the "no cache yet" path only, so a
@@ -29,7 +39,7 @@ function loadBVAFile(this, name)
         % to need it would save fine on first import, then fail (or
         % silently hit the default format's 2GB variable limit) the first
         % time its cache went stale and got refreshed.
-        save(matfilename, 'EEG', '-v7.3');
+        saveEegCache(matfilename, EEG, '-v7.3');
     end
     EEG.id = id;
     EEG.File = matfilename;
