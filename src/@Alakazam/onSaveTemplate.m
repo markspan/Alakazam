@@ -22,7 +22,7 @@ function onSaveTemplate(this)
     try
         nodes = this.collectBranchTree(node.UserData);
     catch ME
-        uialert(this.MainFigure, sprintf('Could not read this branch:\n\n%s', ME.message), ...
+        uialert(this.MainFigure, sprintf('I''m sorry, I wasn''t able to read this branch:\n\n%s', ME.message), ...
             'Could not save template', 'Icon', 'warning');
         return;
     end
@@ -76,12 +76,12 @@ function onSaveTemplate(this)
         json = jsonencode(template, 'PrettyPrint', true, 'ConvertInfAndNaN', false);
         fid = fopen(fullfile(pathName, fileName), 'w');
         if fid < 0
-            throw(MException('Alakazam:onSaveTemplate', 'Could not open the file for writing.'));
+            throw(MException('Alakazam:onSaveTemplate', 'I''m afraid I wasn''t able to open the file for writing.'));
         end
         closeFile = onCleanup(@() fclose(fid));
         fwrite(fid, json, 'char');
     catch ME
-        uialert(this.MainFigure, sprintf('Could not save the template:\n\n%s', ME.message), ...
+        uialert(this.MainFigure, sprintf('Unfortunately, I wasn''t able to save the template:\n\n%s', ME.message), ...
             'Could not save template', 'Icon', 'warning');
         return;
     end

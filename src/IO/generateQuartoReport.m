@@ -67,14 +67,14 @@
 %   MEASUREROWVALUE.
     if isempty(entries)
         throw(MException('Alakazam:generateQuartoReport', ...
-            'generateQuartoReport needs at least one Measure result to build a report from.'));
+            'I''m afraid generateQuartoReport needs at least one Measure result to build a report from.'));
     end
     EEG = entries(1).EEG;
     hasErp      = isfield(EEG, 'measurements') && ~isempty(EEG.measurements);
     hasSpectral = isfield(EEG, 'spectralMeasures') && ~isempty(EEG.spectralMeasures);
     if ~hasErp && ~hasSpectral
         throw(MException('Alakazam:generateQuartoReport', ...
-            ['generateQuartoReport needs a dataset with at least one Measure window ' ...
+            ['I''m afraid generateQuartoReport needs a dataset with at least one Measure window ' ...
              '(EEG.measurements) or Spectral Measure (EEG.spectralMeasures).']));
     end
     if hasErp

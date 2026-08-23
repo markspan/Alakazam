@@ -80,7 +80,7 @@ function items = tokenize(text, windowLabel)
             rel = find(text(i:end) == '}', 1);
             if isempty(rel)
                 throw(MException('Alakazam:Measure', ...
-                    'Window "%s": a channel pool is missing its closing "}".', windowLabel));
+                    'Window "%s": a channel pool here is missing its closing "}" -- would you check the braces?', windowLabel));
             end
             if ~isempty(strtrim(cur)); items{end + 1} = strtrim(cur); cur = ''; end %#ok<AGROW>
             items{end + 1} = strtrim(text(i : i + rel - 1)); %#ok<AGROW>
@@ -117,7 +117,7 @@ function idx = resolveNames(names, allLabels, windowLabel)
     end
     if ~isempty(missing)
         throw(MException('Alakazam:Measure', ...
-            'Window "%s" names channel(s) not in this dataset: %s.', ...
+            'Window "%s" names channel(s) I''m afraid are not in this dataset: %s.', ...
             windowLabel, strjoin(missing, ', ')));
     end
 end

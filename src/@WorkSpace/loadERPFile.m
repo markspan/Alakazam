@@ -28,7 +28,7 @@ function loadERPFile(this, name)
         loaded = load(erpfilename, '-mat');
         if ~isfield(loaded, 'ERP')
             error('Alakazam:loadERPFile', ...
-                'File "%s" is not an ERPLAB erpset (no ERP variable inside).', name);
+                'I''m afraid the file "%s" does not look like an ERPLAB erpset (there is no ERP variable inside).', name);
         end
         EEG = erpsetToAveraged(loaded.ERP);
         EEG.id   = id;

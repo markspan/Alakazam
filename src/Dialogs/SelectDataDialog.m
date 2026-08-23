@@ -73,7 +73,7 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored, timeUnit)
         out = struct();
         out.channels = struct('mode', chanMode.Value, 'labels', {asCell(chanList.Value)});
         if ~strcmp(chanMode.Value, '(off)') && isempty(out.channels.labels)
-            uialert(fig, 'Select at least one channel, or set Channels to (off).', 'Check the selection'); return;
+            uialert(fig, 'Would you select at least one channel, or set Channels to (off)?', 'Check the selection'); return;
         end
 
         [tok, terr] = readRange(timeGrid, 'Time');
@@ -86,7 +86,7 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored, timeUnit)
 
         idx = parseIndices(trialField.Value);
         if ~strcmp(trialMode.Value, '(off)') && isempty(idx)
-            uialert(fig, 'Enter at least one trial index, or set Trials to (off).', 'Check the selection'); return;
+            uialert(fig, 'I''m afraid at least one trial index is needed, or set Trials to (off).', 'Check the selection'); return;
         end
         out.trials = struct('mode', trialMode.Value, 'indices', idx);
 
@@ -117,7 +117,7 @@ function [out, err] = readRange(g, name)
     md = findobj(g, 'Tag', 'mode'); lo = findobj(g, 'Tag', 'lo'); hi = findobj(g, 'Tag', 'hi');
     out.mode = md.Value; out.range = [lo.Value hi.Value];
     if ~strcmp(out.mode, '(off)') && ~(hi.Value > lo.Value)
-        err = sprintf('%s range: the second value must be greater than the first.', name);
+        err = sprintf('For the %s range, the second value would need to be greater than the first.', name);
     end
 end
 

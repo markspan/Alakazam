@@ -161,7 +161,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
 
     function removeSelectedRow()
         if selectedRow < 1 || selectedRow > size(table.Data, 1)
-            uialert(fig, 'Click a row first, then Remove Selected.', 'No row selected');
+            uialert(fig, 'Would you click a row first, then Remove Selected?', 'No row selected');
             return;
         end
         table.Data(selectedRow, :) = [];
@@ -172,7 +172,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     function onOK()
         data = table.Data;
         if isempty(data)
-            uialert(fig, 'Add at least one measurement window.', 'No windows defined');
+            uialert(fig, 'This needs at least one measurement window before it can continue.', 'No windows defined');
             return;
         end
         % Validate the derived-channel block first (by running it on a tiny
@@ -379,18 +379,18 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
     for r = 1:nRows
         label = strtrim(char(string(data{r, 1})));
         if isempty(label)
-            errMsg = sprintf('Row %d needs a label.', r);
+            errMsg = sprintf('Row %d is missing a label -- would you give it one before continuing?', r);
             return;
         end
 
         startMs = data{r, 2};
         stopMs  = data{r, 3};
         if ~isnumeric(startMs) || ~isnumeric(stopMs) || isnan(startMs) || isnan(stopMs)
-            errMsg = sprintf('Window "%s" needs numeric Start/Stop times.', label);
+            errMsg = sprintf('I''m afraid window "%s" needs numeric Start/Stop times.', label);
             return;
         end
         if startMs > stopMs
-            errMsg = sprintf('Window "%s": Start (%.4g ms) must not be after Stop (%.4g ms).', ...
+            errMsg = sprintf('Window "%s": Start (%.4g ms) would need to come before Stop (%.4g ms), not after it.', ...
                 label, startMs, stopMs);
             return;
         end
@@ -414,7 +414,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
         localPoints = data{r, 7};
         if isnumeric(localPoints) && ~isnan(localPoints)
             if localPoints < 0 || mod(localPoints, 1) ~= 0
-                errMsg = sprintf('Window "%s": "Local pts" must be a whole number >= 0 (0 = absolute peak).', label);
+                errMsg = sprintf('I''m afraid window "%s": "Local pts" needs to be a whole number >= 0 (0 = absolute peak).', label);
                 return;
             end
         else
@@ -426,7 +426,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
         fraction = data{r, 8};
         isFractional = any(strcmpi(measure, {'Fractional Peak Latency', 'Fractional Area Latency'}));
         if isFractional && (~isnumeric(fraction) || isnan(fraction) || fraction <= 0 || fraction >= 1)
-            errMsg = sprintf('Window "%s" is a %s measure, so it needs a Fraction strictly between 0 and 1 (e.g. 0.5).', ...
+            errMsg = sprintf('Window "%s" is a %s measure, so it would need a Fraction strictly between 0 and 1 (e.g. 0.5).', ...
                 label, measure);
             return;
         end
@@ -443,7 +443,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
         if ~isempty(baseline)
             nums = str2double(strtrim(strsplit(baseline, {',', ' '})));
             if sum(~isnan(nums)) ~= 2
-                errMsg = sprintf('Window "%s": Baseline must be two numbers (e.g. "-100 0") or blank.', label);
+                errMsg = sprintf('Window "%s": Baseline would need to be two numbers (e.g. "-100 0") or left blank.', label);
                 return;
             end
         end
@@ -463,7 +463,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
 
         refChannel = strtrim(char(string(data{r, 11})));
         if ~isempty(refChannel) && ~any(strcmpi(allLabels, refChannel))
-            errMsg = sprintf('Window "%s" names a reference channel ("%s") not in this dataset.', ...
+            errMsg = sprintf('I''m afraid window "%s" names a reference channel ("%s") that is not in this dataset.', ...
                 label, refChannel);
             return;
         end
@@ -509,9 +509,9 @@ function writeMeasuresFile(filePath, data, derivations)
     fid = fopen(filePath, 'w');
     if fid < 0
         throw(MException('Alakazam:MeasureDialog', ...
-            ['Could not save to %s -- the folder might be read-only, the disk might be ' ...
-             'full, or another program might have the file open. Try a different ' ...
-             'location or filename.'], filePath));
+            ['I''m afraid this could not be saved to %s -- the folder might be read-only, ' ...
+             'the disk might be full, or another program might have the file open. Would ' ...
+             'you try a different location or filename?'], filePath));
     end
     cleanupFid = onCleanup(@() fclose(fid));
     fwrite(fid, json, 'char');
@@ -526,7 +526,7 @@ function [data, derivations] = readMeasuresFile(filePath)
     if ~isstruct(raw) || ~isfield(raw, 'alakazamMeasures') ...
             || ~isequal(raw.alakazamMeasures, true) || ~isfield(raw, 'rows')
         throw(MException('Alakazam:MeasureDialog', ...
-            'This does not look like a saved Measure window file.'));
+            'I''m afraid this does not look like a saved Measure window file.'));
     end
     derivations = '';
     if isfield(raw, 'derivations') && ~isempty(raw.derivations)

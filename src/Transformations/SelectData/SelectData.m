@@ -53,7 +53,7 @@ function args = buildSelectArgs(input, o)
         if strcmp(o.channels.mode, 'Keep')
             if isempty(idx)
                 throw(MException('Alakazam:SelectData', ...
-                    'SelectData: none of the channels to keep are in this dataset.'));
+                    'SelectData: I''m afraid none of the channels to keep are in this dataset.'));
             end
             args = [args, {'channel', idx}];
         elseif ~isempty(idx)

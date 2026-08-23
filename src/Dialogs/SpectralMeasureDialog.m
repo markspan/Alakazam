@@ -122,7 +122,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
 
     function removeSelectedRow()
         if selectedRow < 1 || selectedRow > size(table.Data, 1)
-            uialert(fig, 'Click a row first, then Remove Selected.', 'No row selected');
+            uialert(fig, 'Would you click a row first, then Remove Selected?', 'No row selected');
             return;
         end
         table.Data(selectedRow, :) = [];
@@ -132,15 +132,15 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     function onOK()
         data = table.Data;
         if isempty(data)
-            uialert(fig, 'Add at least one frequency.', 'No frequencies defined');
+            uialert(fig, 'This needs at least one frequency before it can continue.', 'No frequencies defined');
             return;
         end
         for r = 1:size(data, 1)
             if isempty(strtrim(char(string(data{r, 1}))))
-                uialert(fig, sprintf('Row %d needs a label.', r), 'Check the frequencies'); return;
+                uialert(fig, sprintf('Row %d is missing a label -- would you give it one?', r), 'Check the frequencies'); return;
             end
             if isempty(strtrim(char(string(data{r, 2}))))
-                uialert(fig, sprintf('Row "%s" needs a frequency expression.', ...
+                uialert(fig, sprintf('I''m afraid row "%s" needs a frequency expression.', ...
                     char(string(data{r, 1}))), 'Check the frequencies'); return;
             end
         end
@@ -159,7 +159,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         end
         ref = strtrim(char(string(refField.Value)));
         if ~isempty(ref) && ~any(strcmpi(allLabels, ref))
-            uialert(fig, sprintf('Reference channel "%s" is not in this dataset.', ref), ...
+            uialert(fig, sprintf('I''m afraid reference channel "%s" is not in this dataset.', ref), ...
                 'Check the reference channel'); return;
         end
 
@@ -215,7 +215,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         fid = fopen(filePath, 'w');
         if fid < 0
             throw(MException('Alakazam:SpectralMeasureDialog', ...
-                'Could not save to %s (folder read-only, disk full, or file open elsewhere).', filePath));
+                'I''m afraid this could not be saved to %s (the folder may be read-only, the disk full, or the file open elsewhere).', filePath));
         end
         c = onCleanup(@() fclose(fid));
         fwrite(fid, json, 'char');
@@ -226,7 +226,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         if ~isstruct(raw) || ~isfield(raw, 'alakazamSpectral') ...
                 || ~isequal(raw.alakazamSpectral, true) || ~isfield(raw, 'rows')
             throw(MException('Alakazam:SpectralMeasureDialog', ...
-                'This does not look like a saved SpectralMeasure settings file.'));
+                'I''m afraid this does not look like a saved SpectralMeasure settings file.'));
         end
         n = numel(raw.rows);
         d = cell(n, 3);

@@ -29,7 +29,7 @@ else
     refarg = TransTools.LabelsToIdx(input, options.refChannels);
     if isempty(refarg)
         throw(MException('Alakazam:ReRef', ...
-            'ReRef: none of the reference channels are in this dataset.'));
+            'ReRef: I''m afraid none of the reference channels are in this dataset.'));
     end
 end
 

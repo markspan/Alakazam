@@ -24,7 +24,7 @@ function exportSpectralCSV(entries, targetFile)
     fid = fopen(targetFile, 'w');
     if fid < 0
         throw(MException('Alakazam:exportSpectralCSV', ...
-            'Could not open "%s" for writing.', targetFile));
+            'Unfortunately, I could not open "%s" for writing.', targetFile));
     end
     closeFile = onCleanup(@() fclose(fid));
 

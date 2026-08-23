@@ -14,11 +14,11 @@ function ERP = averagedToErpset(EEG)
 %   See also ERPSETTOAVERAGED, ONEXPORTERPSET.
     if ~isfield(EEG, 'DataFormat') || ~strcmpi(char(string(EEG.DataFormat)), 'Averaged')
         error('Alakazam:averagedToErpset', ...
-            ['Only an averaged dataset can be exported as an erpset. Run Average ' ...
-             '(on segmented data) first, then export its result.']);
+            ['Only an averaged dataset can be exported as an erpset, I''m afraid. Would you ' ...
+             'run Average (on segmented data) first, then export its result?']);
     end
     if ~isfield(EEG, 'data') || isempty(EEG.data)
-        error('Alakazam:averagedToErpset', 'This dataset has no data to export.');
+        error('Alakazam:averagedToErpset', 'I''m sorry, but this dataset has no data to export.');
     end
 
     data = double(EEG.data);

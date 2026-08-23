@@ -35,7 +35,7 @@ function [hz, funds] = spectralFreqSpecs(exprList, fundamentalsText)
         ast = parseExpression(expr, ctx);
         v = evalNode(ast, funds, ctx);
         if ~isfinite(v)
-            error('Alakazam:SpectralMeasure', 'The %s did not evaluate to a finite number.', ctx);
+            error('Alakazam:SpectralMeasure', 'I''m afraid the %s did not evaluate to a finite number.', ctx);
         end
         hz(i) = v;
     end
@@ -57,15 +57,15 @@ function funds = parseFundamentals(text)
         if isempty(ln); continue; end
         tok = regexp(ln, '^let\s+([A-Za-z]\w*)\s*=\s*(.+)$', 'tokens', 'once', 'ignorecase');
         if isempty(tok)
-            error('Alakazam:SpectralMeasure', ['Fundamentals line %d is not valid. Write one ' ...
-                '"let <name> = <value>" per line, e.g. let f1 = 63.'], li);
+            error('Alakazam:SpectralMeasure', ['Fundamentals line %d doesn''t look valid, I''m afraid. ' ...
+                'Would you write one "let <name> = <value>" per line, e.g. let f1 = 63?'], li);
         end
         name = char(tok{1});
         ctx = sprintf('fundamental "%s"', name);
         ast = parseExpression(strtrim(char(tok{2})), ctx);
         v = evalNode(ast, funds, ctx);
         if ~isfinite(v)
-            error('Alakazam:SpectralMeasure', 'The %s did not evaluate to a finite number.', ctx);
+            error('Alakazam:SpectralMeasure', 'I''m afraid the %s did not evaluate to a finite number.', ctx);
         end
         funds(lower(name)) = v;
     end
@@ -78,11 +78,11 @@ end
 function ast = parseExpression(expr, ctx)
     toks = lexExpression(expr, ctx);
     if isempty(toks)
-        error('Alakazam:SpectralMeasure', 'The %s is empty.', ctx);
+        error('Alakazam:SpectralMeasure', 'Unfortunately, the %s is empty.', ctx);
     end
     [ast, k] = parseAddSub(toks, 1, ctx);
     if k <= numel(toks)
-        error('Alakazam:SpectralMeasure', 'The %s has unexpected "%s".', ctx, toks(k).text);
+        error('Alakazam:SpectralMeasure', 'The %s has an unexpected "%s", I''m afraid.', ctx, toks(k).text);
     end
 end
 
@@ -120,7 +120,7 @@ end
 
 function [node, k] = parsePrimary(toks, k, ctx)
     if k > numel(toks)
-        error('Alakazam:SpectralMeasure', 'The %s ends too early.', ctx);
+        error('Alakazam:SpectralMeasure', 'Unfortunately, the %s ends too early.', ctx);
     end
     t = toks(k);
     switch t.kind
@@ -131,11 +131,11 @@ function [node, k] = parsePrimary(toks, k, ctx)
         case 'lpar'
             [node, k] = parseAddSub(toks, k + 1, ctx);
             if k > numel(toks) || ~strcmp(toks(k).kind, 'rpar')
-                error('Alakazam:SpectralMeasure', 'The %s has a "(" with no matching ")".', ctx);
+                error('Alakazam:SpectralMeasure', 'I''m afraid the %s has a "(" with no matching ")".', ctx);
             end
             k = k + 1;
         otherwise
-            error('Alakazam:SpectralMeasure', 'The %s has unexpected "%s".', ctx, t.text);
+            error('Alakazam:SpectralMeasure', 'The %s has an unexpected "%s", I''m afraid.', ctx, t.text);
     end
 end
 
@@ -162,11 +162,11 @@ function toks = lexExpression(s, ctx)
             txt = s(i:j - 1);
             v = str2double(txt);
             if isnan(v)
-                error('Alakazam:SpectralMeasure', 'The %s has "%s", which is not a number.', ctx, txt);
+                error('Alakazam:SpectralMeasure', 'I''m sorry, but the %s has "%s", which is not a number.', ctx, txt);
             end
             toks(end + 1) = tok('num', v, txt); i = j; %#ok<AGROW>
         else
-            error('Alakazam:SpectralMeasure', 'The %s has an unexpected character "%s".', ctx, c);
+            error('Alakazam:SpectralMeasure', 'I''m sorry, but the %s has an unexpected character "%s".', ctx, c);
         end
     end
 end
@@ -182,8 +182,8 @@ function out = evalNode(node, funds, ctx)
         case 'name'
             key = lower(node.name);
             if ~isKey(funds, key)
-                error('Alakazam:SpectralMeasure', ['The %s refers to "%s", which is not a declared ' ...
-                    'fundamental. Add it, e.g. let %s = 63.'], ctx, node.name, node.name);
+                error('Alakazam:SpectralMeasure', ['The %s refers to "%s", which isn''t a declared ' ...
+                    'fundamental, I''m afraid. Would you add it, e.g. let %s = 63?'], ctx, node.name, node.name);
             end
             out = funds(key);
         case 'neg'

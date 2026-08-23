@@ -67,7 +67,7 @@ function onClusterStats(this)
         qmdFile = [stem '.qmd'];
         fid = fopen(qmdFile, 'w');
         if fid < 0
-            throw(MException('Alakazam:onClusterStats', 'Could not open "%s" for writing.', qmdFile));
+            throw(MException('Alakazam:onClusterStats', 'I''m sorry, but I wasn''t able to open "%s" for writing.', qmdFile));
         end
         closeFile = onCleanup(@() fclose(fid));
         fwrite(fid, qmdText, 'char');

@@ -10,12 +10,12 @@ function nodes = readTemplate(~, file)
 %   step parented on the previous one. Throws a friendly error if FILE is
 %   missing, unreadable, or not a recognisable Alakazam template.
     if exist(file, "file") ~= 2
-        throw(MException('Alakazam:readTemplate', 'File not found:\n\n    %s', file));
+        throw(MException('Alakazam:readTemplate', 'I''m afraid I couldn''t find this file:\n\n    %s', file));
     end
     raw = jsondecode(fileread(file));
     if ~isstruct(raw) || ~isfield(raw, 'alakazamTemplate') || ~isequal(raw.alakazamTemplate, true)
         throw(MException('Alakazam:readTemplate', ...
-            'This does not look like an Alakazam template file.'));
+            'I''m sorry to say this does not look like an Alakazam template file.'));
     end
 
     nodes = struct('transformId', {}, 'params', {}, 'parent', {});
@@ -39,7 +39,7 @@ function nodes = readTemplate(~, file)
         end
     else
         throw(MException('Alakazam:readTemplate', ...
-            'This template file has no steps to apply.'));
+            'Unfortunately, this template file has no steps to apply.'));
     end
 end
 

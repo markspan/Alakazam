@@ -299,12 +299,12 @@ classdef SettingsDialog < handle
             ok = true;
             for i = 1:numel(bands)
                 if isempty(strtrim(bands(i).label))
-                    uialert(this.Fig, sprintf('Band %d needs a label.', i), 'Check the frequency bands');
+                    uialert(this.Fig, sprintf('Band %d is missing a label -- would you give it one?', i), 'Check the frequency bands');
                     ok = false;
                     return;
                 end
                 if ~(bands(i).hiFreq > bands(i).loFreq)
-                    uialert(this.Fig, sprintf('Band "%s": stop frequency must be greater than start frequency.', ...
+                    uialert(this.Fig, sprintf('I''m afraid band "%s" needs its stop frequency to be greater than its start frequency.', ...
                         bands(i).label), 'Check the frequency bands');
                     ok = false;
                     return;
@@ -381,7 +381,7 @@ classdef SettingsDialog < handle
                     end
                 otherwise
                     error('AlakazamSettings:type', ...
-                        'Unknown setting type ''%s''.', item.type);
+                        'I''m afraid ''%s'' is not a setting type this dialog recognises.', item.type);
             end
             handle.Tooltip = item.tooltip;
         end

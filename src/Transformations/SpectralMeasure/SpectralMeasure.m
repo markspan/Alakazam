@@ -47,9 +47,9 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 EEG = input;
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
     throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
-        'Problem in SpectralMeasure: needs single-trial epoched data (DataFormat = ' ...
-        '"EPOCHED"), not this dataset (DataFormat = "%s"). Run DefineBins with an ' ...
-        '''epoch'' statement first -- phase-locking and coherence are computed across ' ...
+        'Problem in SpectralMeasure: this needs single-trial epoched data (DataFormat = ' ...
+        '"EPOCHED"), and not this dataset (DataFormat = "%s"). Would you run DefineBins with an ' ...
+        '''epoch'' statement first? Phase-locking and coherence are computed across ' ...
         'trials, so they need the individual trials.'], input.DataFormat)));
 end
 if interactive
@@ -72,8 +72,8 @@ if interactive
 else
     if ~isstruct(opts) || ~isfield(opts, 'rows')
         throw(MException('Alakazam:SpectralMeasure', ...
-            ['SpectralMeasure was asked to replay a previous run, but the stored settings ' ...
-             'do not look like ones it produced (no .rows field).']));
+            ['SpectralMeasure has been asked to replay a previous run, but I''m afraid the stored settings ' ...
+             'do not look like ones it produced (there is no .rows field).']));
     end
     options = opts;
 end
@@ -103,7 +103,7 @@ snrGuard     = TransTools.FieldOr(options, 'snrGuard', 1);
 
 if isempty(rows)
     throw(MException('Alakazam:SpectralMeasure', ...
-        'No frequencies are defined, so there is nothing for SpectralMeasure to do.'));
+        'No frequencies have been defined, so there is nothing for SpectralMeasure to do.'));
 end
 
 %% Resolve frequencies (Hz) from the expression rows + fundamentals
@@ -122,7 +122,7 @@ if ~isempty(strtrim(char(string(refChannel))))
     refIdx = find(strcmpi(allLabels, strtrim(char(string(refChannel)))), 1);
     if isempty(refIdx)
         throw(MException('Alakazam:SpectralMeasure', ...
-            'Reference channel "%s" is not a channel in this dataset.', refChannel));
+            'Reference channel "%s" doesn''t appear to be a channel in this dataset.', refChannel));
     end
 end
 
@@ -151,7 +151,7 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
     fUse = abs(fHz);
     if fUse <= 0 || fUse >= nyq
         throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
-            'Frequency "%s" resolves to %.4g Hz, which is outside the analysable range ' ...
+            'Frequency "%s" resolves to %.4g Hz, which falls outside the analysable range ' ...
             '(0, %.4g) Hz for this dataset''s sample rate.'], row.label, fHz, nyq)));
     end
     % Neighbour frequencies for SNR: past a guard band, within (0, nyq).
@@ -261,8 +261,8 @@ function tapers = buildTapers(method, nsamp, K)
     if strcmpi(char(string(method)), 'Multitaper')
         if exist('dpss', 'file') ~= 2
             throw(MException('Alakazam:SpectralMeasure', ...
-                ['Multitaper needs the Signal Processing Toolbox (dpss), which is not ' ...
-                 'available. Choose the Hann taper instead.']));
+                ['Multitaper needs the Signal Processing Toolbox (dpss), which doesn''t appear to be ' ...
+                 'available here. Would you choose the Hann taper instead?']));
         end
         K = max(1, round(K));
         NW = (K + 1) / 2;                 % time-bandwidth; K = 2*NW-1

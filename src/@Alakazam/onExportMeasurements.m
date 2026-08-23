@@ -81,7 +81,7 @@ function onExportMeasurements(this)
         [copyOk, copyMsg] = copyfile(targetFile, fullfile(reportsDir, reportCsvName));
         if ~copyOk
             throw(MException('Alakazam:onExportMeasurements', ...
-                'Could not copy the CSV into the Reports folder: %s', copyMsg));
+                'I wasn''t able to copy the CSV into the Reports folder: %s', copyMsg));
         end
 
         % Generate the report text FIRST, before touching the .qmd file:
@@ -93,7 +93,7 @@ function onExportMeasurements(this)
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         fid = fopen(qmdFile, 'w');
         if fid < 0
-            throw(MException('Alakazam:onExportMeasurements', 'Could not open "%s" for writing.', qmdFile));
+            throw(MException('Alakazam:onExportMeasurements', 'I couldn''t open "%s" for writing.', qmdFile));
         end
         closeFile = onCleanup(@() fclose(fid));
         fwrite(fid, qmdText, 'char');

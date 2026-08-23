@@ -71,14 +71,14 @@ function onExportSpectral(this)
         [copyOk, copyMsg] = copyfile(targetFile, fullfile(reportsDir, reportCsvName));
         if ~copyOk
             throw(MException('Alakazam:onExportSpectral', ...
-                'Could not copy the CSV into the Reports folder: %s', copyMsg));
+                'Unfortunately, I wasn''t able to copy the CSV into the Reports folder: %s', copyMsg));
         end
 
         qmdText = generateQuartoReport(entries, reportCsvName);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         fid = fopen(qmdFile, 'w');
         if fid < 0
-            throw(MException('Alakazam:onExportSpectral', 'Could not open "%s" for writing.', qmdFile));
+            throw(MException('Alakazam:onExportSpectral', 'I''m afraid I wasn''t able to open "%s" for writing.', qmdFile));
         end
         closeFile = onCleanup(@() fclose(fid));
         fwrite(fid, qmdText, 'char');

@@ -13,13 +13,13 @@ function [EEG, options] = Interpolate(input, varargin)
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Interpolate', varargin{:});
 if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
     throw(MException('Alakazam:Interpolate', ...
-        'Problem in Interpolate: this dataset has no channel locations.'));
+        'Problem in Interpolate: I''m afraid this dataset has no channel locations.'));
 end
 if ~anyHasPosition(input.chanlocs)
     throw(MException('Alakazam:Interpolate', ...
         ['Problem in Interpolate: the channels have no scalp positions, so there is ' ...
-         'nothing to interpolate from. Run the Channel Editor first to look up ' ...
-         'standard 10-5 positions by label.']));
+         'nothing to interpolate from. Would you run the Channel Editor first to look up ' ...
+         'standard 10-5 positions by label?']));
 end
 
 if interactive

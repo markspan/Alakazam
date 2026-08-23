@@ -65,7 +65,7 @@ classdef AlakazamSettings < handle
             fid = fopen(AlakazamSettings.SettingsFile, 'w');
             if fid < 0
                 throw(MException('Alakazam:AlakazamSettings', ...
-                    'Could not open %s for writing.', AlakazamSettings.SettingsFile));
+                    'I''m afraid I could not open %s for writing.', AlakazamSettings.SettingsFile));
             end
             closeFile = onCleanup(@() fclose(fid));
             fprintf(fid, '%s', jsonencode(obj.Values, 'PrettyPrint', true));

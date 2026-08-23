@@ -24,7 +24,7 @@ function exportGrandAveragesCSV(nodes, targetFile)
     fid = fopen(targetFile, 'w');
     if fid < 0
         throw(MException('Alakazam:exportGrandAveragesCSV', ...
-            'Could not open "%s" for writing.', targetFile));
+            'I''m afraid I wasn''t able to open "%s" for writing.', targetFile));
     end
     closeFile = onCleanup(@() fclose(fid));
 

@@ -333,8 +333,8 @@ classdef Brain3DView < handle
             [tf, reorder] = ismember(lower(this.SourceResolvedLabels), lower(scalpLabels));
             if ~all(tf)
                 throw(MException("Alakazam:Brain3DView", ...
-                    ["Internal error: a resolved source-model channel is missing from " ...
-                     "this dataset's own positioned channels."]));
+                    ["Something appears to have gone wrong internally, I'm afraid: a resolved " ...
+                     "source-model channel is missing from this dataset's own positioned channels."]));
             end
             scalpData = eeg.data(eeg.ScalpHasPos, :, this.BinIndices(this.SelectedBin)); % nScalpChan x nTime
             values = scalpData(reorder, :);

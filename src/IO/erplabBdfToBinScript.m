@@ -201,7 +201,7 @@ function lines = normaliseLines(bdf)
     elseif isstring(bdf) || iscell(bdf)
         lines = cellstr(bdf);
     else
-        error('Alakazam:erplabBdfToBinScript', 'BDF input must be text.');
+        error('Alakazam:erplabBdfToBinScript', 'I''m afraid the BDF input must be text.');
     end
     lines = cellfun(@stripComment, lines, 'UniformOutput', false);
 end

@@ -104,9 +104,9 @@ EEG = input;
 
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'Averaged')
     throw(MException('Alakazam:Measure', sprintf([ ...
-        'Problem in Measure: only works on an averaged ERP (a subject Average or a Grand ' ...
-        'Average), not this dataset (DataFormat = "%s"). Run Average -- or Grand Average, ' ...
-        'for a group result -- on it first.'], input.DataFormat)));
+        'Problem in Measure: this only works on an averaged ERP (a subject Average or a Grand ' ...
+        'Average), and not on this dataset (DataFormat = "%s"). Would you run Average -- or ' ...
+        'Grand Average, for a group result -- on it first?'], input.DataFormat)));
 end
 
 if interactive
@@ -153,8 +153,8 @@ if interactive
 else
     if ~isstruct(opts) || ~isfield(opts, 'windows')
         throw(MException('Alakazam:Measure', ...
-            ['Measure was asked to replay a previous run, but the stored settings it was ' ...
-             'given do not look like ones Measure itself produced (no .windows field).']));
+            ['Measure has been asked to replay a previous run, but I''m afraid the stored ' ...
+             'settings it was given do not look like ones Measure itself produced (there is no .windows field).']));
     end
     windows = opts.windows;
     if isstruct(windows)
@@ -186,8 +186,8 @@ end
 
 if isempty(windows)
     throw(MException('Alakazam:Measure', ...
-        ['No measurement windows are defined, so there is nothing for Measure to do. Add ' ...
-         'at least one window (a name, a start/stop time, and a measure type).']));
+        ['No measurement windows have been defined, so there is nothing for Measure to do. ' ...
+         'Please add at least one window (a name, a start/stop time, and a measure type).']));
 end
 
 %% Derived channels: evaluate any "let" statements and append them to EEG
@@ -281,12 +281,12 @@ function m = computeWindow(EEG, win, allLabels, nBins)
     % fails with a clear message rather than a NaN column later.
     if strcmp(measure, 'area') && useBand && (isnan(width) || width <= 0)
         throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is a peak-band Area measure but has no positive Width (ms) to integrate over.', win.label)));
+            'Window "%s" is set up as a peak-band Area measure, but has no positive Width (ms) to integrate over -- could you add one?', win.label)));
     end
     if any(strcmp(measure, {'fractional peak latency', 'fractional area latency'})) ...
             && (isnan(fraction) || fraction <= 0 || fraction >= 1)
         throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is a %s measure but has no Fraction strictly between 0 and 1.', ...
+            'Window "%s" is a %s measure, but is missing a Fraction strictly between 0 and 1 -- would you set one?', ...
             win.label, char(string(win.measure)))));
     end
 
@@ -323,7 +323,7 @@ function m = computeWindow(EEG, win, allLabels, nBins)
             refIdx = find(allLabels == string(win.refChannel), 1);
             if isempty(refIdx)
                 throw(MException('Alakazam:Measure', sprintf( ...
-                    'Window "%s" names a reference channel ("%s") that is not in this dataset.', ...
+                    'Window "%s" names a reference channel ("%s") that I''m afraid is not in this dataset.', ...
                     win.label, win.refChannel)));
             end
             for b = 1:nBins
@@ -394,7 +394,7 @@ function m = computeWindow(EEG, win, allLabels, nBins)
 
         otherwise
             throw(MException('Alakazam:Measure', sprintf( ...
-                'Window "%s" has an unknown measure type "%s".', win.label, char(string(win.measure)))));
+                'Window "%s" has a measure type ("%s") that I don''t recognise.', win.label, char(string(win.measure)))));
     end
 
     if strcmp(measure, 'area')

@@ -14,7 +14,7 @@ function EEG = erpsetToAveraged(ERP)
 %
 %   See also AVERAGEDTOERPSET, AVERAGE, LOADERPFILE.
     if ~isstruct(ERP) || ~isfield(ERP, 'bindata') || isempty(ERP.bindata)
-        error('Alakazam:erpsetToAveraged', 'Not a valid erpset: no bindata field.');
+        error('Alakazam:erpsetToAveraged', 'This doesn''t look like a valid erpset, I''m afraid: there is no bindata field.');
     end
 
     data = double(ERP.bindata);

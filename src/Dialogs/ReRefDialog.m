@@ -64,7 +64,7 @@ function options = ReRefDialog(chanlocs, stored)
         out = struct('mode', modeDrop.Value, 'refChannels', {asCell(refList.Value)}, ...
             'exclude', {asCell(exclList.Value)}, 'keepref', logical(keepBox.Value));
         if strcmp(out.mode, 'Specific channels') && isempty(out.refChannels)
-            uialert(fig, 'Select at least one reference channel, or choose Average.', 'Check the reference'); return;
+            uialert(fig, 'Would you select at least one reference channel, or choose Average instead?', 'Check the reference'); return;
         end
         options = out;
         uiresume(fig); delete(fig);

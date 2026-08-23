@@ -28,7 +28,7 @@ function [EEG, options] = Filter(input, varargin)
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Filter', varargin{:});
 if ~isfield(input, 'data') || ~isfield(input, 'srate') || isempty(input.srate)
     throw(MException('Alakazam:Filter', ...
-        'Problem in Filter: this dataset has no data or no sample rate to filter.'));
+        'Problem in Filter: this dataset has no data, or no sample rate, so there is nothing here for me to filter.'));
 end
 
 if interactive
@@ -108,12 +108,12 @@ function EEG = applyFir(EEG, type, freq, db, chanind)
     db    = double(db);
     if ~(freq > 0 && freq < nyq)
         throw(MException('Alakazam:Filter', sprintf( ...
-            'Problem in Filter: the %s frequency (%.4g Hz) must be between 0 and the Nyquist frequency (%.4g Hz).', ...
+            'Problem in Filter: the %s frequency (%.4g Hz) needs to sit between 0 and the Nyquist frequency (%.4g Hz) -- would you choose a value in that range?', ...
             type, freq, nyq)));
     end
     if ~(db > 0)
         throw(MException('Alakazam:Filter', ...
-            'Problem in Filter: the %s dB rating must be a positive number (the stopband attenuation).', type));
+            'Problem in Filter: the %s dB rating needs to be a positive number (the stopband attenuation) -- could you check that value?', type));
     end
 
     dev  = 10 ^ (-db / 20);          % stopband deviation from the dB rating
@@ -133,7 +133,7 @@ function EEG = applyFir(EEG, type, freq, db, chanind)
             df  = 1;                 % transition bandwidth (Hz)
             if freq - hbw <= 0 || freq + hbw >= nyq
                 throw(MException('Alakazam:Filter', ...
-                    'Problem in Filter: the notch frequency (%.4g Hz) is too close to 0 or Nyquist for a %.4g Hz notch.', ...
+                    'Problem in Filter: I''m afraid the notch frequency (%.4g Hz) sits too close to 0 or to Nyquist for a %.4g Hz notch.', ...
                     freq, 2 * hbw));
             end
             fc    = [(freq - hbw) / nyq, (freq + hbw) / nyq];
@@ -146,8 +146,8 @@ function EEG = applyFir(EEG, type, freq, db, chanind)
 
     if m + 1 > size(EEG.data, 2)
         throw(MException('Alakazam:Filter', sprintf([ ...
-            'Problem in Filter: the %s filter needs %d samples but the data is only %d long. ' ...
-            'Filter the continuous recording before epoching, or raise the cutoff / lower the dB.'], ...
+            'Problem in Filter: the %s filter needs %d samples, but this data is only %d long. ' ...
+            'Filtering the continuous recording before epoching would help, or you could raise the cutoff or lower the dB.'], ...
             type, m + 1, size(EEG.data, 2))));
     end
 

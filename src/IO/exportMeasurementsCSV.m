@@ -40,7 +40,7 @@ function exportMeasurementsCSV(entries, targetFile)
     fid = fopen(targetFile, 'w');
     if fid < 0
         throw(MException('Alakazam:exportMeasurementsCSV', ...
-            'Could not open "%s" for writing.', targetFile));
+            'I''m sorry, but I could not open "%s" for writing.', targetFile));
     end
     closeFile = onCleanup(@() fclose(fid));
 
