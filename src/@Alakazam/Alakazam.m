@@ -41,9 +41,15 @@ classdef Alakazam < handle
         MainGrid        % uigridlayout, the top-level shell layout (see setupMainWindow)
         ToolbarGrid     % uigridlayout cell reserved for the ribbon
         Ribbon          % AlakazamRibbon, the Home/Tools/Grand Average control strip
-        RibbonBaseHeight   = 120  % fixed ribbon row height (px); see setupMainWindow. Never grows: an
+        RibbonBaseHeight   = 134  % fixed ribbon row height (px); see setupMainWindow. Never grows: an
                                   % overflowing group now opens as a floating popup instead (see
-                                  % AlakazamRibbon's PopupComponent), so this stays constant.
+                                  % AlakazamRibbon's PopupComponent), so this stays constant. 120 was a
+                                  % few pixels too short for one full tabstrip + icon row + group title
+                                  % (tabstrip ~33px + group padding ~6px + one 60-62px icon row +
+                                  % ~18-20px title bar), giving .alz-content's own overflow-y:auto a
+                                  % vertical scrollbar on every tab -- bumped with a little headroom to
+                                  % spare rather than a bare minimum, another pixel of font-metric drift
+                                  % between platforms should not reopen the same issue.
         TreeGrid        % uigridlayout cell reserved for the workspace tree area (split top/bottom)
         DataTreePanel           % uipanel hosting WorkSpace.Tree (data & analyses), top third of TreeGrid
         GrandAveragesTreePanel  % uipanel hosting WorkSpace.GrandAveragesTree, middle third of TreeGrid
@@ -107,6 +113,7 @@ classdef Alakazam < handle
         onClearOtherAnalyses(this)
         onExportGrandAverages(this)
         onExportErpset(this)
+        onExportSet(this)
         onExportMeasurements(this)
         onExportSpectral(this)
         onRecalculateNode(this)
@@ -123,6 +130,7 @@ classdef Alakazam < handle
         onSaveTemplate(this)
         onApplyTemplate(this)
         onRibbonAction(this, id)
+        onRibbonWidthMeasured(this, width)
         setPlotsViewMode(this, mode)
         refreshPlotsView(this)
         onCloseRequest(this)

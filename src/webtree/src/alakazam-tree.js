@@ -138,6 +138,7 @@ const CONTEXT_ITEMS = [
     { action: 'applyTemplate', label: 'Apply Template...' },
     { separator: true },
     { action: 'exportErpset', label: 'Export as ERPset...' },
+    { action: 'exportSet', label: 'Export as EEGLAB .set...' },
     { separator: true },
     { action: 'delete', label: 'Delete' }
 ]
@@ -549,12 +550,17 @@ class AlakazamTree {
             // only a report node (see Alakazam.persistReportNode/
             // WorkSpace.loadReports) sets it false, since a rendered
             // report's EEG is a synthetic struct with none of the real
-            // fields a transformation expects.
+            // fields a transformation expects. 'exportSet' reuses the same
+            // canApplyTemplate signal for the same reason: unlike
+            // 'exportErpset' (Averaged data only), a .set export is valid
+            // for any real dataset -- continuous, epoched or averaged --
+            // so the only thing worth disabling it for is a report node.
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
                 || (item.action === 'recalculate' && !data.canRecalculate)
                 || (item.action === 'applyToAll' && !data.canApplyToAll)
                 || (item.action === 'saveTemplate' && !data.canApplyToAll)
                 || (item.action === 'exportErpset' && !data.canExportErpset)
+                || (item.action === 'exportSet' && !data.canApplyTemplate)
                 || (item.action === 'applyTemplate' && !data.canApplyTemplate)
             if (disabled) {
                 row.classList.add('alz-menu-item-disabled')

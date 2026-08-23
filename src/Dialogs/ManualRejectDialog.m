@@ -20,12 +20,13 @@ function options = ManualRejectDialog(EEG, prior)
 %   (so paging between trials, or between columns, stays an
 %   eye-to-eye comparison -- the row spacing itself never changes, only
 %   how tall a trace of a given amplitude draws within its own row). The
-%   auto starting scale is a robust (99th-percentile) amplitude, not the
-%   dataset's raw maximum: a single outlier sample -- a spike, or a
-%   channel/trial an earlier ArtefactDetect pass already NaN'd out -- would
-%   otherwise flatten every ordinary trace to an invisible flat line, which
-%   is exactly the "nothing renders" failure this dialog first shipped
-%   with. A trial that is entirely NaN (already rejected upstream) still
+%   auto starting scale is a robust (median-of-per-cell-peaks) amplitude,
+%   not the dataset's raw maximum: a single outlier channel or trial --
+%   a spike, or one an earlier ArtefactDetect pass already NaN'd out --
+%   would otherwise flatten every ordinary trace to an invisible flat
+%   line, which is exactly the "nothing renders" failure this dialog
+%   first shipped with. A trial that is entirely NaN (already rejected
+%   upstream) still
 %   cannot show a trace -- there is nothing to draw -- so that case prints
 %   a plain on-axes note instead of leaving a silent blank plot.
 %
@@ -245,9 +246,9 @@ function options = ManualRejectDialog(EEG, prior)
         hold(ax, 'on');
         for i = 1:n
             c = chanIdx(i);
-            [col, weight] = channelStyle(c);
+            [col, weight, lineWidth] = channelStyle(c);
             y = data(c, :) * autoScale * gain + offsets(i);
-            plot(ax, times, y, 'Color', col, 'LineWidth', 1, ...
+            plot(ax, times, y, 'Color', col, 'LineWidth', lineWidth, ...
                 'ButtonDownFcn', @(~, ~) toggleChannel(c));
             text(ax, times(1) - 0.015 * (times(end) - times(1)), offsets(i), labels{c}, ...
                 'HorizontalAlignment', 'right', 'VerticalAlignment', 'middle', ...
@@ -260,20 +261,22 @@ function options = ManualRejectDialog(EEG, prior)
         title(ax, sprintf('Trial %d of %d', trial, nTrials));
     end
 
-    function [col, weight] = channelStyle(c)
-    %CHANNELSTYLE  A flagged channel is always plain red/bold, so a flag
-    %   reads unambiguously regardless of the channel's own colour.
-    %   Unflagged, each channel keeps one consistent colour across every
-    %   trial and column -- MATLAB's own default axes colour order,
-    %   cycled by channel number -- matching the continuous-data view
-    %   (SignalView), which colours its own per-channel traces the same
-    %   way (each plot() call left to auto-advance through that same
-    %   default order).
+    function [col, weight, lineWidth] = channelStyle(c)
+    %CHANNELSTYLE  A flagged channel is always plain red/bold and drawn
+    %   four times as thick, so a flag reads unambiguously at a glance --
+    %   both by colour and by shape -- regardless of the channel's own
+    %   colour or how many other traces are nearby. Unflagged, each
+    %   channel keeps one consistent colour across every trial and column
+    %   -- MATLAB's own default axes colour order, cycled by channel
+    %   number -- matching the continuous-data view (SignalView), which
+    %   colours its own per-channel traces the same way (each plot() call
+    %   left to auto-advance through that same default order).
+        normalWidth = 1;
         if flags(c, trial)
-            col = [0.80 0.15 0.15]; weight = 'bold';
+            col = [0.80 0.15 0.15]; weight = 'bold'; lineWidth = normalWidth * 4;
         else
             col = channelColorOrder(mod(c - 1, size(channelColorOrder, 1)) + 1, :);
-            weight = 'normal';
+            weight = 'normal'; lineWidth = normalWidth;
         end
     end
 

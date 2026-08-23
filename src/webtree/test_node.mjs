@@ -135,10 +135,13 @@ const menu = window.document.querySelector('.alz-menu')
 assert.ok(menu, 'context menu should be shown')
 const items = [...menu.querySelectorAll('.alz-menu-item')].map(el => el.textContent)
 console.log('menu items:', items);
-assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Delete']))
+assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
 // 'Average1' is an averaged node (canExportErpset: true) -> Export as ERPset enabled.
 const exportItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
 assert.ok(!exportItemC.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be enabled for an averaged node')
+// 'Average1' is an ordinary dataset node (canApplyTemplate: true) -> Export as .set enabled.
+const exportSetItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as EEGLAB .set...')
+assert.ok(!exportSetItemC.classList.contains('alz-menu-item-disabled'), 'Export as EEGLAB .set should be enabled for an ordinary dataset node')
 const listEventsItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'List events')
 assert.ok(listEventsItem.classList.contains('alz-menu-item-disabled'), 'List events should be disabled for canListEvents:false node')
 const applyToAllItem = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Apply to All Raw Files...')
@@ -170,6 +173,10 @@ leafReport.content.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles:
 const reportMenu = window.document.querySelector('.alz-menu')
 const applyTemplateItemReport = [...reportMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Apply Template...')
 assert.ok(applyTemplateItemReport.classList.contains('alz-menu-item-disabled'), 'Apply Template should be disabled for a report node (canApplyTemplate:false)')
+// Export as .set reuses the same canApplyTemplate signal (see CONTEXT_ITEMS'
+// own comment): a rendered report has no real dataset fields to save either.
+const exportSetItemReport = [...reportMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as EEGLAB .set...')
+assert.ok(exportSetItemReport.classList.contains('alz-menu-item-disabled'), 'Export as EEGLAB .set should be disabled for a report node (canApplyTemplate:false)')
 tree._closeMenu()
 console.log('Apply Template gating (enabled for ordinary nodes, disabled for a report node): OK')
 

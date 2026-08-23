@@ -36,6 +36,13 @@ function setupMainWindow(this)
 %   collectMeasurementEntries), so it does not belong nested under one
 %   either. Three real trees read more clearly than forcing either kind
 %   into Data & Analyses's own per-subject branches.
+    % 1280 is a starting width, not a floor the ribbon is guaranteed to fit
+    % in: it grows in onRibbonWidthMeasured, called once the ribbon has
+    % measured its own widest tab (still while Visible is "off", in the
+    % ordinary case -- WorkSpace construction below takes far longer than
+    % the ribbon's own uihtml round trip), so the window never opens
+    % narrower than the ribbon itself needs and starts with its own
+    % horizontal scrollbar.
     this.MainFigure = uifigure( ...
         "Name",   "Alakazam", ...
         "Tag",    "AlakazamApp", ...
@@ -64,7 +71,8 @@ function setupMainWindow(this)
     % height is therefore fixed for the app's lifetime, no ExpandChangedFcn
     % needed here any more.
     this.Ribbon = AlakazamRibbon(this.ToolbarGrid, fullfile(this.RootDir, "Transformations"), ...
-        "ItemPushedFcn", @(id) this.onRibbonAction(id));
+        "ItemPushedFcn", @(id) this.onRibbonAction(id), ...
+        "ContentWidthMeasuredFcn", @(w) this.onRibbonWidthMeasured(w));
 
     % Rows 2 and 4 are thin draggable splitters, one between each
     % adjacent pair of trees (see beginTreesSplitResize/

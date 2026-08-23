@@ -80,8 +80,21 @@ classdef WorkSpaceTree < handle
         % perform would be worse than not offering it.
         RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
             'Baseline', 'ChannelEditor', 'CoherenceMap', 'CoherenceTopography', ...
-            'DefineBins', 'Filter', 'Fourier', 'Interpolate', 'Measure', 'ReRef', ...
-            'Resample', 'SelectData', 'SpectralMeasure', 'TimeFrequency'}
+            'DefineBins', 'Filter', 'Fourier', 'Interpolate', 'ManualReject', ...
+            'Measure', 'ReRef', 'Resample', 'SelectData', 'SpectralMeasure', 'TimeFrequency'}
+        % ManualReject is included deliberately, unlike RemoveComponents:
+        % both are inspection-driven, but ManualReject's own "input" (an
+        % already-epoched dataset's channel/trial identity) is completely
+        % stable across a recalculation, so re-seeding its dialog with the
+        % node's own stored .flags (via the temporary TransformSettings
+        % stand-in below) always means the same channels/trials it meant
+        % when first recorded. RemoveComponents' component NUMBERS are not
+        % -- ICA is not deterministic, and ensureDecomposition re-runs it
+        % from scratch whenever the parent carries no cached decomposition
+        % of its own -- so pre-ticking old component indices against a
+        % freshly re-run decomposition could tick the wrong components
+        % entirely; that would need the decomposition itself made stable
+        % first, a separate change, not attempted here.
     end
 
     methods

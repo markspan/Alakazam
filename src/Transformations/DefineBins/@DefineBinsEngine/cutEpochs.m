@@ -85,6 +85,18 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
         EEG.epoch(k).eventtype    = EEG.event(ei).type;
         EEG.epoch(k).eventlatency = 0;
         EEG.epoch(k).bini         = EEG.event(ei).bini;
+        % EEGLAB expects every event to carry its own containing epoch
+        % number once EEG.trials > 1 (eeg_checkset errors "the event info
+        % structure does not contain an 'epoch' field" otherwise --
+        % surfaced by pop_saveset on export, since nothing internal to
+        % Alakazam itself ever reads this field). Set on each trial's own
+        % anchor event only, matching this epoching model's one-anchor-
+        % per-trial design (see EEG.epoch itself, above); every other
+        % event -- one that was never matched to a bin, so belongs to no
+        % kept trial -- is left with MATLAB's default [] for a struct
+        % field none of its siblings set, which eeg_checkset's own
+        % 'eventconsistency' cleanup already knows to prune as invalid.
+        EEG.event(ei).epoch = k;
     end
     for b = 1:numel(bindesc)
         if isempty(bindesc(b).events)

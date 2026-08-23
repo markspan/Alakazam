@@ -30,6 +30,13 @@ classdef AlakazamRibbon < handle
 %                           own on-page rect (CSS pixels, top-left origin, as
 %                           reported by getBoundingClientRect()).
 %     groupCollapse {}    -- the open group's title bar was clicked again
+%     contentWidth {width} -- sent once, right after the first render: the
+%                           widest any one tab's own content needs to be to
+%                           show without a horizontal scrollbar (see
+%                           AlakazamRibbon.html's own alzMeasureAndReport-
+%                           Width). Alakazam.setupMainWindow widens
+%                           MainFigure at startup if it would otherwise be
+%                           narrower than this -- see ContentWidthMeasuredFcn.
 %
 %   Overflow groups (more items than fit in one row) used to unfold in
 %   place, which meant growing the whole ribbon row height (and pushing
@@ -65,9 +72,10 @@ classdef AlakazamRibbon < handle
     end
 
     properties
-        % Callback function handle: fcn(id). Mirrors WorkSpaceTree's
-        % *Fcn callback-property style.
+        % Callback function handles: fcn(id)/fcn(width). Mirror
+        % WorkSpaceTree's *Fcn callback-property style.
         ItemPushedFcn = function_handle.empty
+        ContentWidthMeasuredFcn = function_handle.empty
     end
 
     properties (Access = private)
@@ -161,6 +169,8 @@ classdef AlakazamRibbon < handle
                     this.showPopup(d);
                 case 'groupCollapse'
                     this.hidePopup();
+                case 'contentWidth'
+                    this.invoke(this.ContentWidthMeasuredFcn, d.width);
             end
         end
 

@@ -99,6 +99,12 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 //                 alzWireTitleExpander; MATLAB positions its own floating
 //                 popup component from this rect, this page never grows.
 //   groupCollapse {}
+//   contentWidth  {width} -- sent once, right after the first render: the
+//                 widest any one tab's own content needs to be to show
+//                 without .alz-content's own horizontal scrollbar (see
+//                 alzMeasureAndReportWidth). MATLAB uses this to widen
+//                 MainFigure at startup if it would otherwise be narrower
+//                 than the ribbon itself needs.
 
 var alzData = null;
 var alzActiveTab = null;
@@ -240,9 +246,30 @@ function alzSendEvent(name, payload) {
     }
 }
 
+function alzMeasureAndReportWidth() {
+    // alzRenderContent() only ever builds the CURRENTLY active tab's
+    // groups into #alzContent (see its own comment), so the widest tab is
+    // not necessarily the one showing first -- each tab is rendered in
+    // turn, scrollWidth read (a synchronous reflow; no requestAnimationFrame
+    // needed), then the original tab is restored so nothing visible changes.
+    var originalTab = alzData.activeTab;
+    var maxWidth = document.getElementById('alzTabStrip').scrollWidth;
+    (alzData.tabs || []).forEach(function (tab) {
+        alzData.activeTab = tab.id;
+        alzActiveTab = tab.id;
+        alzRenderContent();
+        maxWidth = Math.max(maxWidth, document.getElementById('alzContent').scrollWidth);
+    });
+    alzData.activeTab = originalTab;
+    alzActiveTab = originalTab;
+    alzRenderContent();
+    alzSendEvent('contentWidth', { width: maxWidth });
+}
+
 function setup(htmlComponent) {
     alzComponent = htmlComponent;
     alzRender(htmlComponent.Data);
+    alzMeasureAndReportWidth();
     htmlComponent.addEventListener('DataChanged', function () {
         alzRender(htmlComponent.Data);
     });

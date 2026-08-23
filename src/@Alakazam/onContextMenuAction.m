@@ -23,6 +23,8 @@ function onContextMenuAction(this, eventData, sourceTree)
             this.onApplyTemplate();
         case 'exportErpset'
             this.onExportErpset();
+        case 'exportSet'
+            this.onExportSet();
         case 'delete'
             this.onDeleteNode();
     end
