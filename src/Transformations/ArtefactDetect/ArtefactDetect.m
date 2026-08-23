@@ -25,11 +25,11 @@ function [EEG, options] = ArtefactDetect(EEG, varargin)
 [options, interactive] = TransTools.InitGuard(nargin, 'Alakazam:ArtefactDetect', varargin{:});
 
 if ~isfield(EEG, 'data') || isempty(EEG.data)
-    throw(MException('Alakazam:ArtefactDetect', 'Problem in ArtefactDetect: this dataset has no data.'));
+    throw(MException('Alakazam:ArtefactDetect', 'Problem in ArtefactDetect: I''m afraid this dataset has no data.'));
 end
 if ismatrix(EEG.data) || (isfield(EEG, 'DataFormat') && ~strcmpi(EEG.DataFormat, 'EPOCHED'))
     throw(MException('Alakazam:ArtefactDetect', ...
-        ['Problem in ArtefactDetect: needs segmented (epoched) data. Segment it first ' ...
+        ['Problem in ArtefactDetect: this needs segmented (epoched) data. Please segment it first ' ...
          '(e.g. with DefineBins), then run artifact detection on the epoched result.']));
 end
 

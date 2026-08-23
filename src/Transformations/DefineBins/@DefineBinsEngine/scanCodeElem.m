@@ -1,0 +1,23 @@
+function [node, k] = scanCodeElem(T, k, aliases)
+%SCANCODEELEM  One code element: a literal number/string, or an alias
+%   reference spliced in from ALIASES.
+    t = DefineBinsEngine.tokAt(T, k);
+    if t.kind == "num" || t.kind == "str"
+        node = DefineBinsEngine.anchorNode(DefineBinsEngine.canonType(t.val)); k = k + 1;
+    elseif t.kind == "ident"
+        name = char(t.val);
+        if ~isfield(aliases, name)
+            DefineBinsEngine.throwParseError(t.pos, sprintf([ ...
+                'I don''t know what ''%s'' means, I''m afraid -- there is no let alias by ' ...
+                'that name (at least, not one defined earlier in the script). If you ' ...
+                'meant a text marker, it needs quotes: "%s". If you meant an alias, ' ...
+                'would you define it first: let %s = ...'], name, name, name));
+        end
+        node = aliases.(name); k = k + 1;                   % splice in the alias's expression
+    else
+        DefineBinsEngine.throwParseError(t.pos, [ ...
+            'I was hoping to find a marker code here -- a number (112), a quoted text ' ...
+            'marker ("S112"), a {...} or |-separated set of these, or the name of a ' ...
+            'let alias.']);
+    end
+end

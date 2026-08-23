@@ -22,7 +22,7 @@ function mesh = ReadBrainMeshNV(nvFile)
     fid = fopen(nvFile, 'r');
     if fid < 0
         throw(MException('Alakazam:ReadBrainMeshNV', ...
-            'Cannot read brain mesh file: %s', nvFile));
+            'I''m sorry, I was unable to read the brain mesh file: %s', nvFile));
     end
     closer = onCleanup(@() fclose(fid));
 

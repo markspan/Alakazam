@@ -37,11 +37,11 @@ function evaluateDroppedBranch(this, sourceFile, targetNode)
     % onNodeDropped's own try/catch.
     if exist(targetFile, "file") ~= 2
         throw(MException('Alakazam:evaluateDroppedBranch', ...
-            'The target dataset''s cache file is missing:\n\n    %s', targetFile));
+            'I''m afraid the target dataset''s cache file could not be found:\n\n    %s', targetFile));
     end
     if exist(sourceFile, "file") ~= 2
         throw(MException('Alakazam:evaluateDroppedBranch', ...
-            'The dragged branch''s cache file is missing:\n\n    %s', sourceFile));
+            'I''m afraid the dragged branch''s cache file could not be found:\n\n    %s', sourceFile));
     end
     targetStruct = load(targetFile, "EEG");
     sourceStruct = load(sourceFile, "EEG");
@@ -71,9 +71,9 @@ function evaluateDroppedBranch(this, sourceFile, targetNode)
     % "undefined function" error.
     if exist(transformId, "file") ~= 2
         throw(MException('Alakazam:evaluateDroppedBranch', ...
-            ['Stored transformation ''%s'' no longer exists ' ...
-             '(its .m file is missing from the Transformations ' ...
-             'folder). Cannot replay this branch.'], transformId));
+            ['I''m sorry, but the stored transformation ''%s'' no longer appears to exist ' ...
+             '(its .m file seems to be missing from the Transformations folder), so I am ' ...
+             'unable to replay this branch.'], transformId));
     end
     [result.EEG, ~] = feval(transformId, targetStruct.EEG, sourceStruct.EEG.params);
     result.EEG.Call   = sourceStruct.EEG.Call;

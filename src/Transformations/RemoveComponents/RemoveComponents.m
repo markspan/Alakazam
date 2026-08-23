@@ -41,7 +41,7 @@ if interactive
     % polar coordinates straight from the template by label instead.
     dispLocs = TransTools.TemplateScalpLocs(EEG.chanlocs(EEG.icachansind), ...
         TransTools.Dipfit1005File('Alakazam:RemoveComponents'));
-    [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs);
+    [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs, EEG.icaact, EEG.srate);
     if ~ok
         EEG = [];   % cancelled -- no node, no compute
         return;
@@ -75,6 +75,14 @@ function EEG = ensureDecomposition(input)
             isfield(EEG, 'icachansind') && ~isempty(EEG.icachansind)
         if ~hasICLabel(EEG)
             EEG = classifyOnSubset(EEG);
+        end
+        if ~isfield(EEG, 'icaact') || isempty(EEG.icaact)
+            % A reused decomposition does not always carry its activations
+            % (EEGLAB sometimes leaves icaact empty and computes it lazily) --
+            % the manual selector's own time-course/spectrum preview needs
+            % them, so fill them in here rather than at every call site that
+            % might need them.
+            EEG = eeg_checkset(EEG, 'ica');
         end
         return;
     end

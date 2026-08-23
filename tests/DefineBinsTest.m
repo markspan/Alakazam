@@ -122,6 +122,180 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyError(@() DefineBins(EEG, opts), 'Alakazam:DefineBins');
         end
 
+        % --- Broken-script coverage below: one test per distinct parse-error
+        % class DefineBinsEngine's parser can raise (see its throwParseError
+        % call sites), each checked for both the shared wrapped identifier
+        % and a distinguishing phrase from its own specific message -- so a
+        % script that trips the wrong failure path still fails the test,
+        % rather than only checking "some parse error happened".
+
+        function emptyScriptIsRejectedWithAHelpfulMessage(testCase)
+        %EMPTYSCRIPTISREJECTEDWITHAHELPFULMESSAGE  A script with no bin
+        %   statements at all (blank, or only comments) is rejected before
+        %   ever reaching the evaluator.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', '% just a comment, no bins here');
+            testCase.verifyError(@() DefineBins(EEG, opts), 'Alakazam:DefineBins');
+            try
+                DefineBins(EEG, opts);
+            catch err
+                testCase.verifySubstring(err.message, 'bin <number> "<label>"');
+            end
+        end
+
+        function binWithNoExpressionIsRejected(testCase)
+        %BINWITHNOEXPRESSIONISREJECTED  A bin with a label but nothing
+        %   after it has no predicate to match events against.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "Targets"');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'nothing after it');
+            end
+        end
+
+        function duplicateAliasNameIsRejected(testCase)
+        %DUPLICATEALIASNAMEISREJECTED  Two 'let' statements defining the
+        %   same alias name are rejected, not silently letting the second
+        %   shadow the first.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', [ ...
+                'let x = 112' newline ...
+                'let x = 122' newline ...
+                'bin 1 "A" x']);
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'already defined earlier');
+            end
+        end
+
+        function unknownAliasReferenceIsRejected(testCase)
+        %UNKNOWNALIASREFERENCEISREJECTED  A bare word that is not a
+        %   defined 'let' alias (and not a quoted marker) is rejected
+        %   rather than silently matching nothing.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "A" foo');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'don''t know what ''foo'' means');
+            end
+        end
+
+        function comboReferencingAMissingBinIsRejected(testCase)
+        %COMBOREFERENCINGAMISSINGBINISREJECTED  A combination bin that
+        %   names a bin number nobody defined is caught at parse time,
+        %   not as an opaque failure later in Average.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', [ ...
+                'bin 1 "A" 112' newline ...
+                'bin 2 "B" = bin 1 - bin 99']);
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'no bin 99');
+            end
+        end
+
+        function circularComboReferenceIsRejected(testCase)
+        %CIRCULARCOMBOREFERENCEISREJECTED  Two combination bins that
+        %   reference each other can never be computed, and are rejected
+        %   as a loop rather than recursing forever.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', [ ...
+                'bin 1 "A" = bin 2' newline ...
+                'bin 2 "B" = bin 1']);
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'forms a loop');
+            end
+        end
+
+        function emptyBraceListIsRejected(testCase)
+        %EMPTYBRACELISTISREJECTED  {} has no codes inside it to match.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "A" {}');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'empty');
+            end
+        end
+
+        function unclosedBraceListIsRejected(testCase)
+        %UNCLOSEDBRACELISTISREJECTED  A '{' with no matching '}' is
+        %   caught by the tokenizer rather than reading past the script.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "A" {112');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'never closes');
+            end
+        end
+
+        function invertedWindowBoundsAreRejected(testCase)
+        %INVERTEDWINDOWBOUNDSAREREJECTED  A window whose low bound is
+        %   greater than its high bound can never match anything, and is
+        %   rejected rather than silently matching nothing forever.
+            EEG = eegWithEvents({'112', '118'}, [100, 200]);
+            opts = struct('script', 'bin 1 "A" 112 and next(118) within (1200,200] ms');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'greater than');
+            end
+        end
+
+        function anyWithoutAWithinWindowIsRejected(testCase)
+        %ANYWITHOUTAWITHINWINDOWISREJECTED  Unlike next/prev/adjacent,
+        %   any(code) has no natural neighbour to fall back on and always
+        %   needs an explicit window.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "A" any(112)');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'always needs a ''within');
+            end
+        end
+
+        function unrecognisedCharacterIsRejected(testCase)
+        %UNRECOGNISEDCHARACTERISREJECTED  A character that is not part of
+        %   any code, keyword or punctuation the language uses is caught
+        %   by the tokenizer with a pointer to exactly where it is.
+            EEG = eegWithEvents({'112'}, 100);
+            opts = struct('script', 'bin 1 "A" 112 @');
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'don''t know what to do with the character');
+            end
+        end
+
         function epochWindowSegmentsTheData(testCase)
         %EPOCHWINDOWSEGMENTSTHEDATA  Passing opts.epoch alongside
         %   opts.script cuts trials around every matched event and

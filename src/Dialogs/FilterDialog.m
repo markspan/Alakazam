@@ -125,15 +125,15 @@ function options = FilterDialog(srate, labels, stored)
     function ok = validOne(name, key, f, d)
         ok = false;
         if ~(f > 0 && f < nyq)
-            uialert(fig, sprintf('%s frequency (%.4g Hz) must be between 0 and Nyquist (%.4g Hz).', ...
+            uialert(fig, sprintf('I''m afraid %s frequency (%.4g Hz) needs to sit between 0 and Nyquist (%.4g Hz).', ...
                 name, f, nyq), 'Check the filters'); return;
         end
         if strcmp(key, 'notch') && (f - 1 <= 0 || f + 1 >= nyq)
-            uialert(fig, sprintf('%s (%.4g Hz) is too close to 0 or Nyquist for a notch.', name, f), ...
+            uialert(fig, sprintf('I''m afraid %s (%.4g Hz) sits too close to 0 or Nyquist to use for a notch.', name, f), ...
                 'Check the filters'); return;
         end
         if ~(d > 0)
-            uialert(fig, sprintf('%s attenuation (dB) must be positive.', name), 'Check the filters'); return;
+            uialert(fig, sprintf('I''m afraid %s attenuation (dB) needs to be a positive value.', name), 'Check the filters'); return;
         end
         ok = true;
     end

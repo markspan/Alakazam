@@ -13,7 +13,7 @@ function [EEG, options] = ChannelEditor(input, varargin)
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:ChannelEditor', varargin{:});
 if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
     throw(MException('Alakazam:ChannelEditor', ...
-        'Problem in ChannelEditor: this dataset has no channel structure to edit.'));
+        'Problem in ChannelEditor: I''m afraid this dataset has no channel structure to edit.'));
 end
 
 if interactive

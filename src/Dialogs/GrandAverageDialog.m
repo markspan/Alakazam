@@ -121,11 +121,11 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     function onOK()
         name = strtrim(nameField.Value);
         if isempty(name)
-            uialert(fig, 'Give this grand average a name.', 'Name needed');
+            uialert(fig, 'Would you give this grand average a name before continuing?', 'Name needed');
             return;
         end
         if numel(subjectList.Value) < 2
-            uialert(fig, 'Pick at least two subjects of the selected type.', 'Not enough subjects');
+            uialert(fig, 'I''m afraid at least two subjects of the selected type need to be picked.', 'Not enough subjects');
             return;
         end
         weighted = strcmp(typeDrop.Value, 'ERP') && strcmp(weightField.Value, weightChoices{2});

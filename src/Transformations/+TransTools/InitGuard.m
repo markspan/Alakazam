@@ -42,7 +42,7 @@ function [opts, interactive] = InitGuard(nargin_, errorId, varargin)
     if nargin_ < 1
         parts = strsplit(errorId, ':');
         throw(MException(errorId, sprintf( ...
-            'Problem in %s: needs a dataset to run on, and none was given.', parts{end})));
+            'Problem in %s: I''m afraid this needs a dataset to run on, and none was given here.', parts{end})));
     end
     if isempty(varargin)
         opts = 'Init';

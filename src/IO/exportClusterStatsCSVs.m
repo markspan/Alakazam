@@ -150,7 +150,7 @@ end
 function fid = openOrThrow(file)
     fid = fopen(file, 'w');
     if fid < 0
-        throw(MException('Alakazam:exportClusterStatsCSVs', 'Could not open "%s" for writing.', file));
+        throw(MException('Alakazam:exportClusterStatsCSVs', 'I''m afraid I could not open "%s" for writing.', file));
     end
 end
 

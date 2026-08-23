@@ -25,7 +25,7 @@ function nodes = appendBranch(nodes, file, parentIdx)
 %   recurse into every child, depth-first.
     if exist(file, "file") ~= 2
         throw(MException('Alakazam:collectBranchTree', ...
-            'A step''s cache file is missing:\n\n    %s', file));
+            'I''m afraid one of this branch''s steps has a cache file that could not be found:\n\n    %s', file));
     end
     loaded = load(file, "EEG");
     nodes(end + 1) = struct('transformId', char(string(loaded.EEG.Call)), ...

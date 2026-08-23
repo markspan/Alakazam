@@ -131,7 +131,7 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
     function onOK()
         sources = subjectList.Value;
         if numel(sources) < 2
-            uialert(fig, 'Pick at least two subjects.', 'Not enough subjects');
+            uialert(fig, 'I''m afraid at least two subjects need to be picked before this test can run.', 'Not enough subjects');
             return;
         end
         mode = modeDrop.Value;
@@ -140,7 +140,7 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
                 contrast = struct('mode', 'vsZero', 'bin', binADrop.Value);
             case 'paired'
                 if strcmp(binADrop.Value, binBDrop.Value)
-                    uialert(fig, 'Bin A and Bin B must be different.', 'Same bin picked twice');
+                    uialert(fig, 'Bin A and Bin B would need to be different from one another for a paired comparison.', 'Same bin picked twice');
                     return;
                 end
                 contrast = struct('mode', 'paired', 'binA', binADrop.Value, 'binB', binBDrop.Value);
@@ -148,8 +148,8 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
                 mask = ismember(candidateFiles, sources);
                 groupOf = candidateGroups(mask);
                 if numel(setdiff(unique(groupOf), {''})) < 2
-                    uialert(fig, ['The selected subjects don''t span at least two groups. ' ...
-                        'Pick subjects from both groups, or choose a different contrast.'], ...
+                    uialert(fig, ['I''m afraid the selected subjects don''t span at least two groups. ' ...
+                        'Would you pick subjects from both groups, or choose a different contrast instead?'], ...
                         'Not enough groups selected');
                     return;
                 end

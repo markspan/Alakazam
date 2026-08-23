@@ -15,19 +15,19 @@ function [EEG, opts] = Baseline(input, varargin)
 
 if ~isfield(input, 'data')
     throw(MException('Alakazam:Baseline', ...
-        'Problem in Baseline: this dataset has no data at all, so there is nothing to baseline-correct.'));
+        'Problem in Baseline: I''m afraid this dataset has no data at all, so there is nothing to baseline-correct.'));
 end
 
 if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
     throw(MException('Alakazam:Baseline', ...
         ['Problem in Baseline: this needs segmented (epoched) data, but the selected ' ...
-         'dataset is still continuous. Segment it first (e.g. with DefineBins), then ' ...
+         'dataset is still continuous. Please segment it first (e.g. with DefineBins), then ' ...
          'run Baseline on the segmented result.']));
 end
 
 if ~isfield(input, 'trials')
     throw(MException('Alakazam:Baseline', ...
-        'Problem in Baseline: this dataset is missing its trial count, so it cannot be treated as segmented data.'));
+        'Problem in Baseline: I''m afraid this dataset is missing its trial count, so it cannot be treated as segmented data.'));
 end
 
 if interactive

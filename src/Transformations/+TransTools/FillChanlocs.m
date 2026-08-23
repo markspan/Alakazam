@@ -32,7 +32,7 @@ function EEG = FillChanlocs(EEG, errorId, elcFile)
 
     if exist(elcFile, 'file') ~= 2
         throw(MException(errorId, ...
-            'Cannot auto-fill electrode positions: %s was not found.', elcFile));
+            'I''m unable to auto-fill electrode positions: %s could not be found.', elcFile));
     end
     EEG = pop_chanedit(EEG, 'lookup', elcFile);
     % A location lookup fills positions but never channel types; guess the

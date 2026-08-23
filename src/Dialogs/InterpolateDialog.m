@@ -49,7 +49,7 @@ function options = InterpolateDialog(chanlocs, stored)
     function onOK()
         chans = asCell(chanList.Value);
         if isempty(chans)
-            uialert(fig, 'Select at least one channel to interpolate.', 'Nothing selected'); return;
+            uialert(fig, 'Would you select at least one channel to interpolate?', 'Nothing selected'); return;
         end
         code = METHODCODES{strcmp(METHODS, methodDrop.Value)};
         options = struct('channels', {chans}, 'method', code);

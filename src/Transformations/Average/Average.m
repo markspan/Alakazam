@@ -36,19 +36,19 @@ opts = TransTools.InitGuard(nargin, 'Alakazam:Average', varargin{:});
 % Validate input data
 if ~isfield(input, 'data')
     throw(MException('Alakazam:Average', ...
-        'Problem in Average: this dataset has no data at all, so there is nothing to average.'));
+        'Problem in Average: I''m afraid this dataset has no data at all, so there is nothing to average.'));
 end
 
 if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
     throw(MException('Alakazam:Average', ...
         ['Problem in Average: this needs segmented (epoched) data, but the selected ' ...
-         'dataset is still continuous. Segment it first (e.g. with DefineBins), then ' ...
+         'dataset is still continuous. Please segment it first (e.g. with DefineBins), then ' ...
          'run Average on the segmented result.']));
 end
 
 if ~isfield(input, 'trials')
     throw(MException('Alakazam:Average', ...
-        'Problem in Average: this dataset is missing its trial count, so it cannot be treated as segmented data.'));
+        'Problem in Average: I''m afraid this dataset is missing its trial count, so it cannot be treated as segmented data.'));
 end
 
 EEG = input;

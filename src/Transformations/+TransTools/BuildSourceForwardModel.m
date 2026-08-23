@@ -91,8 +91,8 @@ function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labe
     keep = ismember(lower(elec.label), lower(labelsCell));
     if ~any(keep)
         throw(MException('Alakazam:BuildSourceForwardModel', ...
-            ['None of this dataset''s channels match FieldTrip''s own 10-5 ' ...
-             'electrode template, so no forward model can be built.']));
+            ['I''m afraid none of this dataset''s channels match FieldTrip''s own 10-5 ' ...
+             'electrode template, so there is no forward model I can build.']));
     end
     elec.label    = elec.label(keep);
     elec.elecpos  = elec.elecpos(keep, :);
@@ -156,7 +156,7 @@ function v = loadSoleVariable(matFile)
     f = fieldnames(s);
     if numel(f) ~= 1
         throw(MException('Alakazam:BuildSourceForwardModel', ...
-            'Expected exactly one variable in %s, found %d.', matFile, numel(f)));
+            'I expected to find exactly one variable in %s, but found %d instead.', matFile, numel(f)));
     end
     v = s.(f{1});
 end
