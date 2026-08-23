@@ -652,6 +652,106 @@ header.
 
 </details>
 
+## Using your own data
+
+The preceding sections describe analyses performed on recordings referenced
+by a *workspace*. This section documents the procedure for directing
+Alakazam to user-supplied recordings, for specifying the experimental
+design, and for configuring the application's display preferences,
+independent of any single transformation.
+
+### Starting with your own recordings
+
+A workspace consists of three directories and a small quantity of
+persistent state.
+
+- **Raw data directory**: the location of the source recordings. Every file
+  present directly within this directory is registered as a root node in
+  the Data & Analyses tree. Supported formats are `.set` (EEGLAB),
+  `.vhdr`/`.eeg`/`.vmrk` (BrainVision), `.erp` (an ERPLAB erpset, imported
+  as an already-averaged root node), and `.mat` (a previously saved
+  Alakazam session).
+- **Intermediate directory**: the cache in which the output of every
+  transformation is stored, organised in a subdirectory per recording that
+  mirrors the raw file's own name. This permits the analysis tree to be
+  reconstructed in a later session without recomputation (see
+  [Architecture](#architecture)).
+- **Exports directory**: the default destination for CSV and report
+  exports.
+
+On first use, the repository provides `DefaultWorkSpace.wksp`, loaded
+automatically by `startAlakazam` (see [Getting started](#getting-started)).
+To analyse user-supplied recordings, this file may be edited directly -- it
+is a JSON object with `RawDirectory`, `CacheDirectory`, and
+`ExportsDirectory` fields, in which the `~` character resolves to the
+user's home directory -- or the three directories may be reassigned from
+within the application via **Edit WorkSpace...** (below). In either case,
+the raw directory is rescanned and the tree reconstructed as soon as the
+directories are changed.
+
+### Editing the workspace
+
+The Home tab's **Workspace** group provides the following operations.
+
+- **Open WorkSpace...**: loads a specified `.wksp` file, including its
+  directories, previously recorded transformation parameters, and
+  group/subject assignments.
+- **Save WorkSpace...**: writes the current directories, the most recently
+  used parameters of every transformation, and any group/subject
+  assignments to a `.wksp` file, such that the session may be restored in
+  full when reopened. No component of this state is persisted
+  automatically; **Save WorkSpace** constitutes the sole point at which it
+  is written to disk (see [Settings](#settings), a distinct, machine-wide
+  preference file).
+- **Edit WorkSpace...**: modifies the Raw, Intermediate, and Exports
+  directories directly, via a directory-browser control for each field,
+  without requiring a `.wksp` file.
+- **Clear WorkSpace**: deletes the entire Intermediate (cache) directory
+  and rescans the raw directory from its initial state. This operation
+  removes the results of every transformation for every subject, not a
+  single selected subject; a confirmation prompt precedes execution, but
+  the operation cannot be reversed once confirmed.
+- **Clear Other**: retains a single subject's analysis branch (the
+  selected root node, or the first such node if none is selected) and
+  removes every other subject's branch, for use when regenerating the
+  remaining subjects' pipelines from a revised template while preserving
+  the one on which it was developed.
+
+### Specifying the design
+
+Every workspace is, by default, a within-subjects design: each bin or
+condition is assumed to have been measured for every subject. Specification
+of an alternative design -- a between-subjects comparison, or the
+association of multiple recordings (e.g., session 1/2, pre/post) with a
+single individual -- is performed through a single dialog, **Grouping...**,
+located in the Home tab's **Design** group. The procedure and its
+statistical consequences are described in full in
+[Groups: setting up a between-subjects or mixed design](#groups-setting-up-a-between-subjects-or-mixed-design).
+As with the workspace's directories, group and subject assignments are
+retained only for the duration of the current session unless explicitly
+written to disk via **Save WorkSpace**.
+
+### Settings
+
+**Global...**, located in the Home tab's **Settings** group, opens the
+application's preference dialog. These settings govern display behaviour
+uniformly, independent of the active workspace.
+
+- **Graphics** tab: ERP-plot polarity (positive deflection oriented upward
+  or downward), a shared versus per-electrode y-axis, the
+  confidence-interval band and its width, whether trials in the epoch
+  image are grouped by bin, the colour map applied to every signed,
+  zero-centred plot (ERP image, ERSP power, scalp topography), and whether
+  the Fourier power spectrum is smoothed prior to display.
+- **Frequency bands** tab: the named frequency ranges (label, lower and
+  upper bound, colour) shaded beneath the Fourier plot; bands may be
+  added, modified, or removed here.
+
+Selecting **Save** within this dialog writes the configuration to a
+machine-wide preference file immediately, independent of the active
+workspace and irrespective of whether **Save WorkSpace** has been invoked.
+No separate save operation is required for these settings.
+
 ## How-to walkthroughs
 
 Three worked pipelines, plus a fourth that is a complete, reproducible run on
