@@ -360,6 +360,12 @@ format, violin plots showing the actual distribution rather than just a bar
 and an error bar, and narrative prose ("A linear mixed model revealed a
 significant effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
 
+A rendered report, opened in a real browser -- the sticky table of contents,
+the LMM fixed-effect and Holm-corrected pairwise-comparison tables, the
+Friedman robustness check, and a per-subject violin plot:
+
+![Rendered Quarto statistical report: LMM/pairwise tables, Friedman check, violin plot](Screenshots/Report.jpg)
+
 ### What gets tested, and what question it answers
 
 The report is design-aware: it is built at generation time in MATLAB, where
