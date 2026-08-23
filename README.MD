@@ -231,6 +231,11 @@ The current library:
 | `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT: the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
 | `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
 
+`TimeFrequency`'s own grid view, one event-related spectral perturbation
+(ERSP) heatmap per bin, channel-stepped and baseline-corrected:
+
+![TimeFrequency grid view, one ERSP heatmap per bin](Screenshots/TimeFrequency.jpg)
+
 Grand averaging (combining several subjects' `Average` results into one) is
 a separate mechanism, not a transformation plugin: it has its own ribbon tab
 and dialog (`GrandAverage.m`/`GrandAverageDialog.m`) and lands in the
@@ -245,7 +250,15 @@ and dialog (`GrandAverage.m`/`GrandAverageDialog.m`) and lands in the
 `Brain3D` opens the same scrubbable, per-bin averaged ERP as
 `ScalpDistribution`, but drawn on a rotatable 3D brain (click-and-drag to
 orbit) instead of a flat 2D topoplot, with a **Projection** dropdown
-choosing how the data is drawn:
+choosing how the data is drawn.
+
+`ScalpDistribution`'s own flat, scrubbable topography, one head per bin:
+
+![ScalpDistribution: scrubbable topography, one head per bin](Screenshots/ScalpDistribution.jpg)
+
+The same underlying projection, on `Brain3D`'s rotatable 3D surface:
+
+![Brain3D: the same scalp-topography projection on a rotatable 3D brain](Screenshots/Brain3d.jpg)
 
 - **Scalp topography** (the default) is the same spherical-spline
   interpolation `ScalpDistribution`'s flat topoplot uses, projected onto a
@@ -321,21 +334,6 @@ measure reference, with worked examples, is
 [`measure.md`](src/Transformations/Measure/measure.md). The same button also
 renders a companion statistical report, see
 [Statistical analysis](#statistical-analysis).
-
-![ScreenshotERP](Screenshots/ERP.jpg)
-
-![ScreenshotScalp](Screenshots/ScalpDistribution.jpg)
-
-![ScreenshotEpoched](Screenshots/Epoched.jpg)
-
-![ScreenshotTF](Screenshots/TimeFrequency.jpg)
-
-![ScreenshotB3D](Screenshots/Brain3d.jpg)
-
-![ScreenshotFourier](Screenshots/Fourier.jpg)
-
-![ScreenshotCoh](Screenshots/Coherence.jpg)
-
 
 <details>
 <summary><strong>Statistical analysis</strong> (click to expand)</summary>
@@ -633,7 +631,9 @@ exact), and reports:
 For the time-resolved picture, the **Coherence Map** transform draws the
 coherence between each channel and a reference (photodiode) as a per-channel
 **time x frequency heatmap**, the plot the RIFT figures show (Dimigen et al.,
-2025), using either a Morlet wavelet or a fixed-window STFT decomposition.
+2025), using either a Morlet wavelet or a fixed-window STFT decomposition:
+
+![CoherenceMap: per-bin channel-to-reference coherence, time x frequency](Screenshots/Coherence.jpg)
 
 The reference is optional (not every recording has a photodiode), so power /
 SNR / phase-locking are always available and coherence is added when a
@@ -746,6 +746,14 @@ uniformly, independent of the active workspace.
 - **Frequency bands** tab: the named frequency ranges (label, lower and
   upper bound, colour) shaded beneath the Fourier plot; bands may be
   added, modified, or removed here.
+
+The epoch image, trials grouped by bin (Prime/Target x related/unrelated):
+
+![Epoch image with trials grouped by bin](Screenshots/Epoched.jpg)
+
+The Fourier plot, with a configured frequency band shaded beneath the spectrum:
+
+![Fourier plot with a shaded frequency band](Screenshots/Fourier.jpg)
 
 Selecting **Save** within this dialog writes the configuration to a
 machine-wide preference file immediately, independent of the active
@@ -1075,6 +1083,11 @@ other nine recordings in one action -- rather than dragging the template
 onto each of the ten root nodes by hand. **Grand Average** across all ten,
 then the **Export/Report** tab's **ERP & Report** button writes the CSV and
 renders the companion Quarto report.
+
+The resulting Grand Average, all four bins plus the `N400` difference wave,
+with the confidence-interval band from [Settings](#settings) enabled:
+
+![Grand Average of all ten N400 subjects, four bins plus the N400 difference wave](Screenshots/ERP.jpg)
 
 **What actually got tested.** `Measure` defines one window (`N400`, Cz,
 300-500 ms), applied to every bin the averaged dataset resolved a waveform
