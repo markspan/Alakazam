@@ -156,6 +156,47 @@ function EEG = applyFir(EEG, type, freq, db, chanind)
     else
         b = firws(m, fc, ftype, w);
     end
+    EEG = firfiltBins(EEG, b, chanind);
+end
+
+function EEG = firfiltBins(EEG, b, chanind)
+%FIRFILTBINS  Apply the designed FIR with firfilt, once per bin.
+%   An averaged dataset -- one subject's Average, or a GrandAverage -- keeps
+%   one waveform per bin in the third dimension of EEG.data, but still
+%   reports EEG.trials == 1. firfilt reads that as continuous data and
+%   filters EEG.pnts columns, which for an nchan x npnts x nbin array is bin
+%   1 alone, leaving every later bin untouched. So hand firfilt each bin
+%   separately, as genuinely 2-D data. That is also the behaviour we want:
+%   no filtering across a bin boundary, exactly as firfilt keeps epochs
+%   apart. Epoched data (trials > 1) goes straight through -- there the
+%   third dimension is trials, which firfilt already handles itself.
+    nbin = size(EEG.data, 3);
+    if nbin <= 1 || TransTools.FieldOr(EEG, 'trials', 1) > 1
+        EEG = firfiltOne(EEG, b, chanind);
+        return;
+    end
+
+    filtered = EEG.data;
+    for k = 1:nbin
+        binEEG        = EEG;
+        binEEG.data   = EEG.data(:, :, k);
+        binEEG.trials = 1;
+        binEEG.nbchan = size(EEG.data, 1);
+        binEEG.pnts   = size(EEG.data, 2);
+        % An averaged dataset still carries the events of the epoched
+        % dataset it was built from, whose latencies index a different (much
+        % longer) timeline. firfilt is boundary-aware, so leaving them in
+        % place would let a stale boundary event split a bin at a
+        % meaningless sample; each bin is one continuous waveform.
+        binEEG.event  = struct('type', {}, 'latency', {});
+        binEEG        = firfiltOne(binEEG, b, chanind);
+        filtered(:, :, k) = binEEG.data;
+    end
+    EEG.data = filtered;
+end
+
+function EEG = firfiltOne(EEG, b, chanind)
+%FIRFILTONE  A single firfilt call, over every channel or just CHANIND.
     if isempty(chanind)
         EEG = firfilt(EEG, b);
     else
