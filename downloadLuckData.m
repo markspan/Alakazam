@@ -52,7 +52,7 @@ function downloadLuckData(fileIds, targetDir)
         downloadFile(fileIds{i}, zipFile);
 
         fprintf('Extracting into %s ...\n', targetDir);
-        unzip(zipFile, targetDir);
+        unzip(zipFile, fullfile(here, 'Data'));
         deleteIfExists(zipFile);
     end
 
