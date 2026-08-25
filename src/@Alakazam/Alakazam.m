@@ -41,6 +41,7 @@ classdef Alakazam < handle
         MainGrid        % uigridlayout, the top-level shell layout (see setupMainWindow)
         ToolbarGrid     % uigridlayout cell reserved for the ribbon
         Ribbon          % AlakazamRibbon, the Home/Tools/Grand Average control strip
+        HelpFigure      % matlab.ui.Figure, the in-app help viewer -- see onHelp. [] until first opened
         RibbonBaseHeight   = 134  % fixed ribbon row height (px); see setupMainWindow. Never grows: an
                                   % overflowing group now opens as a floating popup instead (see
                                   % AlakazamRibbon's PopupComponent), so this stays constant. 120 was a
@@ -84,6 +85,7 @@ classdef Alakazam < handle
         entries = collectMeasurementEntries(this)
         entries = collectSpectralEntries(this)
         entries = collectEntriesWithField(this, fieldName)
+        entries = collectDataQualityEntries(this)
         restoreDir = enterRepoRoot(this)
         loadAndPlotNode(this, eventData, sourceTree, action)
         dispatchToActiveView(this, eventData, viewNames, methodName)
@@ -116,6 +118,7 @@ classdef Alakazam < handle
         onExportSet(this)
         onExportMeasurements(this)
         onExportSpectral(this)
+        onExportDataQuality(this)
         onRecalculateNode(this)
         recalculateTransformNode(this, node, ownEEG)
         recalculateAffectedGrandAverages(this, touchedFiles)
@@ -131,6 +134,8 @@ classdef Alakazam < handle
         onApplyTemplate(this)
         onRibbonAction(this, id)
         onRibbonWidthMeasured(this, width)
+        onHelp(this)
+        offerReadmeInstead(this)
         setPlotsViewMode(this, mode)
         refreshPlotsView(this)
         onCloseRequest(this)
@@ -199,7 +204,19 @@ classdef Alakazam < handle
             % instead of silently falling back to a watch cursor on a
             % figure nobody can see yet.
             this.MainFigure.Visible = "on";
-            this.Workspace.open();
+            if this.Workspace.IsFirstRun
+                % A fresh clone/install: no .wksp file to read, so WorkSpace
+                % fell back to meaningless RepoRoot-relative folders nobody's
+                % own data lives in (see WorkSpace's own constructor). Guide
+                % the user straight to "Edit WorkSpace" in welcome mode
+                % rather than silently opening an empty tree -- its own OK
+                % handler calls .open() for us once real directories are
+                % set; Cancel just leaves the tree empty, same as before
+                % this guided prompt existed.
+                this.Workspace.edit(true);
+            else
+                this.Workspace.open();
+            end
 
             % Optional debug aid: expose this instance in the base workspace as
             % "AlakazamInst" (otherwise it is only reachable via "ans", which is

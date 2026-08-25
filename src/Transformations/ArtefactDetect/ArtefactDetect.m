@@ -71,6 +71,23 @@ end
 opt = normaliseOptions(options);
 [nChan, nSamp, nTrials] = size(EEG.data);
 
+% No detectors ticked: pass the data through untouched.
+%
+% This used to fall back to the absolute threshold instead, silently, which
+% meant "I selected nothing" quietly became "reject anything outside
+% +/-100 uV over the whole epoch". On real data that discarded up to 45% of
+% one subject's trials on a threshold nobody had chosen, and, because the
+% only trace was a console line that scrolls past, the loss then showed up
+% much later as an unexplained rejection rate in the data-quality report.
+% A transformation must never destroy data on the strength of a default the
+% analyst did not ask for; doing nothing is the only reading of an empty
+% selection that cannot cost anyone their trials.
+if isempty(opt.Method)
+    fprintf(['ArtefactDetect: no detectors were ticked, so nothing was tested and no ' ...
+        'data was changed (%d epoch(s) passed through untouched).\n'], nTrials);
+    return;
+end
+
 % Test window -> sample range (whole epoch when unset / degenerate).
 [lo, hi] = testRange(EEG, opt.TestStart, opt.TestStop, nSamp);
 
@@ -164,10 +181,20 @@ end
 function opt = normaliseOptions(options)
 %NORMALISEOPTIONS  Fill defaults and accept the old Minimum/Maximum-only struct.
 %   Method may be a single string (old struct) or a cellstr (multi-select); it
-%   is normalised to a cellstr, empty selection falling back to the absolute
-%   threshold so detection always does something.
-    opt.Method    = toMethodList(TransTools.FieldOr(options, 'Method', {'Absolute threshold'}));
-    if isempty(opt.Method)
+%   is normalised to a cellstr.
+%
+%   Deliberately NOT read through TransTools.FieldOr, unlike every other
+%   field here: FieldOr treats a present-but-empty field as absent and
+%   returns the default, which would turn "no detectors ticked" back into
+%   {'Absolute threshold'} and reinstate exactly the silent data loss the
+%   no-op guard above exists to prevent. The two cases have to be told
+%   apart, so isfield is tested directly:
+%     * ABSENT  -> the old Minimum/Maximum-only options struct, which meant
+%                  the absolute threshold; that default is kept.
+%     * PRESENT but EMPTY -> a deliberate empty selection; left empty.
+    if isstruct(options) && isfield(options, 'Method')
+        opt.Method = toMethodList(options.Method);
+    else
         opt.Method = {'Absolute threshold'};
     end
     opt.Minimum   = TransTools.FieldOr(options, 'Minimum', -100);

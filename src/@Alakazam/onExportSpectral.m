@@ -22,7 +22,7 @@ function onExportSpectral(this)
     end
     targetFile = fullfile(pathName, fileName);
 
-    restoreBusy = beginBusy(this.MainFigure, 'Exporting spectral measures...');
+    [restoreBusy, setBusy] = beginBusy(this.MainFigure, 'Exporting spectral measures...');
     try
         exportSpectralCSV(entries, targetFile);
     catch err
@@ -84,6 +84,9 @@ function onExportSpectral(this)
         fwrite(fid, qmdText, 'char');
         clear closeFile;   % close now, not at function exit: renderQuartoReport needs to read this file back next
 
+        % See onExportMeasurements' own note: the render, not the CSV
+        % export the opening message names, is the slow phase here.
+        setBusy('Rendering the report (quarto + R). The first run also installs R packages, which can take a minute.');
         [htmlFile, renderError] = renderQuartoReport(qmdFile);
         if ~isempty(htmlFile)
             reportLabel = sprintf('Report (%s) - %s', stem, string(stamp, 'dd-MMM-yyyy HH:mm'));

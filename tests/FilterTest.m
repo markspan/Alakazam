@@ -141,6 +141,40 @@ classdef FilterTest < matlab.unittest.TestCase
                 'Channel 2 (not named in perChannelRows) should be untouched.');
         end
 
+        function filtersEveryBinOfAnAveragedDataset(testCase)
+        %FILTERSEVERYBINOFANAVERAGEDDATASET  An averaged dataset (Average or
+        %   GrandAverage) holds one waveform per bin in the third dimension
+        %   of .data while still reporting trials == 1. Every bin must be
+        %   filtered, not just the first: firfilt on its own reads such a
+        %   dataset as continuous and filters bin 1 only, which is the bug
+        %   this covers. Each bin starts as the same waveform, so after
+        %   filtering each must be attenuated, and all must still match.
+            nbin = 3;
+            [EEG, t] = averagedFixture([0.5, 20], [10, 1], nbin);
+            opts = struct('highpass', struct('enabled', true, 'freq', 2, 'db', 40), ...
+                'lowpass', struct('enabled', false, 'freq', 0, 'db', 0), ...
+                'notch', struct('enabled', false, 'freq', 0, 'db', 0));
+
+            before = EEG.data;
+            [result, ~] = Filter(EEG, opts);
+
+            testCase.verifySize(result.data, size(before), ...
+                'Filtering must not change the shape of an averaged dataset.');
+
+            for k = 1:nbin
+                lowBefore = freqAmplitude(before(1, :, k), t, 0.5);
+                lowAfter  = freqAmplitude(result.data(1, :, k), t, 0.5);
+                testCase.verifyLessThan(lowAfter, lowBefore * 0.1, sprintf( ...
+                    'Bin %d: the 0.5 Hz drift should be attenuated by the 2 Hz high-pass.', k));
+            end
+
+            for k = 2:nbin
+                testCase.verifyEqual(result.data(:, :, k), result.data(:, :, 1), ...
+                    'AbsTol', 1e-9, sprintf( ...
+                    'Bin %d held the same waveform as bin 1, so it should filter identically.', k));
+            end
+        end
+
         function rejectsOutOfRangeFrequency(testCase)
         %REJECTSOUTOFRANGEFREQUENCY  A cutoff at or above Nyquist cannot
         %   be designed and should throw a friendly, identifiable error.
@@ -183,6 +217,29 @@ function [EEG, t] = eegFixture(freqs, amps)
     EEG.pnts   = numel(t);
     EEG.event  = struct('type', {}, 'latency', {});
     EEG.chanlocs = struct('labels', {'Ch1', 'Ch2'});
+end
+
+function [EEG, t] = averagedFixture(freqs, amps, nbin)
+%AVERAGEDFIXTURE  A minimal Averaged dataset: the same sum-of-sinusoids
+%   waveform in each of NBIN bins, held as nchan x npnts x nbin with
+%   trials == 1 -- the shape Average.m and GrandAverage.m both produce. Its
+%   .event deliberately carries a boundary event at a latency past the end
+%   of any single bin, as an averaged dataset inheriting the events of the
+%   epoched dataset it came from really does; a bin-aware filter must not
+%   let that stale latency split a bin.
+    [EEG, t] = eegFixture(freqs, amps);
+    EEG.data       = repmat(EEG.data, [1, 1, nbin]);
+    EEG.DataFormat = 'Averaged';
+    EEG.trials     = 1;
+    EEG.ntrials    = 40;
+    EEG.event      = struct('type', {'boundary'}, 'latency', {numel(t) * nbin - 10});
+    EEG.bindesc    = repmat( ...
+        struct('index', 0, 'label', '', 'n', 0, 'combo', [], 'trials', []), 1, nbin);
+    for k = 1:nbin
+        EEG.bindesc(k).index = k;
+        EEG.bindesc(k).label = sprintf('bin %d', k);
+        EEG.bindesc(k).n     = 20;
+    end
 end
 
 function a = freqAmplitude(sig, t, freq)

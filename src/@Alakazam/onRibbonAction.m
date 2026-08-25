@@ -18,6 +18,8 @@ function onRibbonAction(this, id)
             this.onClearOtherAnalyses();
         case 'settings'
             this.openSettings();
+        case 'help'
+            this.onHelp();
         case 'defineGrandAverage'
             this.onDefineGrandAverage();
         case 'clusterStats'
@@ -28,6 +30,8 @@ function onRibbonAction(this, id)
             this.onExportMeasurements();
         case 'exportSpectral'
             this.onExportSpectral();
+        case 'dataQuality'
+            this.onExportDataQuality();
         case 'viewTabs'
             this.setPlotsViewMode("tabs");
         case 'viewGrid'

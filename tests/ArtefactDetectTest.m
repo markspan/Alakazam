@@ -163,5 +163,60 @@ classdef ArtefactDetectTest < matlab.unittest.TestCase
                 'Scope', 'Whole epoch');
             testCase.verifyError(@() ArtefactDetect(EEG, opts), 'Alakazam:ArtefactDetect');
         end
+
+        % ---- empty detector selection ---------------------------------
+        function noDetectorsTickedChangesNothing(testCase)
+        %NODETECTORSTICKEDCHANGESNOTHING  An empty Method used to fall back
+        %   to the absolute threshold, so "I ticked nothing" silently became
+        %   "reject anything outside +/-100 uV over the whole epoch". On real
+        %   data that discarded 45% of a subject's trials on a threshold
+        %   nobody chose. An empty selection is now a genuine no-op.
+            EEG = makeTestEEG('nbchan', 2, 'trials', 3);
+            EEG.data(1, 10, 2) = 5000;   % way outside the default +/-100 uV
+            opts = struct('Method', {{}}, 'Minimum', -100, 'Maximum', 100, ...
+                'Scope', 'Whole epoch');
+
+            [result, ~] = ArtefactDetect(EEG, opts);
+
+            testCase.verifyEqual(result.data, EEG.data);
+            testCase.verifyFalse(any(isnan(result.data), 'all'));
+        end
+
+        function anEmptyMethodIsNotTreatedAsAnAbsentOne(testCase)
+        %ANEMPTYMETHODISNOTTREATEDASANABSENTONE  The trap that made the
+        %   first attempt at the fix above a no-fix: TransTools.FieldOr
+        %   returns its DEFAULT for a present-but-empty field, so reading
+        %   Method through it turns {} straight back into
+        %   {'Absolute threshold'}. normaliseOptions therefore has to test
+        %   isfield directly, and this pins that the two cases stay apart.
+            EEG = makeTestEEG('nbchan', 1, 'trials', 2);
+            EEG.data(1, 10, 1) = 5000;
+
+            emptyMethod = struct('Method', {{}}, 'Minimum', -100, 'Maximum', 100, ...
+                'Scope', 'Whole epoch');
+            absentMethod = struct('Minimum', -100, 'Maximum', 100, 'Scope', 'Whole epoch');
+
+            untouched = ArtefactDetect(EEG, emptyMethod);
+            rejected  = ArtefactDetect(EEG, absentMethod);
+
+            testCase.verifyFalse(any(isnan(untouched.data), 'all'), ...
+                'An EMPTY Method means no detectors, so nothing should be rejected.');
+            testCase.verifyTrue(all(isnan(rejected.data(:, :, 1)), 'all'), ...
+                'An ABSENT Method is the old Minimum/Maximum-only struct and must still detect.');
+        end
+
+        function aBlankMethodStringIsAlsoANoOp(testCase)
+        %ABLANKMETHODSTRINGISALSOANOOP  toMethodList drops blank entries, so
+        %   a stored {''} (or a bare '') reduces to an empty selection and
+        %   must take the same no-op path, not fall through to a detector.
+            EEG = makeTestEEG('nbchan', 1, 'trials', 2);
+            EEG.data(1, 10, 1) = 5000;
+            opts = struct('Method', {{''}}, 'Minimum', -100, 'Maximum', 100, ...
+                'Scope', 'Whole epoch');
+
+            [result, ~] = ArtefactDetect(EEG, opts);
+
+            testCase.verifyFalse(any(isnan(result.data), 'all'));
+        end
     end
 end
