@@ -18,6 +18,7 @@ classdef WorkSpace < handle
         ActiveTree        % WorkSpaceTree, whichever of Tree/GrandAveragesTree/ReportsTree was last interacted with -- see CreateTreeComponent
         Groups            % struct('subject',{},'group',{},'person',{},'session',{}): per-raw-file metadata -- between-subjects group, and the person/session identity behind a multi-session recording (day 1 vs day 2, ...) -- see editSubjects/groupFor/personFor/sessionFor
         EEG
+        IsFirstRun = false % logical, true only when the requested .wksp file could not be found/read at all (a fresh clone/install, or a named workspace that doesn't exist yet) -- see the constructor's catch branch below and Alakazam's own guided-first-run prompt
     end
     
     methods
@@ -59,6 +60,7 @@ classdef WorkSpace < handle
                     this.RawDirectory     = this.fromStoredPath(DIRS.RawDirectory);
                     this.CacheDirectory   = this.fromStoredPath(DIRS.CacheDirectory);
                     this.ExportsDirectory = this.fromStoredPath(DIRS.ExportsDirectory);
+                    this.IsFirstRun = false;
                 catch ME
                     if strcmp(ME.identifier, 'MATLAB:undefinedVarOrClass') || ...
                        contains(ME.message, 'No such file or directory') || ...
@@ -67,6 +69,7 @@ classdef WorkSpace < handle
                         this.RawDirectory     = fullfile(this.Parent.RepoRoot, 'Data', 'EEG');
                         this.CacheDirectory   = fullfile(this.Parent.RepoRoot, 'Data', 'Cache');
                         this.ExportsDirectory = fullfile(this.Parent.RepoRoot, 'Data', 'Exports');
+                        this.IsFirstRun = true;
                     else
                         rethrow(ME);
                     end

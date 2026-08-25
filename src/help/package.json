@@ -1,0 +1,13 @@
+{
+  "name": "alakazam-help",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build tooling for src/AlakazamHelp.html: converts the repository's own readme.MD (already written for the app's target audience) into a single self-contained in-app help page -- see build.mjs. Mirrors src/webtree's own build/deploy pattern.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "marked": "^18.0.11"
+  }
+}

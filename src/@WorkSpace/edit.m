@@ -1,4 +1,4 @@
-function edit(this, ~, ~)
+function edit(this, varargin)
 %EDIT  "Edit WorkSpace" dialog: Raw/Intermediate/Exports directory fields,
 %   each with a browse ("...") button opening a native folder picker.
 %   uifigure-based (styled to match the main app: header bar in the same
@@ -12,6 +12,16 @@ function edit(this, ~, ~)
 %   directories that don't exist are handled there already (created if
 %   possible, or a warning if not), so this dialog does not duplicate
 %   that validation. Cancel (or closing the window) discards changes.
+%
+%   Called two ways: as the ribbon's ButtonPushedFcn (EDIT(this, src,
+%   event), both ignored), or, on a guided first run (see Alakazam's own
+%   constructor and WorkSpace.IsFirstRun), directly as EDIT(this, true).
+%   WELCOME true adds a one-line explanation, leaves the Raw field blank
+%   instead of prefilling it with the meaningless RepoRoot-relative
+%   fallback nobody's own data lives in, and refuses OK until a Raw
+%   folder is actually chosen.
+    welcome = ~isempty(varargin) && islogical(varargin{end}) && varargin{end};
+
     accentColor = [0.290 0.498 0.788]; % matches AlakazamRibbon.html's .alz-tab-home (#4a7fc9)
     bgColor     = [0.9608 0.9608 0.9608]; % uifigure's own default Color
 
@@ -19,35 +29,55 @@ function edit(this, ~, ~)
     if isprop(this.Parent, 'MainFigure') && isvalid(this.Parent.MainFigure)
         parentFig = this.Parent.MainFigure;
     end
-    position = [400 400 560 230];
+    if welcome
+        headerText = 'Welcome to Alakazam';
+        rowHeights = {40, 36, '1x', 46};
+    else
+        headerText = 'Edit WorkSpace';
+        rowHeights = {40, '1x', 46};
+    end
+    position = [400 400 560 230 + (welcome * 40)];
     if ~isempty(parentFig)
         parentPos = parentFig.Position;
         position(1) = parentPos(1) + (parentPos(3) - position(3)) / 2;
         position(2) = parentPos(2) + (parentPos(4) - position(4)) / 2;
     end
 
-    fig = uifigure('Name', 'Edit WorkSpace', 'Position', position, ...
+    fig = uifigure('Name', headerText, 'Position', position, ...
         'Color', bgColor, 'Resize', 'off');
 
-    outer = uigridlayout(fig, [3, 1], 'RowHeight', {40, '1x', 46}, ...
+    outer = uigridlayout(fig, [numel(rowHeights), 1], 'RowHeight', rowHeights, ...
         'Padding', [0 0 0 0], 'RowSpacing', 0);
 
-    header = uilabel(outer, 'Text', '  Edit WorkSpace', 'FontSize', 14, ...
+    header = uilabel(outer, 'Text', ['  ' headerText], 'FontSize', 14, ...
         'FontWeight', 'bold', 'FontColor', [1 1 1], 'BackgroundColor', accentColor, ...
         'VerticalAlignment', 'center');
     header.Layout.Row = 1;
 
+    nextRow = 2;
+    if welcome
+        introLabel = uilabel(outer, 'Text', ['  Tell Alakazam where your raw EEG recordings live, then ' ...
+            'click OK -- you can change this later from the ribbon''s Edit WorkSpace button.'], ...
+            'WordWrap', 'on', 'FontColor', [0.35 0.35 0.35]);
+        introLabel.Layout.Row = nextRow;
+        nextRow = nextRow + 1;
+    end
+
     fieldsGrid = uigridlayout(outer, [3, 3], 'ColumnWidth', {140, '1x', 32}, ...
         'RowHeight', {30, 30, 30}, 'Padding', [16 14 16 8], 'RowSpacing', 12);
-    fieldsGrid.Layout.Row = 2;
+    fieldsGrid.Layout.Row = nextRow;
 
-    rawField    = addDirRow(fieldsGrid, 1, 'Raw data folder:', this.RawDirectory);
+    rawInitial = this.RawDirectory;
+    if welcome
+        rawInitial = '';
+    end
+    rawField    = addDirRow(fieldsGrid, 1, 'Raw data folder:', rawInitial);
     cacheField  = addDirRow(fieldsGrid, 2, 'Intermediate folder:', this.CacheDirectory);
     exportField = addDirRow(fieldsGrid, 3, 'Exports folder:', this.ExportsDirectory);
 
     buttonRow = uigridlayout(outer, [1, 3], 'ColumnWidth', {'1x', 90, 90}, ...
         'Padding', [16 6 16 10], 'ColumnSpacing', 8);
-    buttonRow.Layout.Row = 3;
+    buttonRow.Layout.Row = nextRow + 1;
     cancelBtn = uibutton(buttonRow, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
     cancelBtn.Layout.Column = 2;
     okBtn = uibutton(buttonRow, 'Text', 'OK', 'BackgroundColor', accentColor, ...
@@ -76,7 +106,7 @@ function edit(this, ~, ~)
     function onBrowse(field)
         startDir = field.Value;
         if isempty(startDir) || ~isfolder(startDir)
-            startDir = pwd;
+            startDir = this.userHome(); % pwd depends on how MATLAB was launched, not where the user's own files are
         end
         chosen = uigetdir(startDir, 'Select a folder');
         if ~isequal(chosen, 0)
@@ -93,6 +123,11 @@ function edit(this, ~, ~)
     end
 
     function onOK()
+        if welcome && isempty(strtrim(rawField.Value))
+            uialert(fig, 'Please choose a raw data folder before continuing (or Cancel to explore first).', ...
+                'Raw data folder needed');
+            return;
+        end
         this.RawDirectory     = ensureTrailingSeparator(rawField.Value);
         this.CacheDirectory   = ensureTrailingSeparator(cacheField.Value);
         this.ExportsDirectory = ensureTrailingSeparator(exportField.Value);

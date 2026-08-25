@@ -31,7 +31,7 @@ function onExportMeasurements(this)
     end
     targetFile = fullfile(pathName, fileName);
 
-    restoreBusy = beginBusy(this.MainFigure, 'Exporting measurements...');
+    [restoreBusy, setBusy] = beginBusy(this.MainFigure, 'Exporting measurements...');
     try
         exportMeasurementsCSV(entries, targetFile);
     catch err
@@ -104,6 +104,10 @@ function onExportMeasurements(this)
         % render itself fails, fall back to exactly the old behaviour
         % (just the .qmd, with the manual render command) rather than
         % losing the .qmd note entirely.
+        % Re-labelled because this, not the CSV export the opening message
+        % names, is the slow part: quarto shells out to R, and a first run
+        % installs the report's own packages before rendering anything.
+        setBusy('Rendering the report (quarto + R). The first run also installs R packages, which can take a minute.');
         [htmlFile, renderError] = renderQuartoReport(qmdFile);
         if ~isempty(htmlFile)
             reportLabel = sprintf('Report (%s) - %s', stem, string(stamp, 'dd-MMM-yyyy HH:mm'));

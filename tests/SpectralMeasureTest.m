@@ -37,6 +37,16 @@ classdef SpectralMeasureTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations', 'SpectralMeasure')));
+            % SpectralMeasure shares Measure's own channel-spec parser
+            % (measureChannelSpecs, which lives in the Measure folder), so
+            % that sibling folder has to be on the path too. The running
+            % app never notices the dependency because setupDirectories
+            % adds Transformations with genpath, i.e. recursively; this
+            % fixture adds only the two named folders, so without this the
+            % whole class errored with "Undefined function
+            % 'measureChannelSpecs'".
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'Measure')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...

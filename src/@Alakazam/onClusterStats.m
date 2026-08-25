@@ -31,7 +31,7 @@ function onClusterStats(this)
     end
 
     restoreDir = this.enterRepoRoot();
-    restoreBusy = beginBusy(this.MainFigure, 'Running cluster permutation test...');
+    [restoreBusy, setBusy] = beginBusy(this.MainFigure, 'Running cluster permutation test...');
     try
         summary = ClusterStats(spec.sourceFiles, spec.contrast, spec.opts);
     catch err
@@ -73,6 +73,10 @@ function onClusterStats(this)
         fwrite(fid, qmdText, 'char');
         clear closeFile;
 
+        % See onExportMeasurements' own note: by this point the test itself
+        % has long finished (its result is already on screen above), so the
+        % opening message would otherwise sit there through the render.
+        setBusy('Rendering the report (quarto + R). The first run also installs R packages, which can take a minute.');
         [htmlFile, renderError] = renderQuartoReport(qmdFile);
         if ~isempty(htmlFile)
             reportLabel = sprintf('Cluster Stats (%s) - %s', label, string(stamp, 'dd-MMM-yyyy HH:mm'));

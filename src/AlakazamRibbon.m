@@ -343,14 +343,16 @@ classdef AlakazamRibbon < handle
                 struct('title', 'Workspace', 'items', {this.workspaceItems(iconsDir)}), ...
                 struct('title', 'Design',    'items', {this.designItems(iconsDir)}), ...
                 struct('title', 'Settings',  'items', {this.settingsItems(iconsDir)}), ...
-                struct('title', 'View',      'items', {this.viewItems(iconsDir)})};
+                struct('title', 'View',      'items', {this.viewItems(iconsDir)}), ...
+                struct('title', 'Help',      'items', {this.helpItems(iconsDir)})};
 
             grandAverageGroups = { ...
                 struct('title', 'Group Averages', 'items', {this.grandAverageItems(iconsDir)})};
 
             measurementsGroups = { ...
                 struct('title', 'Batch Export', 'items', {this.measurementsItems(iconsDir)}), ...
-                struct('title', 'Cluster Statistics', 'items', {this.clusterStatsItems(iconsDir)})};
+                struct('title', 'Cluster Statistics', 'items', {this.clusterStatsItems(iconsDir)}), ...
+                struct('title', 'Data Quality', 'items', {this.dataQualityItems(iconsDir)})};
 
             tabs = { ...
                 struct('id', 'home', 'title', 'Alakazam', 'groups', {homeGroups}), ...
@@ -414,6 +416,16 @@ classdef AlakazamRibbon < handle
             icon = this.encodeSvgFile(fullfile(iconsDir, 'Settings.svg'));
             items = {struct('id', 'settings', 'label', 'Global', ...
                 'tooltip', 'Edit the global Alakazam settings', 'icon', icon)};
+        end
+
+        function items = helpItems(this, iconsDir)
+        %HELPITEMS  In-app help viewer launcher (see Alakazam.onHelp) --
+        %   the app's own readme.MD, rendered and searchable (Ctrl+F) right
+        %   here, for an analyst who is never going to open a README file
+        %   in a repository.
+            icon = this.encodeSvgFile(fullfile(iconsDir, 'Help.svg'));
+            items = {struct('id', 'help', 'label', 'Help', ...
+                'tooltip', 'Open the in-app help (the same content as readme.MD)', 'icon', icon)};
         end
 
         function items = viewItems(this, iconsDir)
@@ -504,6 +516,22 @@ classdef AlakazamRibbon < handle
                     'phase-locking / coherence) to one R-compatible, long-format CSV, plus a ' ...
                     'companion Quarto statistics report'], ...
                 'icon', this.encodeSvgFile(fullfile(iconsDir, 'ExportSpectral.svg')))};
+        end
+
+        function items = dataQualityItems(this, iconsDir)
+        %DATAQUALITYITEMS  "Data Quality Report" on the Export/Report tab
+        %   (see Alakazam.onExportDataQuality): per-subject rejection
+        %   rates, per-trial noise and SME, in the same Reports tree as the
+        %   ERP/Spectral/Cluster reports. Its own group rather than a third
+        %   Batch Export button: those two export measurements an analyst
+        %   then analyses, whereas this one asks whether those measurements
+        %   are trustworthy in the first place. Icon: a waveform over a
+        %   bar-gauge, one bar red -- the "most of this is fine, some of it
+        %   is not" judgement the report itself makes.
+            items = {struct('id', 'dataQuality', 'label', 'Data Quality Report', ...
+                'tooltip', ['Assess per-subject data quality (trials rejected per condition, ' ...
+                    'per-trial noise, SME) and render a Quarto report on it'], ...
+                'icon', this.encodeSvgFile(fullfile(iconsDir, 'DataQuality.svg')))};
         end
 
         function groups = transformationGroups(this, transRoot)

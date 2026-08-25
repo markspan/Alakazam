@@ -45,7 +45,7 @@ current publication standards, Keil et al. (2014) (see
   available on any dataset node, replays a saved template's steps onto it:
   the same recipe applied later, in another workspace, or after Alakazam
   has been restarted. (Not offered on a rendered report node in the
-  Reports tree, see [Statistical analysis](#statistical-analysis) -- a
+  Reports tree, see [Statistical analysis](#statistical-analysis): a
   report has none of the real dataset fields a transformation expects.)
 - **Format support.** BrainVision (`.vhdr`, via the bva-io EEGLAB plugin),
   EEGLAB `.set`, ERPLAB erpsets (`.erp`, read directly as an already-averaged
@@ -76,12 +76,12 @@ current publication standards, Keil et al. (2014) (see
 - **Design-aware statistical reporting.** Exporting ERP or Spectral Measure
   results also writes a companion Quarto/R report to a persistent Reports
   folder: one statistical test per window/frequency and measure type,
-  chosen to fit the actual design -- within-subjects (descriptive
+  chosen to fit the actual design: within-subjects (descriptive
   statistics, a paired test, or a linear mixed model for 3+ conditions),
   between-subjects or mixed once subjects are assigned to groups via
   **Grouping...** (a Welch *t*-test/ANOVA, or a linear mixed model with a
   condition x group interaction), or a one-sample test against zero for a
-  difference bin -- every *t*-test-family comparison also backed by a
+  difference bin. Every *t*-test-family comparison is also backed by a
   Bayes Factor and a bootstrapped effect-size confidence interval as a
   robustness check, with APA-styled tables, violin plots, and a closing
   forest plot of every effect size in the report. It is a real,
@@ -94,6 +94,13 @@ current publication standards, Keil et al. (2014) (see
   spatiotemporal contiguity rather than a fixed per-point correction, with
   its own Quarto report showing where and when each cluster sits (see
   [Cluster statistics](#cluster-statistics-whole-scalp-whole-epoch-testing)).
+- **Per-subject data quality.** **Data Quality Report** (Export/Report tab)
+  asks whether the numbers above can be trusted in the first place: how many
+  trials each subject lost, how much per-trial noise there was, the
+  standardized measurement error of each score actually reported (Luck et al.,
+  2021), and, above all, whether that loss fell evenly across conditions. Its
+  own Quarto report, alongside the others in the Reports tree (see
+  [Data quality](#data-quality)).
 - **Session workspaces.** Working directories and the processing tree are
   saved and reloaded as a workspace.
 
@@ -102,7 +109,10 @@ current publication standards, Keil et al. (2014) (see
 A single `uifigure` hosts the whole application: a control-strip ribbon
 along the top (Home/Tools/Grand Average tabs, discovering transformations
 automatically), the two dataset trees on the left, and the plots area on
-the right (tabbed or tiled, see above). Authored application code lives
+the right (tabbed or tiled, see above). The Home tab's **Help** button opens
+this same document as an in-app, searchable (Ctrl+F) page, screenshots and
+all, for when jumping out to a README is more friction than it's worth.
+Authored application code lives
 under `src/`; third-party toolkits and shared data-file resources stay at
 the repository root. See [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md) for
 the full map (including which pieces are build-time-only, like the Node.js
@@ -360,7 +370,7 @@ format, violin plots showing the actual distribution rather than just a bar
 and an error bar, and narrative prose ("A linear mixed model revealed a
 significant effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
 
-A rendered report, opened in a real browser -- the sticky table of contents,
+A rendered report, opened in a real browser: the sticky table of contents,
 the LMM fixed-effect and Holm-corrected pairwise-comparison tables, the
 Friedman robustness check, and a per-subject violin plot:
 
@@ -371,8 +381,8 @@ Friedman robustness check, and a per-subject violin plot:
 The report is design-aware: it is built at generation time in MATLAB, where
 the actual bin structure (`EEG.bindesc`) and, once assigned, each subject's
 between-subjects group (see [Groups](#groups-setting-up-a-between-subjects-or-mixed-design)
-below) are both still known -- neither is recoverable from the flat CSV
-alone -- so it can choose the statistical test each window/frequency x
+below) are both still known, neither is recoverable from the flat CSV
+alone, so it can choose the statistical test each window/frequency x
 measure-type combination actually calls for, rather than one generic script
 re-discovering the design at runtime. One section per window (ERP) or named
 frequency (Spectral) x measure type:
@@ -381,13 +391,13 @@ frequency (Spectral) x measure type:
 |---|---|---|
 | One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
 | Two ordinary bins | Paired *t*-test + Cohen's *dz* (bootstrapped CI) + Bayes Factor, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
-| Three or more ordinary bins | Linear mixed model (subject random intercept + slope for bin, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects -- using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
+| Three or more ordinary bins | Linear mixed model (subject random intercept + slope for bin, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects, using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
 | One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d* (bootstrapped CI) + Bayes Factor, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
 | One ordinary bin, **3+ groups** assigned | Welch's ANOVA + Games-Howell pairwise comparisons | Does this measure differ between the groups? Which pairs of groups differ? |
-| Two or more ordinary bins, **groups** assigned | Linear mixed model with a condition x group interaction (same random-effects/fallback logic as above) + partial eta-squared with CI + Holm-corrected within-group and between-group pairwise comparisons (`emmeans`) | Does the **condition effect itself differ between groups** (the interaction -- usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
+| Two or more ordinary bins, **groups** assigned | Linear mixed model with a condition x group interaction (same random-effects/fallback logic as above) + partial eta-squared with CI + Holm-corrected within-group and between-group pairwise comparisons (`emmeans`) | Does the **condition effect itself differ between groups** (the interaction, usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
 | Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero, Cohen's *dz* (bootstrapped CI) + Bayes Factor | Is this effect (a priming effect, an oddball effect, ...) actually present? |
-| Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against* -- see below) |
-| Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test -- see below) |
+| Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against*: see below) |
+| Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test: see below) |
 | Combination/difference bin (amplitude/area/power/...), **groups** assigned | One-sample test **within each group** + independent-samples test of the difference score **between groups**, each with Cohen's *d*/*dz* (bootstrapped CI) + Bayes Factor | Does the effect exist within each group? Does the effect's **size** differ between groups (e.g. "is the priming effect different in patients than in controls")? |
 | Combination/difference bin, a **latency**, **groups** assigned | Independent-samples test **between groups** only (still no vs.-zero test) | Does the effect's *timing* differ between groups? |
 | Combination/difference bin, **circular**, **groups** assigned | Descriptive statistics only, per group | (still no linear test is valid, one-sample or between-groups) |
@@ -399,7 +409,7 @@ other bins to the fit, instead of being listwise-dropped from the entire
 channel the way a classic RM-ANOVA would drop them. A maximal model (random
 intercept **and** slope per subject) is tried first and falls back to a
 random-intercept-only model, narrated in the report, if the maximal one
-fails to converge to a non-singular fit -- typically too few
+fails to converge to a non-singular fit, typically too few
 subjects/observations for that many random parameters. The 3+-group
 between-subjects row uses **Welch's ANOVA + Games-Howell**, not classic
 ANOVA + Tukey, for the same reason the paired/between tests already default
@@ -413,7 +423,7 @@ independent condition, so folding it into the same model would be
 statistically invalid. A **latency** has no natural "zero" to test *against*
 (zero would mean "no difference" for an amplitude; it means nothing of the
 kind for a point in time), which is why it drops the one-sample test but
-keeps the between-groups one -- a latency is still an ordinary linear
+keeps the between-groups one: a latency is still an ordinary linear
 quantity, groups can still be validly compared on it. A **circular**
 quantity (phase/phaselag, an angle wrapping at &plusmn;&pi; radians) drops
 *every* test, one-sample and between-groups alike, since neither is valid
@@ -428,7 +438,7 @@ equivalent, and every Cohen's *d*/*dz* effect size carries a bootstrapped
 (BCa, 200 resamples) confidence interval, not just a point estimate. The
 omnibus LMM tests report partial eta-squared with a genuine confidence
 interval (`effectsize::F_to_eta2`, via the model's F-statistic) instead of
-marginal R^2 for exactly this reason -- R^2 alone has no CI to plot.
+marginal R^2 for exactly this reason:  R^2 alone has no CI to plot.
 
 Every section's own key test result also feeds one final cross-report
 summary table, Benjamini-Hochberg (BH/FDR) corrected across every channel,
@@ -446,12 +456,12 @@ not stop the rest of the report from rendering.
 
 Every design starts out within-subjects: every bin/condition is assumed to
 be measured on every subject, matched by `dataset` in the CSV. To ask a
-between-subjects question instead ("do patients and controls differ" --
+between-subjects question instead ("do patients and controls differ", 
 see Kappenman & Luck, 2016, on the extra methodological care this kind of
 clinical-population comparison needs, in [References](#references)),
 assign each subject to a group first, via **Grouping...** (the Home ribbon
-tab's own **Design** group) -- the "Edit Subjects" dialog: one row per
-subject -- every root node in the Data & Analyses tree -- with a free-text
+tab's own **Design** group), the "Edit Subjects" dialog: one row per
+subject, every root node in the Data & Analyses tree, with a free-text
 **Group** label; leave it blank for "no group". A subject left blank is
 excluded from every group-based test (with a count and a reason in the
 rendered report), but still counted normally in a report that turns out to
@@ -461,14 +471,14 @@ assignment lives only in this session until saved with **Save WorkSpace**.
 Once at least two distinct group labels are actually in use, both exporters
 add a `group` column to their CSV, and `generateQuartoReport` switches every
 relevant section from its within-subjects test to the matching
-between-subjects or mixed one in the table above -- automatically, from the
+between-subjects or mixed one in the table above, automatically, from the
 data, with nothing else to configure. A workspace where nobody has been
 assigned a group (or everybody shares the same one label) renders exactly as
 it always has.
 
 The same dialog has two more columns, **Person ID** and **Session**, for
 linking multiple raw-file recordings of the same person (e.g. "...day1",
-"...day2") together -- give them the same Person ID and an optional Session
+"...day2") together: give them the same Person ID and an optional Session
 label ("Day 1", "Pre", "Post", ...) to record that they are repeated
 measurements of one person, not unrelated subjects. Person ID is pre-filled
 per raw file with whatever substring varies once every part of the
@@ -477,8 +487,8 @@ experiment name shared by every recording cannot help tell subjects apart,
 so it is not worth leaving in the suggestion). Both columns reach the
 exported CSV (`person_id`/`session`) for a researcher's own downstream use,
 but `generateQuartoReport` does not yet treat session as a statistical
-factor the way it does bin or group -- that is groundwork for a future
-multi-session design, not yet a wired-up test.
+factor the way it does bin or group: that is left for a future
+multi-session design, not yet a wired-up test. (TODO)
 
 ### It's just R and Quarto underneath
 
@@ -488,9 +498,9 @@ locked report format: every test in the table above is a plain
 list below) over a `dat` tibble read straight from the CSV copy sitting next
 to it. Open the `.qmd` itself (in the Reports folder, next to its `.html`
 and its own CSV copy) in RStudio, VS Code, or any text editor, and add,
-change, or remove anything -- a fully Bayesian alternative (`brms`), a
+change, or remove anything: a fully Bayesian alternative (`brms`), a
 random-effects structure the built-in LMM does not try, a custom plot, a
-subset of channels or subjects, extra covariates joined in from elsewhere --
+subset of channels or subjects, extra covariates joined in from elsewhere:
 exactly as in any other Quarto/R document, then render it again (`quarto
 render <name>.qmd`, or the "Render" button in RStudio/VS Code). The
 auto-generated report is a statistically-considered starting point for this
@@ -499,7 +509,7 @@ not the last word on it: if a test exists in R, it can go in this report.
 
 If Quarto or R (with the `tidyverse`, `rstatix`, `ggpubr`, `gt`,
 `BayesFactor`, `lme4`, `lmerTest`, `emmeans`, `performance` and
-`effectsize` packages -- installed automatically by the report's own setup
+`effectsize` packages, installed automatically by the report's own setup
 step on first render) are not found on this machine, the `.qmd` and its CSV
 are still written and the export still succeeds; render it manually once
 they are available (the export's completion dialog gives the exact
@@ -510,23 +520,23 @@ Generated by [`generateQuartoReport.m`](src/IO/generateQuartoReport.m).
 </details>
 
 <details>
-<summary><strong>Cluster statistics</strong> (whole-scalp, whole-epoch testing -- click to expand)</summary>
+<summary><strong>Cluster statistics</strong> (whole-scalp, whole-epoch testing: click to expand)</summary>
 
 ## Cluster statistics (whole-scalp, whole-epoch testing)
 
 The Statistical analysis report above always tests one pre-chosen channel
-and window at a time -- exactly right when a literature-grounded hypothesis
+and window at a time, exactly right when a literature-grounded hypothesis
 already says where and when an effect should appear (an N400 at Cz,
 300-500 ms). **Cluster Test...** (the **Export/Report** tab's own **Cluster
 Statistics** group) answers a different question: does an effect exist
 *anywhere* across the whole scalp and the whole epoch, without committing
-to a channel or window in advance -- the case for an exploratory analysis,
+to a channel or window in advance, the case for an exploratory analysis,
 a new paradigm, or replicating someone else's effect without knowing if it
 lands at the same site/latency in your own data.
 
 Testing every channel x time point individually would need thousands of
 individual comparisons, either hopelessly conservative to correct for
-properly or badly underpowered -- the mass-univariate multiple-comparisons
+properly or badly underpowered: the mass-univariate multiple-comparisons
 problem Groppe, Urbach & Kutas (2011) survey across the several corrections
 in common use. Cluster-based permutation testing (Maris & Oostenveld, 2007)
 sidesteps that by exploiting a real property of EEG: a
@@ -534,13 +544,13 @@ genuine effect is never one isolated point, it is smeared across
 neighbouring electrodes and adjacent samples. It groups contiguous
 above-threshold points into spatiotemporal clusters, sums the test
 statistic within each, and compares that against a null distribution built
-by repeatedly shuffling condition/group labels and re-clustering -- one
+by repeatedly shuffling condition/group labels and re-clustering: one
 family-wise-error-corrected p-value per cluster, not one per point.
 
 This wraps [FieldTrip](https://www.fieldtriptoolbox.org/)'s own
 `ft_timelockstatistics`/`ft_prepare_neighbours`/`ft_prepare_layout` (the
 same pinned dependency `Brain3D`'s Source-estimate mode already uses,
-downloaded once with consent -- see [3D brain view](#3d-brain-view)) as the
+downloaded once with consent, see [3D brain view](#3d-brain-view)) as the
 actual statistical engine, rather than reimplementing the permutation
 machinery: EEGLAB itself has no native equivalent (its own
 `statcondfieldtrip.m` already delegates to FieldTrip for exactly this).
@@ -552,23 +562,23 @@ list Grand Average draws from (every Averaged ERP dataset in the
 workspace) and the same `Grouping...` assignment the Statistical analysis
 report already reads:
 
-- **One bin against zero, within subjects** -- typically a `DefineBins`
+- **One bin against zero, within subjects**: typically a `DefineBins`
   combination/difference bin (e.g. an "N400" = unrelated - related
   contrast): is this effect reliably present anywhere?
-- **Two bins, within subjects (paired)** -- does condition A differ from
+- **Two bins, within subjects (paired)**: does condition A differ from
   condition B anywhere, without picking a channel/window first?
-- **One bin, between two groups** -- only shown once at least two distinct
+- **One bin, between two groups**: only shown once at least two distinct
   groups are assigned; does this measure differ between the groups,
   anywhere?
 
 Three or more bins/groups at once (an omnibus or interaction cluster test)
-is not yet supported -- a materially different design shape, left for a
-later pass rather than half-built now.
+is not yet supported, as it needs a different design shape, left for
+later (TODO)
 
 The options below the contrast picker come with sensible defaults, each
 with its own plain-language tooltip: **Correction method** defaults to
 **TFCE** (Threshold-Free Cluster Enhancement; Smith & Nichols, 2009), which
-avoids having to pick an arbitrary cluster-forming threshold at all -- the
+avoids having to pick an arbitrary cluster-forming threshold at all: the
 classic fixed-threshold recipe is offered too, for anyone who wants the
 textbook Maris & Oostenveld method specifically. **Permutations** defaults
 to 1000; if that count is already close to the design's own exhaustive
@@ -581,7 +591,7 @@ same point FieldTrip's own console would otherwise warn about.
 ### The report
 
 Running the test shows an immediate on-screen summary (every cluster
-found, significant or not -- a near-miss is still worth seeing), then
+found, significant or not: a near-miss is still worth seeing), then
 writes and renders a companion Quarto report the same way Statistical
 analysis does: narrative prose explaining the test that ran, a summary
 table of every cluster, an overview heatmap of the test statistic across
@@ -593,7 +603,7 @@ waveform). It lands in the **Reports** tree exactly like the ERP/Spectral
 reports, labelled `Cluster Stats (<contrast>) - <timestamp>`.
 
 Needs channel positions the standard 10-5 system recognises (auto-filled
-from a bundled template, the same mechanism `AutoEyeICA` already uses --
+from a bundled template, the same mechanism `AutoEyeICA` already uses:
 rename or exclude any channel it does not recognise first) and, on first
 use, FieldTrip itself (a ~400 MB download, consent-gated, shared with
 `Brain3D`'s own Source-estimate mode).
@@ -604,7 +614,110 @@ Generated by [`ClusterStats.m`](src/ClusterStats.m) and
 </details>
 
 <details>
-<summary><strong>Frequency analysis</strong> (frequency tagging / RIFT -- click to expand)</summary>
+<summary><strong>Data quality</strong> (per-subject, per-condition: click to expand)</summary>
+
+## Data quality
+
+Every other report in Alakazam answers "what did I find?". This one answers
+"can I believe it?". **Data Quality Report** (Export/Report tab) walks each
+subject's Average back to the segmented data it was built from, measures what
+survived artefact rejection and how noisy it was, and renders a Quarto report
+next to the others in the Reports tree.
+
+The structure is adapted from the data-quality assessment Mathôt and
+Vilotijević (2023) set out for cognitive pupillometry. Their central argument
+carries over to ERP unchanged: **the number that matters is not how much data
+you lost, but whether you lost it evenly across conditions**. A high but even
+rejection rate costs statistical power. An uneven one costs validity, because
+the trials surviving in one condition are no longer a fair sample of it. The
+report's central figure is therefore rejection rate per bin per subject, one
+line each, with a Friedman test across subjects underneath it: the direct
+counterpart of their plot of blinks per trial by condition and participant.
+
+Each metric and what it was translated from:
+
+| Metric | Pupillometry original | What it tells you |
+|---|---|---|
+| % trials rejected | % missing samples / blinks per trial | How much of the recording survived rejection |
+| % trials rejected **per bin** | blinks per trial by condition | Whether that loss is even. The one that can invalidate a result rather than merely weaken it |
+| % channel-epochs flagged | (no direct analogue) | Loss confined to single channels, usually one bad electrode |
+| Pre-stimulus SD (µV) | baseline pupil size | Per-trial noise |
+| % baseline outlier trials | z-scored baseline, \|z\| > 2 | Trials whose noise is extreme *for that subject* |
+| SME | (no analogue) | Standardized measurement error (Luck et al., 2021), reported both over the whole epoch and per measurement window |
+
+Two places the translation deliberately departs from the original:
+
+- **Pre-stimulus SD, not pre-stimulus mean.** Their metric is baseline pupil
+  *size*. The literal ERP translation, mean pre-stimulus amplitude, is useless
+  here: `Baseline` sets it to exactly zero by construction. Pre-stimulus
+  *variability* stands in, which survives baseline correction and is already
+  what ERP practice treats as the per-trial noise estimate.
+- **SME is included anyway.** It has no pupillometry counterpart, but it is
+  the ERP field's own single-subject quality statistic, combining how noisy
+  the trials were and how many survived into one number in the units of the
+  measurement itself: the standard error you would expect if you re-ran the
+  same subject in the same condition. See
+  [Measurement error](#measurement-error-sme) below.
+
+Beyond the by-condition figure, the report covers the per-subject overview
+table, the distribution of per-trial noise (pooled, and z-scored within each
+subject so the \|z\| > 2 rule means something), noise against trial number to
+catch a recording that degrades as it runs, a subject x channel noise map for
+spotting single bad electrodes, SME at both grains, and, when subjects have
+been assigned to groups, the same even-loss check one level up: if one group's
+data is systematically noisier than another's, any group difference in the ERP
+has a competing explanation that has nothing to do with the brain.
+
+### Measurement error (SME)
+
+SME is reported at two grains, because the coarser one is convenient and the
+finer one is what is actually defensible.
+
+- **Whole-epoch SME**, read from `Average`'s own `aSME` field, is a single
+  figure per subject and channel. It is a useful first sort, but it averages
+  together a time range a subject may have been clean in and one they were
+  not. A dataset averaged before that field existed needs re-averaging to
+  report one.
+- **Per-window SME** is the number to quote. Luck et al.'s point is that SME
+  describes the error on *a specific score*, so it is computed for each
+  `Measure` window, on the score that window actually produces, from the
+  single trials behind each subject's average.
+
+Which estimator is used follows from the score type, and the report says which
+it used for each:
+
+- **Analytic**, for mean amplitude. The mean amplitude of the average is
+  exactly the average of the per-trial mean amplitudes, so the standard error
+  of that score is simply SD/sqrt(*n*). No approximation is involved.
+- **Bootstrapped**, for everything else: peak amplitude, peak latency, area,
+  and the fractional latencies. These are non-linear functions of the
+  waveform, and the peak of the average is not the average of the peaks, so no
+  such identity exists and there is no closed form. The estimate instead comes
+  from repeatedly resampling trials with replacement, re-averaging, re-scoring
+  and taking the spread. Bootstrapped values therefore shift slightly if the
+  report is regenerated, which is expected rather than a sign of instability.
+
+Two cases are skipped rather than approximated, since a plausible-looking
+number would be worse than none: a window whose peak is located via a
+**reference channel** (its score depends on another channel, so it is not a
+per-channel function of the waveform being scored), and any channel a window
+was not measured on.
+
+**Nothing is excluded on your behalf.** Mathôt and Vilotijević are explicit
+that exclusion criteria should be set in advance and reported transparently.
+The closing "Worth a Look" section flags conventional thresholds (more than
+25% of trials rejected, fewer than 20 surviving trials in a bin, a channel
+flagged in more than 20% of trials, a subject more than 3 MAD noisier than the
+sample median) and says plainly that it is a shortlist, not a verdict.
+
+Generated by [`dataQualityMetrics.m`](src/IO/dataQualityMetrics.m),
+[`erpScoreSME.m`](src/IO/erpScoreSME.m) and
+[`generateDataQualityReport.m`](src/IO/generateDataQualityReport.m).
+
+</details>
+
+<details>
+<summary><strong>Frequency analysis</strong> (frequency tagging / RIFT: click to expand)</summary>
 
 ## Frequency analysis (frequency tagging / RIFT)
 
@@ -647,7 +760,7 @@ reference is set. Results export to one long-format, R-compatible CSV via the
 Export/Report tab's **Spectral & Report** button
 ([`exportSpectralCSV.m`](src/IO/exportSpectralCSV.m)), which also renders a
 companion statistical report for it (see
-[Statistical analysis](#statistical-analysis)) -- phase and phaselag are
+[Statistical analysis](#statistical-analysis)): phase and phaselag are
 reported descriptively only where a test would not be statistically valid
 (see that section), power/amplitude/SNR/ITC/coherence get the full
 within-subjects/between-subjects/mixed treatment like any ERP measure. Like
@@ -685,15 +798,24 @@ persistent state.
 - **Exports directory**: the default destination for CSV and report
   exports.
 
-On first use, the repository provides `DefaultWorkSpace.wksp`, loaded
-automatically by `startAlakazam` (see [Getting started](#getting-started)).
-To analyse user-supplied recordings, this file may be edited directly -- it
-is a JSON object with `RawDirectory`, `CacheDirectory`, and
-`ExportsDirectory` fields, in which the `~` character resolves to the
-user's home directory -- or the three directories may be reassigned from
-within the application via **Edit WorkSpace...** (below). In either case,
-the raw directory is rescanned and the tree reconstructed as soon as the
-directories are changed.
+On a fresh installation there is no workspace file yet. Rather than opening
+onto an empty tree and leaving you to work out why, Alakazam notices this and
+opens a **Welcome** dialog on that first run, asking for the one thing it
+actually needs: where your raw recordings live. It is the same dialog as
+**Edit WorkSpace...** below, so the control you meet on day one is the one you
+will use afterwards. The raw folder starts blank rather than prefilled with a
+placeholder path nobody's data is in, and **OK** waits until you have chosen
+one. **Cancel** simply leaves the tree empty if you would rather look around
+first.
+
+Thereafter the repository's `DefaultWorkSpace.wksp` is loaded automatically by
+`startAlakazam` (see [Getting started](#getting-started)). To analyse
+user-supplied recordings, this file may be edited directly: it is a JSON
+object with `RawDirectory`, `CacheDirectory`, and `ExportsDirectory` fields,
+in which the `~` character resolves to the user's home directory: or the three
+directories may be reassigned from within the application via **Edit
+WorkSpace...** (below). In either case, the raw directory is rescanned and the
+tree reconstructed as soon as the directories are changed.
 
 ### Editing the workspace
 
@@ -727,9 +849,9 @@ The Home tab's **Workspace** group provides the following operations.
 
 Every workspace is, by default, a within-subjects design: each bin or
 condition is assumed to have been measured for every subject. Specification
-of an alternative design -- a between-subjects comparison, or the
+of an alternative design, a between-subjects comparison, or the
 association of multiple recordings (e.g., session 1/2, pre/post) with a
-single individual -- is performed through a single dialog, **Grouping...**,
+single individual, is performed through a single dialog, **Grouping...**,
 located in the Home tab's **Design** group. The procedure and its
 statistical consequences are described in full in
 [Groups: setting up a between-subjects or mixed design](#groups-setting-up-a-between-subjects-or-mixed-design).
@@ -940,7 +1062,7 @@ required.
 Unlike the three recipes above, this one is a complete, reproducible run on
 real published data, using a template ([`N400.alztemplate`](N400.alztemplate))
 that ships in the repository, ending in an actual rendered statistics
-report -- not a generic recipe with placeholder marker codes.
+report, not a generic recipe with placeholder marker codes.
 
 **The data.** The ERP CORE N400 experiment (Kappenman, Farrens, Zhang,
 Stewart, & Luck, 2021, see [References](#references)) is a semantic-priming
@@ -949,7 +1071,7 @@ the target is either semantically **related** to the prime (e.g. TABLE then
 CHAIR) or **unrelated** (e.g. RAKE then SPIDER). The participant presses one
 of two buttons on each trial to judge which. Luck's textbook chapter 2
 walks through processing one participant; chapter 3 repeats it across "10 of
-the 40 participants in the actual study" -- the same 10-participant subset
+the 40 participants in the actual study": the same 10-participant subset
 used here (`Data/Luck/ch3` in a local checkout: ten
 `<id>_N400_preprocessed.set` EEGLAB recordings, already filtered/referenced,
 ready to be epoched, cleaned and averaged). Get the data itself from the
@@ -966,7 +1088,7 @@ ms) as its own choice, not a reproduction of the book's exact numbers.
 chained together, in the order you would run them by hand the first time;
 saving that chain as a template (**Save Template...**) is what turns "the
 steps I just ran on subject 1" into "the recipe every subject gets". The
-order itself -- denoise, then epoch/baseline, then reject, then average --
+order itself: denoise, then epoch/baseline, then reject, then average,
 is not arbitrary: artefact correction (a nonlinear operation) has to happen
 before artefact rejection and averaging for its own result to be
 meaningful, whereas the purely linear steps (filtering, re-referencing,
@@ -981,17 +1103,17 @@ Widmann, Schröger & Maess (2015). Built fresh from an imported raw recording,
 Home tab, each step's own options dialog would ask for:
 
 1. **AutoGEDAI** (denoise). Its dialog has three groups of options:
-   *Denoising* -- **Strength** (`auto`/`auto+`/`auto-`, this template leaves
+   *Denoising*: **Strength** (`auto`/`auto+`/`auto-`, this template leaves
    it at `auto`: GEDAI's own SENSAI signal/artefact-subspace thresholding
    decides how aggressively to separate brain signal from noise, rather than
    a fixed cutoff), a **Leadfield matrix** (`precomputed`, matching channels
-   to GEDAI's own bundled 10-5 template by label alone -- `interpolated`
+   to GEDAI's own bundled 10-5 template by label alone: `interpolated`
    would additionally need real 3-D electrode positions, not necessary
    here), and a **Low-cut frequency** of `0.4` Hz (GEDAI's own high-pass,
    separate from running a general-purpose `Filter` step first). *Bad epoch/
-   channel rejection* -- both left off (`no`) here: ArtefactDetect, three
+   channel rejection*: both left off (`no`) here: ArtefactDetect, three
    steps later, is where this template does its rejection, explicitly and
-   visibly, rather than silently inside the denoiser. *Performance* --
+   visibly, rather than silently inside the denoiser. *Performance*:
    **Use parallel processing**, left at `no` (only meaningful with a GPU
    present anyway). GEDAI is a separate, non-commercially-licensed EEGLAB
    plugin (Ros et al., 2025); the first run on a machine without it prompts
@@ -999,7 +1121,7 @@ Home tab, each step's own options dialog would ask for:
 2. **DefineBins** (epoch and label the trials). Two fields: an **epoch**
    window, `-200` to `800` ms around each matched event (so every trial's
    epoch spans 200 ms of pre-stimulus baseline material through 800 ms
-   post-stimulus), and the bin **script** itself -- imported here from the
+   post-stimulus), and the bin **script** itself: imported here from the
    experiment's own bin descriptor (`BDF_N400.txt`, ERPLAB's original BDF
    format, one condition per event-code set) rather than typed by hand:
    ```
@@ -1014,9 +1136,9 @@ Home tab, each step's own options dialog would ask for:
    Bins 1-2 are the prime words themselves (marker sets `111|112`/`121|122`),
    split by whether the *target* that follows them will be related or
    unrelated. Bins 3-4 are those target words, each additionally requiring
-   `next(201) within [200,1500] ms` -- the [bin
+   `next(201) within [200,1500] ms`: the [bin
    language](#how-to-walkthroughs)'s relation syntax for "a `201` (correct-
-   response) marker follows within 200 to 1500 ms" -- so a missed or
+   response) marker follows within 200 to 1500 ms", so a missed or
    implausibly fast trial is excluded from the scored data rather than
    silently averaged in. `bin 5` is a **combination bin**
    (`bin 4 - bin 3`, no marker of its own): the classic N400 contrast,
@@ -1025,15 +1147,15 @@ Home tab, each step's own options dialog would ask for:
    other condition.
 3. **Baseline** (pre-stimulus correction). Two fields, **Start**/**Stop** in
    ms: `-100` to `-10`. Every channel's own mean over that interval, in
-   every trial, is subtracted from the whole epoch -- the ordinary ERP
+   every trial, is subtracted from the whole epoch: the ordinary ERP
    baseline correction, done once here on single-trial data (distinct from
-   `Measure`'s own *optional*, later, per-window baseline -- see step 6).
+   `Measure`'s own *optional*, later, per-window baseline, see step 6).
 4. **ArtefactDetect** (reject bad trials). The dialog actually offers four
    detectors (Absolute threshold, Step function, Moving-window peak-to-peak,
-   Sample-to-sample -- ERPLAB's own set), any combination of them, and a
+   Sample-to-sample: ERPLAB's own set), any combination of them, and a
    choice of rejecting the whole epoch or just the offending channel when
    one trips. This template uses the simplest: **Absolute threshold**,
-   **Minimum**/**Maximum** = `-100`/`100` µV, whole-epoch scope -- any
+   **Minimum**/**Maximum** = `-100`/`100` µV, whole-epoch scope: any
    single sample outside &plusmn;100 µV, on any channel, rejects that
    trial's epoch entirely (the rejected data is set to `NaN`, which
    `Average` omits rather than treating as a real zero).
@@ -1041,13 +1163,13 @@ Home tab, each step's own options dialog would ask for:
    here is just that acknowledgement, not a real setting): it produces one
    ERP per bin, over the trials that survived step 4, automatically
    including bin 5's own difference wave (computed from bins 3 and 4's
-   *already-averaged* waveforms, not their raw trials -- see
+   *already-averaged* waveforms, not their raw trials, see
    [Average](#transformations) above) once both of those have resolved.
 6. **Measure** (turn the waveform into numbers). This is the step that
    decides what actually gets exported and tested, so it is worth knowing
    the full shape of what it can ask for, not just what this one template
    happens to use. Each row of its window table names a **measure type**:
-   **Mean Amplitude** (the average of the waveform over the window -- the
+   **Mean Amplitude** (the average of the waveform over the window: the
    default recommendation for most component analyses: unbiased by noise or
    window length, unlike a raw peak), **Peak** (the single most extreme
    sample's amplitude *and* latency, by **Polarity**), **Area** (a
@@ -1055,7 +1177,7 @@ Home tab, each step's own options dialog would ask for:
    over the whole window or a peak-locked band `Width` ms wide), and the two
    robust timing measures, **Fractional Peak Latency** and **Fractional
    Area Latency** (the time reaching a chosen **Fraction**, e.g. `0.5`, of
-   the peak or of the window's cumulative area -- the latter is the
+   the peak or of the window's cumulative area: the latter is the
    recommended onset/timing measure over raw peak latency). A **Local pts**
    setting (0 = the absolute extreme; N &ge; 1 = the most extreme *local*
    peak) guards the peak-based measures against a window-edge sample or a
@@ -1068,24 +1190,24 @@ Home tab, each step's own options dialog would ask for:
 
    This template defines exactly **one** window: Label `N400`, Start/Stop
    `300`/`500` ms, Measure `Mean Amplitude`, Polarity `Negative`, Channels
-   `Cz` -- Width/Local pts/Fraction/Area mode/Baseline/Reference channel are
+   `Cz`: Width/Local pts/Fraction/Area mode/Baseline/Reference channel are
    all left blank, since none of them apply to Mean Amplitude (the dialog
    greys them out for exactly that reason; Polarity specifically is stored
    on the row but, per Mean Amplitude's own definition, plays no part in the
-   computed number -- it is carried over here from where this window
+   computed number, it is carried over here from where this window
    started, the `n400` single-component preset in
    [`measure.md`](src/Transformations/Measure/measure.md)'s own preset
    library, which records the component's usual negative-going direction as
    documentation even though this particular measure ignores it). Every
    bin gets this same 300-500 ms Cz mean, uniformly, including
-   the `N400` combination bin from step 2 -- there is no separate "which
+   the `N400` combination bin from step 2: there is no separate "which
    bins to measure" setting.
 
 Import each participant's raw recording, apply the template once (drag it
 onto the first imported dataset, or right-click -> **Apply Template...**),
 check the result, then right-click that same processed branch and choose
 **Apply to All Raw Files...** to replay the identical six steps over the
-other nine recordings in one action -- rather than dragging the template
+other nine recordings in one action, rather than dragging the template
 onto each of the ten root nodes by hand. **Grand Average** across all ten,
 then the **Export/Report** tab's **ERP & Report** button writes the CSV and
 renders the companion Quarto report.
@@ -1097,16 +1219,16 @@ with the confidence-interval band from [Settings](#settings) enabled:
 
 **What actually got tested.** `Measure` defines one window (`N400`, Cz,
 300-500 ms), applied to every bin the averaged dataset resolved a waveform
-for, including `bin 5` -- so it does measure the `N400` contrast wave, not
+for, including `bin 5`, so it does measure the `N400` contrast wave, not
 just the four ordinary bins, and `generateQuartoReport` does give it its own
 section testing it against zero (see below), exactly the
 [design table](#what-gets-tested-and-what-question-it-answers)'s
-"combination/difference bin" row -- and, had subjects been assigned to
+"combination/difference bin" row and, had subjects been assigned to
 groups via **Grouping...**, would instead test it within each group and
 between them, the same row's "groups assigned" variant. (An earlier render
 of this exact export, cached before `bin 5` was added to this template,
 predated the combo bin and only showed the omnibus test below; the numbers
-here are from a fresh run against the current, five-bin template --
+here are from a fresh run against the current, five-bin template:
 recompute your own via **Recalculate** on the `DefineBins` node if an old
 cache is still missing it.) With no groups assigned, the four ordinary
 bins still get the "three or more ordinary bins, no groups" row: a linear
@@ -1132,7 +1254,7 @@ significant effect of bin, *F*(3.0, 27.0) = 19.95, *p* < .001, partial
 that omnibus effect down to exactly three significant pairs, all involving
 one condition: Prime,related - Target,related (*p* < .001), Prime,unrelated
 - Target,related (*p* < .001), and Target,related - Target,unrelated (*p* <
-.001) -- every other pair, including Prime,related vs. Prime,unrelated, was
+.001); every other pair, including Prime,related vs. Prime,unrelated, was
 not significant. A Friedman test on the same 10 complete-data subjects, run
 as a rank-based robustness check, agreed: &chi;<sup>2</sup>(3) = 18.12, *p*
 < .001.
@@ -1140,7 +1262,7 @@ as a rank-based robustness check, agreed: &chi;<sup>2</sup>(3) = 18.12, *p*
 The `N400` combination bin (`bin 4 - bin 3`, unrelated minus related
 targets) gets its own section, separate from the omnibus test above, tested
 against zero: *M* = -2.79 µV, *SD* = 1.69, *n* = 10, one-sample
-*t*(9) = -5.21, *p* < .001, Cohen's *dz* = -1.65 -- a very large effect, in
+*t*(9) = -5.21, *p* < .001, Cohen's *dz* = -1.65, a very large effect, in
 the expected negative-going direction (the rendered report additionally
 backs this with a bootstrapped confidence interval on *dz* and a Bayes
 Factor, both computed at render time by the R packages, not reproduced
@@ -1149,7 +1271,7 @@ two tests the export produced, both still significant after
 Benjamini-Hochberg correction.
 
 **The question this answers, and what the numbers say.** Whether N400 mean
-amplitude at Cz differs across the four conditions -- and it does, with a
+amplitude at Cz differs across the four conditions, and it does, with a
 very large effect (partial &eta;<sup>2</sup> = .689 is well past Cohen's
 "large" benchmark of .14; the wide CI reflects the small, 10-subject
 sample, not a weak effect). The pairwise table shows *why*: it is not that
@@ -1157,7 +1279,7 @@ all four conditions differ, but that Target, related (M = 3.56 µV)
 stands apart from the other three, which do not differ from each other.
 Target, unrelated (M = 0.80 µV) is markedly less positive than
 Target, related in this 300-500 ms window, exactly the textbook N400
-pattern (Kappenman et al., 2021; Kutas & Hillyard, 1980) -- a semantically
+pattern (Kappenman et al., 2021; Kutas & Hillyard, 1980): a semantically
 unrelated target elicits a larger centro-parietal negativity than a related
 one, while the two prime conditions (which carry no semantic relationship
 to score yet) sit indistinguishably near zero, as expected. The `N400`
@@ -1211,6 +1333,21 @@ Scientific/methodological:
   measurement choice, construct validity across groups) behind
   [Groups](#groups-setting-up-a-between-subjects-or-mixed-design)' own
   patients-vs-controls framing above.
+- Luck, S. J., Stewart, A. X., Simmons, A. M., & Kappenman, E. S. (2021).
+  Standardized measurement error: A universal metric of data quality for
+  averaged event-related potentials. *Psychophysiology*, 58(6), e13793. DOI:
+  [10.1111/psyp.13793](https://doi.org/10.1111/psyp.13793).
+  The SME reported by `Average` (whole-epoch) and by the
+  [Data quality](#data-quality) report (per measurement window, analytic for
+  mean amplitude and bootstrapped for the non-linear scores).
+- Mathôt, S., & Vilotijević, A. (2023). Methods in cognitive pupillometry:
+  Design, preprocessing, and statistical analysis. *Behavior Research
+  Methods*, 55(6), 3055-3077. DOI:
+  [10.3758/s13428-022-01957-7](https://doi.org/10.3758/s13428-022-01957-7).
+  The data-quality assessment the [Data quality](#data-quality) report is
+  adapted from, including its central argument that even loss across
+  conditions matters more than total loss, and its practice of reporting
+  rather than silently excluding.
 - Kutas, M., & Hillyard, S. A. (1980). Reading senseless sentences: Brain
   potentials reflect semantic incongruity. *Science*, 207(4427), 203-205.
   DOI: [10.1126/science.7350657](https://doi.org/10.1126/science.7350657).
@@ -1232,7 +1369,7 @@ Scientific/methodological:
   every worked pipeline in this README, and `N400.alztemplate` itself,
   follows.
 - Widmann, A., Schröger, E., & Maess, B. (2015). Digital filter design for
-  electrophysiological data -- a practical approach. *Journal of
+  electrophysiological data: a practical approach. *Journal of
   Neuroscience Methods*, 250, 34-46. DOI:
   [10.1016/j.jneumeth.2014.08.002](https://doi.org/10.1016/j.jneumeth.2014.08.002).
   The practical rationale behind `Filter`'s own zero-phase FIR windowed-sinc

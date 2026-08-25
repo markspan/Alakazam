@@ -39,3 +39,15 @@ ga.txt
 # src/webtree/README.md to rebuild.
 src/webtree/node_modules/
 src/webtree/dist/
+
+# ── src/help/ (the in-app help viewer's build tooling) ────────────────
+# Nothing here is committed, INCLUDING the built page itself: it embeds
+# every screenshot as base64 and runs to ~5 MB, and it is regenerated
+# from readme.MD, so committing it would put a 5 MB binary-ish diff in
+# history every time the readme changed. Build it with
+# `npm install && npm run build` in src/help, then copy dist/
+# AlakazamHelp.html up to src/ (see src/help/README.md). Alakazam.onHelp
+# explains what to do if it is missing rather than failing.
+src/help/node_modules/
+src/help/dist/
+src/AlakazamHelp.html
