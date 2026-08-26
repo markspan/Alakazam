@@ -11,7 +11,7 @@ function offerReadmeInstead(this)
 %   -browser flag on a file:// URL), not in a uihtml: raw Markdown rendered
 %   as HTML would show every # and * as literal text, which reads worse
 %   than the plain file does in whatever the user already uses for it.
-    readmeFile = fullfile(this.RepoRoot, 'readme.MD');
+    readmeFile = findReadme(this.RepoRoot);
     buildHint = sprintf(['The in-app help page has not been built in this copy yet.\n\n' ...
         'To build it (needs Node.js, once):\n' ...
         '    cd "%s"\n    npm install\n    npm run build\n' ...
@@ -19,7 +19,7 @@ function offerReadmeInstead(this)
         'The same content is in readme.MD in the meantime.'], ...
         fullfile(this.RootDir, 'help'));
 
-    if exist(readmeFile, 'file') ~= 2
+    if isempty(readmeFile)
         uialert(this.MainFigure, buildHint, 'Help page not built yet', 'Icon', 'info');
         return;
     end
@@ -34,6 +34,23 @@ function offerReadmeInstead(this)
             % Some platforms/installs have no external browser wired up;
             % MATLAB's own built-in one always works and still shows the file.
             web(readmeFile);
+        end
+    end
+end
+
+function file = findReadme(repoRoot)
+%FINDREADME  The README's actual path, whatever its case, or '' if absent.
+%   The project refers to it as readme.MD throughout, but git records it as
+%   README.MD. On Windows and macOS the two name the same file; on a
+%   case-sensitive filesystem only one of them opens, so the directory is
+%   listed rather than either spelling assumed.
+    file = '';
+    entries = dir(fullfile(repoRoot, '*.MD'));
+    entries = [entries; dir(fullfile(repoRoot, '*.md'))];
+    for k = 1:numel(entries)
+        if strcmpi(entries(k).name, 'readme.md')
+            file = fullfile(repoRoot, entries(k).name);
+            return;
         end
     end
 end

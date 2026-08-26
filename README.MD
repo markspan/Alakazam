@@ -163,6 +163,11 @@ otherwise, so a machine without a GPU is just slower, not broken.
 [3D brain view](#3d-brain-view)); it downloads on first use of that mode,
 after an explicit consent prompt, not at startup.
 
+Either clone the repository or download a packaged release from the
+[Releases page](https://github.com/markspan/Alakazam/releases). The release
+archive is the same source tree with the in-app help page already built, which
+a clone does not include (see [`src/help/README.md`](src/help/README.md)).
+
 ```matlab
 % From the repository root:
 startAlakazam        % adds src/ to the path and opens the application

@@ -16,8 +16,23 @@ import { fileURLToPath } from 'url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..')
-const readmePath = path.join(repoRoot, 'readme.MD')
 const outDir = path.join(here, 'dist')
+
+// The README is referred to as "readme.MD" throughout the project, but git
+// records it as "README.MD". On Windows and macOS those name the same file
+// and the difference never shows; on a case-sensitive filesystem, which is
+// what the release workflow's Linux runner uses, opening the wrong one is a
+// hard failure. Resolved by listing the directory instead of assuming
+// either spelling.
+function findReadme(dir) {
+    const match = fs.readdirSync(dir).find(f => f.toLowerCase() === 'readme.md')
+    if (!match) {
+        throw new Error(`No readme found in ${dir}`)
+    }
+    return path.join(dir, match)
+}
+
+const readmePath = findReadme(repoRoot)
 
 // GitHub's own heading-slug algorithm, reproduced exactly rather than
 // approximated: readme.MD's internal links are written to work on GitHub, so

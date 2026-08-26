@@ -1,0 +1,161 @@
+name: Release
+
+# Publishes a downloadable Alakazam package and a GitHub release.
+#
+# Runs when a version tag is pushed:
+#
+#     git tag -a v1.2.0 -m "Alakazam 1.2.0"
+#     git push origin v1.2.0
+#
+# or on demand from the Actions tab, where a version has to be supplied by
+# hand (used for a dry run: "Run workflow" with draft left on produces a
+# draft release that can be inspected and deleted without announcing
+# anything).
+#
+# The package is the tracked repository tree PLUS src/AlakazamHelp.html,
+# which is deliberately not in version control (about 5 MB of embedded
+# screenshots regenerated from readme.MD, see .gitignore) but is exactly
+# what an analyst downloading a release needs: without it the in-app Help
+# button can only offer the raw README, and building it here needs Node,
+# which they will not have. Everything else is taken straight from the git
+# index, so gitignored working data (Data/, eeglab/, node_modules/) cannot
+# leak into a published archive.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, including the leading v (e.g. v1.2.0)'
+        required: true
+        type: string
+      draft:
+        description: 'Create as a draft release'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write   # required to create the release and upload the asset
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # The whole history: the release notes below are generated from
+          # the commits since the previous tag, which a shallow clone
+          # cannot see.
+          fetch-depth: 0
+
+      - name: Resolve the version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          case "$VERSION" in
+            v*) ;;
+            *) echo "::error::Version must start with 'v' (got '$VERSION')."; exit 1 ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build the in-app help page
+        working-directory: src/help
+        run: |
+          npm ci
+          npm run build
+          cp dist/AlakazamHelp.html ../AlakazamHelp.html
+          ls -l ../AlakazamHelp.html
+
+      - name: Assemble the package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          NAME="Alakazam-${VERSION}"
+          mkdir -p "stage/${NAME}"
+          # git archive emits the tracked tree only, so nothing ignored
+          # (Data/, eeglab/, node_modules/) can end up in the package.
+          git archive HEAD | tar -x -C "stage/${NAME}"
+          # The one deliberate addition: the built help page.
+          cp src/AlakazamHelp.html "stage/${NAME}/src/AlakazamHelp.html"
+          ( cd stage && zip -qr "../${NAME}.zip" "${NAME}" )
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "zip=${NAME}.zip" >> "$GITHUB_OUTPUT"
+          ls -lh "${NAME}.zip"
+
+      - name: Verify the package contents
+        env:
+          ZIP: ${{ steps.package.outputs.zip }}
+          NAME: ${{ steps.package.outputs.name }}
+        run: |
+          set -euo pipefail
+          # A release that silently omits the help page, or that ships a
+          # participant's data, is worth failing the build over rather than
+          # discovering after publication.
+          unzip -l "$ZIP" > listing.txt
+          grep -q "${NAME}/src/AlakazamHelp.html" listing.txt \
+            || { echo "::error::The built help page is missing from the package."; exit 1; }
+          grep -q "${NAME}/startAlakazam.m" listing.txt \
+            || { echo "::error::startAlakazam.m is missing from the package."; exit 1; }
+          if grep -Eq "${NAME}/(Data/|eeglab/|src/(help|webtree)/node_modules/)" listing.txt; then
+            echo "::error::The package contains data or dependencies that must not be published."
+            exit 1
+          fi
+          echo "Package contents look correct."
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE=notes.md
+          cat > "$NOTES_FILE" <<'EOF'
+          ## Installing
+
+          Download and unzip the attached archive, then in MATLAB:
+
+              cd Alakazam
+              startAlakazam
+
+          EEGLAB and the other toolkits are not included; they are installed
+          on first run, or obtained as described in `dependencies.md`. The
+          example datasets are not included either (see `DATA.md`).
+
+          This package includes the pre-built in-app help page, so the Home
+          tab's **Help** button works without needing Node.js.
+
+          EOF
+          # An array, not a string: the title contains a space, and an
+          # unquoted "$FLAGS" would split it into two arguments and leave
+          # the version as a stray positional.
+          FLAGS=(--title "Alakazam ${VERSION}" --notes-file "$NOTES_FILE" --generate-notes)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "$DRAFT" = "true" ]; then
+            FLAGS+=(--draft)
+          fi
+          # Upload to an existing release rather than failing, so a
+          # corrected re-run is possible without deleting it by hand.
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists; uploading the asset to it."
+            gh release upload "$VERSION" "$ZIP" --clobber
+          else
+            gh release create "$VERSION" "$ZIP" "${FLAGS[@]}"
+          fi
