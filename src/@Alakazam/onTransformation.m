@@ -22,12 +22,20 @@ function onTransformation(this, entry)
     try
         restoreDir = this.enterRepoRoot();
 
-        % A transformation's own options dialog (if it has one) already
-        % ran interactively before this point (feval below just computes),
-        % so a modal busy indicator here does not block anything the user
-        % still needs to interact with. Figure-wide (every dataset is a
-        % tab on the one shared MainFigure), so no per-tab lookup is
-        % needed here.
+        % NOTE: the transformation's own options dialog runs INSIDE the
+        % feval below, not before it -- a one-argument call makes
+        % TransTools.InitGuard return interactive = true. This comment
+        % used to claim the opposite, and the indicator therefore sat on
+        % top of that dialog: harmless-looking on a local MATLAB, where the
+        % dialog is a separate window, but in MATLAB Online it covered the
+        % settings completely and had to be dismissed by hand. InitGuard
+        % now suspends the indicator for the duration of the dialog and
+        % TransformSettings.set restores it once the settings are accepted,
+        % so raising it here is still correct: it covers the compute, and
+        % steps out of the way for the form. See busyGate.
+        %
+        % Figure-wide (every dataset is a tab on the one shared
+        % MainFigure), so no per-tab lookup is needed here.
         restoreBusy = beginBusy(this.MainFigure, sprintf("Running %s...", transformId));
 
         % Apply the transformation to the current dataset.

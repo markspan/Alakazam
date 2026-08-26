@@ -77,6 +77,7 @@ this pass). This listing was itself stale; corrected.
 | Tool | Location | Purpose |
 |---|---|---|
 | Node.js + npm (`yy-tree`, esbuild) | `src/webtree/` | Regenerates `src/WorkSpaceTree.html` from `src/webtree/src/*` (the workspace tree's JS/CSS). Only needed when editing the tree's look/behaviour -- the built output is committed, so a fresh clone does not need Node.js to run Alakazam. See `src/webtree/README.md`. |
+| Node.js + npm (`marked`) | `src/help/` | Generates `src/AlakazamHelp.html`, the in-app help page, from `readme.MD`. Unlike the tree above, this output is **not** committed: it embeds every screenshot as base64 and runs to about 5 MB. A fresh clone therefore has no help page until it is built; the Help button explains this and offers `readme.MD` instead. See `src/help/README.md`. |
 
 ## Follow-up (not done in this pass)
 

@@ -55,8 +55,18 @@ classdef TransformSettings < handle
 
         function set(transformId, opts)
         %SET  Remember OPTS as TRANSFORMID's last-used options.
+        %
+        %   Also the moment at which a transformation's options dialog has
+        %   been accepted and real work is about to start, so it is where
+        %   the app's busy indicator is put back after TransTools.InitGuard
+        %   suspended it for the duration of that dialog. A no-op when
+        %   nothing is armed, which is every headless and test call. Kept
+        %   here rather than repeated in each transformation because every
+        %   options dialog already funnels through this one line on its way
+        %   out; see busyGate for the whole picture.
             obj = TransformSettings.instance();
             obj.Values.(transformId) = opts;
+            TransTools.BusyGate('resume');
         end
 
         function reset()

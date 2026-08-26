@@ -50,4 +50,17 @@ function [opts, interactive] = InitGuard(nargin_, errorId, varargin)
         opts = varargin{1};
     end
     interactive = (ischar(opts) || isstring(opts)) && strcmpi(string(opts), "Init");
+
+    % An interactive call is about to put an options dialog on screen, so
+    % take down any "Running <id>..." indicator the app raised before
+    % calling us: it would otherwise sit on top of the very settings the
+    % analyst is being asked to fill in (in MATLAB Online it covers them
+    % outright and has to be dismissed by hand), and it is claiming the app
+    % is busy when it is really waiting for input. TransformSettings.set
+    % puts it back, which every options dialog reaches once its settings
+    % have been accepted and real work starts. No-op when nothing is armed,
+    % so headless and test calls are unaffected. See busyGate.
+    if interactive
+        TransTools.BusyGate('suspend');
+    end
 end

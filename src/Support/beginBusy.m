@@ -44,25 +44,17 @@ function [restoreFcn, updateFcn] = beginBusy(fig, message)
 %   otherwise crash app startup outright). Falls back to the old bare
 %   watch-cursor in that case, so this is always safe to call regardless
 %   of whether the window is showing yet.
+%   The dialog itself is owned by busyGate rather than held here, so that
+%   code running underneath it (a transformation's own options dialog) can
+%   take it down for the duration and put it back afterwards. See busyGate
+%   for why that matters in MATLAB Online, where a modal progress dialog
+%   otherwise covers the very settings the user is being asked to fill in.
     if strcmp(fig.Visible, "on")
-        dlg = uiprogressdlg(fig, "Title", "Alakazam", "Message", message, "Indeterminate", "on");
-        restoreFcn = onCleanup(@() close(dlg));
-        updateFcn  = @(newMessage) setMessage(dlg, newMessage);
+        restoreFcn = busyGate('open', fig, message);
+        updateFcn  = @(newMessage) busyGate('message', newMessage);
     else
         fig.Pointer = "watch";
         restoreFcn = onCleanup(@() set(fig, "Pointer", "arrow"));
         updateFcn  = @(~) [];
-    end
-end
-
-function setMessage(dlg, newMessage)
-%SETMESSAGE  Re-label a live progress dialog. Guarded on isvalid: the
-%   caller holds the closing onCleanup, so an error path can perfectly
-%   well have already closed DLG by the time a later phase tries to
-%   announce itself, and a stale update must not turn a real error into a
-%   second, unrelated one about a deleted handle.
-    if isvalid(dlg)
-        dlg.Message = newMessage;
-        drawnow;
     end
 end

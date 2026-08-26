@@ -509,6 +509,18 @@ each waveform, which shows quality resolved across time) and the **trial counts*
 so "how noisy, on how many trials" is answered both as the formal aSME and
 visually.
 
+**The Data Quality Report.** The value above is computed over the whole epoch,
+which is a summary rather than the quantity Luck argues for: SME describes the
+error on a specific score, so it belongs to a measurement window. The
+**Data Quality Report** (Export/Report tab) computes it per **Measure** window
+across every subject in the workspace, analytically for mean amplitude and by
+bootstrap for peak amplitude, peak latency, area and the fractional latencies,
+which have no closed form. The same report covers rejection and truncation
+counts per subject and per bin, per-trial noise, and a per-channel noise map.
+Its organising concern is whether trial loss is even across conditions, since
+uneven loss affects the validity of the contrast rather than only its power.
+See [Data quality](../readme.MD#data-quality).
+
 **Is there a "good" aSME?** There is no universal threshold: the value is in
 microvolts and depends on the component, montage, reference, filter, measurement
 window and trial count, so a number that is fine for a large slow component (P3b)
@@ -616,6 +628,12 @@ recording you know. Tick **one or more** of:
 - **Moving-window peak-to-peak** -- max-minus-min within a sliding window exceeds
   a threshold.
 - **Sample-to-sample** -- any single-sample jump exceeds a threshold (transients).
+
+Ticking **none** leaves the data untouched and reports that it did so. Earlier
+versions silently fell back to the absolute threshold in that case, which meant
+an empty selection quietly rejected on a default nobody had chosen; if you have
+`ArtefactDetect` nodes built before this change with no detector selected, their
+rejections came from that fallback and are worth recalculating.
 
 A channel is flagged if **any** ticked detector trips. Detection runs over a
 **test window** (blank = the whole epoch), and a hit rejects either the **whole
