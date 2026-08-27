@@ -181,18 +181,53 @@ jobs:
           tab's **Help** button works without needing Node.js.
 
           EOF
+          # Whether THIS run is meant to leave a draft behind. Only the manual
+          # dry run is; a tag push always publishes.
+          WANT_DRAFT=false
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRAFT" = "true" ]; then
+            WANT_DRAFT=true
+          fi
+
           # An array, not a string: the title contains a space, and an
           # unquoted "$FLAGS" would split it into two arguments and leave
           # the version as a stray positional.
-          FLAGS=(--title "Alakazam ${VERSION}" --notes-file "$NOTES_FILE" --generate-notes)
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRAFT" = "true" ]; then
+          #
+          # --target pins the release to the exact commit that was packaged a
+          # few steps above. Without it gh defaults to the repository's
+          # DEFAULT branch, so a dispatch run from Development would archive
+          # Development's tree but create the tag on main -- the shipped zip
+          # and the tag would name different commits. GitHub ignores the
+          # target when the tag already exists, which is the tag-push case.
+          FLAGS=(--title "Alakazam ${VERSION}" --notes-file "$NOTES_FILE"
+                 --generate-notes --target "$GITHUB_SHA")
+          if [ "$WANT_DRAFT" = "true" ]; then
             FLAGS+=(--draft)
           fi
+
           # Upload to an existing release rather than failing, so a
           # corrected re-run is possible without deleting it by hand.
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release $VERSION already exists; uploading the asset to it."
             gh release upload "$VERSION" "$ZIP" --clobber
+            # `gh release view` resolves DRAFTS as well as published releases
+            # (it runs a draft lookup alongside the by-tag one), so this branch
+            # is also reached by a leftover dry-run draft -- not just by a
+            # genuine re-run. Uploading and stopping there would publish
+            # nothing: the run goes green, the tag exists, and the release
+            # stays a draft that only people with push access can see. This
+            # branch never applied "${FLAGS[@]}", so the draft flag, title and
+            # notes were all skipped; promote and repopulate them here.
+            IS_DRAFT="$(gh release view "$VERSION" --json isDraft -q .isDraft)"
+            if [ "$IS_DRAFT" = "true" ] && [ "$WANT_DRAFT" = "false" ]; then
+              echo "Promoting the existing draft $VERSION to a published release."
+              # `gh release edit` has no --generate-notes, so the auto-generated
+              # commit changelog is not reproduced on this path; the hand-written
+              # notes above are restored, which is the part that matters.
+              gh release edit "$VERSION" \
+                --draft=false \
+                --title "Alakazam ${VERSION}" \
+                --notes-file "$NOTES_FILE"
+            fi
           else
             gh release create "$VERSION" "$ZIP" "${FLAGS[@]}"
           fi
