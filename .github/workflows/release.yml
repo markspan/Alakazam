@@ -2,10 +2,14 @@ name: Release
 
 # Publishes a downloadable Alakazam package and a GitHub release.
 #
-# Runs when a version tag is pushed:
+# Runs when a version tag is pushed, in this repository's own capital-V
+# convention (V0.0.1 ... V0.3.1 to date):
 #
-#     git tag -a v1.2.0 -m "Alakazam 1.2.0"
-#     git push origin v1.2.0
+#     git tag -a V0.4.0 -m "Alakazam 0.4.0"
+#     git push origin V0.4.0
+#
+# Lowercase v works too; both are accepted by the trigger and the version
+# check below.
 #
 # or on demand from the Actions tab, where a version has to be supplied by
 # hand (used for a dry run: "Run workflow" with draft left on produces a
@@ -24,11 +28,16 @@ name: Release
 on:
   push:
     tags:
+      # Both spellings. These globs are matched case-sensitively, so 'v*'
+      # alone would silently ignore this repository's own convention: every
+      # tag it has ever carried (V0.0.1 ... V0.3.1) begins with a capital V,
+      # and a push of the next one would produce no run and no error at all.
       - 'v*'
+      - 'V*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish, including the leading v (e.g. v1.2.0)'
+        description: 'Version to publish, including the leading V (e.g. V0.4.0)'
         required: true
         type: string
       draft:
@@ -40,6 +49,16 @@ on:
 permissions:
   contents: write   # required to create the release and upload the asset
 
+# One release at a time, repository-wide. Two tags pushed in quick succession
+# would otherwise run concurrently and could race on the same release: both
+# see "does not exist yet", both call `gh release create`, and the loser
+# fails. A fixed group (rather than one per ref) is what serialises them,
+# since different tags are different refs. Never cancel a run in flight --
+# a half-published release is worse than a queued one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -48,22 +67,39 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
         with:
-          # The whole history: the release notes below are generated from
-          # the commits since the previous tag, which a shallow clone
-          # cannot see.
+          # Not needed for the release notes: `gh release create
+          # --generate-notes` is resolved server-side by the GitHub API from
+          # the tag metadata, so nothing here reads the local history to
+          # build them. The only local git command below is `git archive
+          # HEAD`, which a depth-1 clone would satisfy just as well. The
+          # full history is kept deliberately, as a conservative default so
+          # that any later step that does want history (a changelog diff
+          # against the previous tag, say) is not silently broken by a
+          # grafted shallow clone -- at the cost of a slower checkout. Drop
+          # this to the default if that trade stops being worth it.
           fetch-depth: 0
 
       - name: Resolve the version
         id: version
+        # Passed as environment variables rather than interpolated into the
+        # script below. A `${{ }}` expression is substituted textually before
+        # bash ever parses the line, so a dispatch input containing shell
+        # metacharacters would be executed rather than assigned; read through
+        # the environment, the value is only ever data.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
+          # This repository's own tags are capital-V (V0.3.1 and friends),
+          # so both spellings are accepted here.
           case "$VERSION" in
-            v*) ;;
-            *) echo "::error::Version must start with 'v' (got '$VERSION')."; exit 1 ;;
+            v*|V*) ;;
+            *) echo "::error::Version must start with 'v' or 'V' (got '$VERSION')."; exit 1 ;;
           esac
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing $VERSION"
@@ -125,6 +161,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: ${{ steps.package.outputs.zip }}
           DRAFT: ${{ inputs.draft }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           NOTES_FILE=notes.md
@@ -133,7 +170,7 @@ jobs:
 
           Download and unzip the attached archive, then in MATLAB:
 
-              cd Alakazam
+              cd Alakazam-<version>
               startAlakazam
 
           EEGLAB and the other toolkits are not included; they are installed
@@ -148,7 +185,7 @@ jobs:
           # unquoted "$FLAGS" would split it into two arguments and leave
           # the version as a stray positional.
           FLAGS=(--title "Alakazam ${VERSION}" --notes-file "$NOTES_FILE" --generate-notes)
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "$DRAFT" = "true" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DRAFT" = "true" ]; then
             FLAGS+=(--draft)
           fi
           # Upload to an existing release rather than failing, so a
