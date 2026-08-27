@@ -12,12 +12,28 @@ function [files, labels, kinds] = findGrandAverageCandidates(this)
 %   continuous intermediate node in each subject's processing chain, which
 %   run 100+ MB apiece -- a workspace with a few dozen subjects easily has
 %   tens of GB of cache, almost none of which this scan has any use for.
+%
+%   Driven from the TREE, not from a directory scan of the cache. The cache
+%   outlives the workspaces that wrote it: "Clear Other" deliberately
+%   leaves a cache file that has no tree node alone, a raw recording can be
+%   removed from the raw directory, and a cache folder can simply be
+%   pointed at by a later workspace analysing a different study. Any of
+%   those leaves .mat files on disk that belong to no current subject, and
+%   a directory scan offers them as candidates: the reported symptom was a
+%   grand average failing on a channel-count mismatch between an average
+%   from the study being analysed and one left behind by a previous study
+%   whose raw files are long gone. The tree holds exactly the datasets
+%   reachable from a raw recording that is actually in this workspace,
+%   which is the right definition of "available to grand-average".
     files  = {};
     labels = {};
     kinds  = {};
-    found = dir(fullfile(this.Workspace.CacheDirectory, '**', '*.mat'));
-    for i = 1:numel(found)
-        file = fullfile(found(i).folder, found(i).name);
+    nodes = this.Workspace.Tree.allNodes();
+    for i = 1:numel(nodes)
+        file = nodes(i).UserData;
+        if isempty(file) || exist(file, 'file') ~= 2
+            continue;
+        end
         info = readEegCacheInfo(file);
         if info.isGrandAverage
             continue; % do not grand-average a grand average
@@ -27,9 +43,31 @@ function [files, labels, kinds] = findGrandAverageCandidates(this)
             continue;
         end
         files{end + 1}  = file; %#ok<AGROW>
-        labels{end + 1} = sprintf('%s (%s)', info.id, ...
+        labels{end + 1} = sprintf('%s: %s (%s)', ...
+            rootNameFor(this.Workspace.Tree, nodes(i)), info.id, ...
             strjoin(info.bindescLabels, ', ')); %#ok<AGROW>
         kinds{end + 1}  = tag; %#ok<AGROW>
+    end
+end
+
+function name = rootNameFor(tree, node)
+%ROOTNAMEFOR  The recording a candidate descends from, for the selection
+%   list. Every subject's average is called "Average", so a list of them
+%   is otherwise a column of identical entries: the recording is the only
+%   part that tells one row from another. Falls back to the node's own name
+%   if the root cannot be resolved, which leaves the list no worse than it
+%   was rather than blank.
+    name = '';
+    if ~node.IsRoot
+        root = tree.rootOf(node.Id);
+        if ~isempty(root)
+            name = root.Name;
+        end
+    else
+        name = node.Name;
+    end
+    if isempty(name)
+        name = node.Name;
     end
 end
 

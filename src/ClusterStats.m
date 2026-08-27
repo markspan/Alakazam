@@ -189,7 +189,7 @@ function validateCompatibility(subjects, sourceFiles, contrast)
 
     refChan = size(subjects{1}.data, 1);
     for i = 1:numel(subjects)
-        name = displayNameFor(sourceFiles{i});
+        name = displayNameFor(sourceFiles{i}, subjects{i});
         if size(subjects{i}.data, 1) ~= refChan
             throw(MException('Alakazam:ClusterStats', sprintf( ...
                 ['"%s" has %d channels, I''m afraid, but the first subject has %d. Every ' ...
@@ -386,6 +386,33 @@ function outline = headOutline()
     outline = {headCircle, nose, leftEar, rightEar};
 end
 
-function name = displayNameFor(file)
-    [~, name, ~] = fileparts(file);
+function name = displayNameFor(file, subject)
+%DISPLAYNAMEFOR  How a subject is named in the compatibility errors above.
+%   Same problem and same solution as GrandAverage's own copy: every
+%   subject's average is called "Average" plus a timestamp, so naming a
+%   mismatch by the cache file alone identifies nothing. The recording it
+%   came from is carried on the dataset as EEG.setname, so both are
+%   reported: "12_N400_preprocessed / Average25225213". Degrades to the
+%   bare file stem when setname is absent or blank.
+    [~, stem, ~] = fileparts(file);
+    name = stem;
+    if nargin < 2 || ~isstruct(subject)
+        return;
+    end
+    root = '';
+    for candidate = {'setname', 'filename'}
+        field = candidate{1};
+        if isfield(subject, field) && (ischar(subject.(field)) || isstring(subject.(field)))
+            root = strtrim(char(string(subject.(field))));
+            if strcmp(field, 'filename') && ~isempty(root)
+                [~, root, ~] = fileparts(root);
+            end
+            if ~isempty(root)
+                break;
+            end
+        end
+    end
+    if ~isempty(root)
+        name = sprintf('%s / %s', root, stem);
+    end
 end

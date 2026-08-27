@@ -53,8 +53,8 @@ function EEG = GrandAverage(sourceFiles, weighted)
                 '"%s" is a %s result but "%s" is a %s result, I''m afraid. A grand average ' ...
                 'combines datasets of one kind -- all ERPs, all time-frequency ' ...
                 'maps, or all coherence maps -- not a mix.'], ...
-                displayNameFor(sourceFiles{s}), kindName(grandAverageKind(subjects{s})), ...
-                displayNameFor(sourceFiles{1}), kindName(kind))));
+                displayNameFor(sourceFiles{s}, subjects{s}), kindName(grandAverageKind(subjects{s})), ...
+                displayNameFor(sourceFiles{1}, subjects{1}), kindName(kind))));
         end
     end
 
@@ -197,13 +197,13 @@ function validateMapCompatibility(subjects, sourceFiles, field)
 %VALIDATEMAPCOMPATIBILITY  Every subject's map must match in channels, frequency
 %   count and time count, and carry the same set of bin labels.
     reference     = subjects{1};
-    referenceName = displayNameFor(sourceFiles{1});
+    referenceName = displayNameFor(sourceFiles{1}, reference);
     refSize       = size(reference.(field));
     referenceLabels = sort(string({reference.bindesc.label}));
 
     for i = 2:numel(subjects)
         subject     = subjects{i};
-        subjectName = displayNameFor(sourceFiles{i});
+        subjectName = displayNameFor(sourceFiles{i}, subject);
         subSize     = size(subject.(field));
 
         if ~isequal(subSize(1:3), refSize(1:3))
@@ -249,12 +249,12 @@ function validateCompatibility(subjects, sourceFiles)
 %   naming exactly which subject and which mismatch, rather than letting
 %   a silent size mismatch or a wrong bin lineup happen later.
     reference     = subjects{1};
-    referenceName = displayNameFor(sourceFiles{1});
+    referenceName = displayNameFor(sourceFiles{1}, reference);
     referenceLabels = sort(string({reference.bindesc.label}));
 
     for i = 2:numel(subjects)
         subject     = subjects{i};
-        subjectName = displayNameFor(sourceFiles{i});
+        subjectName = displayNameFor(sourceFiles{i}, subject);
 
         if size(subject.data, 1) ~= size(reference.data, 1)
             throw(MException('Alakazam:GrandAverage', sprintf([ ...
@@ -283,6 +283,55 @@ function validateCompatibility(subjects, sourceFiles)
     end
 end
 
-function name = displayNameFor(file)
-    [~, name, ~] = fileparts(file);
+function name = displayNameFor(file, subject)
+%DISPLAYNAMEFOR  How a subject is named in the compatibility errors above.
+%
+%   The cache file stem alone is useless to the analyst: every subject's
+%   average is called "Average" plus a timestamp, so a mismatch reported
+%   between "Average25225213" and "Average27224649" names two files nobody
+%   can tell apart, in a workspace where they may not even be from the same
+%   study. The recording each one came from is what identifies it, and it is
+%   carried on the dataset itself as EEG.setname, so the two are reported
+%   together as "12_N400_preprocessed / Average25225213".
+%
+%   SUBJECT may be omitted, and setname may be absent or blank on a dataset
+%   built before it was set (or imported from a format that never had one),
+%   so this degrades to the bare file stem rather than failing to produce a
+%   name for an error message.
+    [~, stem, ~] = fileparts(file);
+    name = stem;
+    if nargin < 2 || ~isstruct(subject)
+        return;
+    end
+    root = firstNonBlank({fieldText(subject, 'setname'), ...
+                          stripExtension(fieldText(subject, 'filename'))});
+    if ~isempty(root)
+        name = sprintf('%s / %s', root, stem);
+    end
+end
+
+function text = fieldText(s, name)
+%FIELDTEXT  S.(NAME) as trimmed char, or '' when absent or not text.
+    text = '';
+    if isfield(s, name) && (ischar(s.(name)) || isstring(s.(name)))
+        text = strtrim(char(string(s.(name))));
+    end
+end
+
+function stem = stripExtension(fileName)
+    if isempty(fileName)
+        stem = '';
+    else
+        [~, stem, ~] = fileparts(fileName);
+    end
+end
+
+function value = firstNonBlank(candidates)
+    value = '';
+    for i = 1:numel(candidates)
+        if ~isempty(candidates{i})
+            value = candidates{i};
+            return;
+        end
+    end
 end
