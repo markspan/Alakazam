@@ -12,9 +12,22 @@ function [EEG, options] = ArtefactDetect(EEG, varargin)
 %                                  (a single-sample jump / transient).
 %   One or more detectors may be selected at once; a channel trips if any
 %   selected detector flags it. Detection runs over a Test window (blank =
-%   the whole epoch), and a hit rejects either the whole epoch (all channels,
-%   the ERP-standard default) or just the offending channel. Rejected data is
-%   set to NaN, which Average omits (mean/std are computed with 'omitnan').
+%   the whole epoch), and a hit is acted on in one of three ways (Scope):
+%     * 'Whole epoch'            -- reject every channel of that trial (the
+%                                  ERP-standard default).
+%     * 'This channel only'      -- reject just the offending channel of
+%                                  that trial, leaving the rest of the trial.
+%     * 'Interpolate this channel' -- reconstruct the offending channel of
+%                                  that trial from its neighbours instead of
+%                                  discarding it (the automatic counterpart
+%                                  of ManualReject's own Interpolate mode).
+%   Rejected data is set to NaN, which Average omits (mean/std are computed
+%   with 'omitnan'). Interpolated data is NOT NaN, so it is recorded in
+%   EEG.etc.alz.interpolated instead -- see TransTools.InterpolateFlaggedCells
+%   for why that mask has to exist, and note the caveat there about
+%   reconstructing spatially correlated artefacts (a blink is present on the
+%   neighbours too). The warning printed below is the automatic caller's
+%   share of that caveat: unlike ManualReject, nobody has looked at these.
 %
 %   Backward compatible: an old options struct carrying only Minimum/Maximum
 %   is treated as the Absolute-threshold method over the whole epoch.
@@ -34,7 +47,7 @@ if ismatrix(EEG.data) || (isfield(EEG, 'DataFormat') && ~strcmpi(EEG.DataFormat,
 end
 
 METHODS = {'Absolute threshold', 'Step function', 'Moving-window peak-to-peak', 'Sample-to-sample'};
-SCOPES  = {'Whole epoch', 'This channel only'};
+SCOPES  = {'Whole epoch', 'This channel only', 'Interpolate this channel'};
 
 if interactive
     stored = TransformSettings.get('ArtefactDetect');
@@ -96,37 +109,73 @@ srate = EEG.srate;
 winN  = max(2, round(opt.Window / 1000 * srate));
 stepN = max(1, round(opt.Step   / 1000 * srate));
 
-rejectEpoch   = strcmpi(opt.Scope, 'Whole epoch');
-markedEpochs  = false(1, nTrials);
-markedTrials  = 0; markedChannels = 0;
+rejectEpoch = strcmpi(opt.Scope, 'Whole epoch');
+interpolate = strcmpi(opt.Scope, 'Interpolate this channel');
 
+% Detection is now separated from what is done about it. Interpolation has
+% to read the neighbouring channels of a trial, so it cannot run while the
+% same trial is still being NaN'd cell by cell: the flags are collected
+% first, then applied once, whole.
+flags = false(nChan, nTrials);
 for t = 1:nTrials
-    epochBad = false;
     for c = 1:nChan
         sig = EEG.data(c, lo:hi, t);
         if channelIsBad(sig, opt, winN, stepN)
+            flags(c, t) = true;
             if rejectEpoch
-                epochBad = true;
                 break;   % one bad channel condemns the whole epoch
-            else
-                EEG.data(c, :, t) = NaN;
-                markedChannels = markedChannels + 1;
             end
         end
-    end
-    if epochBad
-        EEG.data(:, :, t) = NaN;
-        markedEpochs(t) = true;
-        markedTrials = markedTrials + 1;
     end
 end
 
 methodLabel = strjoin(opt.Method, ', ');
 if rejectEpoch
-    fprintf('ArtefactDetect (%s): rejected %d of %d epoch(s).\n', methodLabel, markedTrials, nTrials);
+    markedEpochs = any(flags, 1);
+    EEG.data(:, :, markedEpochs) = NaN;
+    fprintf('ArtefactDetect (%s): rejected %d of %d epoch(s).\n', ...
+        methodLabel, sum(markedEpochs), nTrials);
+elseif interpolate
+    warnCrowdedTrials(flags, nChan);
+    EEG = TransTools.InterpolateFlaggedCells(EEG, flags);
+    fprintf('ArtefactDetect (%s): interpolated %d channel-epoch(s).\n', ...
+        methodLabel, nnz(flags));
 else
-    fprintf('ArtefactDetect (%s): flagged %d channel-epoch(s).\n', methodLabel, markedChannels);
+    for t = 1:nTrials
+        EEG.data(flags(:, t), :, t) = NaN;
+    end
+    fprintf('ArtefactDetect (%s): flagged %d channel-epoch(s).\n', ...
+        methodLabel, nnz(flags));
 end
+end
+
+% ======================================================================= %
+function warnCrowdedTrials(flags, nChan)
+%WARNCROWDEDTRIALS  Warn when interpolation is asked to reconstruct a channel
+%   from neighbours that are themselves flagged.
+%
+%   Spherical-spline interpolation assumes the surviving channels are clean.
+%   That assumption is weakest exactly where an automatic detector fires
+%   hardest: a blink or a movement artefact trips a whole cluster of
+%   neighbouring electrodes at once, and reconstructing one of them from the
+%   others reproduces the artefact rather than removing it. A human working
+%   through ManualReject sees that; a threshold does not, so it is said out
+%   loud here. Reported, never enforced -- the analyst chose this scope, and
+%   a transformation that silently overrode that choice would be worse than
+%   one that explains itself.
+    CROWDED = 0.25;   % a quarter of the montage flagged in one trial
+    perTrial = sum(flags, 1);
+    crowded  = find(perTrial > max(1, floor(CROWDED * nChan)));
+    if isempty(crowded)
+        return;
+    end
+    fprintf(['ArtefactDetect: WARNING -- %d trial(s) had more than %d%% of channels flagged ' ...
+        '(worst: trial %d, %d of %d channels). Interpolation reconstructs each flagged channel ' ...
+        'from the others in the same trial, so where an artefact spans neighbouring electrodes ' ...
+        'the reconstruction can reproduce it. Consider ''Whole epoch'' for these.\n'], ...
+        numel(crowded), round(CROWDED * 100), ...
+        crowded(find(perTrial(crowded) == max(perTrial(crowded)), 1)), ...
+        max(perTrial(crowded)), nChan);
 end
 
 % ======================================================================= %

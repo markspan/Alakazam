@@ -218,5 +218,90 @@ classdef ArtefactDetectTest < matlab.unittest.TestCase
 
             testCase.verifyFalse(any(isnan(result.data), 'all'));
         end
+
+        function nanScopesLeaveNoInterpolationRecord(testCase)
+        %NANSCOPESLEAVENOINTERPOLATIONRECORD  Neither rejecting scope
+        %   reconstructs anything, so neither may write the interpolation
+        %   mask. A false entry there would have the data-quality report
+        %   describe discarded data as repaired.
+            for scope = {'Whole epoch', 'This channel only'}
+                EEG = makeTestEEG('nbchan', 2, 'trials', 2);
+                EEG.data(1, 5, 1) = 500;
+                opts = struct('Method', {{'Absolute threshold'}}, ...
+                    'Minimum', -100, 'Maximum', 100, 'Scope', scope{1});
+
+                [result, ~] = ArtefactDetect(EEG, opts);
+
+                testCase.verifyTrue(any(isnan(result.data), 'all'), ...
+                    sprintf('%s should still have rejected something.', scope{1}));
+                marked = isfield(result, 'etc') && isstruct(result.etc) && ...
+                    isfield(result.etc, 'alz') && isstruct(result.etc.alz) && ...
+                    isfield(result.etc.alz, 'interpolated') && ...
+                    any(result.etc.alz.interpolated(:));
+                testCase.verifyFalse(marked, ...
+                    sprintf('%s must not claim to have interpolated.', scope{1}));
+            end
+        end
+
+        function interpolateScopeRebuildsTheChannelAndRecordsIt(testCase)
+        %INTERPOLATESCOPEREBUILDSTHECHANNELANDRECORDSIT  Scope =
+        %   "Interpolate this channel" reconstructs the offending cell
+        %   instead of discarding it: the cell is no longer NaN and no
+        %   longer its original value, its neighbours in the same trial are
+        %   untouched, the same channel's other trials are untouched, and
+        %   the reconstruction is recorded in EEG.etc.alz.interpolated --
+        %   which is the only evidence it happened, since interpolated
+        %   samples are ordinary numbers to everything downstream.
+        %
+        %   Does not check the reconstructed VALUE: that is EEGLAB's own
+        %   eeg_interp maths, the same boundary InterpolateTest.m and
+        %   ManualRejectTest.m both draw.
+            testCase.assumeTrue(~isempty(which('eeglab')), ...
+                'EEGLAB not found on the MATLAB path -- skipping this test.');
+            if isempty(which('eeg_interp'))
+                eeglab('nogui');
+            end
+            testCase.assumeFalse(isempty(which('eeg_interp')), ...
+                'EEGLAB''s eeg_interp is not available -- skipping this test.');
+
+            % Same reasoning as ManualRejectTest's own interpolation test:
+            % eeg_interp reaches through pop_select for standard EEGLAB
+            % fields the hand-built fixture does not carry, so start from a
+            % real (empty) EEG struct and overlay the fixture onto it.
+            labels = {'Fz', 'Cz', 'Pz', 'C3', 'C4'};
+            fixture = makeTestEEG('nbchan', numel(labels), 'trials', 3, 'labels', labels);
+            EEG = eeg_emptyset();
+            EEG.data     = fixture.data;
+            EEG.srate    = fixture.srate;
+            EEG.nbchan   = fixture.nbchan;
+            EEG.trials   = fixture.trials;
+            EEG.pnts     = fixture.pnts;
+            EEG.times    = fixture.times;
+            EEG.xmin     = fixture.times(1) / 1000;
+            EEG.xmax     = fixture.times(end) / 1000;
+            EEG.chanlocs = TransTools.TemplateScalpLocs(fixture.chanlocs, ...
+                TransTools.Dipfit1005File('ArtefactDetectTest'));
+            EEG = eeg_checkset(EEG);
+            original = EEG.data;
+
+            EEG.data(1, 5, 2) = 500;   % Fz, trial 2 only
+            opts = struct('Method', {{'Absolute threshold'}}, 'Minimum', -100, ...
+                'Maximum', 100, 'Scope', 'Interpolate this channel');
+
+            [result, ~] = ArtefactDetect(EEG, opts);
+
+            testCase.verifyFalse(any(isnan(result.data), 'all'), ...
+                'Interpolation replaces the cell, so nothing should be left NaN.');
+            testCase.verifyFalse(isequaln(result.data(1, :, 2), EEG.data(1, :, 2)), ...
+                'The flagged cell should have been rebuilt, not left as it was.');
+            testCase.verifyEqual(result.data(2:end, :, 2), EEG.data(2:end, :, 2), ...
+                'AbsTol', 1e-10, 'Other channels of the same trial must be untouched.');
+            testCase.verifyEqual(result.data(1, :, [1 3]), original(1, :, [1 3]), ...
+                'AbsTol', 1e-10, 'The same channel''s other trials must be untouched.');
+
+            expected = false(EEG.nbchan, EEG.trials);
+            expected(1, 2) = true;
+            testCase.verifyEqual(result.etc.alz.interpolated, expected);
+        end
     end
 end

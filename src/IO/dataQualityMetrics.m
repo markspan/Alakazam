@@ -57,6 +57,17 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 %   cannot check. An epoch that merely OVERLAPS the recording edge is a
 %   different case and is counted separately, as truncated (see below).
 %
+%   AND WHAT "INTERPOLATED" MEANS. The NaN convention above can only ever
+%   describe data that was REMOVED. ArtefactDetect and ManualReject can both
+%   instead RECONSTRUCT a flagged channel-epoch from its neighbours, which
+%   leaves real numbers in the cell -- invisible to every count here, and
+%   indistinguishable from a channel that was never flagged at all. Those two
+%   therefore record EEG.etc.alz.interpolated (logical nChan x nTrials), the
+%   only trace reconstruction leaves, and it is reported separately: a
+%   reconstructed cell is neither rejected nor clean, and rolling it into
+%   either would misstate the recording. See
+%   TransTools.InterpolateFlaggedCells.
+%
 %   EPOCHED is the segmented dataset (channels x samples x trials, with
 %   rejected data already set to NaN by ArtefactDetect/ManualReject).
 %   AVERAGED is its Average result, or [] when there is none (only the
@@ -113,6 +124,17 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
     trialRejected = all(chanGone, 1);
     chanFlagged = chanGone & ~repmat(trialRejected, nChan, 1);
 
+    % INTERPOLATED cells cannot be read off the NaN convention at all: the
+    % whole point of interpolation is that the cell holds real numbers again,
+    % so a reconstructed channel-epoch is indistinguishable from one that was
+    % never flagged. Counting it as clean would let a recording that had been
+    % half rebuilt from its own neighbours report a spotless rejection rate.
+    % The transformations that reconstruct data therefore leave a mask behind
+    % (see TransTools.InterpolateFlaggedCells), and it is the only way to know.
+    % Absent mask = nothing was interpolated, which is also the right answer
+    % for every dataset produced before the mask existed.
+    chanInterpolated = interpolatedMask(epoched, nChan, nTrials);
+
     % TRUNCATED trials: samples that are NaN across EVERY channel at once,
     % in a trial that still has usable data elsewhere. Neither detector
     % writes that pattern (ArtefactDetect and ManualReject NaN whole
@@ -166,6 +188,8 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
         'pct_trials_rejected', pct(sum(trialRejected), nTrials), ...
         'n_channel_epochs_flagged', sum(chanFlagged(:)), ...
         'pct_channel_epochs_flagged', pct(sum(chanFlagged(:)), nChan * nTrials), ...
+        'n_channel_epochs_interpolated', sum(chanInterpolated(:)), ...
+        'pct_channel_epochs_interpolated', pct(sum(chanInterpolated(:)), nChan * nTrials), ...
         'n_trials_truncated', sum(trialTruncated), ...
         'pct_trials_truncated', pct(sum(trialTruncated), nTrials), ...
         'max_truncated_pct_of_epoch', maxTruncation(truncatedSamples, trialTruncated, size(epoched.data, 2)), ...
@@ -176,7 +200,8 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
         'n_bins', numel(bins));
 
     q.byBinChannel = struct('bin', {}, 'channel', {}, 'n_trials', {}, 'n_trials_rejected', {}, ...
-        'pct_trials_rejected', {}, 'n_flagged', {}, 'pct_flagged', {}, 'baseline_sd_uv', {}, 'sme_uv', {});
+        'pct_trials_rejected', {}, 'n_flagged', {}, 'pct_flagged', {}, ...
+        'n_interpolated', {}, 'pct_interpolated', {}, 'baseline_sd_uv', {}, 'sme_uv', {});
     for b = 1:numel(bins)
         member = bins(b).trials;
         for c = 1:nChan
@@ -189,6 +214,8 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
                 'pct_trials_rejected', pct(sum(inBinRejected), numel(member)), ...
                 'n_flagged', sum(chanFlagged(c, member)), ...
                 'pct_flagged', pct(sum(chanFlagged(c, member)), numel(member)), ...
+                'n_interpolated', sum(chanInterpolated(c, member)), ...
+                'pct_interpolated', pct(sum(chanInterpolated(c, member)), numel(member)), ...
                 'baseline_sd_uv', median(baselineSdChan(c, member), 'omitnan'), ...
                 'sme_uv', smeFor(averaged, c, bins(b).index));
         end
@@ -394,6 +421,35 @@ function labels = channelLabels(EEG, nChan)
                 labels{c} = name;
             end
         end
+    end
+end
+
+function mask = interpolatedMask(EEG, nChan, nTrials)
+%INTERPOLATEDMASK  The nChan x nTrials logical written by whichever
+%   transformation reconstructed data, or all-false when there is none.
+%
+%   Read defensively and deliberately NOT through TransTools: EEG.etc is
+%   EEGLAB's free-form field and may be absent, empty or not a struct, and
+%   this file is IO code that must stay usable without the Transformations
+%   package on the path. The field name is the contract with
+%   TransTools.InterpolateFlaggedCells; if it changes, it changes in both.
+%
+%   A mask of the wrong shape is discarded rather than misapplied: it was
+%   written for a differently shaped dataset (a resample, a channel edit)
+%   and there is no honest way to map it onto this one.
+    mask = false(nChan, nTrials);
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || isempty(EEG.etc)
+        return;
+    end
+    if ~isfield(EEG.etc, 'alz') || ~isstruct(EEG.etc.alz) || isempty(EEG.etc.alz)
+        return;
+    end
+    if ~isfield(EEG.etc.alz, 'interpolated')
+        return;
+    end
+    stored = EEG.etc.alz.interpolated;
+    if islogical(stored) && isequal(size(stored), [nChan, nTrials])
+        mask = stored;
     end
 end
 

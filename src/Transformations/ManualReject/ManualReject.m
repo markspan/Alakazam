@@ -67,7 +67,7 @@ if strcmpi(options.scope, 'Whole epoch')
     EEG.data(:, :, badTrials) = NaN;
     fprintf('ManualReject: rejected %d of %d epoch(s).\n', sum(badTrials), nTrials);
 elseif strcmpi(options.channelMode, 'Interpolate')
-    EEG = interpolateFlaggedCells(EEG, options.flags);
+    EEG = TransTools.InterpolateFlaggedCells(EEG, options.flags);
     fprintf('ManualReject: interpolated %d flagged channel-epoch(s).\n', nnz(options.flags));
 else
     for t = 1:nTrials
@@ -77,25 +77,9 @@ else
 end
 end
 
-% ======================================================================= %
-function EEG = interpolateFlaggedCells(EEG, flags)
-%INTERPOLATEFLAGGEDCELLS  Reconstruct every flagged (channel, trial) cell
-%   from its neighbours, one trial at a time. eeg_interp (the function
-%   pop_interp itself calls, and Interpolate.m calls indirectly through it)
-%   is handed a one-trial copy of EEG so its own spherical-spline maths
-%   only ever sees THIS trial's spatial pattern -- the same channel is
-%   free to be flagged in one trial and left alone in the next, unlike
-%   pop_interp's own whole-recording "this channel is bad everywhere" model.
-    nTrials = size(EEG.data, 3);
-    for t = 1:nTrials
-        badIdx = find(flags(:, t));
-        if isempty(badIdx)
-            continue;
-        end
-        oneTrial = EEG;
-        oneTrial.data   = EEG.data(:, :, t);
-        oneTrial.trials = 1;
-        oneTrial = eeg_interp(oneTrial, badIdx, 'spherical');
-        EEG.data(badIdx, :, t) = oneTrial.data(badIdx, :);
-    end
-end
+% The per-trial interpolation this used to carry as a local function now
+% lives in TransTools.InterpolateFlaggedCells, shared with ArtefactDetect's
+% own Interpolate scope. It also records EEG.etc.alz.interpolated, without
+% which reconstructed cells are invisible to the data-quality report: they
+% are no longer NaN, so nothing downstream can tell them from data that was
+% never flagged.

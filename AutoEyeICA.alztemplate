@@ -1,0 +1,84 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "AutoEyeICA",
+  "nodes": [
+    {
+      "transformId": "AutoEyeICA",
+      "params": {
+        "EyeThreshold": 0.6
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "DefineBins",
+      "params": {
+        "script": "% Codes are markers; ? = any char; { } lists alternatives; | is or.\n% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] unit.\n% let names a reusable expression (codes or relations); = makes a difference bin.\nlet prime  = {111, 112, 121, 122}\nlet target = {211, 212, 221, 222}\nlet related = \"?1?\"\nlet unrelated = \"?2?\"\nbin 1 \"Prime, related\"    (prime and related)\nbin 2 \"Prime, unrelated\"  (prime and unrelated)\nbin 3 \"Target, related\"   (target and related) and next(\"201\") within (200,1500] ms\nbin 4 \"Target, unrelated\" (target and unrelated) and next(\"201\") within (200,1500] ms\nbin 5 \"N400\" = bin 3 - bin 1",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      },
+      "parent": 1
+    },
+    {
+      "transformId": "Baseline",
+      "params": {
+        "Start": -100,
+        "Stop": -10
+      },
+      "parent": 2
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "params": {
+        "Method": [
+          "Absolute threshold",
+          "Step function",
+          "Moving-window peak-to-peak",
+          "Sample-to-sample"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 50,
+        "TestStart": 0,
+        "TestStop": 0,
+        "Scope": "Whole epoch"
+      },
+      "parent": 3
+    },
+    {
+      "transformId": "Average",
+      "params": {
+        "Param": "Init"
+      },
+      "parent": 4
+    },
+    {
+      "transformId": "Measure",
+      "params": {
+        "windows": [
+          {
+            "label": "N400",
+            "start": 300,
+            "stop": 500,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 100,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": ""
+          }
+        ],
+        "derivations": ""
+      },
+      "parent": 5
+    }
+  ]
+}

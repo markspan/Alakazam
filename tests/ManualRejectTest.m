@@ -159,6 +159,35 @@ classdef ManualRejectTest < matlab.unittest.TestCase
             testCase.verifyFalse(isequaln(result.data(1, :, 2), EEG.data(1, :, 2)));
             testCase.verifyFalse(any(isnan(result.data(1, :, 2))));
             testCase.verifyEqual(result.data(1, :, [1 3 4]), EEG.data(1, :, [1 3 4]));
+
+            % The reconstructed cell holds real numbers again, so it is
+            % indistinguishable from data nobody ever flagged -- every count
+            % in dataQualityMetrics is derived from the NaN convention and
+            % would score this recording as untouched. The mask is the only
+            % trace interpolation leaves, which is why it is asserted here
+            % rather than treated as an implementation detail.
+            testCase.verifyTrue(isfield(result.etc, 'alz'));
+            testCase.verifyTrue(isfield(result.etc.alz, 'interpolated'));
+            testCase.verifyEqual(result.etc.alz.interpolated, flags);
+        end
+
+        function nanTreatmentLeavesNoInterpolationRecord(testCase)
+        %NANTREATMENTLEAVESNOINTERPOLATIONRECORD  The mask means
+        %   "reconstructed", not "flagged": the plain This-channel-only
+        %   path discards the cell and must NOT claim to have rebuilt it,
+        %   or the report would credit a repair that never happened.
+            EEG = makeTestEEG('nbchan', 3, 'trials', 2);
+            flags = false(EEG.nbchan, EEG.trials);
+            flags(2, 1) = true;
+            opts = struct('flags', flags, 'scope', 'This channel only', 'channelMode', 'NaN');
+
+            [result, ~] = ManualReject(EEG, opts);
+
+            testCase.verifyTrue(all(isnan(result.data(2, :, 1))));
+            hasMask = isfield(result, 'etc') && isstruct(result.etc) && ...
+                isfield(result.etc, 'alz') && isstruct(result.etc.alz) && ...
+                isfield(result.etc.alz, 'interpolated') && any(result.etc.alz.interpolated(:));
+            testCase.verifyFalse(hasMask);
         end
     end
 end
