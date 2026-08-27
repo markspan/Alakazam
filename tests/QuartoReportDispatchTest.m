@@ -1,0 +1,388 @@
+classdef QuartoReportDispatchTest < matlab.unittest.TestCase
+%QUARTOREPORTDISPATCHTEST  What src/IO/generateQuartoReport.m's own
+%   dispatch loop ROUTES TO -- one assertion per cell of the
+%   (ordinary-bin count x grouped x report kind x combination bin) matrix
+%   its if/elseif chain at lines 109-144 implements.
+%
+%   Testing philosophy. The orchestrator's whole job is choosing a section
+%   builder; almost every way it can go wrong is a WRONG CHOICE, not a
+%   crash. Swap descriptiveSection for betweenSection, or comboSection for
+%   comboSectionDescriptiveOnly, and the call still has the right arity,
+%   MATLAB raises nothing, and the report still renders -- it simply
+%   reports a different statistical test than the design calls for. So
+%   these tests are written to KILL exactly that class of mutation.
+%
+%   That rules out the obvious assertion. A section heading cannot
+%   discriminate the builders, because "## N400 -- mean\_amplitude" is a
+%   strict PREFIX of both "## N400 -- mean\_amplitude (Between Subjects)"
+%   and "## N400 -- mean\_amplitude (Mixed Design)": a verifySubstring on
+%   the bare heading passes for all three designs at once. Every assertion
+%   here therefore keys on one of three things that DO name the builder
+%   that ran:
+%     - the ordered "#| label:" chunk census (desc- / between- / paired- /
+%       mixed- / anova- / combo- / combo-desc- / combo-grouped-), which is
+%       both order- and length-sensitive, so a hoisted loop, a deleted
+%       branch or a substituted builder all fail it;
+%     - the design's own prose line; and
+%     - the R `design = "..."` literal each builder logs into `omnibus`,
+%       which is what the closing summary's facet mapping keys on.
+%
+%   Nothing here needs R or Quarto: it is pure MATLAB text work over the
+%   .qmd generateQuartoReport returns, so the whole file runs in about a
+%   second and can guard a change in a fast inner loop.
+%
+%   Fixtures come from tests/ReportFixtures.m (a static-method class, not
+%   a test class); nothing is restated here that lives there.
+%
+%   Every test in this file is expected to PASS today. The two spectral
+%   census expectations encode a live bug (F1, circular measure types
+%   routing into linear omnibus tests) as CURRENT behaviour and are
+%   flagged inline; the assertion that F1 is WRONG lives in
+%   QuartoReportKnownGapTest, where it belongs.
+%
+%   Run with: runtests('tests/QuartoReportDispatchTest.m').
+
+    properties (TestParameter)
+        %DISPATCHCELL  One entry per cell of the ordinary-bin-count x
+        %   grouped dispatch matrix, so each cell fails as a separately
+        %   named test result rather than as one anonymous method.
+        dispatchCell = struct( ...
+            'oneBinUngrouped', struct( ...
+                'binLabels', {{'A'}}, ...
+                'groups', {{'', ''}}, ...
+                'prose', 'descriptive statistics only, no comparison possible', ...
+                'designLiteral', '', ...
+                'ownPrefix', '#| label: desc-'), ...
+            'oneBinGrouped', struct( ...
+                'binLabels', {{'A'}}, ...
+                'groups', {{'ctrl', 'patient'}}, ...
+                'prose', '(Between Subjects)', ...
+                'designLiteral', 'design = "indep_t"', ...
+                'ownPrefix', '#| label: between-'), ...
+            'twoBinsUngrouped', struct( ...
+                'binLabels', {{'A', 'B'}}, ...
+                'groups', {{'', ''}}, ...
+                'prose', 'Two conditions: "A" vs. "B".', ...
+                'designLiteral', 'design = "paired_t", test = "paired_t_test"', ...
+                'ownPrefix', '#| label: paired-'), ...
+            'twoBinsGrouped', struct( ...
+                'binLabels', {{'A', 'B'}}, ...
+                'groups', {{'ctrl', 'patient'}}, ...
+                'prose', '(Mixed Design)', ...
+                'designLiteral', 'design = "lmm_mixed"', ...
+                'ownPrefix', '#| label: mixed-'), ...
+            'threeBinsUngrouped', struct( ...
+                'binLabels', {{'A', 'B', 'C'}}, ...
+                'groups', {{'', ''}}, ...
+                'prose', '3 conditions: A, B, C.', ...
+                'designLiteral', 'design = "lmm_within", test = "omnibus"', ...
+                'ownPrefix', '#| label: anova-'), ...
+            'threeBinsGrouped', struct( ...
+                'binLabels', {{'A', 'B', 'C'}}, ...
+                'groups', {{'ctrl', 'patient'}}, ...
+                'prose', 'within subjects, crossed with the between-subjects group', ...
+                'designLiteral', 'design = "lmm_mixed"', ...
+                'ownPrefix', '#| label: mixed-'))
+
+        %GROUPRULE  The five decisions distinctGroups makes: blanks are
+        %   dropped BEFORE the >= 2 count, only 'subject' rows count at
+        %   all, and one shared label is not a grouping.
+        groupRule = struct( ...
+            'noGroupLabelsAtAll', struct( ...
+                'groups', {{'', ''}}, ...
+                'datasetTypes', {{'subject', 'subject'}}, ...
+                'expectGrouped', false), ...
+            'oneDistinctLabelOnly', struct( ...
+                'groups', {{'ctrl', 'ctrl'}}, ...
+                'datasetTypes', {{'subject', 'subject'}}, ...
+                'expectGrouped', false), ...
+            'oneLabelPlusOneBlank', struct( ...
+                'groups', {{'ctrl', ''}}, ...
+                'datasetTypes', {{'subject', 'subject'}}, ...
+                'expectGrouped', false), ...
+            'secondLabelOnAGrandAverage', struct( ...
+                'groups', {{'ctrl', 'patient'}}, ...
+                'datasetTypes', {{'subject', 'grand_average'}}, ...
+                'expectGrouped', false), ...
+            'twoDistinctSubjectLabels', struct( ...
+                'groups', {{'ctrl', 'patient'}}, ...
+                'datasetTypes', {{'subject', 'subject'}}, ...
+                'expectGrouped', true))
+
+        %SECTIONPRODUCT  Designs whose section count is a genuine product
+        %   of blocks x measure types x (1 + combination bins), not a
+        %   coincidence of twos -- see
+        %   sectionCountIsProductOfBlocksTypesAndCombos.
+        sectionProduct = struct( ...
+            'oneBlockTwoTypesOneCombo', struct( ...
+                'windowLabels', {{'N400'}}, ...
+                'measure', 'Peak', ...
+                'scope', '', ...
+                'nTypes', 2, ...
+                'nCombo', 1), ...
+            'oneBlockThreeTypesOneCombo', struct( ...
+                'windowLabels', {{'N400'}}, ...
+                'measure', 'Peak Area', ...
+                'scope', 'band', ...
+                'nTypes', 3, ...
+                'nCombo', 1), ...
+            'twoBlocksThreeTypesOneCombo', struct( ...
+                'windowLabels', {{'N400', 'P300'}}, ...
+                'measure', 'Peak Area', ...
+                'scope', 'band', ...
+                'nTypes', 3, ...
+                'nCombo', 1), ...
+            'oneBlockTwoTypesTwoCombos', struct( ...
+                'windowLabels', {{'N400'}}, ...
+                'measure', 'Peak', ...
+                'scope', '', ...
+                'nTypes', 2, ...
+                'nCombo', 2))
+    end
+
+    methods (TestClassSetup)
+        function addSourceToPath(testCase)
+        %ADDSOURCETOPATH  src/IO (generateQuartoReport + the
+        %   +ReportSections package), src/Support (measureRowTypes and
+        %   friends) and the tests folder itself, so ReportFixtures
+        %   resolves however the suite was launched.
+            here = fileparts(mfilename('fullpath'));
+            root = fileparts(here);
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'IO')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Support')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));
+        end
+    end
+
+    methods (Test)
+
+        function chunkLabelCensusIsExactAndOrdered(testCase)
+        %CHUNKLABELCENSUSISEXACTANDORDERED  The flagship. For each of the
+        %   eight census fixtures, the ordered list of "#| label:" values
+        %   the report emits, asserted whole -- so a substituted builder
+        %   (a wrong label), a deleted branch (a missing label), a hoisted
+        %   combination loop (a reordered label) and a spurious extra
+        %   section (a longer list) each fail, and each fails naming the
+        %   fixture that caught it.
+        %
+        %   verifyEqual on the whole cellstr, never verifySubstring on one
+        %   heading: several designs' headings are strict prefixes of one
+        %   another (see this class's own header comment).
+            expected = struct();
+            expected.('F_ERP1') = {'setup', 'desc-n400-mean-amplitude', 'summary-all-tests'};
+            expected.('F_ERP1G') = {'setup', 'groups-summary', 'between-n400-mean-amplitude', 'summary-all-tests'};
+            expected.('F_ERP2') = {'setup', 'paired-n400-mean-amplitude', 'summary-all-tests'};
+            expected.('F_ERP2G') = {'setup', 'groups-summary', 'mixed-n400-mean-amplitude', 'summary-all-tests'};
+            expected.('F_ERP3C') = {'setup', 'anova-n400-peak-amplitude', 'combo-n400-peak-amplitude-a-b', ...
+                'anova-n400-peak-latency', 'combo-desc-n400-peak-latency-a-b', 'summary-all-tests'};
+            expected.('F_ERP3CG') = {'setup', 'groups-summary', 'mixed-n400-peak-amplitude', ...
+                'combo-grouped-n400-peak-amplitude-a-b', 'mixed-n400-peak-latency', ...
+                'combo-grouped-n400-peak-latency-a-b', 'summary-all-tests'};
+            % F1 (unfixed): 'anova-10hz-phase' is the live circular-routing bug. See QuartoReportKnownGapTest. When F1 is fixed, THIS is the line to update.
+            expected.('F_SPEC3C') = {'setup', 'anova-10hz-power', 'combo-10hz-power-a-b', ...
+                'anova-10hz-amplitude', 'combo-10hz-amplitude-a-b', ...
+                'anova-10hz-snr', 'combo-10hz-snr-a-b', ...
+                'anova-10hz-itc', 'combo-10hz-itc-a-b', ...
+                'anova-10hz-phase', 'combo-desc-10hz-phase-a-b', 'summary-all-tests'};
+            % F1 (unfixed): 'anova-10hz-phase' is the live circular-routing bug. See QuartoReportKnownGapTest. When F1 is fixed, THIS is the line to update.
+            expected.('F_SPEC3CR') = {'setup', 'anova-10hz-power', 'combo-10hz-power-a-b', ...
+                'anova-10hz-amplitude', 'combo-10hz-amplitude-a-b', ...
+                'anova-10hz-snr', 'combo-10hz-snr-a-b', ...
+                'anova-10hz-itc', 'combo-10hz-itc-a-b', ...
+                'anova-10hz-phase', 'combo-desc-10hz-phase-a-b', ...
+                'anova-10hz-coherence', 'combo-10hz-coherence-a-b', ...
+                'anova-10hz-phaselag', 'combo-desc-10hz-phaselag-a-b', 'summary-all-tests'};
+
+            ids = ReportFixtures.censusIds();
+            for i = 1:numel(ids)
+                id = ids{i};
+                txt = generateQuartoReport(ReportFixtures.censusEntries(id), 'x.csv');
+                testCase.verifyEqual(ReportFixtures.chunkLabels(txt), ...
+                    expected.(strrep(id, '-', '_')), ...
+                    sprintf(['Fixture %s routed to a different set (or order) of section ' ...
+                             'builders than its design calls for.'], id));
+            end
+        end
+
+        function designSignatureMatchesDispatchCell(testCase, dispatchCell)
+        %DESIGNSIGNATUREMATCHESDISPATCHCELL  Each dispatch cell states its
+        %   own design three ways at once: the prose line the reader sees,
+        %   the R `design = "..."` literal the summary table keys on, and
+        %   its own chunk-label prefix -- with all five SIBLING prefixes
+        %   verified absent, which is what turns "the right builder ran"
+        %   into "no other builder ran".
+            entries = ReportFixtures.erpEntries( ...
+                'Bindesc', ReportFixtures.bindesc(dispatchCell.binLabels), ...
+                'Groups', dispatchCell.groups);
+            txt = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(txt, dispatchCell.prose);
+            if ~isempty(dispatchCell.designLiteral)
+                testCase.verifySubstring(txt, dispatchCell.designLiteral);
+            end
+            testCase.verifySubstring(txt, dispatchCell.ownPrefix);
+
+            siblings = allSectionPrefixes();
+            siblings(strcmp(siblings, dispatchCell.ownPrefix)) = [];
+            for i = 1:numel(siblings)
+                testCase.verifyFalse(contains(txt, siblings{i}), ...
+                    sprintf('A section labelled "%s" was emitted for a design whose only builder is "%s".', ...
+                        siblings{i}, dispatchCell.ownPrefix));
+            end
+        end
+
+        function groupActivationRules(testCase, groupRule)
+        %GROUPACTIVATIONRULES  distinctGroups' three independent
+        %   decisions, each pinned on BOTH observable consequences of
+        %   hasGroups: the setup chunk's own ungrouped-subject filter, and
+        %   the visible groups-summary chunk. Asserting both together is
+        %   what stops one being wired up without the other.
+            entries = ReportFixtures.erpEntries( ...
+                'Groups', groupRule.groups, 'DatasetTypes', groupRule.datasetTypes);
+            txt = generateQuartoReport(entries, 'x.csv');
+
+            filterLine = 'ungrouped_subjects <- dat %>% filter(is.na(group) | group == "")';
+            summaryLabel = '#| label: groups-summary';
+            testCase.verifyEqual(contains(txt, filterLine), groupRule.expectGrouped, ...
+                'The setup chunk''s ungrouped-subject filter disagrees with the expected grouping decision.');
+            testCase.verifyEqual(contains(txt, summaryLabel), groupRule.expectGrouped, ...
+                'The groups-summary chunk disagrees with the expected grouping decision.');
+        end
+
+        function sectionCountIsProductOfBlocksTypesAndCombos(testCase, sectionProduct)
+        %SECTIONCOUNTISPRODUCTOFBLOCKSTYPESANDCOMBOS  Every block expands
+        %   into one omnibus section per measure type PLUS one section per
+        %   combination bin, so the heading count is
+        %   nBlocks * nTypes * (1 + nCombo), plus one for the closing
+        %   summary.
+        %
+        %   The parameters vary each factor independently (a band-scoped
+        %   'Peak Area' window expands into THREE measure types, and one
+        %   design carries two combination bins), so the formula is
+        %   exercised as a genuine product rather than as a coincidence of
+        %   twos -- a dropped nesting level then fails arithmetically, not
+        %   by luck.
+            bins = ReportFixtures.bindesc({'A', 'B', 'C'});
+            comboLabels = {'A-B', 'A-C'};
+            for c = 1:sectionProduct.nCombo
+                bins = ReportFixtures.withCombo(bins, comboLabels{c}, [1, -1], [1, c + 1]);
+            end
+
+            windows = cell(1, numel(sectionProduct.windowLabels));
+            for w = 1:numel(windows)
+                windows{w} = ReportFixtures.windowSpec(sectionProduct.windowLabels{w}, ...
+                    sectionProduct.measure, 'Scope', sectionProduct.scope);
+            end
+
+            entries = ReportFixtures.erpEntries('Bindesc', bins, 'Windows', windows);
+            txt = generateQuartoReport(entries, 'x.csv');
+
+            nBlocks = numel(sectionProduct.windowLabels);
+            expectedHeadings = nBlocks * sectionProduct.nTypes * (1 + sectionProduct.nCombo) + 1;
+            testCase.verifyNumElements(ReportFixtures.headings(txt), expectedHeadings, ...
+                'The report emitted a different number of sections than blocks x measure types x (1 + combos) + 1.');
+        end
+
+        function comboSectionsStayInnermost(testCase)
+        %COMBOSECTIONSSTAYINNERMOST  A combination bin's section belongs
+        %   to the measure type it was computed for, so it must appear
+        %   BEFORE the next measure type's omnibus section. Hoisting the
+        %   combination loop out of the measure-type loop leaves every
+        %   heading and every chunk label byte-identical and only changes
+        %   their ORDER, which is exactly what this asserts.
+            txt = generateQuartoReport(ReportFixtures.censusEntries('F-ERP3C'), 'x.csv');
+            comboAt = strfind(txt, '#| label: combo-n400-peak-amplitude-a-b');
+            nextOmnibusAt = strfind(txt, '#| label: anova-n400-peak-latency');
+            testCase.assertNumElements(comboAt, 1, ...
+                'Expected exactly one peak_amplitude combination section to locate.');
+            testCase.assertNumElements(nextOmnibusAt, 1, ...
+                'Expected exactly one peak_latency omnibus section to locate.');
+            testCase.verifyLessThan(comboAt, nextOmnibusAt, ...
+                ['peak_amplitude''s combination section was emitted after the peak_latency ' ...
+                 'omnibus section, so the combination loop is no longer innermost.']);
+        end
+
+        function erpTakesPrecedenceOverSpectral(testCase)
+        %ERPTAKESPRECEDENCEOVERSPECTRAL  Characterisation, not
+        %   endorsement: an EEG carrying BOTH a non-empty .measurements
+        %   and a non-empty .spectralMeasures builds an ERP report and
+        %   silently drops the spectral half -- deliberate (the isfield
+        %   chain tests hasErp first) but lossy, and worth pinning so the
+        %   precedence cannot flip unnoticed.
+            txt = generateQuartoReport(ReportFixtures.erpAndSpectralEntries(), 'x.csv');
+            testCase.verifySubstring(txt, 'title: "Alakazam ERP Statistical Report"');
+            testCase.verifyFalse(contains(txt, 'rename(window = frequency_label)'), ...
+                'A Spectral read chunk was emitted for an export that also has ERP measurements.');
+        end
+
+        function emptyEntriesIsDiscriminatedByMessage(testCase)
+        %EMPTYENTRIESISDISCRIMINATEDBYMESSAGE  The "no entries at all"
+        %   guard. Both of generateQuartoReport's throw paths share one
+        %   MException identifier, so the identifier alone cannot tell
+        %   them apart -- the message must be checked too, or a test for
+        %   one guard passes when the other fires.
+            testCase.verifyError(@() generateQuartoReport(ReportFixtures.emptyEntries(), 'x.csv'), ...
+                'Alakazam:generateQuartoReport');
+            err = errorFrom(@() generateQuartoReport(ReportFixtures.emptyEntries(), 'x.csv'));
+            testCase.assertNotEmpty(err, 'generateQuartoReport accepted an empty ENTRIES without erroring.');
+            testCase.verifySubstring(err.message, 'at least one Measure result');
+        end
+
+        function missingAndEmptyMeasureFieldShareOneGuard(testCase)
+        %MISSINGANDEMPTYMEASUREFIELDSHAREONEGUARD  The second guard's two
+        %   legs: the measure field absent altogether (isfield) and the
+        %   measure field present but {} (~isempty). The {} leg is the one
+        %   that matters -- dropping the "&& ~isempty(...)" turns it from
+        %   an error into a silently zero-section report that still
+        %   renders and still looks complete.
+            expectedText = '(EEG.measurements) or Spectral Measure (EEG.spectralMeasures).';
+
+            missingField = @() generateQuartoReport(ReportFixtures.entriesMissingMeasureField(), 'x.csv');
+            testCase.verifyError(missingField, 'Alakazam:generateQuartoReport');
+            errMissing = errorFrom(missingField);
+            testCase.assertNotEmpty(errMissing, ...
+                'generateQuartoReport accepted an EEG with no measure field at all without erroring.');
+            testCase.verifySubstring(errMissing.message, expectedText);
+
+            emptyField = @() generateQuartoReport(ReportFixtures.entriesWithEmptyMeasureField(), 'x.csv');
+            testCase.verifyError(emptyField, 'Alakazam:generateQuartoReport');
+            errEmpty = errorFrom(emptyField);
+            testCase.assertNotEmpty(errEmpty, ...
+                'generateQuartoReport accepted an empty EEG.measurements without erroring.');
+            testCase.verifySubstring(errEmpty.message, expectedText);
+        end
+    end
+end
+
+function err = errorFrom(fcn)
+%ERRORFROM  The MException FCN throws, or [] when it throws nothing.
+%
+%   verifyError already states THAT the identifier is right; this exists
+%   only to get at the MESSAGE, because generateQuartoReport's two guards
+%   share a single identifier and can therefore only be told apart by what
+%   they say. Captured with try/catch rather than from verifyError's own
+%   return value, which is not an MException on every release.
+    err = [];
+    try
+        fcn();
+    catch caught
+        err = caught;
+    end
+end
+
+function prefixes = allSectionPrefixes()
+%ALLSECTIONPREFIXES  The chunk-label prefix of every omnibus section
+%   builder generateQuartoReport can dispatch to. Exactly one of them may
+%   appear in a report whose design has a single window and a single
+%   measure type; the other five must not.
+%
+%   The combination-bin prefixes (combo-, combo-desc-, combo-grouped-) are
+%   deliberately NOT listed: they are emitted alongside an omnibus section
+%   rather than instead of one, and none of them has any of these five as
+%   a prefix, so a "combo-desc-..." label can never be mistaken for a
+%   "desc-..." one here.
+    prefixes = {'#| label: desc-', '#| label: between-', '#| label: paired-', ...
+        '#| label: mixed-', '#| label: anova-'};
+end
