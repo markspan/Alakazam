@@ -20,6 +20,8 @@ function onRibbonAction(this, id)
             this.openSettings();
         case 'help'
             this.onHelp();
+        case 'about'
+            this.onAbout();
         case 'defineGrandAverage'
             this.onDefineGrandAverage();
         case 'clusterStats'

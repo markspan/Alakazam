@@ -28,6 +28,19 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     presentKinds = order(ismember(order, candidateKinds));
     if isempty(presentKinds); presentKinds = unique(candidateKinds); end
 
+    % Nothing to offer: return rather than build a dropdown around it.
+    % 'Value', presentKinds{1} below indexes this, so an empty candidate
+    % list threw MATLAB:badsubscript ("Index exceeds array bounds") out of
+    % the dialog instead of saying anything. onDefineGrandAverage and
+    % onClusterStats both guard with their own "fewer than two" check and
+    % never arrive here empty, but onRecalculateNode calls straight through
+    % with no guard -- so recalculating an existing grand average in a
+    % workspace that no longer offers its sources was a hard error, which
+    % is precisely the moment the analyst most needs an explanation.
+    if isempty(presentKinds)
+        return;
+    end
+
     weightChoices = {'Unweighted (every subject counts equally)', ...
                      'Weighted by each subject''s trial count'};
 

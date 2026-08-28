@@ -344,7 +344,8 @@ classdef AlakazamRibbon < handle
                 struct('title', 'Design',    'items', {this.designItems(iconsDir)}), ...
                 struct('title', 'Settings',  'items', {this.settingsItems(iconsDir)}), ...
                 struct('title', 'View',      'items', {this.viewItems(iconsDir)}), ...
-                struct('title', 'Help',      'items', {this.helpItems(iconsDir)})};
+                struct('title', 'Help',      'items', {this.helpItems(iconsDir)}), ...
+                struct('title', 'About',     'items', {this.aboutItems(iconsDir)})};
 
             grandAverageGroups = { ...
                 struct('title', 'Group Averages', 'items', {this.grandAverageItems(iconsDir)})};
@@ -425,7 +426,32 @@ classdef AlakazamRibbon < handle
         %   in a repository.
             icon = this.encodeSvgFile(fullfile(iconsDir, 'Help.svg'));
             items = {struct('id', 'help', 'label', 'Help', ...
-                'tooltip', 'Open the in-app help (the same content as readme.MD)', 'icon', icon)};
+                'tooltip', 'Open the in-app help (the same content as readme.MD)', ...
+                'icon', icon)};
+        end
+
+        function items = aboutItems(this, iconsDir)
+        %ABOUTITEMS  The About box launcher (see Alakazam.onAbout): version,
+        %   author, licence and where to report a problem.
+        %
+        %   Its own group rather than sharing Help's. The two are both
+        %   "information about the application" in the abstract, but Help
+        %   is a working reference the analyst opens mid-analysis and comes
+        %   back to, while About is looked at once and answers a different
+        %   question entirely -- which version am I running, and who do I
+        %   tell. A group of its own also lets the application's mark sit
+        %   under its own name at the end of the tab.
+        %
+        %   The icon is the application's own artwork (src/Icons/Alakazam.svg),
+        %   the same file the About box itself uses at 96px. SVG rather than
+        %   a bitmap because one file has to serve both sizes, and because
+        %   MATLAB's own image components read SVG but not WebP (uiimage:
+        %   "Valid file formats are one of the following: png, jpg, jpeg,
+        %   gif, svg").
+            icon = this.encodeSvgFile(fullfile(iconsDir, 'Alakazam.svg'));
+            items = {struct('id', 'about', 'label', 'About', ...
+                'tooltip', 'Version, author, licence and where to report a problem', ...
+                'icon', icon)};
         end
 
         function items = viewItems(this, iconsDir)

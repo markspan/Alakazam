@@ -9,6 +9,18 @@
 // page is loaded into a uihtml component). Run: npm run build, then
 // (matching src/webtree's own manual deploy step) copy dist/AlakazamHelp.html
 // to ../AlakazamHelp.html.
+//
+// THE SAME APPLIES TO ORDINARY LINKS, which is easy to miss because only
+// the images look like file references. readme.MD is full of relative links
+// written for GitHub -- [LICENSE](LICENSE), [`dependencies.md`](dependencies.md),
+// [`ClusterStats.m`](src/ClusterStats.m) -- and every one of them is a dead
+// link in the help viewer: the page is loaded from src/, so "LICENSE"
+// resolves next to it rather than at the repository root, and even where the
+// path did resolve, a .md or .m file is not something the component can
+// render. They are rewritten below to absolute GitHub URLs, with one
+// exception: the LICENSE itself is appended to the page in full. A GPL
+// program should be able to show its own licence without a network
+// connection, and it is the link an analyst is most likely to click.
 import { marked } from 'marked'
 import fs from 'fs'
 import path from 'path'
@@ -17,6 +29,18 @@ import { fileURLToPath } from 'url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..')
 const outDir = path.join(here, 'dist')
+
+// Where a relative link in readme.MD is sent instead. Pinned to the default
+// branch rather than to whatever produced this build: a release package can
+// be opened long after it was cut, and a link into a branch that has since
+// moved or been deleted is worse than one pointing at the current default.
+const REPO_BLOB = 'https://github.com/markspan/Alakazam/blob/main/'
+
+// The in-page anchor the LICENSE link becomes. Must match the slug that
+// slugify() below produces for the appended heading, or the one link this
+// whole exercise started from is dead again.
+const LICENSE_ANCHOR = 'license-full-text'
+const LICENSE_HEADING = 'License (full text)'
 
 // The README is referred to as "readme.MD" throughout the project, but git
 // records it as "README.MD". On Windows and macOS those name the same file
@@ -70,6 +94,31 @@ md = md.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (whole, alt, src) => {
     return `![${alt}](${inlineImage(src)})`
 })
 
+// Now the ordinary links. Runs AFTER the image pass, and skips anything
+// already absolute, so the data: URIs just written above are left alone --
+// the negative lookbehind keeps this off image syntax in any case.
+//
+// A relative href may carry its own fragment (docs/x.md#section); the path
+// and the fragment are split so the path is rewritten and the fragment
+// survives onto the GitHub URL, where it still means something.
+md = md.replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, (whole, text, href) => {
+    if (/^(https?:|data:|mailto:|#)/.test(href)) return whole
+    const [target, fragment] = splitFragment(href)
+    if (target === 'LICENSE') {
+        // Kept in the page rather than sent to GitHub: see the header note.
+        return `[${text}](#${LICENSE_ANCHOR})`
+    }
+    return `[${text}](${REPO_BLOB}${target}${fragment})`
+})
+
+function splitFragment(href) {
+    const hash = href.indexOf('#')
+    if (hash < 0) {
+        return [href, '']
+    }
+    return [href.slice(0, hash), href.slice(hash)]
+}
+
 // Custom renderer: h2/h3 headings get a stable slug id (so the TOC sidebar
 // can link straight to them) and a TOC entry is recorded as a side effect
 // of rendering -- simplest way to keep the TOC and the rendered anchors
@@ -87,7 +136,36 @@ renderer.heading = function (token) {
     return `<h${level}>${text}</h${level}>\n`
 }
 
+// External links open outside the help window. Without this a click
+// navigates the uihtml component itself away from the help page, and the
+// component has no back button to return with -- the analyst would have to
+// close Help and reopen it.
+renderer.link = function (token) {
+    const text = this.parser.parseInline(token.tokens)
+    const title = token.title ? ` title="${token.title}"` : ''
+    if (/^https?:\/\//.test(token.href)) {
+        return `<a href="${token.href}"${title} target="_blank" rel="noopener noreferrer">${text}</a>`
+    }
+    return `<a href="${token.href}"${title}>${text}</a>`
+}
+
+// The licence, appended verbatim. Fenced rather than rendered as Markdown:
+// the GPL is a fixed-layout legal text whose own line breaks and indentation
+// carry meaning, and letting a Markdown renderer reflow it (or read its
+// numbered clauses as list syntax) would alter the wording as displayed.
+const licenseText = fs.readFileSync(path.join(repoRoot, 'LICENSE'), 'utf8')
+md += `\n\n## ${LICENSE_HEADING}\n\n\`\`\`text\n${licenseText.replace(/```/g, "'''")}\n\`\`\`\n`
+
 const bodyHtml = marked.parse(md, { renderer })
+
+// The whole point of the LICENSE special case is that its link resolves, so
+// a slug drift between LICENSE_ANCHOR and the appended heading is a build
+// failure rather than something to discover by clicking.
+if (slugify(LICENSE_HEADING) !== LICENSE_ANCHOR) {
+    throw new Error(
+        `LICENSE_ANCHOR ("${LICENSE_ANCHOR}") does not match the slug of ` +
+        `LICENSE_HEADING ("${slugify(LICENSE_HEADING)}") -- the licence link would be dead.`)
+}
 
 const tocHtml = toc.map(t =>
     `<a class="toc-${t.level === 2 ? 'h2' : 'h3'}" href="#${t.id}">${t.text}</a>`

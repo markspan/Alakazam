@@ -244,10 +244,43 @@ end
 
 function validateCompatibility(subjects, sourceFiles)
 %VALIDATECOMPATIBILITY  Make sure every subject can actually be combined:
-%   same number of channels, same number of time samples, and the same
-%   set of bin labels (any order). Throws a specific, friendly error
-%   naming exactly which subject and which mismatch, rather than letting
-%   a silent size mismatch or a wrong bin lineup happen later.
+%   same number of channels, same number of time samples, the same set of
+%   bin labels (any order), and -- see below -- that each one actually
+%   contains data. Throws a specific, friendly error naming exactly which
+%   subject and which mismatch, rather than letting a silent size mismatch
+%   or a wrong bin lineup happen later.
+
+    % EMPTY SUBJECTS FIRST, over ALL of them rather than against a
+    % reference. A subject whose every epoch was rejected still averages to
+    % a correctly shaped, correctly binned block of NaN, so it passes every
+    % compatibility test below and then silently destroys the result:
+    % combineSubjects sums across subjects without 'omitnan', so ONE
+    % all-NaN subject makes the ENTIRE grand average NaN, which plots as
+    % blank. That is a real failure seen on a real workspace -- ten N400
+    % subjects, one of them recorded on a scale where no trial could pass
+    % the +/-100 uV threshold, and a grand average that was 100% NaN with
+    % nothing anywhere saying why.
+    %
+    % Note this loop starts at 1, not 2: the offending subject may be the
+    % reference the loop below compares everything else against, and in the
+    % case that prompted this it was exactly that.
+    %
+    % Rejecting with a message rather than quietly switching combineSubjects
+    % to 'omitnan': averaging over whichever subjects happen to have data at
+    % each point would return a grand average silently computed over a
+    % different N per channel, which is a worse answer than a clear refusal.
+    for i = 1:numel(subjects)
+        if ~any(isfinite(subjects{i}.data(:)))
+            throw(MException('Alakazam:GrandAverage', sprintf([ ...
+                'I''m afraid "%s" contains no data: every epoch in it was rejected, so its ' ...
+                'average is entirely empty. Including it would make the whole grand average ' ...
+                'empty too. Please either leave this subject out, or revisit its artefact ' ...
+                'rejection -- if every single trial failed, the thresholds are usually the ' ...
+                'reason rather than the recording.'], ...
+                displayNameFor(sourceFiles{i}, subjects{i}))));
+        end
+    end
+
     reference     = subjects{1};
     referenceName = displayNameFor(sourceFiles{1}, reference);
     referenceLabels = sort(string({reference.bindesc.label}));

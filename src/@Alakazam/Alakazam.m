@@ -42,6 +42,7 @@ classdef Alakazam < handle
         ToolbarGrid     % uigridlayout cell reserved for the ribbon
         Ribbon          % AlakazamRibbon, the Home/Tools/Grand Average control strip
         HelpFigure      % matlab.ui.Figure, the in-app help viewer -- see onHelp. [] until first opened
+        AboutFigure     % matlab.ui.Figure, the About box -- see onAbout. [] until first opened
         RibbonBaseHeight   = 134  % fixed ribbon row height (px); see setupMainWindow. Never grows: an
                                   % overflowing group now opens as a floating popup instead (see
                                   % AlakazamRibbon's PopupComponent), so this stays constant. 120 was a
@@ -111,6 +112,7 @@ classdef Alakazam < handle
         onDeleteNode(this)
         closeTab(this, tag)
         onDefineGrandAverage(this)
+        hint = unrootedAveragesHint(this)
         onClusterStats(this)
         onClearOtherAnalyses(this)
         onExportGrandAverages(this)
@@ -136,6 +138,7 @@ classdef Alakazam < handle
         onRibbonWidthMeasured(this, width)
         onHelp(this)
         offerReadmeInstead(this)
+        onAbout(this)
         setPlotsViewMode(this, mode)
         refreshPlotsView(this)
         onCloseRequest(this)

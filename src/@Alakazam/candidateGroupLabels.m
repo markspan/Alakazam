@@ -1,11 +1,10 @@
 function groups = candidateGroupLabels(this, candidateFiles)
 %CANDIDATEGROUPLABELS  Each candidate's own between-subjects group ('' if
-%   none), same order as CANDIDATEFILES. findGrandAverageCandidates scans
-%   the cache directory directly, not the tree, so a candidate is matched
-%   back to its own tree node by file path (WorkSpaceTree exposes no
-%   direct "node for this file" lookup, so this compares UserData against
-%   each candidate -- the same approach Alakazam.onClearOtherAnalyses
-%   already uses), then walked up to its root via Tree.rootOf -- the SAME
+%   none), same order as CANDIDATEFILES. A candidate is matched back to its
+%   own tree node by file path (WorkSpaceTree exposes no direct "node for
+%   this file" lookup, so this compares UserData against each candidate --
+%   the same approach Alakazam.onClearOtherAnalyses already uses), then
+%   walked up to its root via Tree.rootOf -- the SAME
 %   mechanism collectEntriesWithField already uses to resolve a subject
 %   for the ERP/Spectral export's own .group column, which is already
 %   known to work correctly.

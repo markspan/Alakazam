@@ -192,26 +192,55 @@ eegOnly = pop_select(EEG, 'channel', eegIdx);
 %  copying EEGclean's own chanlocs back in risks a struct field mismatch
 %  (pop_select/GEDAI may add or drop chanlocs fields) for no real benefit.
 %
-%  GEDAI's epoch rejection can shrink the sample/trial count; if it did, the
-%  excluded channels' original-length data no longer lines up with
-%  EEGclean's, and there is no way to know which epochs/samples GEDAI kept.
-if ~isequal(size(EEGclean.data, 2), size(EEG.data, 2)) ...
-        || ~isequal(size(EEGclean.data, 3), size(EEG.data, 3))
-    throw(MException('Alakazam:AutoGEDAI', ...
-        ['I''m unable to re-insert the excluded channels: GEDAI''s epoch rejection ' ...
-         'changed the number of samples or trials, so the excluded ' ...
-         'channels'' original data no longer lines up. Please disable epoch ' ...
-         'rejection, or run AutoGEDAI on a dataset with only 10-5-' ...
-         'matched channels.']));
-end
+%  GEDAI's epoch rejection shrinks the sample count, so EEGclean's data no
+%  longer lines up with the excluded channels' original-length data. This
+%  used to be a hard error on the grounds that "there is no way to know
+%  which epochs/samples GEDAI kept". There is: GEDAI records the mask it
+%  applied as EEGclean.etc.GEDAI.samples_to_keep, a logical over the
+%  ORIGINAL sample axis (built as true(1, pnts), cleared for each rejected
+%  epoch, then applied as EEGclean.data(:, samples_to_keep)). It is set on
+%  every path through GEDAI, including the no-rejection one.
+%
+%  So the rejected samples are put back as NaN rather than refused. That
+%  keeps the dataset its original shape -- the excluded non-EEG channels
+%  splice into their own slots again -- and NaN is already this
+%  application's convention for "rejected, do not use": Average computes
+%  with 'omitnan', and dataQualityMetrics derives its whole rejection
+%  report from exactly this pattern (see its own header note). Rejected
+%  samples are NaN'd across EVERY channel, not just the denoised ones,
+%  because the rejection is a judgement about that stretch of recording,
+%  not about a particular electrode.
+%
+%  Bad CHANNEL rejection needs no handling here: GEDAI interpolates
+%  rejected channels back from their neighbours (eeg_interp_GEDAI) before
+%  returning, so the channel count is unchanged either way.
 merged = EEG;
-merged.data(eegIdx, :, :) = EEGclean.data;
+if isequal(size(EEGclean.data, 2), size(EEG.data, 2)) ...
+        && isequal(size(EEGclean.data, 3), size(EEG.data, 3))
+    merged.data(eegIdx, :, :) = EEGclean.data;
+    nRejected = 0;
+else
+    keep = keptSampleMask(EEGclean, size(EEG.data, 2) * size(EEG.data, 3), ...
+        size(EEGclean.data, 2) * size(EEGclean.data, 3));
+    % Flatten the sample axis so one mask serves continuous (chan x pnts)
+    % and epoched (chan x pnts x trials) data alike; reshaped back below.
+    origShape = size(EEG.data);
+    flat = reshape(merged.data, size(merged.data, 1), []);
+    flat(:, ~keep) = NaN;
+    flat(eegIdx, keep) = reshape(EEGclean.data, numel(eegIdx), []);
+    merged.data = reshape(flat, origShape);
+    nRejected = nnz(~keep);
+    fprintf(['AutoGEDAI: GEDAI rejected %d of %d sample(s); these are returned as NaN ' ...
+        'across all channels rather than dropped, so the dataset keeps its original ' ...
+        'length (Average and the data-quality report both treat NaN as rejected).\n'], ...
+        nRejected, numel(keep));
+end
 EEG = merged;
 EEG.id = name;
 EEG.etc.GEDAI = struct('SENSAI_score', SENSAI_score, ...
     'ENOVA_per_epoch', ENOVA_per_epoch, 'ENOVA_per_channel', ENOVA_per_channel, ...
     'channelIndices', eegIdx, 'excludedChannels', {{EEG.chanlocs(otherIdx).labels}}, ...
-    'options', opts);
+    'nSamplesRejected', nRejected, 'options', opts);
 
 fprintf('AutoGEDAI: SENSAI score %.3f.\n', SENSAI_score);
 if epochThreshold < inf
@@ -222,6 +251,38 @@ if channelThreshold < inf
     fprintf('AutoGEDAI: %d channel(s) exceeded the ENOVA threshold (%.2f).\n', ...
         sum(ENOVA_per_channel > channelThreshold), channelThreshold);
 end
+end
+
+function keep = keptSampleMask(EEGclean, nOriginalSamples, nKeptSamples)
+%KEPTSAMPLEMASK  Which of the original samples GEDAI kept, as a logical row.
+%
+%   Read from EEGclean.etc.GEDAI.samples_to_keep, the mask GEDAI applies
+%   when rejecting epochs. It is validated rather than trusted: this is a
+%   third-party plugin whose output shape has to line up exactly with the
+%   data before anything is written through it, and a silently misaligned
+%   mask would scatter one recording's samples into the wrong slots --
+%   corrupting the dataset in a way nothing downstream could detect.
+%
+%   Fails with the same friendly error the hard refusal used to give if the
+%   mask is absent or does not describe this reduction, so the worst case
+%   is the behaviour that was there before rather than bad data.
+    keep = [];
+    if isfield(EEGclean, 'etc') && isstruct(EEGclean.etc) ...
+            && isfield(EEGclean.etc, 'GEDAI') && isstruct(EEGclean.etc.GEDAI) ...
+            && isfield(EEGclean.etc.GEDAI, 'samples_to_keep')
+        keep = logical(EEGclean.etc.GEDAI.samples_to_keep(:)).';
+    end
+
+    if numel(keep) ~= nOriginalSamples || nnz(keep) ~= nKeptSamples
+        throw(MException('Alakazam:AutoGEDAI', sprintf([ ...
+            'I''m unable to re-insert the excluded channels: GEDAI''s epoch rejection ' ...
+            'changed the number of samples, and the record of which samples it kept ' ...
+            'does not match the result it returned (expected a mask over %d sample(s) ' ...
+            'selecting %d, got %d selecting %d). This usually means a different GEDAI ' ...
+            'version. Please disable epoch rejection, or run AutoGEDAI on a dataset ' ...
+            'with only 10-5-matched channels.'], ...
+            nOriginalSamples, nKeptSamples, numel(keep), nnz(keep))));
+    end
 end
 
 function ensureGEDAI()
