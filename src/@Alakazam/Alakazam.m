@@ -63,7 +63,7 @@ classdef Alakazam < handle
         LastClickedTag = "" % Tag of the tile last clicked/interacted with in Grid/Stack mode; see registerTileClick/activeTileTag
         Workspace       % WorkSpace, the data-browser tree and session state
         Plotter         % AlakazamPlotter, renders datasets into tabs
-        Debug = true    % logical, when true expose the instance in the base workspace
+        Debug = true    % logical, when true expose the instance in the base workspace.
     end
 
     methods (Access = private)
