@@ -38,128 +38,128 @@
   "Groups": [
     {
       "subject": "11_P3_corrected",
-      "group": "a",
+      "group": "",
       "person": "11",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "12_P3_corrected",
-      "group": "a",
-      "person": "11",
-      "session": "2",
+      "group": "",
+      "person": "12",
+      "session": "",
       "included": true
     },
     {
       "subject": "13_P3_corrected",
-      "group": "a",
+      "group": "",
       "person": "13",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "14_P3_corrected",
-      "group": "a",
-      "person": "13",
-      "session": "2",
+      "group": "",
+      "person": "14",
+      "session": "",
       "included": true
     },
     {
       "subject": "15_P3_corrected",
-      "group": "a",
+      "group": "",
       "person": "15",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "16_P3_corrected",
-      "group": "a",
-      "person": "15",
-      "session": "2",
+      "group": "",
+      "person": "16",
+      "session": "",
       "included": true
     },
     {
       "subject": "17_P3_corrected",
-      "group": "a",
+      "group": "",
       "person": "17",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "18_P3_corrected",
-      "group": "a",
-      "person": "17",
-      "session": "2",
+      "group": "",
+      "person": "18",
+      "session": "",
       "included": true
     },
     {
       "subject": "19_P3_corrected",
-      "group": "a",
+      "group": "",
       "person": "19",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "1_P3_corrected",
-      "group": "b",
+      "group": "",
       "person": "1",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "20_P3_corrected",
-      "group": "b",
-      "person": "1",
-      "session": "2",
+      "group": "",
+      "person": "20",
+      "session": "",
       "included": true
     },
     {
       "subject": "21_P3_corrected",
-      "group": "b",
+      "group": "",
       "person": "21",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "2_P3_corrected",
-      "group": "b",
-      "person": "21",
-      "session": "2",
+      "group": "",
+      "person": "2",
+      "session": "",
       "included": true
     },
     {
       "subject": "3_P3_corrected",
-      "group": "b",
+      "group": "",
       "person": "3",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "4_P3_corrected",
-      "group": "b",
-      "person": "3",
-      "session": "2",
+      "group": "",
+      "person": "4",
+      "session": "",
       "included": true
     },
     {
       "subject": "5_P3_corrected",
-      "group": "b",
+      "group": "",
       "person": "5",
-      "session": "1",
+      "session": "",
       "included": true
     },
     {
       "subject": "7_P3_corrected",
-      "group": "b",
-      "person": "5",
-      "session": "2",
+      "group": "",
+      "person": "7",
+      "session": "",
       "included": true
     },
     {
       "subject": "8_P3_corrected",
-      "group": "b",
+      "group": "",
       "person": "8",
-      "session": "1",
+      "session": "",
       "included": true
     }
   ]

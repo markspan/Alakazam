@@ -398,6 +398,63 @@ classdef DataQualityTest < matlab.unittest.TestCase
             testCase.verifyEmpty(strfind(qmd, '\\|z\\|')); %#ok<STRIFCND>
         end
 
+        function theLowTrialFlagNeedsTrialsToHaveBeenLost(testCase)
+        %THELOWTRIALFLAGNEEDSTRIALSTOHAVEBEENLOST  "Fewer than 20 surviving
+        %   trials in a bin" only means something if the bin ever had 20. A
+        %   bin designed with 15 trials has lost nothing, and flagging it
+        %   describes the experiment rather than the data quality -- so the
+        %   rule carries n_trials > 20 alongside kept < 20.
+        %
+        %   The explanation in the criteria table is asserted too: this
+        %   report states each threshold and its reasoning to the analyst,
+        %   so a rule that changes without its stated reason changing is a
+        %   report that misdescribes itself.
+            qmd = generateDataQualityReport(testCase.twoSubjectEntries(), 'q.csv', 't.csv');
+
+            testCase.verifySubstring(qmd, 'filter(kept < 20, n_trials > 20)');
+            testCase.verifySubstring(qmd, 'a bin that began with more than 20');
+            testCase.verifySubstring(qmd, '(%d of %d left)', ...
+                'The note should say what the bin started with, not just what is left.');
+        end
+
+        function theGeneratedRParses(testCase)
+        %THEGENERATEDRPARSES  This report emits several hundred lines of R
+        %   and nothing checked that R would accept them; its two known
+        %   escaping bugs were both found by rendering it by hand, after the
+        %   fact. Handing the chunks to R's own parser is the cheap half of
+        %   that check, and it runs in the ordinary suite.
+        %
+        %   Skips where Rscript is absent -- it is not on PATH in a stock
+        %   Windows R install, and a machine without R is not a broken
+        %   report.
+            here = fileparts(mfilename('fullpath'));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));
+            testCase.assumeTrue(~isempty(ReportFixtures.rscriptExe()), ...
+                'Rscript not found; skipping the generated-R parse check.');
+
+            qmd = generateDataQualityReport(testCase.twoSubjectEntries(), 'q.csv', 't.csv');
+            folder = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture()).Folder;
+            file = fullfile(folder, 'quality.R');
+            fid = fopen(file, 'w');
+            testCase.assertGreaterThan(fid, 0);
+            fwrite(fid, ReportFixtures.rCode(qmd));
+            fclose(fid);
+
+            % Forward slashes: a Windows path inside an R string literal
+            % would otherwise carry backslash escapes R reads as its own.
+            rPath = strrep(file, '\', '/');
+            driver = sprintf(['cat(tryCatch({ parse(file = "%s"); "OK" },' ...
+                ' error = function(e) paste("FAIL:", conditionMessage(e))), "\\n")'], rPath);
+            [status, output] = ReportFixtures.runRscript(driver);
+
+            testCase.assertEqual(status, 0, ...
+                sprintf('The parse driver itself failed to run.\nRscript said:\n%s', output));
+            testCase.verifyEmpty(strfind(output, 'FAIL'), ...
+                sprintf('R refuses to parse the data-quality report:\n%s', output)); %#ok<STREMP>
+            testCase.verifySubstring(output, 'OK');
+        end
+
         function reportRefusesAnEmptyExport(testCase)
             empty = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {});
             testCase.verifyError(@() generateDataQualityReport(empty, 'q.csv', 't.csv'), ...
