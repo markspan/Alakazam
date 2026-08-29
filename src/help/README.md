@@ -4,13 +4,13 @@ Build tooling for `src/AlakazamHelp.html`, the self-contained `uihtml` page
 the app's own Help button opens.
 
 **The built page is not in version control.** It embeds every screenshot as
-base64 and runs to about 5 MB, regenerated from `readme.MD`, so committing it
+base64 and runs to about 5 MB, regenerated from `README.MD`, so committing it
 would add a 5 MB diff to history on every README edit. Build it locally with
 the steps below. Until you do, the Help button explains that and offers to
-open `readme.MD` instead (see `Alakazam.offerReadmeInstead`), so a fresh clone
+open `README.MD` instead (see `Alakazam.offerReadmeInstead`), so a fresh clone
 is never left with a dead button.
 
-Converts the repository's own [`readme.MD`](../../readme.MD) into a single
+Converts the repository's own [`README.MD`](../../README.MD) into a single
 in-app help page, rather than authoring a second, parallel set of help text
 -- the README is already written for the app's own target audience (see its
 "Using your own data"/walkthrough sections) and already kept up to date as
@@ -33,7 +33,7 @@ browser, so the standard Ctrl+F "find in page" already works.
 
 ## Rebuilding
 
-Once after cloning, and again whenever `readme.MD` or `Screenshots/*.jpg`
+Once after cloning, and again whenever `README.MD` or `Screenshots/*.jpg`
 changes:
 
 ```

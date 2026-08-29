@@ -33,7 +33,7 @@ classdef GenerateQuartoReportTest < matlab.unittest.TestCase
     methods (Test)
         function threeOrdinaryBinsPlusComboNoGroupsReachesAnovaAndCombo(testCase)
         %THREEORDINARYBINSPLUSCOMBONOGROUPSREACHESANOVAANDCOMBO  3 ordinary
-        %   bins with no between-subjects group routes to anovaSection; the
+        %   bins with no between-subjects group routes to lmmSection; the
         %   combo bin's 'Peak' window produces both an ordinary measure
         %   type (peak_amplitude -> comboSection's own one-sample-vs-zero
         %   text) and a descriptive-only one (peak_latency -> delegates to
@@ -41,7 +41,7 @@ classdef GenerateQuartoReportTest < matlab.unittest.TestCase
             entries = oneEntry(bindesc3WithCombo(), 'Peak', '');
             txt = generateQuartoReport(entries, 'x.csv');
             testCase.verifySubstring(txt, '## N400 -- peak\_amplitude');
-            testCase.verifySubstring(txt, '3 conditions: A, B, C.');           % anovaSection
+            testCase.verifySubstring(txt, '3 conditions: A, B, C.');           % lmmSection
             testCase.verifySubstring(txt, 'Difference/combination bin');      % comboSection
             testCase.verifySubstring(txt, 'descriptive statistics');         % comboSectionDescriptiveOnly's own text
         end
@@ -49,7 +49,7 @@ classdef GenerateQuartoReportTest < matlab.unittest.TestCase
         function threeOrdinaryBinsPlusComboWithGroupsReachesMixedAndGroupedCombo(testCase)
         %THREEORDINARYBINSPLUSCOMBOWITHGROUPSREACHESMIXEDANDGROUPEDCOMBO
         %   The same design, but with >= 2 distinct subject groups, routes
-        %   to mixedSection and comboSectionGrouped instead.
+        %   to lmmSection and comboSectionGrouped instead.
             entries = twoGroupEntries(bindesc3WithCombo(), 'Peak');
             txt = generateQuartoReport(entries, 'x.csv');
             testCase.verifySubstring(txt, '## N400 -- peak\_amplitude');

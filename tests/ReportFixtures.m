@@ -320,11 +320,17 @@ classdef ReportFixtures
         % ================================================================ %
 
         function ids = censusIds()
-        %CENSUSIDS  The eight fixture identifiers censusEntries accepts,
-        %   one per cell of generateQuartoReport's dispatch matrix that a
+        %CENSUSIDS  The ten fixture identifiers censusEntries accepts, one
+        %   per cell of generateQuartoReport's dispatch matrix that a
         %   chunk-label census can distinguish.
+        %
+        %   The two session cells were added when the design layer made
+        %   session a real factor: without them the census could not reach
+        %   the lmm_session design at all, so neither the design-vocabulary
+        %   check nor the generated-R parse check covered it.
             ids = {'F-ERP1', 'F-ERP1G', 'F-ERP2', 'F-ERP2G', ...
-                'F-ERP3C', 'F-ERP3CG', 'F-SPEC3C', 'F-SPEC3CR'};
+                'F-ERP3C', 'F-ERP3CG', 'F-ERP3S', 'F-ERP3SG', ...
+                'F-SPEC3C', 'F-SPEC3CR'};
         end
 
         function entries = censusEntries(id)
@@ -335,6 +341,8 @@ classdef ReportFixtures
         %     F-ERP2G    2 ordinary bins, grouped,   ERP  -> mixed
         %     F-ERP3C    3 + combo,       ungrouped, ERP  -> anova + combo
         %     F-ERP3CG   3 + combo,       grouped,   ERP  -> mixed + combo-grouped
+        %     F-ERP3S    3 + combo,       2 sessions, ERP -> session + combo
+        %     F-ERP3SG   3 + combo,       2 sessions x 2 groups -> session x group
         %     F-SPEC3C   3 + combo,       ungrouped, Spectral, no refChannel
         %     F-SPEC3CR  as F-SPEC3C but with refChannel 'Cz', which adds
         %                the coherence/phaselag measure types
@@ -365,6 +373,26 @@ classdef ReportFixtures
                 case 'F-ERP3CG'
                     entries = ReportFixtures.erpEntries('Bindesc', ReportFixtures.bindesc3WithCombo(), ...
                         'Windows', peak, 'Groups', grouped);
+                case 'F-ERP3S'
+                    % Two people, each measured twice. Four recordings, so
+                    % this fixture still clears the two-subject floor the
+                    % generated R enforces, and the crossing has no empty
+                    % cell for reportDesignPlan to fall back over.
+                    entries = ReportFixtures.erpEntries('Bindesc', ReportFixtures.bindesc3WithCombo(), ...
+                        'Windows', peak, 'Groups', {'', '', '', ''}, ...
+                        'Subjects', {'a_pre', 'a_post', 'b_pre', 'b_post'}, ...
+                        'Persons', {'a', 'a', 'b', 'b'}, ...
+                        'Sessions', {'pre', 'post', 'pre', 'post'});
+                case 'F-ERP3SG'
+                    % Two groups of two people, each measured twice: every
+                    % cell of group x session occupied, which is what lets
+                    % the (bin + session + group)^2 model be fitted.
+                    entries = ReportFixtures.erpEntries('Bindesc', ReportFixtures.bindesc3WithCombo(), ...
+                        'Windows', peak, ...
+                        'Groups', {'ctrl', 'ctrl', 'ctrl', 'ctrl', 'patient', 'patient', 'patient', 'patient'}, ...
+                        'Subjects', {'a1', 'a2', 'b1', 'b2', 'c1', 'c2', 'd1', 'd2'}, ...
+                        'Persons', {'a', 'a', 'b', 'b', 'c', 'c', 'd', 'd'}, ...
+                        'Sessions', {'pre', 'post', 'pre', 'post', 'pre', 'post', 'pre', 'post'});
                 case 'F-SPEC3C'
                     entries = ReportFixtures.spectralEntries('Bindesc', ReportFixtures.bindesc3WithCombo(), ...
                         'Measures', {ReportFixtures.frequencySpec('10Hz')}, 'Groups', ungrouped);

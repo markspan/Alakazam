@@ -19,13 +19,13 @@ function exportMeasurementsCSV(entries, targetFile)
 %   window,measure_type,window_start_ms,window_stop_ms,value -- the same
 %   "tidy"/long shape exportGrandAveragesCSV.m uses, so both exports drop
 %   into the same R workflow (read.csv() + dplyr/ggplot2, no reshape
-%   needed). person_id/session are metadata only so far -- every
-%   statistical test in the companion Quarto report (generateQuartoReport)
-%   still keys on dataset/group, not person_id/session, since treating a
-%   session as a genuine second within-subjects factor (crossed against
-%   bin) is a design the report engine does not build yet; they are
-%   there for a researcher's own custom analysis of the CSV in the
-%   meantime. A "Peak" window contributes two rows per (bin, channel) --
+%   needed). person_id and session are both consumed by the companion
+%   Quarto report (generateQuartoReport): the random effect is grouped by
+%   person_id rather than by the recording, so a person measured twice
+%   counts as one subject, and session is crossed with bin as a genuine
+%   within-subjects factor wherever the recordings support it (see
+%   reportDesignPlan, which decides that and says so in the report when
+%   they do not). A "Peak" window contributes two rows per (bin, channel) --
 %   measure_type peak_amplitude and peak_latency -- rather than two value
 %   columns, so every row's own value column stays uniformly numeric
 %   with no per-measure-type NA column needed.

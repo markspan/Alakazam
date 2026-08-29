@@ -111,7 +111,7 @@ automatically), the two dataset trees on the left, and the plots area on
 the right (tabbed or tiled, see above). The Home tab's **Help** button opens
 this document as an in-app page, with screenshots and searchable with Ctrl+F.
 The page is generated from this file and is not kept in version control; if it
-has not been built, the button explains how and offers to open `readme.MD`
+has not been built, the button explains how and offers to open `README.MD`
 instead (see [`src/help/README.md`](src/help/README.md)).
 Authored application code lives
 under `src/`; third-party toolkits and shared data-file resources stay at
@@ -373,8 +373,8 @@ and a sticky table of contents render better outside it). Rendering
 (`quarto render <name>.qmd`, self-contained HTML) produces a short,
 APA-styled results report, not just a table: tables in three-line APA
 format, violin plots showing the actual distribution rather than just a bar
-and an error bar, and narrative prose ("A linear mixed model revealed a
-significant effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
+and an error bar, and narrative prose ("The model revealed a significant
+effect of bin, *F*(2, 18) = 6.4, *p* = .008, ...").
 
 A rendered report, opened in a real browser: the sticky table of contents,
 the LMM fixed-effect and Holm-corrected pairwise-comparison tables, the
@@ -397,10 +397,12 @@ frequency (Spectral) x measure type:
 |---|---|---|
 | One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
 | Two ordinary bins | Paired *t*-test + Cohen's *dz* (bootstrapped CI) + Bayes Factor, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
-| Three or more ordinary bins | Linear mixed model (subject random intercept + slope for bin, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects, using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
+| Three or more ordinary bins | Linear mixed model (random intercept + slope for bin **per person**, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects, using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
 | One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d* (bootstrapped CI) + Bayes Factor, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
 | One ordinary bin, **3+ groups** assigned | Welch's ANOVA + Games-Howell pairwise comparisons | Does this measure differ between the groups? Which pairs of groups differ? |
 | Two or more ordinary bins, **groups** assigned | Linear mixed model with a condition x group interaction (same random-effects/fallback logic as above) + partial eta-squared with CI + Holm-corrected within-group and between-group pairwise comparisons (`emmeans`) | Does the **condition effect itself differ between groups** (the interaction, usually the actually-interesting question in a mixed design)? Plus: is there a main effect of condition, or of group, on its own? |
+| Two or more ordinary bins, **sessions** assigned | Linear mixed model with a condition x session interaction (same random-effects/fallback logic) + partial eta-squared with CI + Holm-corrected contrasts, run only if the interaction or the main effect of condition is significant | Does the condition effect **change between sessions** (pre vs. post, day 1 vs. day 2)? |
+| Two or more ordinary bins, **sessions and groups** assigned | Linear mixed model with every main effect and every two-way interaction, `(bin + session + group)^2`; the three-way interaction is deliberately omitted | Does the condition effect differ between sessions, and between groups, without asking for a three-way term the subject count rarely supports? |
 | Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero, Cohen's *dz* (bootstrapped CI) + Bayes Factor | Is this effect (a priming effect, an oddball effect, ...) actually present? |
 | Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against*: see below) |
 | Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test: see below) |
@@ -408,7 +410,7 @@ frequency (Spectral) x measure type:
 | Combination/difference bin, a **latency**, **groups** assigned | Independent-samples test **between groups** only (still no vs.-zero test) | Does the effect's *timing* differ between groups? |
 | Combination/difference bin, **circular**, **groups** assigned | Descriptive statistics only, per group | (still no linear test is valid, one-sample or between-groups) |
 
-The 3+-bin and mixed-design rows deliberately use a **linear mixed model**
+The 3+-bin, mixed-design and session rows deliberately use a **linear mixed model**
 (`lme4`/`lmerTest`), not a repeated-measures or split-plot ANOVA: the LMM's
 whole point here is that a subject missing one bin still contributes their
 other bins to the fit, instead of being listwise-dropped from the entire
@@ -482,7 +484,7 @@ data, with nothing else to configure. A workspace where nobody has been
 assigned a group (or everybody shares the same one label) renders exactly as
 it always has.
 
-The same dialog has two more columns, **Person ID** and **Session**, for
+The same dialog has three more columns. **Person ID** and **Session** are for
 linking multiple raw-file recordings of the same person (e.g. "...day1",
 "...day2") together: give them the same Person ID and an optional Session
 label ("Day 1", "Pre", "Post", ...) to record that they are repeated
@@ -490,11 +492,30 @@ measurements of one person, not unrelated subjects. Person ID is pre-filled
 per raw file with whatever substring varies once every part of the
 filename common to *all* raw files in the workspace is stripped out (an
 experiment name shared by every recording cannot help tell subjects apart,
-so it is not worth leaving in the suggestion). Both columns reach the
-exported CSV (`person_id`/`session`) for a researcher's own downstream use,
-but `generateQuartoReport` does not yet treat session as a statistical
-factor the way it does bin or group: that is left for a future
-multi-session design, not yet a wired-up test. (TODO)
+so it is not worth leaving in the suggestion). Both columns reach the exported CSV
+(`person_id`/`session`) and both are used by the statistical report.
+
+`person_id` is what the report groups its random effect by, so a person
+recorded twice counts as one subject rather than two. Where nobody has set
+a Person ID it is the recording's own name, which is why single-session
+studies are unaffected by this.
+
+`session` becomes a within-subjects factor in its own right, crossed with
+bin, whenever the recordings support one: two or more session labels, at
+least two people measured under more than one of them, and no empty cell in
+the crossing. There is no switch to turn this on. If the recordings do not
+support it, the report fits the simpler model and prints why, rather than
+fitting an interaction it cannot estimate. See
+[the design table](#what-gets-tested-and-what-question-it-answers) for the
+models this produces, and **Show Design** (Home tab, Design group) for what
+Alakazam believes your design to be before you run anything.
+
+**In study** is the third. It is ticked by default, and unticking it takes
+that recording out of every report, statistic and grand average, with the
+count and the names of what was excluded printed where the design is shown.
+It replaces an older implicit rule, where a recording with no group assigned
+was silently dropped from grouped tests: the decision is now the analyst's,
+and visible, rather than a side effect of leaving a field blank.
 
 ### It's just R and Quarto underneath
 

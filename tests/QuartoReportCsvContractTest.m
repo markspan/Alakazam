@@ -76,19 +76,23 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
         %   actually writes is partitioned by whether the generated ERP
         %   report references it as a standalone R identifier.
         %
-        %   The eight consumed columns are the report's whole input; the
-        %   four unconsumed ones are its blind spot. person_id and session
-        %   being on the unconsumed side IS finding F2 (pseudoreplication:
-        %   two sessions of one person are treated as two subjects),
-        %   pinned here so that fixing it cannot pass unnoticed.
+        %   The ten consumed columns are the report's whole input; the two
+        %   unconsumed ones are what it never looks at.
+        %
+        %   person_id and session used to sit on the unconsumed side, and
+        %   that WAS finding F2 (pseudoreplication: two sessions of one
+        %   person counted as two subjects). They are consumed now -- the
+        %   random effect is grouped by person_id, and session is normalised
+        %   in the preamble -- so the partition below is what closing that
+        %   gap looks like from the CSV's side.
         %
         %   The standalone-identifier regex needs BOTH lookarounds: a bare
         %   'window' otherwise false-matches inside 'window_start_ms', and
         %   the whole partition collapses into "everything is consumed".
             folder = testCase.temporaryFolder();
             expectedHit  = {'bin', 'channel', 'dataset', 'dataset_type', ...
-                'group', 'measure_type', 'value', 'window'};
-            expectedMiss = {'person_id', 'session', 'window_start_ms', 'window_stop_ms'};
+                'group', 'measure_type', 'person_id', 'session', 'value', 'window'};
+            expectedMiss = {'window_start_ms', 'window_stop_ms'};
 
             for id = erpCensusIds()
                 [columns, hit] = testCase.columnCensus(folder, id{1});
@@ -96,8 +100,8 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
                     sprintf('%s: the ERP report consumes a different set of CSV columns than expected.', id{1}));
                 testCase.verifyEqual(sort(columns(~hit)), expectedMiss, ...
                     sprintf(['%s: the set of CSV columns the ERP report IGNORES has changed. ' ...
-                    'If person_id or session just left this list, finding F2 has been addressed -- ' ...
-                    'see QuartoReportKnownGapTest/generatedRReferencesPersonIdentifier.'], id{1}));
+                    'If person_id or session just RE-ENTERED this list, the person grouping has ' ...
+                    'been lost -- see QuartoReportPersonGroupingTest.'], id{1}));
             end
         end
 
@@ -110,12 +114,13 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
         %   it to 'window' immediately after read_csv, so every section
         %   builder can go on hardcoding 'window =='), while frequency_hz
         %   and reference are written for a researcher's own use and never
-        %   analysed -- alongside the same person_id/session blind spot the
-        %   ERP side has.
+        %   analysed. person_id and session are consumed here too, for the
+        %   same reason as on the ERP side.
             folder = testCase.temporaryFolder();
             expectedHit  = {'bin', 'channel', 'dataset', 'dataset_type', ...
-                'frequency_label', 'group', 'measure_type', 'value'};
-            expectedMiss = {'frequency_hz', 'person_id', 'reference', 'session'};
+                'frequency_label', 'group', 'measure_type', 'person_id', ...
+                'session', 'value'};
+            expectedMiss = {'frequency_hz', 'reference'};
 
             for id = spectralCensusIds()
                 [columns, hit] = testCase.columnCensus(folder, id{1});

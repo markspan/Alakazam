@@ -1,6 +1,6 @@
 function onHelp(this)
 %ONHELP  Ribbon callback ('help'): show the in-app help page
-%   (src/AlakazamHelp.html, built from the repository's own readme.MD --
+%   (src/AlakazamHelp.html, built from the repository's own README.MD --
 %   see src/help/README.md to rebuild it after editing the README). A
 %   singleton window, like the app's own MainFigure: a second click just
 %   refocuses the one already open rather than stacking up copies, since
@@ -14,7 +14,7 @@ function onHelp(this)
 %   the analyst ever opens Help.
 %
 %   The built page is NOT in version control (see .gitignore): it is ~5 MB
-%   of embedded screenshots regenerated from readme.MD, which would put a
+%   of embedded screenshots regenerated from README.MD, which would put a
 %   5 MB diff in history on every README edit. A fresh clone therefore does
 %   not have it until someone runs the build, so its absence is a normal
 %   state to be explained, not an install fault to warn about -- and the

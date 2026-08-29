@@ -87,14 +87,15 @@ function editSubjects(this, ~, ~)
     % invisible on screen, exactly what left the columns unlabelled.
     % Same ColumnWidth as rowsGrid below so the header text lines up
     % with the fields underneath it.
-    columnsGrid = uigridlayout(outer, [1, 4], ...
-        'ColumnWidth', {'1.3x', '1x', '0.8x', '0.8x'}, 'RowHeight', {22}, ...
+    columnsGrid = uigridlayout(outer, [1, 5], ...
+        'ColumnWidth', {'1.2x', '0.95x', '0.75x', '0.75x', 60}, 'RowHeight', {22}, ...
         'Padding', [16 0 30 0], 'ColumnSpacing', 8);
     columnsGrid.Layout.Row = 3;
     boldLabel(columnsGrid, 'Raw file', 1);
     boldLabel(columnsGrid, 'Person ID', 2);
     boldLabel(columnsGrid, 'Session', 3);
     boldLabel(columnsGrid, 'Group', 4);
+    boldLabel(columnsGrid, 'In study', 5);
 
     if isempty(subjects)
         rowsGrid = uigridlayout(outer, [1, 1], 'Padding', [16 8 16 8]);
@@ -103,13 +104,14 @@ function editSubjects(this, ~, ~)
         personFields = {};
         sessionFields = {};
         groupFields = {};
+        includeBoxes = {};
     else
         scrollPanel = uipanel(outer, 'Scrollable', 'on', 'BorderType', 'none', ...
             'BackgroundColor', bgColor);
         scrollPanel.Layout.Row = 4;
 
-        rowsGrid = uigridlayout(scrollPanel, [numel(subjects), 4], ...
-            'ColumnWidth', {'1.3x', '1x', '0.8x', '0.8x'}, 'RowHeight', repmat({30}, 1, numel(subjects)), ...
+        rowsGrid = uigridlayout(scrollPanel, [numel(subjects), 5], ...
+            'ColumnWidth', {'1.2x', '0.95x', '0.75x', '0.75x', 60}, 'RowHeight', repmat({30}, 1, numel(subjects)), ...
             'Padding', [16 4 16 10], 'RowSpacing', 8, 'Scrollable', 'on');
         % Suggested Person IDs, only for rows nothing has been explicitly
         % typed into yet (see suggestedPersonIds's own header comment) --
@@ -120,6 +122,7 @@ function editSubjects(this, ~, ~)
         personFields = gobjects(1, numel(subjects));
         sessionFields = gobjects(1, numel(subjects));
         groupFields = gobjects(1, numel(subjects));
+        includeBoxes = gobjects(1, numel(subjects));
         for i = 1:numel(subjects)
             label = uilabel(rowsGrid, 'Text', subjects{i}, 'VerticalAlignment', 'center');
             label.Layout.Row = i;
@@ -144,6 +147,15 @@ function editSubjects(this, ~, ~)
                 'Placeholder', 'blank = none');
             groupFields(i).Layout.Row = i;
             groupFields(i).Layout.Column = 4;
+
+            % Ticked by default: a recording is in the study unless somebody
+            % says otherwise. Unticking is how a recording is left out now,
+            % in place of the old convention of clearing its Group and
+            % letting the report's own filter drop it.
+            includeBoxes(i) = uicheckbox(rowsGrid, 'Text', '', ...
+                'Value', this.includedFor(subjects{i}));
+            includeBoxes(i).Layout.Row = i;
+            includeBoxes(i).Layout.Column = 5;
         end
     end
 
@@ -161,21 +173,30 @@ function editSubjects(this, ~, ~)
     uiwait(fig);
 
     function onOK()
-        newGroups = struct('subject', {}, 'group', {}, 'person', {}, 'session', {});
+        newGroups = struct('subject', {}, 'group', {}, 'person', {}, ...
+            'session', {}, 'included', {});
         for k = 1:numel(subjects)
             grp = strtrim(groupFields(k).Value);
             person = strtrim(personFields(k).Value);
             session = strtrim(sessionFields(k).Value);
+            included = logical(includeBoxes(k).Value);
             % A row with nothing set at all is dropped, not kept as an
             % empty entry -- same "blank means unassigned" convention
             % personFor/sessionFor/groupFor already treat a missing row
             % as, so this.Groups never accumulates dead rows for
             % subjects an analyst looked at but left untouched.
-            if isempty(grp) && isempty(session) && (isempty(person) || strcmp(person, subjects{k}))
+            %
+            % An EXCLUDED row is never "nothing set", however blank its
+            % other fields: dropping it would read back as included (see
+            % includedFor's own default) and silently undo the exclusion on
+            % the next open.
+            untouched = isempty(grp) && isempty(session) ...
+                && (isempty(person) || strcmp(person, subjects{k}));
+            if untouched && included
                 continue;
             end
             newGroups(end + 1) = struct('subject', subjects{k}, 'group', grp, ...
-                'person', person, 'session', session); %#ok<AGROW>
+                'person', person, 'session', session, 'included', included); %#ok<AGROW>
         end
         this.Groups = newGroups;
         delete(fig);

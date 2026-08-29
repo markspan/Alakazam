@@ -17,8 +17,8 @@ function exportSpectralCSV(entries, targetFile)
 %   amplitude / snr / itc / phase (always) and coherence / phaselag (only
 %   when the frequency was measured against a reference channel), so every
 %   row's value column stays uniformly numeric with no per-type NA columns.
-%   person_id/session are metadata only so far -- see
-%   exportMeasurementsCSV's own header comment for why. Same tidy/long shape
+%   person_id/session are both consumed by the report -- see
+%   exportMeasurementsCSV's own header comment. Same tidy/long shape
 %   and quoting as exportMeasurementsCSV, so both drop into the same R
 %   workflow.
     fid = fopen(targetFile, 'w');

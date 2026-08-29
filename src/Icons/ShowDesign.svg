@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="#4a7fc9" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- A 2x2 grid of cells: the crossing of a between factor with a within one. -->
+  <rect x="3.2" y="5.2" width="7.4" height="6.2" rx="1"/>
+  <rect x="13.4" y="5.2" width="7.4" height="6.2" rx="1"/>
+  <rect x="3.2" y="13.6" width="7.4" height="6.2" rx="1"/>
+  <!-- The fourth cell in red: the empty one this panel exists to reveal. -->
+  <rect x="13.4" y="13.6" width="7.4" height="6.2" rx="1"
+        stroke="#c0413f" stroke-dasharray="2 1.8"/>
+  <!-- Counts, as marks inside the filled cells. -->
+  <path d="M5.6 8.3h2.6M15.8 8.3h2.6M5.6 16.7h2.6" stroke-width="1.2"/>
+</svg>

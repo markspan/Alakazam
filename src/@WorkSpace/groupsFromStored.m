@@ -13,7 +13,7 @@ function groups = groupsFromStored(~, stored)
 %   sessionFor) already treats a missing/blank .person as "same as
 %   .subject" and a missing/blank .session as "none" -- so an old file
 %   loads exactly as it always did, just via the wider struct shape now.
-    groups = struct('subject', {}, 'group', {}, 'person', {}, 'session', {});
+    groups = struct('subject', {}, 'group', {}, 'person', {}, 'session', {}, 'included', {});
     if isempty(stored)
         return;
     end
@@ -27,7 +27,13 @@ function groups = groupsFromStored(~, stored)
         if isfield(entry, 'person'); person = char(entry.person); end
         session = '';
         if isfield(entry, 'session'); session = char(entry.session); end
+        % .included defaults to TRUE, and must: a .wksp written before
+        % exclusion existed says nothing about it, and reading that silence
+        % as "excluded" would empty an existing study on first open. Only an
+        % explicit false excludes.
+        included = true;
+        if isfield(entry, 'included'); included = logical(entry.included); end
         groups(end + 1) = struct('subject', char(entry.subject), 'group', char(entry.group), ...
-            'person', person, 'session', session); %#ok<AGROW>
+            'person', person, 'session', session, 'included', included); %#ok<AGROW>
     end
 end

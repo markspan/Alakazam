@@ -160,7 +160,7 @@ classdef QuartoReportDispatchTest < matlab.unittest.TestCase
 
         function chunkLabelCensusIsExactAndOrdered(testCase)
         %CHUNKLABELCENSUSISEXACTANDORDERED  The flagship. For each of the
-        %   eight census fixtures, the ordered list of "#| label:" values
+        %   ten census fixtures, the ordered list of "#| label:" values
         %   the report emits, asserted whole -- so a substituted builder
         %   (a wrong label), a deleted branch (a missing label), a hoisted
         %   combination loop (a reordered label) and a spurious extra
@@ -179,6 +179,16 @@ classdef QuartoReportDispatchTest < matlab.unittest.TestCase
                 'anova-n400-peak-latency', 'combo-desc-n400-peak-latency-a-b', 'summary-all-tests'};
             expected.('F_ERP3CG') = {'setup', 'groups-summary', 'mixed-n400-peak-amplitude', ...
                 'combo-grouped-n400-peak-amplitude-a-b', 'mixed-n400-peak-latency', ...
+                'combo-grouped-n400-peak-latency-a-b', 'summary-all-tests'};
+            % The two session cells. Same shape as F_ERP3C/F_ERP3CG above,
+            % with the omnibus section replaced by a session- one: the
+            % combination-bin sections are unaffected by session, since a
+            % difference bin is tested against zero either way.
+            expected.('F_ERP3S') = {'setup', 'session-n400-peak-amplitude', ...
+                'combo-n400-peak-amplitude-a-b', 'session-n400-peak-latency', ...
+                'combo-desc-n400-peak-latency-a-b', 'summary-all-tests'};
+            expected.('F_ERP3SG') = {'setup', 'groups-summary', 'session-n400-peak-amplitude', ...
+                'combo-grouped-n400-peak-amplitude-a-b', 'session-n400-peak-latency', ...
                 'combo-grouped-n400-peak-latency-a-b', 'summary-all-tests'};
             % F1 (unfixed): 'anova-10hz-phase' is the live circular-routing bug. See QuartoReportKnownGapTest. When F1 is fixed, THIS is the line to update.
             expected.('F_SPEC3C') = {'setup', 'anova-10hz-power', 'combo-10hz-power-a-b', ...

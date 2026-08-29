@@ -12,6 +12,8 @@ function onRibbonAction(this, id)
             this.Workspace.edit();
         case 'editSubjects'
             this.Workspace.editSubjects();
+        case 'showDesign'
+            this.onShowDesign();
         case 'clearWorkspace'
             this.Workspace.rawclear();
         case 'clearOtherAnalyses'
@@ -22,6 +24,8 @@ function onRibbonAction(this, id)
             this.onHelp();
         case 'about'
             this.onAbout();
+        case 'grandAveragePerCell'
+            this.onGrandAveragePerCell();
         case 'defineGrandAverage'
             this.onDefineGrandAverage();
         case 'clusterStats'
@@ -32,6 +36,8 @@ function onRibbonAction(this, id)
             this.onExportMeasurements();
         case 'exportSpectral'
             this.onExportSpectral();
+        case 'analysisScript'
+            this.onExportAnalysisScript();
         case 'dataQuality'
             this.onExportDataQuality();
         case 'viewTabs'

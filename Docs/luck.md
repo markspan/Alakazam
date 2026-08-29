@@ -519,7 +519,7 @@ which have no closed form. The same report covers rejection and truncation
 counts per subject and per bin, per-trial noise, and a per-channel noise map.
 Its organising concern is whether trial loss is even across conditions, since
 uneven loss affects the validity of the contrast rather than only its power.
-See [Data quality](../readme.MD#data-quality).
+See [Data quality](../README.MD#data-quality).
 
 **Is there a "good" aSME?** There is no universal threshold: the value is in
 microvolts and depends on the component, montage, reference, filter, measurement
@@ -878,7 +878,7 @@ statistical model, edit the generated R script.
 
 Theory rather than software; the book's introductory appendix is the place for
 it. Alakazam's own algorithm citations are in
-[readme.MD](../readme.MD#references).
+[README.MD](../README.MD#references).
 
 ## Appendix 3 -- The example pipeline, as a template
 

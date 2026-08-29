@@ -9,13 +9,9 @@ function onDeleteNode(this)
         return; % nothing selected, or a root node
     end
 
-    % LEGACY-JAVA-GUI: questdlg is a classic Java/AWT dialog, not
-    % a uifigure -- see migration.md's "old-style Java-based
-    % graphics" checklist.
-    answer = questdlg( ...
-        sprintf('Delete "%s" and everything computed from it? This cannot be undone.', node.Name), ...
-        'Delete node', 'Delete', 'Cancel', 'Cancel');
-    if ~strcmp(answer, 'Delete')
+    if ~confirmAction(this.MainFigure, ...
+            sprintf('Delete "%s" and everything computed from it? This cannot be undone.', node.Name), ...
+            'Delete node', 'Delete', 'Cancel', 'Icon', 'warning')
         return;
     end
 

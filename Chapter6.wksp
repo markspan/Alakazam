@@ -34,5 +34,133 @@
       "BaselineStart": -100,
       "BaselineStop": 0
     }
-  }
+  },
+  "Groups": [
+    {
+      "subject": "11_P3_corrected",
+      "group": "a",
+      "person": "11",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "12_P3_corrected",
+      "group": "a",
+      "person": "11",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "13_P3_corrected",
+      "group": "a",
+      "person": "13",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "14_P3_corrected",
+      "group": "a",
+      "person": "13",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "15_P3_corrected",
+      "group": "a",
+      "person": "15",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "16_P3_corrected",
+      "group": "a",
+      "person": "15",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "17_P3_corrected",
+      "group": "a",
+      "person": "17",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "18_P3_corrected",
+      "group": "a",
+      "person": "17",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "19_P3_corrected",
+      "group": "a",
+      "person": "19",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "1_P3_corrected",
+      "group": "b",
+      "person": "1",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "20_P3_corrected",
+      "group": "b",
+      "person": "1",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "21_P3_corrected",
+      "group": "b",
+      "person": "21",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "2_P3_corrected",
+      "group": "b",
+      "person": "21",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "3_P3_corrected",
+      "group": "b",
+      "person": "3",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "4_P3_corrected",
+      "group": "b",
+      "person": "3",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "5_P3_corrected",
+      "group": "b",
+      "person": "5",
+      "session": "1",
+      "included": true
+    },
+    {
+      "subject": "7_P3_corrected",
+      "group": "b",
+      "person": "5",
+      "session": "2",
+      "included": true
+    },
+    {
+      "subject": "8_P3_corrected",
+      "group": "b",
+      "person": "8",
+      "session": "1",
+      "included": true
+    }
+  ]
 }

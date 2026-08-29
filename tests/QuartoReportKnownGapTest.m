@@ -27,7 +27,7 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
 %         ReportSections.isDescriptiveOnlyType -- only the COMBINATION-bin
 %         branch below it does. A Spectral export's 'phase' and 'phaselag'
 %         are angles that wrap at +/-pi, yet they route into
-%         anovaSection/mixedSection/pairedSection/descriptiveSection and
+%         lmmSection/pairedSection/descriptiveSection and
 %         are handed lmerTest::lmer and mean(value)/sd(value). Expected
 %         fix: consult isCircularType in the ordinary-bin branch too and
 %         emit a descriptive (or genuinely circular) section instead.
@@ -36,14 +36,15 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
 %         circularTypeNeverRoutesToMixedModel,
 %         phaselagWithReferenceChannelNeverRoutesToLinearOmnibus.
 %
-%     F2  THE PERSON IDENTIFIER IS EXPORTED AND THEN IGNORED.
-%         exportMeasurementsCSV and exportSpectralCSV both write a
-%         person_id column; no generated R references it anywhere. Two
-%         sessions of one person are therefore analysed as two independent
-%         subjects, which inflates the degrees of freedom. Expected fix:
-%         aggregate sessions to person means, or nest the session random
-%         effect inside the person (1 | person_id/dataset).
-%         Case: generatedRReferencesPersonIdentifier.
+%     F2  CLOSED. The person identifier was exported and then ignored, so
+%         two sessions of one person were analysed as two independent
+%         subjects. The random effect is now grouped by person_id rather
+%         than by the recording, and the preamble falls back to the
+%         recording where no person was set -- which is what personFor
+%         itself does, so single-session studies are unaffected. Its case
+%         has left this register; the contract is pinned properly in
+%         tests/QuartoReportPersonGroupingTest.m, and the model choice it
+%         belongs to is decided in src/IO/reportDesignPlan.m.
 %
 %     SIGN  THE PAIRED EFFECT SIZE DISAGREES WITH ITS OWN t.
 %         pairedSection computes t.test(wide[[BIN2]], wide[[BIN1]]) --
@@ -212,35 +213,6 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
                 'A circular measure type (phaselag) must not be given a linear omnibus section.');
         end
 
-        % ================================================================ %
-        %  F2 -- the exported person identifier is never consumed
-        % ================================================================ %
-
-        function generatedRReferencesPersonIdentifier(testCase)
-        %GENERATEDRREFERENCESPERSONIDENTIFIER  EXPECTED RED (gap F2). Both
-        %   exporters faithfully write a person_id column; the generated R
-        %   must reference it somewhere -- whether to aggregate a person's
-        %   sessions to one mean, or to nest the session inside the person
-        %   as a random effect -- otherwise two sessions of one person are
-        %   analysed as two independent subjects.
-        %
-        %   Asserted across four dispatch cells, since the person
-        %   identifier is equally ignored by all of them, and a fix that
-        %   reached only the paired path would be a half fix.
-        %
-        %   Deliberately no CSV or R execution here, so this case stays
-        %   tool-free and runs in the fast inner loop: the consequence
-        %   (inflated degrees of freedom) is stated in this comment rather
-        %   than measured.
-        %
-        %   Fails today: zero occurrences of 'person_id' in any of them.
-            for id = {'F-ERP2', 'F-ERP2G', 'F-SPEC3C', 'F-SPEC3CR'}
-                txt = generateQuartoReport(ReportFixtures.censusEntries(id{1}), 'x.csv');
-                testCase.verifySubstring(txt, 'person_id', ...
-                    sprintf(['Fixture %s: the exported person_id column is never referenced, ' ...
-                             'so repeated sessions count as independent subjects.'], id{1}));
-            end
-        end
 
         % ================================================================ %
         %  The paired effect size's sign

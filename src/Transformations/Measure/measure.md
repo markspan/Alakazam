@@ -449,7 +449,7 @@ The windows defined here are also what the **Data Quality Report**
 (Export/Report tab) computes a standardized measurement error against: SME
 describes the error on a specific score, so it is reported per window and per
 measure type rather than once per recording. See
-[Data quality](../../../readme.MD#data-quality).
+[Data quality](../../../README.MD#data-quality).
 
 To get the numbers into a statistics package, use the **ERP** export button
 on the ribbon's **Measurements** tab. It walks the whole workspace, every

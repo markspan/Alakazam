@@ -9,7 +9,7 @@ function [EEG, opts] = TimeFrequency(varargin)
 %   high frequencies for spectral precision), single-trial power
 %   averaged across trials, then baseline-corrected in dB relative to a
 %   user-set pre-stimulus window (the standard ERSP convention -- see
-%   readme.MD's bibliography for the general lineage this app's
+%   README.MD's bibliography for the general lineage this app's
 %   algorithms follow).
 %
 %   A normal, persisted transformation (Alakazam.onTransformation):

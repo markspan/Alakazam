@@ -18,7 +18,7 @@ name: Release
 #
 # The package is the tracked repository tree PLUS src/AlakazamHelp.html,
 # which is deliberately not in version control (about 5 MB of embedded
-# screenshots regenerated from readme.MD, see .gitignore) but is exactly
+# screenshots regenerated from README.MD, see .gitignore) but is exactly
 # what an analyst downloading a release needs: without it the in-app Help
 # button can only offer the raw README, and building it here needs Node,
 # which they will not have. Everything else is taken straight from the git
@@ -130,6 +130,11 @@ jobs:
           git archive HEAD | tar -x -C "stage/${NAME}"
           # The one deliberate addition: the built help page.
           cp src/AlakazamHelp.html "stage/${NAME}/src/AlakazamHelp.html"
+          # Stamp the version the package was published from. A release
+          # package has no .git directory, so `git describe` cannot tell an
+          # analyst what they are running; alakazamVersion reads this file
+          # first for exactly that reason, and the About box shows it.
+          printf '%s\n' "${VERSION}" > "stage/${NAME}/VERSION"
           ( cd stage && zip -qr "../${NAME}.zip" "${NAME}" )
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "zip=${NAME}.zip" >> "$GITHUB_OUTPUT"
@@ -149,6 +154,11 @@ jobs:
             || { echo "::error::The built help page is missing from the package."; exit 1; }
           grep -q "${NAME}/startAlakazam.m" listing.txt \
             || { echo "::error::startAlakazam.m is missing from the package."; exit 1; }
+          # Without this the About box silently falls back to whatever
+          # constant happened to be committed, which is the stale number
+          # the VERSION file exists to replace.
+          grep -q "${NAME}/VERSION" listing.txt \
+            || { echo "::error::The VERSION stamp is missing from the package."; exit 1; }
           if grep -Eq "${NAME}/(Data/|eeglab/|src/(help|webtree)/node_modules/)" listing.txt; then
             echo "::error::The package contains data or dependencies that must not be published."
             exit 1

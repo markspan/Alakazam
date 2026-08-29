@@ -25,13 +25,8 @@ function rawclear(this,~,~)
 
     targets = ownedCacheTargets(this);
 
-    % LEGACY-JAVA-GUI: questdlg is a classic Java/AWT dialog, not a
-    % uifigure -- see migration.md's "old-style Java-based graphics"
-    % checklist.
-    answer = questdlg(confirmationText(targets), ...
-    	'Clear Workspace?', ...
-        'Yes, delete!','Sorry, what? No!','Sorry, what? No!');
-    if ~strcmp(answer, 'Yes, delete!')
+    if ~confirmAction(this.Parent.MainFigure, confirmationText(targets), ...
+            'Clear Workspace?', 'Yes, delete!', 'Sorry, what? No!', 'Icon', 'warning')
         return;
     end
 

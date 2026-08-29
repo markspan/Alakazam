@@ -28,8 +28,7 @@ classdef Alakazam < handle
 %   required by a third-party API (transformation ids, EEG.Call, fed straight
 %   to feval; element-wise char comparisons; path components).
 %
-%   Adapted from "matlab.ui.internal.desktop.showcaseMPCDesigner()" by
-%   R. Chen; original work (c) 2015 The MathWorks, Inc. Further developed by
+%   Developed by
 %   M.M. Span, University of Groningen, Department of Experimental Psychology.
 %
 %   See also ALAKAZAMPLOTTER, EEGLABENVIRONMENT, WORKSPACE, BUILDTOOLBARALAKAZAM.
@@ -121,6 +120,10 @@ classdef Alakazam < handle
         onExportMeasurements(this)
         onExportSpectral(this)
         onExportDataQuality(this)
+        onExportAnalysisScript(this)
+        onShowDesign(this)
+        onGrandAveragePerCell(this)
+        recordings = collectDesignRecordings(this)
         onRecalculateNode(this)
         recalculateTransformNode(this, node, ownEEG)
         recalculateAffectedGrandAverages(this, touchedFiles)

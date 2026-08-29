@@ -38,13 +38,22 @@ function entries = collectEntriesWithField(this, fieldName)
         if ~ismember(fieldName, readEegCacheInfo(node.UserData).fieldNames)
             continue;
         end
-        loaded = load(node.UserData, "EEG");
         subjectNode = this.Workspace.Tree.rootOf(node.Id);
         if isempty(subjectNode)
             subject = node.Name; % defensive fallback; rootOf should always find at least node itself
         else
             subject = subjectNode.Name;
         end
+        % Exclusion applies here, at the source, so an excluded recording is
+        % absent from the exported measurements and therefore from every
+        % report, statistic and grand average built on them -- one stated
+        % reason rather than several implicit ones downstream. Checked
+        % before the load, since an excluded dataset need not be read at
+        % all. See WorkSpace.includedFor.
+        if ~this.Workspace.includedFor(subject)
+            continue;
+        end
+        loaded = load(node.UserData, "EEG");
         entries(end + 1) = struct('subject', subject, 'datasetType', 'subject', ...
             'group', this.Workspace.groupFor(subject), 'person', this.Workspace.personFor(subject), ...
             'session', this.Workspace.sessionFor(subject), 'EEG', loaded.EEG); %#ok<AGROW>

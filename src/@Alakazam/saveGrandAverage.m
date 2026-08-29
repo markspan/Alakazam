@@ -13,6 +13,15 @@ function saveGrandAverage(this, spec, existingNode)
                                                         % error
     EEG.id = spec.name;
 
+    % Which design cell this represents, when it came from one (see
+    % designCellSpecs). A grand average built by hand knows only which files
+    % went into it, so nothing downstream -- and nobody reading it in a few
+    % months -- can say what it stands for. Recorded on the result itself so
+    % it travels with the dataset rather than living in the tree.
+    if isfield(spec, 'cell') && ~isempty(spec.cell)
+        EEG.etc.DesignCell = spec.cell;
+    end
+
     gaDir = fullfile(this.Workspace.CacheDirectory, 'GrandAverages');
     if ~exist(gaDir, "dir")
         mkdir(gaDir);

@@ -1,4 +1,4 @@
-// Converts the repository's own readme.MD into a single, self-contained
+// Converts the repository's own README.MD into a single, self-contained
 // AlakazamHelp.html: this app's own in-app help viewer. The README is
 // already written for the app's own target audience (see its own "Using
 // your own data"/walkthrough sections) and already kept up to date as
@@ -11,7 +11,7 @@
 // to ../AlakazamHelp.html.
 //
 // THE SAME APPLIES TO ORDINARY LINKS, which is easy to miss because only
-// the images look like file references. readme.MD is full of relative links
+// the images look like file references. README.MD is full of relative links
 // written for GitHub -- [LICENSE](LICENSE), [`dependencies.md`](dependencies.md),
 // [`ClusterStats.m`](src/ClusterStats.m) -- and every one of them is a dead
 // link in the help viewer: the page is loaded from src/, so "LICENSE"
@@ -30,7 +30,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..')
 const outDir = path.join(here, 'dist')
 
-// Where a relative link in readme.MD is sent instead. Pinned to the default
+// Where a relative link in README.MD is sent instead. Pinned to the default
 // branch rather than to whatever produced this build: a release package can
 // be opened long after it was cut, and a link into a branch that has since
 // moved or been deleted is worse than one pointing at the current default.
@@ -42,12 +42,13 @@ const REPO_BLOB = 'https://github.com/markspan/Alakazam/blob/main/'
 const LICENSE_ANCHOR = 'license-full-text'
 const LICENSE_HEADING = 'License (full text)'
 
-// The README is referred to as "readme.MD" throughout the project, but git
-// records it as "README.MD". On Windows and macOS those name the same file
-// and the difference never shows; on a case-sensitive filesystem, which is
-// what the release workflow's Linux runner uses, opening the wrong one is a
-// hard failure. Resolved by listing the directory instead of assuming
-// either spelling.
+// git records the README as "README.MD", and everything in this repository
+// now names it that way. The directory is still listed rather than that
+// spelling assumed: core.ignorecase is on for Windows checkouts, so a
+// working copy can hold readme.MD while the index holds README.MD, and on a
+// case-sensitive filesystem -- which is what the release workflow's Linux
+// runner uses -- opening the wrong one is a hard failure. Listing costs
+// nothing and cannot be wrong.
 function findReadme(dir) {
     const match = fs.readdirSync(dir).find(f => f.toLowerCase() === 'readme.md')
     if (!match) {
@@ -59,7 +60,7 @@ function findReadme(dir) {
 const readmePath = findReadme(repoRoot)
 
 // GitHub's own heading-slug algorithm, reproduced exactly rather than
-// approximated: readme.MD's internal links are written to work on GitHub, so
+// approximated: README.MD's internal links are written to work on GitHub, so
 // any slug that differs here silently produces a dead link in the help viewer
 // while the same link still works on the web.
 //

@@ -77,17 +77,17 @@ function onClearOtherAnalyses(this)
         return;
     end
 
-    % LEGACY-JAVA-GUI: questdlg, see the note near onDeleteNode. Same
-    % button-label style and "safe option is the default" convention as
-    % WorkSpace.rawclear's own "Clear WorkSpace" dialog, its closest
-    % sibling -- adapted here to also say WHICH subject survives and how
-    % much is being deleted, since (unlike a full workspace wipe) that
-    % detail is the one thing worth double-checking before confirming.
-    answer = questdlg(sprintf(['Are you sure you want to delete every OTHER subject''s analysis, keeping ' ...
+    % Same button-label style as WorkSpace.rawclear's own "Clear WorkSpace"
+    % dialog, its closest sibling -- adapted here to also say WHICH subject
+    % survives and how much is being deleted, since (unlike a full workspace
+    % wipe) that detail is the one thing worth double-checking before
+    % confirming.
+    ok = confirmAction(this.MainFigure, ...
+        sprintf(['Are you sure you want to delete every OTHER subject''s analysis, keeping ' ...
         'only "%s"? This removes %d branch(es) across %d subject(s), and cannot be undone -- a Grand ' ...
         'Average built from a branch being removed will go stale.'], keepName, numel(victims), affectedSubjects), ...
-        'Clear Other?', 'Yes, delete!', 'Sorry, what? No!', 'Sorry, what? No!');
-    if ~strcmp(answer, 'Yes, delete!')
+        'Clear Other?', 'Yes, delete!', 'Sorry, what? No!', 'Icon', 'warning');
+    if ~ok
         return;
     end
 

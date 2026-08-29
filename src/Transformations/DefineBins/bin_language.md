@@ -87,6 +87,7 @@ stimulus that started the immediately preceding trial" in a strict
 stimulus → response → stimulus → response design:
 
 ```
+let rare = 112
 let precededByRare = prev(rare) within [-2,-2] events
 ```
 
@@ -258,8 +259,9 @@ Work anywhere a code is allowed, including inside a relation:
 bin <n> "<label>" = [+|-] bin <n2> ( [+|-] bin <n3> )*
 ```
 
-A signed sum of bin numbers (integer coefficients allowed: `2*bin 1 - bin
-2`), each of which may itself be an ordinary or a combination bin. See
+A signed sum of bin numbers (integer coefficients allowed, written next to
+the term with no operator: `2 bin 1 - bin 2`), each of which may itself be
+an ordinary or a combination bin. See
 [§11](#11-difference-bins) and [§12](#12-interaction-effects-combination-bins-referencing-combination-bins).
 
 ### Reaction time and `rt within`
