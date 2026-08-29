@@ -61,9 +61,11 @@ classdef AlakazamVersionTest < matlab.unittest.TestCase
         end
 
         function repeatedCallsAgree(testCase)
-        %REPEATEDCALLSAGREE  The result is cached in a persistent, since
-        %   resolving it shells out to git. A cache that returned something
-        %   different on a later call would be worse than no cache.
+        %REPEATEDCALLSAGREE  Resolved fresh on every call (the persistent
+        %   cache this used to keep went stale the moment a tag was created
+        %   with the app still open). Two calls with nothing changed in
+        %   between must still agree -- resolving repeatedly is only
+        %   acceptable if it is deterministic.
             first = alakazamVersion();
             second = alakazamVersion();
 

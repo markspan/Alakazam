@@ -36,21 +36,24 @@ function info = alakazamVersion()
 
     % Bumped in the commit that gets tagged. Only reached when neither the
     % packaged VERSION file nor a git checkout is available.
-    VERSION_FALLBACK = 'V0.4.2';
+    VERSION_FALLBACK = 'V0.4.3';
 
-    % Resolving the version shells out to git, so it is worked out once per
-    % MATLAB session rather than on every call. Nothing that could change
-    % it (unzipping a package, checking out a tag) happens while the
-    % application is running.
-    persistent cachedVersion cachedSource
-    if isempty(cachedVersion)
-        [cachedVersion, cachedSource] = resolveVersion(VERSION_FALLBACK);
-    end
+    % RESOLVED ON EVERY CALL, not cached. An earlier version held it in a
+    % persistent, on the grounds that resolving it shells out to git and
+    % nothing that could change the answer happens while the application is
+    % running. That second half was simply untrue: tagging a release is
+    % exactly the kind of thing done from another window with Alakazam still
+    % open, and the About box then went on reporting the version, and the
+    % dirty flag, from whenever it was first asked. The only caller is
+    % Alakazam.onAbout -- a button somebody presses by hand, rarely -- so
+    % the cache was saving one `git describe` on a click and buying a stale
+    % answer at the one moment the answer matters.
+    [version, source] = resolveVersion(VERSION_FALLBACK);
 
     info = struct( ...
         'Name',          'Alakazam', ...
-        'Version',       cachedVersion, ...
-        'VersionSource', cachedSource, ...
+        'Version',       version, ...
+        'VersionSource', source, ...
         'Tagline',       'An interactive MATLAB workbench for EEG and event-related potential (ERP) analysis.', ...
         'Author',        'Mark M. Span', ...
         'Email',         'm.m.span@rug.nl', ...
@@ -108,9 +111,9 @@ end
 function version = describedVersion(root)
 %DESCRIBEDVERSION  `git describe` in a checkout, or ''.
 %
-%   -C rather than a cd: this runs while the application is starting, and
-%   changing the process's working directory out from under it (even
-%   briefly) is not worth the risk of an error leaving it somewhere else.
+%   -C rather than a cd: this runs inside a live application, and changing
+%   the process's working directory out from under it (even briefly) is not
+%   worth the risk of an error leaving it somewhere else.
 %
 %   --dirty is the point of doing this at all. A developer with uncommitted
 %   changes is not running V0.4.1, and the About box saying so is what
