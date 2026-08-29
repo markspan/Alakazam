@@ -42,7 +42,33 @@ function onAbout(this)
         'Position', centredOn(this.MainFigure, 580, 640), ...
         'Resize', 'off');
     grid = uigridlayout(this.AboutFigure, [1 1], 'Padding', [0 0 0 0]);
-    uihtml(grid, 'HTMLSource', html);
+    % The page hands every external link back here rather than following it
+    % itself: a uihtml embeds a browser with no window to open into, so an
+    % ordinary <a> (even target="_blank") does nothing when clicked. See
+    % aboutPageHtml's own note on the bridge.
+    uihtml(grid, 'HTMLSource', html, ...
+        'HTMLEventReceivedFcn', @(~, evt) openExternal(evt));
+end
+
+% ======================================================================= %
+function openExternal(evt)
+%OPENEXTERNAL  Open a link the About page was clicked on, in the real
+%   browser. Anything that is not an http(s) address is ignored rather than
+%   handed to web(): the page's own links are all fixed strings from
+%   alakazamVersion and alakazamDependencies, so there is nothing else this
+%   should ever be asked to open.
+    if ~strcmp(evt.HTMLEventName, 'openUrl')
+        return;
+    end
+    url = char(string(evt.HTMLEventData));
+    if isempty(regexp(url, '^https?://', 'once'))
+        return;
+    end
+    try
+        web(url, '-browser');
+    catch
+        web(url);                                % no system browser; use MATLAB's
+    end
 end
 
 % ======================================================================= %

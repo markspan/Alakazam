@@ -204,6 +204,32 @@ const page = `<!doctype html>
   <nav id="toc"><div id="toc-title">Contents</div>${tocHtml}</nav>
   <main id="content">${bodyHtml}</main>
 </div>
+<script>
+// A LINK IN A uihtml GOES NOWHERE ON ITS OWN. The component embeds a browser
+// with no window of its own to open into, so an ordinary <a> to an http(s)
+// address does nothing at all when clicked: no new tab, no navigation, no
+// error. Rewriting the relative links above to absolute GitHub URLs is only
+// half the job -- without this bridge they are still dead, just dead pointing
+// somewhere correct.
+//
+// setup() is uihtml's own entry point, the same one AlakazamRibbon.html and
+// the workspace tree use; Alakazam.onHelp listens for the event.
+//
+// In-page "#anchor" links are left alone: the table of contents is built from
+// them, they are same-document navigation, and they already work.
+let alzHelp;
+function setup(htmlComponent) {
+  alzHelp = htmlComponent;
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest('a');
+    if (!a) { return; }
+    const href = a.getAttribute('href') || '';
+    if (href.startsWith('#')) { return; }
+    e.preventDefault();
+    if (alzHelp) { alzHelp.sendEventToMATLAB('openUrl', href); }
+  });
+}
+</script>
 </body>
 </html>
 `

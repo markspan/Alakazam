@@ -32,5 +32,32 @@ function onHelp(this)
 
     this.HelpFigure = uifigure("Name", "Alakazam Help", "Position", [160 120 1000 700]);
     grid = uigridlayout(this.HelpFigure, [1 1], "Padding", [0 0 0 0]);
-    uihtml(grid, "HTMLSource", htmlFile);
+    % Every link in the page is handed back here rather than followed in
+    % place: a uihtml embeds a browser with no window to open into, so an
+    % ordinary <a> does nothing when clicked. See src/help/build.mjs, which
+    % rewrites the README's relative links to absolute GitHub URLs and
+    % injects the bridge that sends them here.
+    uihtml(grid, "HTMLSource", htmlFile, ...
+        "HTMLEventReceivedFcn", @(~, evt) openExternal(evt));
+end
+
+% ======================================================================= %
+function openExternal(evt)
+%OPENEXTERNAL  Open a link the help page was clicked on, in the real
+%   browser. Only http(s): build.mjs rewrites every relative link in the
+%   README to an absolute GitHub URL, so anything still relative by the time
+%   it reaches here is a link that rewriting missed, and following it would
+%   resolve against src/ and fail anyway.
+    if ~strcmp(evt.HTMLEventName, 'openUrl')
+        return;
+    end
+    url = char(string(evt.HTMLEventData));
+    if isempty(regexp(url, '^https?://', 'once'))
+        return;
+    end
+    try
+        web(url, '-browser');
+    catch
+        web(url);
+    end
 end

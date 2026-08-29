@@ -50,6 +50,57 @@ classdef MarkdownRenderTest < matlab.unittest.TestCase
                 'Alakazam:MarkdownDialog:missing');
         end
 
+        function pandocChatterCannotReachThePage(testCase)
+        %PANDOCCHATTERCANNOTREACHTHEPAGE  MATLAB's system() merges the
+        %   child's stderr into the output it returns, so anything pandoc
+        %   says on the way past lands at the top of the page as literal
+        %   text. That is not hypothetical: passing --no-highlight to pandoc
+        %   3.8 put "[WARNING] Deprecated: --no-highlight" in as the
+        %   document's first line.
+        %
+        %   Two halves. The HTML must come from --output rather than stdout,
+        %   which makes any FUTURE warning harmless; and the deprecated flag
+        %   is gone rather than swapped for its replacement, because a
+        %   fragment emits no stylesheet for it to have been guarding
+        %   against.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            src = fileread(fullfile(root, 'src', 'Dialogs', 'MarkdownDialog.m'));
+
+            % Comment lines stripped first: this file explains at length why
+            % the flag is gone, and searching the whole text would match
+            % that explanation rather than the command.
+            lines = strsplit(src, newline);
+            code = lines(cellfun(@(l) isempty(regexp(strtrim(l), '^%', 'once')), lines));
+            code = strjoin(code, newline);
+
+            testCase.verifySubstring(code, '--output=', ...
+                'The HTML is being read from stdout again, where stderr joins it.');
+            testCase.verifyEmpty(strfind(code, '--no-highlight'), ...
+                'The deprecated flag is back; pandoc 3.8 warns about it into the page.'); %#ok<STREMP>
+        end
+
+        function theRenderedFragmentStartsWithMarkup(testCase)
+        %THERENDEREDFRAGMENTSTARTSWITHMARKUP  The end-to-end version of the
+        %   check above, run against the real pandoc when there is one: the
+        %   first thing in the fragment has to be a tag, not a diagnostic.
+            exe = pandocExe();
+            testCase.assumeTrue(~isempty(exe), 'No pandoc; skipping the render check.');
+
+            root = fileparts(fileparts(mfilename('fullpath')));
+            md = fullfile(root, 'src', 'Transformations', 'DefineBins', 'bin_language.md');
+            out = [tempname() '.html'];
+            cleanup = onCleanup(@() delete(out)); %#ok<NASGU>
+
+            status = system(sprintf('"%s" --from=gfm --to=html --output="%s" "%s"', ...
+                exe, out, md));
+            testCase.assertEqual(status, 0, 'pandoc did not render the reference.');
+
+            html = strtrim(fileread(out));
+            testCase.verifyEqual(html(1), '<', ...
+                sprintf('The fragment begins with "%s" rather than a tag.', ...
+                    html(1:min(60, end))));
+        end
+
         % ---- what would actually break -------------------------------------
         function theSyntaxButtonPointsAtARealFile(testCase)
         %THESYNTAXBUTTONPOINTSATAREALFILE  The button builds the reference's
