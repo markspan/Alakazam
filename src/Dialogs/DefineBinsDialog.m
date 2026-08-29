@@ -8,7 +8,11 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
 %   typed, valid or not.
     result = [];
 
-    fig = uifigure('Name', 'DefineBins', 'Position', [100 100 640 480]);
+    % 780 wide, not the original 640: the button row's fixed widths plus its
+    % padding and gaps need 646px before the flexible spacer gets anything,
+    % so adding "Syntax..." pushed the last button off the edge. This leaves
+    % the spacer real room rather than only just fitting.
+    fig = uifigure('Name', 'DefineBins', 'Position', [100 100 780 520]);
     outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 44});
 
     % Row 1: epoch start/stop fields, side by side.
@@ -25,8 +29,8 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
         'FontName', 'Consolas');
     scriptArea.Layout.Row = 2;
 
-    % Row 3: Save / Load / Import on the left, OK / Cancel right-aligned.
-    buttons = uigridlayout(outer, [1 6], 'ColumnWidth', {90, 90, 120, '1x', 90, 90}, ...
+    % Row 3: Save / Load / Import / Syntax on the left, OK / Cancel right.
+    buttons = uigridlayout(outer, [1 7], 'ColumnWidth', {90, 90, 120, 90, '1x', 90, 90}, ...
         'Padding', [8 6 8 6]);
     buttons.Layout.Row = 3;
     saveBtn = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~,~) onSave());
@@ -36,13 +40,40 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
     importBtn = uibutton(buttons, 'Text', 'Import BDF...', 'ButtonPushedFcn', @(~,~) onImportBdf(), ...
         'Tooltip', 'Import an ERPLAB bin descriptor file and translate it to this language');
     importBtn.Layout.Column = 3;
+    syntaxBtn = uibutton(buttons, 'Text', 'Syntax...', 'ButtonPushedFcn', @(~,~) onSyntax(), ...
+        'Tooltip', 'Open the bin-definition language reference');
+    syntaxBtn.Layout.Column = 4;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
-    cancelBtn.Layout.Column = 5;
+    cancelBtn.Layout.Column = 6;
     okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
-    okBtn.Layout.Column = 6;
+    okBtn.Layout.Column = 7;
     fig.CloseRequestFcn = @(~,~) onCancel();
 
+    % The reference window, kept so a second click refocuses the open one
+    % rather than stacking up copies -- the same singleton the Help and
+    % About windows use.
+    syntaxFig = [];
+
     uiwait(fig);
+
+    function onSyntax()
+    %ONSYNTAX  Open the language reference beside the editor.
+    %   Deliberately non-modal: the reason for putting the reference here at
+    %   all is being able to read it while writing a bin definition.
+        if ~isempty(syntaxFig) && isvalid(syntaxFig)
+            figure(syntaxFig);
+            return;
+        end
+        mdFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), ...
+            'Transformations', 'DefineBins', 'bin_language.md');
+        try
+            syntaxFig = MarkdownDialog('Bin-definition language', mdFile, fig);
+        catch err
+            uialert(fig, sprintf(['I could not open the language reference, I am afraid: ' ...
+                '%s\n\nIt should be at %s.'], err.message, mdFile), ...
+                'Language reference unavailable', 'Icon', 'warning');
+        end
+    end
 
     function onOK()
         result = struct('start', strtrim(startField.Value), ...

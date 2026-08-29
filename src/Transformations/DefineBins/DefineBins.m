@@ -143,8 +143,16 @@ function [EEG, options] = DefineBins(input, varargin)
 
         result = DefineBinsDialog(default, prevEpoch);
         if isempty(result)
-            throw(MException('Alakazam:DefineBins', ...
-                'That''s quite alright -- you cancelled the DefineBins dialog, so nothing has been changed.'));
+            % Cancel is not a failure. Returning an empty EEG is how every
+            % other transformation says "the analyst changed their mind":
+            % Alakazam.onTransformation reads it as cancelled, persists
+            % nothing and shows nothing. This used to throw instead, so
+            % backing out of the dialog raised an error the analyst then had
+            % to dismiss -- a second click to undo a decision they had
+            % already made.
+            EEG = [];
+            options = [];
+            return;
         end
 
         script   = result.script;

@@ -398,6 +398,31 @@ classdef DefineBinsTest < matlab.unittest.TestCase
                 'Alakazam:DefineBins');
         end
 
+        function cancellingTheDialogIsNotAnError(testCase)
+        %CANCELLINGTHEDIALOGISNOTANERROR  Every transformation says "the
+        %   analyst changed their mind" by returning an empty EEG, which
+        %   Alakazam.onTransformation reads as cancelled: nothing persisted,
+        %   nothing shown. DefineBins threw instead, so backing out of the
+        %   dialog raised an error that then had to be dismissed -- a second
+        %   click to undo a decision already made.
+        %
+        %   Checked at the source, because the cancel path is interactive and
+        %   MATLAB's -batch refuses blocking dialogs. Weaker than driving it,
+        %   but it does catch the throw coming back.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            src = fileread(fullfile(root, 'src', 'Transformations', ...
+                'DefineBins', 'DefineBins.m'));
+
+            start = strfind(src, 'result = DefineBinsDialog(');
+            testCase.assertNotEmpty(start, 'The interactive branch has moved.');
+            branch = src(start(1):min(start(1) + 800, numel(src)));
+
+            testCase.verifySubstring(branch, 'EEG = [];');
+            testCase.verifySubstring(branch, 'options = [];');
+            testCase.verifyEmpty(strfind(branch, 'throw(MException'), ...
+                'Cancelling DefineBins raises an error again.'); %#ok<STREMP>
+        end
+
         % ---- the s-prefix rule ---------------------------------------------
         function anSPrefixIsDroppedSoCodesAreNumeric(testCase)
         %ANSPREFIXISDROPPEDSOCODESARENUMERIC  BrainVision writes stimulus
