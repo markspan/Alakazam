@@ -225,18 +225,40 @@ is caught immediately when the script is parsed.
 
 | Kind | Written as | Matches |
 |---|---|---|
-| Numeric | `112` | marker `112` or `"112"` |
-| Text | `"S201"` | marker `S201` (must be quoted , a bare word is an identifier/alias name) |
+| Numeric | `112` | marker `112`, `"112"`, `S112` or `S 112` |
+| Text | `"R201"` | marker `R201` (must be quoted , a bare word is an identifier/alias name) |
+| Range | `21-30` | every code from 21 to 30 inclusive, prefixed or not |
 
 Wildcards (`?` one char, `*` any run) only work inside quotes, so a numeric
 pattern like `"1??"` needs quoting too. Whitespace inside a marker is
 ignored, so `"S 12"` matches `S12` or `S 12`.
+
+**A leading `s` before a number is dropped.** BrainVision writes stimulus
+markers as `S 12`, `S201` and so on, so the codes arrive as text even though
+they are numbers with a prefix. Dropping it makes them numeric again, which
+means they can be written unquoted, compared numerically, and covered by a
+range: `21-30` matches `S21` through `S30`. The rule is applied to both
+sides, so `S12`, `S 12`, `s12` and `12` are all the same code whether they
+are written in a bin definition or recorded in the file.
+
+Only `s`/`S` is dropped, and only when the rest is entirely digits (or
+wildcards). Response markers keep their prefix, since `R 12` routinely
+reuses the number of the stimulus it answers, and a text marker like `"S1a"`
+is left alone. Wildcards lose the prefix too (`"s??"` becomes `"??"`), so a
+pattern written that way now also matches an unprefixed two-digit code.
+
+A **range** is numeric only, and is expanded to every code it covers, so
+`21-30` is exactly the same as writing all ten out. Spaces around the dash
+make no difference: `21-30`, `21 -30`, `21 - 30` and `21- 30` are the same
+range. Event codes are never negative, so a bare `-30` is refused, and so is
+a range that runs backwards (`30-21`) or one wider than 1000 codes.
 
 ### Sets
 
 ```
 111|112|121|122                          % pipe form
 {"s11" "s22" "s33" "s44"}                % braced list, spaces or commas
+{21-30 99}                               % a range and a single code
 ```
 
 Work anywhere a code is allowed, including inside a relation:
@@ -267,8 +289,13 @@ an ordinary or a combination bin. See
 ### Reaction time and `rt within`
 
 `EEG.bindesc(b).rt` holds the delay to the neighbour picked out by the first
-(left-to-right) relation that contributed to the match (from a true branch,
-if it went through `or`); `NaN` for a pure-anchor match or one from a `not`.
+(left-to-right) **forward** relation that contributed to the match (from a
+true branch, if it went through `or`); `NaN` for a pure-anchor match, one
+from a `not`, or one whose only relations look backwards. Only forward
+matches count: a reaction time is the delay to a *later* event, so a
+preceding-context relation such as `prev(cue)` never becomes the reaction
+time however early in the bin it is written. (`timelock` is unaffected and
+may still lock to a preceding event.)
 `rt within (lo,hi] ms` keeps only matches whose RT falls in that window
 (`ms` only; a `NaN` RT is always dropped).
 

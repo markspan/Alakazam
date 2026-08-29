@@ -9,6 +9,21 @@ function [tf, cap] = evalNode(node, p, ctx)
             cap = NaN;
         case 'rel'
             [tf, cap] = DefineBinsEngine.evalRel(node, p, ctx);
+            % ONLY A FORWARD MATCH BECOMES A REACTION TIME. evalRel captures
+            % whatever latency it matched, in either direction, and that is
+            % right for its other caller: 'timelock' may legitimately lock the
+            % epoch to a PRECEDING event. But a backward match must not become
+            % the bin's rt, and it used to. Because 'and' takes the first
+            % non-NaN capture left to right, a bin written as
+            %     112 and prev(cue) ... and next(response) ...
+            % recorded the CUE delay -- negative -- as its reaction time,
+            % while the same bin with the two relations written the other way
+            % round recorded the response. An rt that depends on the order the
+            % terms happen to appear in is worse than no rt at all, so a
+            % capture is kept only when it is later than the anchor.
+            if ~isnan(cap) && cap <= ctx.lat(p)
+                cap = NaN;
+            end
         case 'not'
             tf  = ~DefineBinsEngine.evalNode(node.kid, p, ctx);
             cap = NaN;
