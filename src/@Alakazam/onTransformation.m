@@ -39,7 +39,7 @@ function onTransformation(this, entry)
         restoreBusy = beginBusy(this.MainFigure, sprintf("Running %s...", transformId));
 
         % Apply the transformation to the current dataset.
-        [result.EEG, usedParams] = feval(transformId, this.Workspace.EEG);
+        [result.EEG, usedParams] = TransTools.invoke(transformId, this.Workspace.EEG);
 
         if isempty(result.EEG) || ishandle(result.EEG)
             % Either the transformation's own options dialog was

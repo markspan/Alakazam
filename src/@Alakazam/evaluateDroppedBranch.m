@@ -75,7 +75,7 @@ function evaluateDroppedBranch(this, sourceFile, targetNode)
              '(its .m file seems to be missing from the Transformations folder), so I am ' ...
              'unable to replay this branch.'], transformId));
     end
-    [result.EEG, ~] = feval(transformId, targetStruct.EEG, sourceStruct.EEG.params);
+    [result.EEG, ~] = TransTools.invoke(transformId, targetStruct.EEG, sourceStruct.EEG.params);
     result.EEG.Call   = sourceStruct.EEG.Call;
     result.EEG.params = sourceStruct.EEG.params;
 

@@ -25,7 +25,7 @@ function newNode = applyStepToTarget(this, transformId, params, targetNode)
     targetEEG = targetLoaded.EEG;
     targetEEG.File = targetFile; % see loadNodeEEG's own note on why this wins over the stored field
 
-    [result.EEG, ~] = feval(transformId, targetEEG, params);
+    [result.EEG, ~] = TransTools.invoke(transformId, targetEEG, params);
     result.EEG.Call   = transformId;
     result.EEG.params = params;
 

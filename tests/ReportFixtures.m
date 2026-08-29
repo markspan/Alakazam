@@ -969,72 +969,46 @@ function literal = rVectorLiteral(items)
 end
 
 function exe = discoverRscript()
-%DISCOVERRSCRIPT  See ReportFixtures.rscriptExe -- override, PATH, then
-%   R's own default Windows install folders, highest version first.
+%DISCOVERRSCRIPT  See ReportFixtures.rscriptExe -- the ALAKAZAM_RSCRIPT
+%   override, then the application's own discovery, which also reads R's
+%   InstallPath out of the Windows registry (where its installer always
+%   writes it, whether or not PATH was updated).
     exe = getenv('ALAKAZAM_RSCRIPT');
     if ~isempty(exe) && isfile(exe)
         return;
     end
-    if systemSucceeds('Rscript --version')
-        exe = 'Rscript';
-        return;
+    exe = quartoTools();
+end
+
+function [rscriptExe, quartoExe] = quartoTools()
+%QUARTOTOOLS  locateQuartoTools, once per session.
+%   Both discoveries shell out several times on a miss, and neither answer
+%   changes while the tests run.
+    persistent cached
+    if isempty(cached)
+        [rs, q] = locateQuartoTools();
+        cached = struct('rs', rs, 'q', q);
     end
-    roots = unique({getenv('ProgramFiles'), 'C:\Program Files'});
-    candidates = {};
-    versions = [];
-    for r = 1:numel(roots)
-        if isempty(roots{r})
-            continue;
-        end
-        found = dir(fullfile(roots{r}, 'R', 'R-*'));
-        for f = 1:numel(found)
-            candidate = fullfile(found(f).folder, found(f).name, 'bin', 'Rscript.exe');
-            if isfile(candidate)
-                candidates{end + 1} = candidate; %#ok<AGROW>
-                versions(end + 1) = versionRank(found(f).name); %#ok<AGROW>
-            end
-        end
-    end
-    exe = '';
-    if ~isempty(candidates)
-        [~, best] = max(versions);
-        exe = candidates{best};
-    end
+    rscriptExe = cached.rs;
+    quartoExe = cached.q;
 end
 
 function exe = discoverQuarto()
-%DISCOVERQUARTO  See ReportFixtures.quartoExe -- override, PATH, then
-%   Quarto's own default per-user install folder.
+%DISCOVERQUARTO  See ReportFixtures.quartoExe -- the ALAKAZAM_QUARTO
+%   override, then the application's own discovery.
+%
+%   This used to do its own lookup: PATH, then Quarto's per-user install
+%   folder. It missed the copy RStudio bundles under its own resources
+%   folder, which is never on PATH --
+%   so on a machine with R and RStudio installed, the render tests skipped
+%   with "Quarto not found" while renderQuartoReport itself found it
+%   perfectly well and rendered reports all day. The guard was stricter than
+%   the thing it guarded, which is the worst way for a skip to be wrong: it
+%   is silent, and it hides exactly the end-to-end checks that catch what
+%   unit tests cannot.
     exe = getenv('ALAKAZAM_QUARTO');
     if ~isempty(exe) && isfile(exe)
         return;
     end
-    if systemSucceeds('quarto --version')
-        exe = 'quarto';
-        return;
-    end
-    candidate = fullfile(getenv('LOCALAPPDATA'), 'Programs', 'Quarto', 'bin', 'quarto.cmd');
-    if isfile(candidate)
-        exe = candidate;
-        return;
-    end
-    exe = '';
-end
-
-function tf = systemSucceeds(command)
-%SYSTEMSUCCEEDS  True when COMMAND runs and exits 0 (its output is
-%   discarded; only the exit status is of interest here).
-    [status, ~] = system(command);
-    tf = status == 0;
-end
-
-function rank = versionRank(folderName)
-%VERSIONRANK  A sortable number for an "R-4.6.1" folder name, so 4.10.0
-%   ranks above 4.6.1 -- which a plain lexicographic sort gets backwards.
-    parts = regexp(folderName, '\d+', 'match');
-    rank = 0;
-    weights = [1e6, 1e3, 1];
-    for i = 1:min(numel(parts), numel(weights))
-        rank = rank + weights(i) * str2double(parts{i});
-    end
+    [~, exe] = quartoTools();
 end

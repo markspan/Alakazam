@@ -49,7 +49,7 @@ function recalculateTransformNode(this, node, ownEEG)
 
     parentLoaded = load(parentFile, "EEG");
     try
-        [newEEG, newParams] = feval(transformId, parentLoaded.EEG);
+        [newEEG, newParams] = TransTools.invoke(transformId, parentLoaded.EEG);
     catch ME
         this.restoreFocus();
         this.showTransformationError(transformId, ME);
