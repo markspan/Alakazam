@@ -183,6 +183,59 @@ classdef TransformContractTest < matlab.unittest.TestCase
                         'again.'], files(k).name)); %#ok<STREMP>
             end
         end
+
+        function everyCancelPathAssignsBothOutputs(testCase)
+        %EVERYCANCELPATHASSIGNSBOTHOUTPUTS  Cancel is the one branch the seam
+        %   cannot reach, and so the one that rotted.
+        %
+        %   A transformation signals "cancelled" by returning EEG = [], and
+        %   several did that and returned WITHOUT ever assigning options.
+        %   Called with one output that is harmless, which is why it survived;
+        %   called with two, as TransTools.invoke calls everything, MATLAB
+        %   throws "Output argument 'options' is not assigned". So pressing
+        %   Cancel raised an error instead of quietly doing nothing. Eight
+        %   transformations were in that state at once, including
+        %   ChannelEditor, where a user found it.
+        %
+        %   The runtime seam cannot catch this: reaching the cancel branch
+        %   means opening a modal dialog and dismissing it, which a test
+        %   cannot do. So this reads the source instead. A static test is the
+        %   weaker instrument and it is used here only because the stronger
+        %   one cannot reach.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            folders = dir(fullfile(root, 'src', 'Transformations'));
+            folders = folders([folders.isdir] & ~startsWith({folders.name}, '.'));
+
+            for k = 1:numel(folders)
+                name = folders(k).name;
+                file = fullfile(folders(k).folder, name, [name '.m']);
+                if ~isfile(file); continue; end        % +packages, helper folders
+
+                lines = string(splitlines(fileread(file)));
+                code = regexprep(lines, '%.*$', '');   % comments say nothing
+
+                cancels = find(~cellfun(@isempty, ...
+                    regexp(code, 'EEG\s*=\s*\[\s*\]\s*;', 'once')));
+                assigns = find(~cellfun(@isempty, ...
+                    regexp(code, '(^|[\s;,)])options\s*=[^=]', 'once')));
+
+                % What must hold is that options is assigned before the RETURN
+                % that ends the cancel branch, not before the EEG = [] line:
+                % the two assignments sit side by side and either order works.
+                returns = find(~cellfun(@isempty, ...
+                    regexp(code, '(^|[\s;])return\s*;?\s*$', 'once')));
+
+                for c = cancels(:)'
+                    r = returns(find(returns >= c, 1));
+                    if isempty(r); r = numel(code) + 1; end
+                    testCase.verifyTrue(any(assigns < r), sprintf( ...
+                        ['%s cancels at line %d without assigning options. ' ...
+                         'Called with two outputs -- which is how TransTools.invoke ' ...
+                         'calls every transformation -- that is an error, so Cancel ' ...
+                         'would raise one instead of doing nothing.'], name, c));
+                end
+            end
+        end
     end
 
     methods (Access = private)

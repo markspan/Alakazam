@@ -44,6 +44,7 @@ if interactive
     [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs, EEG.icaact, EEG.srate);
     if ~ok
         EEG = [];   % cancelled -- no node, no compute
+        options = [];   % the contract is two outputs; both must be assigned
         return;
     end
     opts = struct('components', removed(:)');

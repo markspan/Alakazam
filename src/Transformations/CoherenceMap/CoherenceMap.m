@@ -60,6 +60,7 @@ if interactive
         {'Zero-padding ratio'; 'PadRatio'}, stored.PadRatio);
     if isempty(opts)
         EEG = [];   % cancelled
+        options = [];   % the contract is two outputs; both must be assigned
         return;
     end
     TransformSettings.set('CoherenceMap', opts);

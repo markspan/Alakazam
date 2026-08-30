@@ -59,6 +59,7 @@ if interactive
         {'Stop'; 'TimeStop'}, stored.TimeStop);
     if isempty(opts)
         EEG = [];   % cancelled
+        options = [];   % the contract is two outputs; both must be assigned
         return;
     end
     TransformSettings.set('CoherenceTopography', opts);

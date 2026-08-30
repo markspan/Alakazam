@@ -1,0 +1,1 @@
+{"Name":"Photodiode","Description":"Measure display delay from a photodiode channel, or import its onsets as events","Entry":"Photodiode.m","Icon":"Photodiode.png","Section":"1. Preprocessing","Category":"Data"}

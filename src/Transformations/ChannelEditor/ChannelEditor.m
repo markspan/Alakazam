@@ -21,6 +21,7 @@ if interactive
     edited = ChannelEditorDialog(input.chanlocs, elcFile);
     if isempty(edited)
         EEG = [];   % cancelled -- no node, no compute
+        options = [];   % the contract is two outputs; both must be assigned
         return;
     end
     options = struct('chanlocs', edited);

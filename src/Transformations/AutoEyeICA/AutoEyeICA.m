@@ -47,6 +47,7 @@ if interactive
         % untouched) and nothing to run -- Alakazam.onTransformation
         % treats an empty EEG as "cancelled", not an error.
         EEG = [];
+        options = [];   % the contract is two outputs; both must be assigned
         return;
     end
     TransformSettings.set('AutoEyeICA', opts);

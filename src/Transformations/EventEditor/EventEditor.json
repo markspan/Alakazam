@@ -1,0 +1,1 @@
+{"Name":"EventEditor","Description":"Correct the event table: rename, drop, shift or fix triggers","Entry":"EventEditor.m","Icon":"EventEditor.png","Section":"1. Preprocessing","Category":"Data"}
