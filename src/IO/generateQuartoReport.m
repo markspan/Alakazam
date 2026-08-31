@@ -1,20 +1,9 @@
-﻿function qmdText = generateQuartoReport(entries, csvFileName, spec)
+﻿function qmdText = generateQuartoReport(entries, csvFileName)
 %GENERATEQUARTOREPORT  A design-aware Quarto (.qmd) report for an exported
 %   measurements CSV: rendering it (self-contained HTML) produces a short,
 %   APA-styled results report -- narrative prose with inline-computed
 %   statistics, APA-formatted tables (gt), and embedded plots -- rather
 %   than a plain R console script.
-%
-%   Optional SPEC re-titles the document and adds notes under its heading:
-%     .Title  replaces the "ERP"/"Spectral" name in the report title
-%     .Notes  cell array of markdown lines, printed under the title
-%   Omit it and the report is exactly what it always was. It exists so a
-%   report over the same MEASUREMENT SHAPE but a different provenance --
-%   source regions rather than scalp channels (see generateSourceReport) --
-%   can be its own document with its own caveats WITHOUT a second copy of
-%   the design logic, the preamble, or the section builders. The statistics
-%   do not change because the data came from an inverse solution; only what
-%   has to be said about them does.
 %
 %   This file is the orchestrator. It works out what design the export
 %   actually has, picks one section builder per window/frequency x measure
@@ -96,9 +85,6 @@
 %
 %   See also DERIVEDESIGN, REPORTDESIGNPLAN, DESIGNRECORDS,
 %   EXPORTMEASUREMENTSCSV, EXPORTSPECTRALCSV, MEASUREROWTYPES.
-    if nargin < 3 || isempty(spec)
-        spec = struct();
-    end
     if isempty(entries)
         throw(MException('Alakazam:generateQuartoReport', ...
             'I''m afraid generateQuartoReport needs at least one Measure result to build a report from.'));
@@ -143,14 +129,58 @@
     plan = reportDesignPlan(design);
     hasGroups = ~isempty(plan.betweenFactors);
 
-    % WHICH sections a design gets is shared with every other report that
-    % analyses measurements -- see ReportSections.statisticalSections. The
-    % choice is a property of the design, not of what was measured, so a
-    % scalp-channel report and a source-region report must not each carry
-    % their own copy of it.
-    sections = ReportSections.statisticalSections(blocks, ordinaryLabels, comboBins, plan);
+    useSession = numel(plan.withinFactors) > 1;
 
-    parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, spec)}, sections, {closingText()}];
+    % A linear mixed model is what every multi-bin design gets EXCEPT the
+    % plain two-bin within-subjects case, which stays a paired t-test: with
+    % exactly two conditions and no other factor, the t-test is the same
+    % comparison stated more simply, and it carries a Bayes factor and a
+    % Wilcoxon check an LMM section does not.
+    useLmm = hasGroups || useSession;
+
+    sections = {};
+    for bl = 1:numel(blocks)
+        blockLabel = blocks(bl).label;
+        types = blocks(bl).measureTypes;
+        for ti = 1:numel(types)
+            measureType = types{ti};
+
+            if isscalar(ordinaryLabels)
+                if hasGroups
+                    sections{end + 1} = ReportSections.betweenSection(blockLabel, measureType, ordinaryLabels{1}); %#ok<AGROW>
+                else
+                    sections{end + 1} = ReportSections.descriptiveSection(blockLabel, measureType, ordinaryLabels{1}); %#ok<AGROW>
+                end
+            elseif numel(ordinaryLabels) == 2 && ~useLmm
+                sections{end + 1} = ReportSections.pairedSection(blockLabel, measureType, ordinaryLabels{1}, ordinaryLabels{2}); %#ok<AGROW>
+            elseif numel(ordinaryLabels) >= 2
+                % One section for every design that gets a linear mixed
+                % model. Which of the four it is -- bin, bin x group,
+                % bin x session, or all three two-way -- is read off the
+                % plan inside lmmSection, not decided again here.
+                sections{end + 1} = ReportSections.lmmSection(blockLabel, measureType, ordinaryLabels, plan); %#ok<AGROW>
+            end
+            for cb = 1:numel(comboBins)
+                if hasGroups
+                    % includeVsZero: skip for latency/circular types, same
+                    % reason as the no-groups path (isDescriptiveOnlyType).
+                    % includeBetweenGroups: skip ONLY for circular types --
+                    % unlike the "vs zero" test, an ordinary linear
+                    % between-groups comparison (a latency IS on a linear
+                    % scale) is perfectly valid for a latency combo bin,
+                    % just not for a circular one (see isCircularType).
+                    sections{end + 1} = ReportSections.comboSectionGrouped(blockLabel, measureType, ...
+                        comboBins(cb).label, comboBins(cb).recipeText, ...
+                        ~ReportSections.isDescriptiveOnlyType(measureType), ~ReportSections.isCircularType(measureType)); %#ok<AGROW>
+                else
+                    sections{end + 1} = ReportSections.comboSection(blockLabel, measureType, ...
+                        comboBins(cb).label, comboBins(cb).recipeText); %#ok<AGROW>
+                end
+            end
+        end
+    end
+
+    parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan)}, sections, {closingText()}];
     qmdText = char(strjoin(parts, [newline newline]));
 end
 
@@ -240,7 +270,7 @@ function txt = comboRecipeText(bindesc, entry)
     txt = char(strjoin(parts, ""));
 end
 
-function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, spec)
+function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan)
 %PREAMBLETEXT  The YAML header + setup chunk shared by every report kind.
 %   REPORTTITLE ("ERP" or "Spectral") names the report in its own title
 %   and intro comment. GROUPCOLUMN is the CSV column that plays "window"'s
@@ -284,15 +314,7 @@ function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, p
         '         session = as.character(session),' ...
         '         session = ifelse(is.na(session), "", session))'}];
 
-    if isfield(spec, 'Title') && ~isempty(spec.Title)
-        reportTitle = char(string(spec.Title));
-    end
-    notes = {};
-    if isfield(spec, 'Notes') && ~isempty(spec.Notes)
-        notes = [{''}, cellstr(string(spec.Notes(:)'))];
-    end
-
-    lines = [ReportDoc.yamlHeader(['Alakazam ' reportTitle ' Statistical Report']), notes, { ...
+    lines = [ReportDoc.yamlHeader(['Alakazam ' reportTitle ' Statistical Report']), { ...
         '' ...
         '<!--' ...
         ['Alakazam -- statistical report for exported ' reportTitle ' measurements.'] ...

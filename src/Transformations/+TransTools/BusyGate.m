@@ -6,12 +6,11 @@ function BusyGate(action, varargin)
 %       TransTools.BusyGate('message', 'Building the head model...');
 %
 %   RELABELLING MATTERS for a transformation whose slow phase is not the
-%   one the app's own generic "Running <id>..." names. Source parcellation
-%   spends twenty seconds building a forward model before it computes
-%   anything; left saying "Running Parcellate...", that reads as a hang
-%   rather than as progress. Same reasoning as beginBusy's own updateFcn,
-%   reachable from inside a transformation, where beginBusy itself must not
-%   be called (it would seize the gate -- see ParcellateDialog/localBusy).
+%   one the app's own generic "Running <id>..." names -- building a source
+%   forward model, say, which takes twenty seconds before anything is
+%   computed. Same reasoning as beginBusy's own updateFcn, but reachable
+%   from inside a transformation, where beginBusy itself must NOT be called:
+%   beginBusy opens the global gate and would seize it from the app.
 %
 %   A transformation invoked interactively opens its own options dialog,
 %   and the app has already raised "Running <id>..." by then. That

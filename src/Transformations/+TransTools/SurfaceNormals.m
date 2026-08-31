@@ -31,11 +31,10 @@ function normals = SurfaceNormals(sourcemodel)
 %
 %   The convention matters less than its STABILITY. Alakazam's source
 %   models are templates, identical for every subject, so whatever sign a
-%   vertex gets here it gets for everyone -- which is what makes signed
-%   region time courses comparable across subjects at all.
+%   vertex gets here it gets for everyone, and a signed source map means the
+%   same thing from one recording to the next.
 %
-%   See also TRANSTOOLS.BUILDSOURCEFORWARDMODEL, TRANSTOOLS.INVERSESOLUTION,
-%   TRANSTOOLS.PARCELLATESOURCE.
+%   See also TRANSTOOLS.BUILDSOURCEFORWARDMODEL, TRANSTOOLS.INVERSESOLUTION.
     if ~isstruct(sourcemodel) || ~isfield(sourcemodel, 'pos') || ~isfield(sourcemodel, 'tri')
         throw(MException('Alakazam:SurfaceNormals', ...
             ['Problem in SurfaceNormals: I need a surface with .pos and .tri to work out ' ...

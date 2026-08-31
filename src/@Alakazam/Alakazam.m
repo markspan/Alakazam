@@ -120,7 +120,6 @@ classdef Alakazam < handle
         onExportMeasurements(this)
         onExportSpectral(this)
         onExportDataQuality(this)
-        onExportSourceReport(this)
         onExportAnalysisScript(this)
         onShowDesign(this)
         onGrandAveragePerCell(this)

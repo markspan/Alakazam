@@ -36,8 +36,40 @@ function showTransformationError(this, transformId, ME)
             'right kind of data for this step -- for example, it may need segmented ' ...
             '(epoched) data, an average, or frequency-domain data, and this ' ...
             'dataset is not yet in that form.'];
+
+        % WHERE it happened, for the cases where WHAT happened is not enough.
+        % An Alakazam guard clause explains itself and needs no location; a
+        % raw MATLAB error ("Arrays have incompatible sizes") explains
+        % nothing, and without a location the only way to find it is to
+        % guess. Note that this dialog covers the plotting of the result as
+        % well as the transformation itself, so the frame named here is
+        % sometimes in a view rather than in the transformation.
+        where = alakazamFrames(ME);
+        if ~isempty(where)
+            message{end + 1} = '';
+            message{end + 1} = sprintf('Technical detail (%s): %s', ME.identifier, where);
+        end
     end
 
     uialert(this.MainFigure, message, sprintf('Couldn''t run %s', transformId), ...
         'Icon', 'warning');
+end
+
+% ======================================================================= %
+function text = alakazamFrames(ME)
+%ALAKAZAMFRAMES  The first few stack frames, as "name (line N)".
+%   Deliberately the WHOLE stack rather than only Alakazam's own files: an
+%   error raised inside FieldTrip or EEGLAB is exactly the case where the
+%   calling frame alone does not say enough, and the top frames are what
+%   distinguish "the inverse rejected this" from "the plot of the result
+%   did". Capped at four, because past that it is stack trace rather than
+%   explanation.
+    if isempty(ME.stack)
+        text = '';
+        return;
+    end
+    n = min(4, numel(ME.stack));
+    parts = arrayfun(@(f) sprintf('%s (line %d)', f.name, f.line), ...
+        ME.stack(1:n), 'UniformOutput', false);
+    text = strjoin(parts, ' <- ');
 end

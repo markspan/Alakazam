@@ -139,10 +139,10 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
     % itself marks some points outside the head), so .inside is set
     % explicitly rather than left to ft_read_headshape, which does not set
     % it for a plain surface file.
-    % Read (and cached) by TransTools.TemplateSourceModel, so that listing
-    % the regions this sheet can be parcellated into does not require
-    % building a leadfield first -- see that function's own header.
-    sourcemodel = TransTools.TemplateSourceModel();
+    sourcemodelFile = fullfile(ftRoot, 'template', 'sourcemodel', 'cortex_20484.surf.gii');
+    sourcemodel = ft_read_headshape(sourcemodelFile);
+    sourcemodel = ft_convert_units(sourcemodel, 'mm');
+    sourcemodel.inside = true(size(sourcemodel.pos, 1), 1);
 
     cfg = [];
     cfg.headmodel   = headmodel;

@@ -10,13 +10,13 @@ function writeQmdFile(qmdFile, qmdText, errorId)
 %   platform and fails on another, so the close is not left to whenever the
 %   caller's own cleanup happens to run.
 %
-%   Five report actions wrote these same ten lines
-%   (onExportMeasurements/Spectral/DataQuality/SourceReport, onClusterStats).
+%   Four report actions wrote these same ten lines
+%   (onExportMeasurements/Spectral/DataQuality, onClusterStats).
 %   The generation-before-opening order they all share matters and is kept:
 %   opening the file first would truncate it, so a generator that then threw
 %   would leave an empty, unexplained .qmd behind.
 %
-%   See also RENDERQUARTOREPORT, GENERATEQUARTOREPORT, GENERATESOURCEREPORT.
+%   See also RENDERQUARTOREPORT, GENERATEQUARTOREPORT.
     fid = fopen(qmdFile, 'w');
     if fid < 0
         throw(MException(errorId, 'I couldn''t open "%s" for writing.', qmdFile));

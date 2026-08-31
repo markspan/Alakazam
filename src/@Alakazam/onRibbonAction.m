@@ -40,8 +40,6 @@ function onRibbonAction(this, id)
             this.onExportAnalysisScript();
         case 'dataQuality'
             this.onExportDataQuality();
-        case 'sourceReport'
-            this.onExportSourceReport();
         case 'viewTabs'
             this.setPlotsViewMode("tabs");
         case 'viewGrid'
