@@ -71,7 +71,7 @@ function html = runPandoc(exe, mdFile)
 %   guarding against something that could not happen.)
     html = '';
     outFile = [tempname() '.html'];
-    cleanup = onCleanup(@() deleteIfPresent(outFile)); %#ok<NASGU>
+    cleanup = onCleanup(@() deleteIfPresent(outFile));
 
     try
         status = system(sprintf('"%s" --from=gfm --to=html --output="%s" "%s"', ...
@@ -182,16 +182,4 @@ function html = page(body)
         '}\n' ...
         '</script>\n' ...
         '</body></html>'], body);
-end
-
-function pos = centredOn(parent, width, height)
-%CENTREDON  A WIDTH x HEIGHT position centred over PARENT, falling back to
-%   the screen centre when there is no usable parent.
-    try
-        p = parent.Position;
-        pos = [p(1) + (p(3) - width) / 2, p(2) + (p(4) - height) / 2, width, height];
-    catch
-        screen = get(groot, 'ScreenSize');
-        pos = [(screen(3) - width) / 2, (screen(4) - height) / 2, width, height];
-    end
 end

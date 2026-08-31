@@ -75,7 +75,7 @@ switch lower(mode)
         EEG.event = appendOnsets(input.event, onsets, options);
         EEG.DiodeReport = struct([]);
     otherwise
-        EEG.DiodeReport = diodeTriggerDelay(onsets, eventsOf(input), input.srate, options);
+        EEG.DiodeReport = diodeTriggerDelay(onsets, TransTools.FieldOr(input, 'event', []), input.srate, options);
         % Said out loud rather than left in a field: the measurement IS the
         % result of this step, and a node whose whole output is a number
         % nobody sees has not really produced anything.
@@ -123,13 +123,6 @@ function chan = resolveChannel(EEG, wanted)
     end
 end
 
-function events = eventsOf(EEG)
-    if isfield(EEG, 'event')
-        events = EEG.event;
-    else
-        events = [];
-    end
-end
 
 function events = appendOnsets(events, onsets, options)
 %APPENDONSETS  Add the diode onsets to the event table, then re-sort it:

@@ -26,7 +26,7 @@ function ops = EventEditorDialog(EEG)
     pnts  = fieldOr(EEG, 'pnts', NaN);
     original = EEG.event;
 
-    fig = uifigure('Name', 'Event editor', 'Position', centred(1040, 660));
+    fig = uifigure('Name', 'Event editor', 'Position', centredOn([], 1040, 660));
     outer = uigridlayout(fig, [2 1], 'RowHeight', {'1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
@@ -361,7 +361,3 @@ function value = fieldOr(s, name, default)
     end
 end
 
-function pos = centred(width, height)
-    screen = get(groot, 'ScreenSize');
-    pos = [(screen(3) - width) / 2, (screen(4) - height) / 2, width, height];
-end

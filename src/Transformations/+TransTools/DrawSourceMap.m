@@ -1,4 +1,4 @@
-function brainPatch = DrawSourceMap(ax, sourcePower, sourcemodel, mapLimit, brainPatch)
+function brainPatch = DrawSourceMap(ax, sourcePower, sourcemodel, mapLimit, brainPatch, signed)
 %DRAWSOURCEMAP  Draw (or update) a per-vertex source-power estimate on
 %   FieldTrip's own cortical-sheet mesh -- Brain3DView's Source-estimate
 %   mode, the counterpart of TransTools.DrawBrainMap's scalp-projection
@@ -28,6 +28,20 @@ function brainPatch = DrawSourceMap(ax, sourcePower, sourcemodel, mapLimit, brai
     if nargin < 5
         brainPatch = [];
     end
-    brainPatch = TransTools.DrawBrainPatch(ax, sourcemodel.pos, sourcemodel.tri, sourcePower, ...
-        parula, [0, mapLimit], brainPatch);
+    if nargin < 6 || isempty(signed)
+        signed = false;
+    end
+
+    % A signed (cortical-normal-projected) estimate has a meaningful zero and
+    % a meaningful sign, so it gets the same diverging, symmetric-about-zero
+    % treatment DrawBrainMap gives scalp microvolts. Drawing it on the
+    % sequential [0, limit] scale would map negative values onto the bottom
+    % of the colormap alongside "no activity", which is a different claim.
+    if signed
+        brainPatch = TransTools.DrawBrainPatch(ax, sourcemodel.pos, sourcemodel.tri, ...
+            sourcePower, TransTools.DivergingColormap(), [-mapLimit, mapLimit], brainPatch);
+    else
+        brainPatch = TransTools.DrawBrainPatch(ax, sourcemodel.pos, sourcemodel.tri, ...
+            sourcePower, parula, [0, mapLimit], brainPatch);
+    end
 end

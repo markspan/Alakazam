@@ -91,13 +91,7 @@ function onExportMeasurements(this)
         % to produce, with no way to tell why.
         qmdText = generateQuartoReport(entries, reportCsvName);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
-        fid = fopen(qmdFile, 'w');
-        if fid < 0
-            throw(MException('Alakazam:onExportMeasurements', 'I couldn''t open "%s" for writing.', qmdFile));
-        end
-        closeFile = onCleanup(@() fclose(fid));
-        fwrite(fid, qmdText, 'char');
-        clear closeFile;   % close now, not at function exit: renderQuartoReport needs to read this file back next
+        writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportMeasurements');
 
         % Best effort, same "must not lose what already succeeded" spirit
         % as this whole block: if quarto/R are not on this machine, or the

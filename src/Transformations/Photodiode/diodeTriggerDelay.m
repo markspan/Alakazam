@@ -35,8 +35,8 @@ function report = diodeTriggerDelay(onsets, events, srate, opts)
 %
 %   See also DETECTDIODEONSETS, PHOTODIODE, EVENTEDITOR.
     if nargin < 4; opts = struct(); end
-    maxLag = getOr(opts, 'MaxLagMs', 200);
-    types = getOr(opts, 'Types', {});
+    maxLag = TransTools.FieldOr(opts, 'MaxLagMs', 200);
+    types = TransTools.FieldOr(opts, 'Types', {});
 
     report = struct('n', 0, 'medianMs', NaN, 'meanMs', NaN, 'sdMs', NaN, ...
         'iqrMs', NaN, 'minMs', NaN, 'maxMs', NaN, ...
@@ -90,13 +90,12 @@ function report = diodeTriggerDelay(onsets, events, srate, opts)
         return;
     end
 
-    sorted = sort(lags);
     report.medianMs = median(lags);
-    report.meanMs = mean(lags);
-    report.sdMs = std(lags);
-    report.iqrMs = quantileOf(sorted, 0.75) - quantileOf(sorted, 0.25);
-    report.minMs = sorted(1);
-    report.maxMs = sorted(end);
+    report.meanMs   = mean(lags);
+    report.sdMs     = std(lags);
+    report.iqrMs    = TransTools.Percentile(lags, 75) - TransTools.Percentile(lags, 25);
+    report.minMs    = min(lags);
+    report.maxMs    = max(lags);
 
     report.summary = sprintf(['The display changed %.1f ms after the trigger (median of ' ...
         '%d paired onsets, IQR %.1f ms, range %.1f to %.1f). To correct it, shift these ' ...
@@ -125,18 +124,3 @@ function keep = matching(events, types)
     end
 end
 
-function v = quantileOf(sorted, q)
-    if isempty(sorted)
-        v = NaN;
-        return;
-    end
-    v = sorted(max(1, min(numel(sorted), round(q * (numel(sorted) - 1)) + 1)));
-end
-
-function v = getOr(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
-        v = s.(name);
-    else
-        v = default;
-    end
-end

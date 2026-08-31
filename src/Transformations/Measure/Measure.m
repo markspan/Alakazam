@@ -103,10 +103,15 @@ function [EEG, options] = Measure(input, varargin)
 EEG = input;
 
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'Averaged')
+    % TransTools.FieldOr, not input.DataFormat: the condition above is true
+    % when the field is ABSENT as well as when it is wrong, and reading it
+    % directly then threw a bare MATLAB "Unrecognized field name" from
+    % inside the very sprintf meant to explain the problem.
     throw(MException('Alakazam:Measure', sprintf([ ...
         'Problem in Measure: this only works on an averaged ERP (a subject Average or a Grand ' ...
         'Average), and not on this dataset (DataFormat = "%s"). Would you run Average -- or ' ...
-        'Grand Average, for a group result -- on it first?'], input.DataFormat)));
+        'Grand Average, for a group result -- on it first?'], ...
+        char(string(TransTools.FieldOr(input, 'DataFormat', 'not set'))))));
 end
 
 if interactive

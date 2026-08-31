@@ -66,13 +66,7 @@ function onClusterStats(this)
         qmdText = generateClusterStatsReport(summary, [statName '.csv'], ...
             [waveformName '.csv'], [outlineName '.csv']);
         qmdFile = [stem '.qmd'];
-        fid = fopen(qmdFile, 'w');
-        if fid < 0
-            throw(MException('Alakazam:onClusterStats', 'I''m sorry, but I wasn''t able to open "%s" for writing.', qmdFile));
-        end
-        closeFile = onCleanup(@() fclose(fid));
-        fwrite(fid, qmdText, 'char');
-        clear closeFile;
+        writeQmdFile(qmdFile, qmdText, 'Alakazam:onClusterStats');
 
         % See onExportMeasurements' own note: by this point the test itself
         % has long finished (its result is already on screen above), so the

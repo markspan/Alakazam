@@ -53,8 +53,8 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
 
     smoothed = movingMean(signal, max(1, round(o.SmoothMs * srate / 1000)));
 
-    lo = prctileOf(smoothed, 5);
-    hi = prctileOf(smoothed, 95);
+    lo = TransTools.Percentile(smoothed, 5);
+    hi = TransTools.Percentile(smoothed, 95);
     info.low = lo;
     info.high = hi;
 
@@ -183,17 +183,6 @@ function idx = separated(idx, n)
     idx = keep;
 end
 
-function v = prctileOf(x, p)
-%PRCTILEOF  One percentile, without the Statistics Toolbox: this runs in the
-%   preprocessing path, and a transformation that needs a licensed toolbox
-%   to look at a channel would be a poor trade.
-    x = sort(x(~isnan(x)));
-    if isempty(x)
-        v = NaN;
-        return;
-    end
-    v = x(max(1, min(numel(x), round(p / 100 * (numel(x) - 1)) + 1)));
-end
 
 function idx = refineOnsets(idx, raw, w, trailing)
 %REFINEONSETS  Re-time each onset against the unsmoothed channel.

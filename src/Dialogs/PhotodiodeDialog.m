@@ -21,7 +21,7 @@ function options = PhotodiodeDialog(EEG)
     labels = channelLabels(EEG);
     guess = guessDiode(labels);
 
-    fig = uifigure('Name', 'Photodiode', 'Position', centred(1080, 680));
+    fig = uifigure('Name', 'Photodiode', 'Position', centredOn([], 1080, 680));
     outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
@@ -103,7 +103,7 @@ function options = PhotodiodeDialog(EEG)
                 'added as events of type "%s".'], numel(onsets), info.separation, ...
                 typeField.Value);
         else
-            rep = diodeTriggerDelay(onsets, eventsOf(EEG), EEG.srate, o);
+            rep = diodeTriggerDelay(onsets, TransTools.FieldOr(EEG, 'event', []), EEG.srate, o);
             verdict.Text = sprintf('%d onsets found (separability %.1f).  %s', ...
                 numel(onsets), info.separation, rep.summary);
         end
@@ -189,15 +189,4 @@ function idx = guessDiode(labels)
     end
 end
 
-function events = eventsOf(EEG)
-    if isfield(EEG, 'event')
-        events = EEG.event;
-    else
-        events = [];
-    end
-end
 
-function pos = centred(width, height)
-    screen = get(groot, 'ScreenSize');
-    pos = [(screen(3) - width) / 2, (screen(4) - height) / 2, width, height];
-end

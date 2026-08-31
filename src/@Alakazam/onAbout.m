@@ -72,16 +72,3 @@ function openExternal(evt)
 end
 
 % ======================================================================= %
-function pos = centredOn(parent, width, height)
-%CENTREDON  A WIDTH x HEIGHT position centred over PARENT, falling back to
-%   the screen centre when the parent is unavailable. The app is normally
-%   up by the time About can be clicked, but nothing here needs to depend
-%   on that.
-    try
-        p = parent.Position;
-        pos = [p(1) + (p(3) - width) / 2, p(2) + (p(4) - height) / 2, width, height];
-    catch
-        screen = get(groot, 'ScreenSize');
-        pos = [(screen(3) - width) / 2, (screen(4) - height) / 2, width, height];
-    end
-end

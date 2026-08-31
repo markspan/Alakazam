@@ -1,6 +1,17 @@
-function BusyGate(action)
+function BusyGate(action, varargin)
 %BUSYGATE  Drive the app's busy indicator from inside a transformation,
-%   when there is an app. ACTION is 'suspend' or 'resume'.
+%   when there is an app. ACTION is 'suspend', 'resume', or 'message' with
+%   the new text:
+%
+%       TransTools.BusyGate('message', 'Building the head model...');
+%
+%   RELABELLING MATTERS for a transformation whose slow phase is not the
+%   one the app's own generic "Running <id>..." names. Source parcellation
+%   spends twenty seconds building a forward model before it computes
+%   anything; left saying "Running Parcellate...", that reads as a hang
+%   rather than as progress. Same reasoning as beginBusy's own updateFcn,
+%   reachable from inside a transformation, where beginBusy itself must not
+%   be called (it would seize the gate -- see ParcellateDialog/localBusy).
 %
 %   A transformation invoked interactively opens its own options dialog,
 %   and the app has already raised "Running <id>..." by then. That
@@ -32,6 +43,6 @@ function BusyGate(action)
         available = exist('busyGate', 'file') == 2;
     end
     if available
-        busyGate(action);
+        busyGate(action, varargin{:});
     end
 end

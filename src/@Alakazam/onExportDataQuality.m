@@ -54,14 +54,7 @@ function onExportDataQuality(this)
         qmdText = generateDataQualityReport(entries, [summaryName '.csv'], ...
             [trialName '.csv'], [smeName '.csv']);
         qmdFile = [stem '.qmd'];
-        fid = fopen(qmdFile, 'w');
-        if fid < 0
-            throw(MException('Alakazam:onExportDataQuality', ...
-                'I couldn''t open "%s" for writing.', qmdFile));
-        end
-        closeFile = onCleanup(@() fclose(fid));
-        fwrite(fid, qmdText, 'char');
-        clear closeFile;   % close now: renderQuartoReport reads this file back next
+        writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportDataQuality');
 
         % The long one: quarto shells out to R, and on a first run R
         % installs the report's own packages before it can render anything.

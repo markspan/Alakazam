@@ -1,4 +1,4 @@
-function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labels)
+function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSourceForwardModel(labels)
 %BUILDSOURCEFORWARDMODEL  The EEG forward model (leadfield) for
 %   Brain3DView's Source-estimate mode: FieldTrip's own template BEM head
 %   model, paired with its own template electrode positions (NOT
@@ -24,6 +24,15 @@ function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labe
 %   TransTools.ComputeSourceEstimate -- feeding it rows in the wrong
 %   order would silently scramble which amplitude gets attributed to
 %   which electrode position, with no error to catch it.
+%
+%   Also returns ELEC and HEADMODEL, the template electrode definition and
+%   BEM volume conductor the leadfield was built FROM. They are cached
+%   alongside it and returned only because FieldTrip's own ft_inverse_*
+%   functions take them as required positional arguments, even when handed
+%   a precomputed leadfield they will not recompute (see
+%   TransTools.InverseSolution). Nothing else needs them; the hand-rolled
+%   TransTools.ComputeSourceEstimate path ignores them entirely, and the
+%   three-output call it uses stays valid.
 %
 %   COORDINATE CHOICE, AND WHY THIS DOES NOT REUSE ALAKAZAM'S OWN CHANLOCS
 %   POSITIONS: Brain3DView's existing Scalp-projection mode
@@ -66,7 +75,8 @@ function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labe
 %   TRANSTOOLS.ENSUREFIELDTRIP.
     persistent cache
     if isempty(cache)
-        cache = struct('key', '', 'leadfield', [], 'sourcemodel', [], 'resolvedLabels', {{}});
+        cache = struct('key', '', 'leadfield', [], 'sourcemodel', [], ...
+            'resolvedLabels', {{}}, 'elec', [], 'headmodel', []);
     end
 
     TransTools.ensureFieldTrip();
@@ -77,6 +87,8 @@ function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labe
         leadfield      = cache.leadfield;
         sourcemodel    = cache.sourcemodel;
         resolvedLabels = cache.resolvedLabels;
+        elec           = cache.elec;
+        headmodel      = cache.headmodel;
         return;
     end
 
@@ -127,22 +139,42 @@ function [leadfield, sourcemodel, resolvedLabels] = BuildSourceForwardModel(labe
     % itself marks some points outside the head), so .inside is set
     % explicitly rather than left to ft_read_headshape, which does not set
     % it for a plain surface file.
-    sourcemodelFile = fullfile(ftRoot, 'template', 'sourcemodel', 'cortex_20484.surf.gii');
-    sourcemodel = ft_read_headshape(sourcemodelFile);
-    sourcemodel = ft_convert_units(sourcemodel, 'mm');
-    sourcemodel.inside = true(size(sourcemodel.pos, 1), 1);
+    % Read (and cached) by TransTools.TemplateSourceModel, so that listing
+    % the regions this sheet can be parcellated into does not require
+    % building a leadfield first -- see that function's own header.
+    sourcemodel = TransTools.TemplateSourceModel();
 
     cfg = [];
     cfg.headmodel   = headmodel;
     cfg.elec        = elec;
     cfg.sourcemodel = sourcemodel;
     cfg.reducerank  = 3; % EEG (unlike MEG) uses the full 3-D dipole moment
+    % EXPECTED, HARMLESS WARNING: every run of this prints
+    %   "assuming that the sourcemodel units are in mm"
+    % from ft_prepare_sourcemodel. It is not a sign of a units problem --
+    % the answer it reports is right, and it is right BECAUSE the geometry
+    % above was explicitly converted: elec, headmodel and sourcemodel are
+    % all ft_convert_units(..., 'mm'), and the message repeats the
+    % sourcemodel's own .unit back.
+    %
+    % It cannot be silenced from here. ft_prepare_leadfield forwards only a
+    % keepfields() whitelist to ft_prepare_sourcemodel and 'unit' is not on
+    % it, so setting cfg.unit here does nothing at all (verified: identical
+    % leadfields, identical warning). The warning also fires unconditionally
+    % once ft_prepare_sourcemodel enters its "cfg.unit is empty" branch,
+    % whichever source it then takes the unit from. Suppressing by
+    % identifier is possible but the identifier ends in ":line383" -- it is
+    % keyed to a LINE NUMBER, so it would rot silently at the next FieldTrip
+    % bump and leave a warning nobody had noticed came back. Left visible on
+    % purpose.
     leadfield = ft_prepare_leadfield(cfg);
 
     cache.key            = key;
     cache.leadfield      = leadfield;
     cache.sourcemodel    = sourcemodel;
     cache.resolvedLabels = resolvedLabels;
+    cache.elec           = elec;
+    cache.headmodel      = headmodel;
 end
 
 function v = loadSoleVariable(matFile)

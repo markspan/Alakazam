@@ -76,13 +76,7 @@ function onExportSpectral(this)
 
         qmdText = generateQuartoReport(entries, reportCsvName);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
-        fid = fopen(qmdFile, 'w');
-        if fid < 0
-            throw(MException('Alakazam:onExportSpectral', 'I''m afraid I wasn''t able to open "%s" for writing.', qmdFile));
-        end
-        closeFile = onCleanup(@() fclose(fid));
-        fwrite(fid, qmdText, 'char');
-        clear closeFile;   % close now, not at function exit: renderQuartoReport needs to read this file back next
+        writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportSpectral');
 
         % See onExportMeasurements' own note: the render, not the CSV
         % export the opening message names, is the slow phase here.

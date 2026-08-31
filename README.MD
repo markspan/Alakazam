@@ -69,7 +69,8 @@ current publication standards, Keil et al. (2014) (see
   trial averaging (including bin-difference/interaction contrasts),
   amplitude-threshold artefact marking, automated ICA- and GEDAI-based
   artefact removal, Fourier analysis, and scalp topography plots, including
-  a rotatable 3D brain view with an optional real MNE source estimate (see
+  a rotatable 3D brain view with optional real source estimates, dSPM,
+  eLORETA or sLORETA (see
   [Transformations](#transformations) and [3D brain view](#3d-brain-view));
   grand averaging across subjects is a separate mechanism with its own tree
   and dialog.
@@ -193,10 +194,20 @@ interactively (from the ribbon) it prompts the user and remembers the chosen
 `options` (`TransformSettings`) for next time; when called with a previously
 captured `options` struct (dragging a branch onto another dataset, **Apply to
 All Raw Files...**, or replaying a saved template) it reproduces the operation
-without interaction, via a direct `feval(transformId, EEG, options)` call:
-plain data, not a parsed or `eval`'d command string. Every transformation opens
-with the same `nargin`/`'Init'`-sentinel guard,
+without interaction: plain data, not a parsed or `eval`'d command string. Every
+transformation opens with the same `nargin`/`'Init'`-sentinel guard,
 [`TransTools.InitGuard`](src/Transformations/+TransTools/InitGuard.m).
+
+Every call is made through
+[`TransTools.invoke`](src/Transformations/+TransTools/invoke.m), which
+validates the returned shape before it reaches the workspace tree: two
+outputs, an `EEG` that is empty (cancelled), a struct or a graphics handle,
+and an `options` that is a struct, empty or the `'Init'` sentinel. Previously
+four call sites each accepted whatever a transformation returned, so a plugin
+returning the wrong shape produced an error further down the pipeline rather
+than at its source. The seam's behaviour is specified in
+[`TransformContractTest.m`](tests/TransformContractTest.m), which also asserts
+that no call site bypasses it.
 
 ```matlab
 function [EEG, options] = SelectData(input, varargin)
@@ -208,7 +219,8 @@ function [EEG, options] = SelectData(input, varargin)
         % Interactive: prompt for options, remember them for next time.
         options = SelectDataDialog(input.chanlocs);
         if isempty(options)
-            EEG = [];   % cancelled, no node, no compute
+            EEG = [];        % cancelled, no node, no compute
+            options = [];    % BOTH outputs: the contract is two, always
             return;
         end
         TransformSettings.set('SelectData', options);
@@ -227,6 +239,8 @@ The current library:
 |---|---|
 | `Filter` | FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering (EEGLAB's `firfilt`, Kaiser window). Each filter is set by just a frequency and a dB rating (stopband attenuation); the filter order, transition band and window are chosen automatically. |
 | `ChannelEditor` | Edit channel labels, types and locations. |
+| `EventEditor` | Corrects the event table: rename or drop trigger codes, retain a subset, shift latencies in milliseconds, or edit a single event. Records the operations rather than the resulting table, so replaying it on another dataset applies the same corrections to that dataset's own events. |
+| `Photodiode` | Measures display delay from a photodiode channel: pairs each light onset with the preceding trigger and reports the lag (median, IQR, range), which can then be corrected with `EventEditor`'s latency shift. Alternatively imports the onsets as events, as EEGLAB's `pop_chanevent` does. Onsets are reported only where the channel is demonstrably bimodal, so that a recording without presented patches returns none rather than responding to mains flicker. |
 | `ReRef` | Re-references the data (wraps `pop_reref`). |
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
 | `Interpolate` | Interpolates bad channels. |
@@ -240,7 +254,8 @@ The current library:
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
-| `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real MNE source estimate (see [3D brain view](#3d-brain-view)). |
+| `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real source estimate: dSPM, eLORETA or sLORETA, as a magnitude or signed onto the cortical normal (see [3D brain view](#3d-brain-view)). |
+| `Parcellate` | Reduces an averaged ERP to signed anatomical region time courses: estimates cortical sources per bin, then reduces the 20484-vertex estimate to one waveform per AAL (or Brainnetome) region. The result is a dataset whose channels are regions, and is accepted unchanged by `Measure`, grand averaging and the measurement export. Scalp views reject it, as a region dataset carries no scalp geometry. See [Source regions](#source-regions). |
 | `Measure` | Quantifies ERP components in named time windows: mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency), on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference, [Measurement export](#measurement-export) and [Statistical analysis](#statistical-analysis). |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
 | `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
@@ -282,25 +297,49 @@ The same underlying projection, on `Brain3D`'s rotatable 3D surface:
   legibility. It is **not source-localized**: the colour scale is the
   measured scalp voltage itself (µV, signed, symmetric about zero), exactly
   as in the flat 2D plot.
-- **Source estimate (MNE)** is a real inverse computation: a
-  Tikhonov-regularized minimum-norm estimate, noise-normalized dSPM-style
-  (Dale et al., 2000, see [References](#references)), using
+- **Source estimate (dSPM / eLORETA / sLORETA)** are real inverse
+  computations, all three using
   [FieldTrip](https://www.fieldtriptoolbox.org/)'s template BEM head model,
   template 10-5 electrode positions, and a template cortical-sheet source
-  model, drawn directly on that cortical surface. Selecting it the first
+  model, drawn directly on that cortical surface. Selecting one the first
   time prompts to download FieldTrip (about 400 MB, one time, opt-in, see
   [`dependencies.md`](dependencies.md)); switching into it, or onto a bin
   not yet computed, takes a moment longer than scalp mode while the
-  leadfield/inverse is built (cached afterwards per channel set/bin).
+  leadfield/inverse is built (cached afterwards per channel set/bin/method).
+  The leadfield is a property of the head and the electrodes, not of the
+  method, so switching between the three re-solves without rebuilding it.
 
-  **Its colour scale looks nothing like scalp mode's, on purpose.** dSPM
-  normalization corrects raw minimum-norm's bias toward superficial
-  sources and turns the result into a statistic, approximately "how many
-  noise standard deviations above baseline", comparable *across* source
-  locations, which raw dipole-moment magnitude is not. It is still **not**
-  on a µV-like physical scale, so the colorbar is labelled "dSPM
-  (noise-normalized)", not an amplitude; do not compare its numbers to
-  scalp mode's µV scale. One further simplification worth knowing: the
+  | Method | What it is |
+  |---|---|
+  | **dSPM** | Tikhonov-regularized minimum norm, noise-normalized (Dale et al., 2000). |
+  | **eLORETA** | Exact low-resolution tomography (Pascual-Marqui, 2007): zero localization error for a single source, but an amplitude rather than a normalized statistic. |
+  | **sLORETA** | Standardized low-resolution tomography (Pascual-Marqui, 2002), standardized by its own resolution matrix rather than by projected noise. |
+
+  **The three scales are not comparable to each other, and none is in µV.**
+  Each result carries its own colorbar label from
+  [`InverseSolution`](src/Transformations/+TransTools/InverseSolution.m)
+  rather than a label fixed in the view, so a map cannot be drawn under
+  another method's scale. dSPM normalization corrects the raw minimum
+  norm's bias toward superficial sources and yields a statistic,
+  approximately the number of noise standard deviations above baseline,
+  which is comparable *across* source locations where raw dipole-moment
+  magnitude is not. It remains a statistic rather than a physical
+  amplitude, and none of these values should be compared with the scalp
+  mode's µV scale.
+
+  The three inverse methods are computed by FieldTrip, which is asked for
+  the spatial filter only. Projection through the filter, the per-method
+  scaling and the collapse of free-orientation moments are performed in
+  Alakazam along a single shared path, which keeps the dSPM normalization
+  explicit rather than dependent on the convention a given FieldTrip
+  function uses for its power output. An independent implementation
+  ([`ComputeSourceEstimate`](src/Transformations/+TransTools/ComputeSourceEstimate.m))
+  is retained as a reference: the two agree to floating-point equality on
+  the test fixture, so routing the existing dSPM path through FieldTrip
+  does not change results (see
+  [`SourceInverseTest.m`](tests/SourceInverseTest.m)).
+
+  One further simplification: the
   assumed noise covariance behind both the regularization and the dSPM
   normalization itself is a scaled identity, not an independently
   estimated one, since Alakazam's pipeline runs on already-averaged ERPs,
@@ -637,6 +676,108 @@ use, FieldTrip itself (a ~400 MB download, consent-gated, shared with
 
 Generated by [`ClusterStats.m`](src/ClusterStats.m) and
 [`generateClusterStatsReport.m`](src/IO/generateClusterStatsReport.m).
+
+</details>
+
+<details>
+<summary><strong>Source regions</strong> (parcellation and its statistics: click to expand)</summary>
+
+## Source regions
+
+`Parcellate` reduces a vertex-wise source estimate to one time course per
+anatomical region. It runs on an averaged ERP, estimates sources for each bin
+using the same forward model as the [3D brain view](#3d-brain-view), and
+returns a dataset whose channels are regions rather than electrodes.
+
+Because nothing downstream of a dataset requires a channel to be an electrode,
+that result is accepted unchanged by `Measure`, by grand averaging and by the
+measurement export; all three were checked end to end. Scalp views reject it,
+since region names do not resolve to 10-5 positions and a region dataset
+carries no scalp geometry.
+
+Building the forward model takes roughly 22 seconds and is cached for the rest
+of the session; subsequent bins and methods reuse it.
+
+### Orientation
+
+A free-orientation inverse yields three dipole components per vertex. The 3D
+brain view reduces them to their L2 norm, which is non-negative and therefore
+cannot represent the polarity of a component. Parcellation instead projects
+each vertex onto its cortical normal, retaining the sign. Pyramidal cells are
+oriented perpendicular to the cortical sheet, so the normal is the
+conventional orientation constraint for EEG. The same signed quantity can be
+displayed on the 3D brain view through its **Signed (cortical normal)**
+checkbox, which uses a diverging scale symmetric about zero; the view defaults
+to magnitude.
+
+Because cortex is folded, vertices on opposite walls of a sulcus have close to
+opposing normals and record a common source with opposite sign. Averaging a
+signed estimate over such a region therefore attenuates it. The default
+`mean_flip` aggregation first aligns each region's vertices to the dominant
+direction of their own normals, taken as the leading singular vector, and then
+averages. On FieldTrip's cortical sheet this recovered approximately three
+times the amplitude of a plain mean from identical input. Plain `mean` remains
+available.
+
+The resulting sign is defined relative to each region's dominant normal. It is
+comparable across bins, conditions and subjects within a region, because all
+subjects share the same template source model and therefore the same
+alignment. It is not comparable between regions.
+
+### Region assignment
+
+FieldTrip provides no surface parcellation, so each vertex of the cortical
+sheet is assigned by looking up its position in a volumetric atlas. Source
+model and atlas are both in MNI space. Measured against `cortex_20484` and
+AAL: all vertices fall within the atlas volume, 87.8% receive a non-zero
+label, and 93 of AAL's 116 regions are represented. The 23 that are not are
+cerebellar and deep grey structures, which a cortical surface does not sample.
+Vertices without a label are excluded rather than assigned to a neighbouring
+region. Brainnetome is also available, and labels 81.7% of vertices across 230
+of its 246 regions. The assignment is cached, as the template geometry is
+fixed.
+
+With the default minimum of 20 vertices per region, AAL yields about 85
+regions. The dialog lists them with their vertex counts and allows a subset to
+be selected.
+
+### Source Region Report
+
+**Source Region Report** (Export/Report tab) exports the measurements taken on
+parcellated datasets and renders a Quarto report, in the same Reports tree as
+the other reports.
+
+It is a separate document but not a separate analysis: the design derivation,
+the section builders and the closing false-discovery-rate summary are shared
+with the ERP report, since a region measured across bins and subjects presents
+the same design as a channel measured across bins and subjects. Scalp-channel
+and source-region results are reported separately because they differ in
+provenance: one is measured, the other estimated through a model.
+
+Three limitations are stated at the head of the report:
+
+- The estimates depend on a template head model, template electrode positions
+  and a template atlas. A region name identifies where the model places the
+  activity, not where it was recorded.
+- Regions are not independent. The inverse is spatially smooth, so
+  neighbouring regions share signal, and the false-discovery-rate summary
+  cannot account for that.
+- Signs are interpretable within a region only.
+
+The parcellation settings, inverse method, atlas and aggregation, are printed
+alongside them. A dataset exported before those settings were recorded
+receives no provenance line.
+
+Implementation:
+[`Parcellate`](src/Transformations/Parcellate/Parcellate.m),
+[`ParcellateSource`](src/Transformations/+TransTools/ParcellateSource.m),
+[`AtlasVertexLabels`](src/Transformations/+TransTools/AtlasVertexLabels.m),
+[`SurfaceNormals`](src/Transformations/+TransTools/SurfaceNormals.m),
+[`generateSourceReport`](src/IO/generateSourceReport.m); tested in
+[`ParcellationTest.m`](tests/ParcellationTest.m),
+[`ParcellateTest.m`](tests/ParcellateTest.m) and
+[`SourceReportTest.m`](tests/SourceReportTest.m). The end-to-end cases in
+`ParcellateTest` are tagged `Slow`, as they build a real forward model.
 
 </details>
 
@@ -1460,6 +1601,23 @@ Scientific/methodological:
   [10.1016/S0896-6273(00)81138-1](https://doi.org/10.1016/S0896-6273(00)81138-1).
   The dSPM noise-normalization `Brain3D`'s Source-estimate mode applies to
   its minimum-norm inverse (see [3D brain view](#3d-brain-view)).
+- Pascual-Marqui, R. D. (2002). Standardized low-resolution brain
+  electromagnetic tomography (sLORETA): technical details. *Methods and
+  Findings in Experimental and Clinical Pharmacology*, 24 Suppl D, 5-12.
+  `Brain3D`'s sLORETA source-estimate mode, computed via FieldTrip's
+  `ft_inverse_sloreta` (see [3D brain view](#3d-brain-view)).
+- Pascual-Marqui, R. D. (2007). Discrete, 3D distributed, linear imaging
+  methods of electric neuronal activity. Part 1: exact, zero error
+  localization. *arXiv*:0710.3341.
+  [arxiv.org/abs/0710.3341](https://arxiv.org/abs/0710.3341).
+  `Brain3D`'s eLORETA source-estimate mode, computed via FieldTrip's
+  `ft_inverse_eloreta` (see [3D brain view](#3d-brain-view)).
+- Tzourio-Mazoyer, N., Landeau, B., Papathanassiou, D., Crivello, F., Etard,
+  O., Delcroix, N., Mazoyer, B., & Joliot, M. (2002). Automated anatomical
+  labeling of activations in SPM using a macroscopic anatomical parcellation
+  of the MNI MRI single-subject brain. *NeuroImage*, 15(1), 273-289. DOI:
+  [10.1006/nimg.2001.0978](https://doi.org/10.1006/nimg.2001.0978).
+  The AAL atlas behind [region time courses](#source-regions).
 - Delorme, A., & Makeig, S. (2004). EEGLAB: an open source toolbox for
   analysis of single-trial EEG dynamics. *Journal of Neuroscience Methods*,
   134(1), 9-21. [sccn.ucsd.edu/eeglab](https://sccn.ucsd.edu/eeglab/index.php).
