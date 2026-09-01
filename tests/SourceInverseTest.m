@@ -142,6 +142,141 @@ classdef SourceInverseTest < matlab.unittest.TestCase
             end
         end
 
+        % ---- residual variance: the one number that IS comparable ---------
+        function residualVarianceMatchesTheHandRolledProjection(testCase)
+        %RESIDUALVARIANCEMATCHESTHEHANDROLLEDPROJECTION  Pins
+        %   INFO.ResidualVariance to an independently-written reference:
+        %   project the SAME closed-form mne operator's raw current
+        %   estimate back through the leadfield and compute
+        %   sum(residual.^2)/sum(values.^2) here, entirely outside
+        %   InverseSolution, then check the two agree. This is the
+        %   correctness test; the other tests below only check that a
+        %   number comes back.
+            [lf, elec, headmodel, values] = testCase.forwardFixture();
+            inside = find(lf.inside);
+            L = cell2mat(lf.leadfield(inside));
+            nChan = size(L, 1);
+            lambda = 0.05 * trace(L * L') / nChan;
+            M = L' / (L * L' + lambda * eye(nChan));
+
+            % Average-referenced here too, because InverseSolution does it:
+            % the leadfield has no common mode, so the data must not either.
+            % A reference re-derivation has to re-derive the whole
+            % computation, not the part of it that is convenient.
+            referenced = values - mean(values, 1);
+            J = M * referenced; % raw current, BEFORE dSPM's own noise-normalization
+            predicted = L * J;
+            expectedRV = sum((referenced(:) - predicted(:)) .^ 2) / sum(referenced(:) .^ 2);
+
+            [~, info] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'mne'));
+
+            testCase.verifyEqual(info.ResidualVariance, expectedRV, 'RelTol', 1e-8, ...
+                ['INFO.ResidualVariance must be computed from the RAW current estimate, ' ...
+                 'before dSPM''s own noise-normalization, and against the ' ...
+                 'average-referenced data the leadfield can actually reproduce.']);
+        end
+
+        function residualVarianceIsReportedOnlyWhereItIsMeaningful(testCase)
+        %RESIDUALVARIANCEISREPORTEDONLYWHEREITISMEANINGFUL  Back-projection
+        %   is defined only where the filter output is a CURRENT in the
+        %   units the leadfield maps to volts: the minimum norm and eLORETA
+        %   estimate an amplitude, sLORETA a dimensionless statistic.
+        %
+        %   THE BOUND MATTERS AS MUCH AS THE FINITENESS. An earlier version
+        %   of this test asked only for finite and non-negative, and passed
+        %   while sLORETA was reporting a residual of 45x the data power on
+        %   a real 61-channel recording -- "-4403% variance explained" would
+        %   have been drawn on the axes title. A residual variance that
+        %   exceeds the data's own variance means the projection is not
+        %   measuring what its name says, so the plausible range is asserted
+        %   here, not just the sign.
+            [lf, elec, headmodel, values] = testCase.forwardFixture();
+
+            for m = ["mne", "eloreta"]
+                [~, info] = FieldTripFixtures.quietly(@() ...
+                    TransTools.InverseSolution(values, lf, elec, headmodel, m));
+                testCase.verifyTrue(isfinite(info.ResidualVariance), ...
+                    sprintf('%s produced a non-finite ResidualVariance.', m));
+                testCase.verifyGreaterThanOrEqual(info.ResidualVariance, 0, ...
+                    sprintf('%s produced a negative ResidualVariance, which should be impossible.', m));
+                testCase.verifyLessThanOrEqual(info.ResidualVariance, 1, sprintf( ...
+                    ['%s left more variance unexplained than the data contains (%.3g), so its ' ...
+                     'output is not a current in the leadfield''s own units and the ' ...
+                     'back-projection is not measuring what it claims.'], ...
+                     m, info.ResidualVariance));
+            end
+
+            [~, sloretaInfo] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'sloreta'));
+            testCase.verifyTrue(isnan(sloretaInfo.ResidualVariance), ...
+                ['sLORETA must report NaN, not a number: its filter output is standardized ' ...
+                 'rather than a current, so there is nothing to project back.']);
+        end
+
+        function residualVarianceDoesNotDependOnOrientation(testCase)
+        %RESIDUALVARIANCEDOESNOTDEPENDONORIENTATION  ResidualVariance is
+        %   computed from the raw, pre-collapse current estimate, so a
+        %   signed (cortical-normal) estimate and a magnitude estimate --
+        %   different SourcePower, same underlying current -- must report
+        %   the identical fit. If this ever starts to differ, the
+        %   computation moved to after the orientation collapse by mistake.
+            [lf, elec, headmodel, values] = testCase.forwardFixture();
+            normals = randn(testCase.NSrc, 3);
+            normals = normals ./ vecnorm(normals, 2, 2);
+
+            [~, magInfo] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'mne'));
+            [~, signedInfo] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'mne', ...
+                struct('Orientation', 'normal', 'Normals', normals)));
+
+            testCase.verifyEqual(signedInfo.ResidualVariance, magInfo.ResidualVariance, 'RelTol', 1e-10);
+        end
+
+        function dataIsAverageReferencedToMatchTheLeadfield(testCase)
+        %DATAISAVERAGEREFERENCEDTOMATCHTHELEADFIELD  FieldTrip's EEG
+        %   leadfields have zero common mode by construction, so a
+        %   common-mode component in the data is unexplainable by any source
+        %   configuration. Adding a constant offset to every channel must
+        %   therefore change nothing at all.
+        %
+        %   FOUND ON REAL DATA, not by inspection: a recording referenced to
+        %   linked mastoids had 74% of its power in the common mode, and the
+        %   minimum norm explained only 25% of the variance. The giveaway
+        %   was that it did not improve as lambda went to zero -- an
+        %   underdetermined system fits perfectly once regularisation is
+        %   removed, so a floor means part of the data is outside the
+        %   leadfield's reach entirely.
+            [lf, elec, headmodel, values] = testCase.forwardFixture();
+            offset = values + 3.7e-6;   % a rigid reference shift
+
+            plain = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'mne'));
+            shifted = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(offset, lf, elec, headmodel, 'mne'));
+
+            testCase.verifyEqual(shifted, plain, 'RelTol', 1e-9, ...
+                ['A rigid shift of every channel changed the source estimate, so the data ' ...
+                 'is not being referenced to match the leadfield.']);
+        end
+
+        function aCommonModeComponentIsNotCountedAgainstTheFit(testCase)
+        %ACOMMONMODECOMPONENTISNOTCOUNTEDAGAINSTTHEFIT  The residual
+        %   variance must be measured against the part of the data the
+        %   forward model could ever reproduce. Before the average
+        %   reference was applied, a mastoid-referenced recording reported
+        %   25% variance explained purely because of its reference.
+            [lf, elec, headmodel, values] = testCase.forwardFixture();
+
+            [~, plain] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values, lf, elec, headmodel, 'mne'));
+            [~, shifted] = FieldTripFixtures.quietly(@() ...
+                TransTools.InverseSolution(values + 3.7e-6, lf, elec, headmodel, 'mne'));
+
+            testCase.verifyEqual(shifted.ResidualVariance, plain.ResidualVariance, 'RelTol', 1e-9);
+        end
+
         % ---- the scales are not interchangeable ---------------------------
         function eachMethodCarriesItsOwnScaleLabel(testCase)
         %EACHMETHODCARRIESITSOWNSCALELABEL  The documented hazard in this

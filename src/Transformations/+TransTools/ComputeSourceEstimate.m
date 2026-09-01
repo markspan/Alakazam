@@ -87,7 +87,15 @@ function sourcePower = ComputeSourceEstimate(values, leadfield)
     lambda = RegParam * trace(LLt) / nChan;
     M = L' / (LLt + lambda * eye(nChan)); % (3*nInside) x nChan
 
-    J = M * double(values); % (3*nInside) x nTime
+    % Average-referenced to match the leadfield, for the reason
+    % TransTools.InverseSolution's own copy of this line documents at
+    % length: FieldTrip's EEG leadfields have zero common mode by
+    % construction, so data on any other reference carries a component no
+    % source configuration can explain. Kept in step with InverseSolution
+    % deliberately -- the two are asserted to agree bit for bit
+    % (tests/SourceInverseTest.m), and that equivalence is only worth
+    % having while both are also correct.
+    J = M * (double(values) - mean(double(values), 1)); % (3*nInside) x nTime
 
     % dSPM noise normalization: noiseVar(i) = diag(M * (lambda*I) * M')(i)
     % = lambda * (M*M')(i,i) = lambda * sum(M(i,:).^2) -- the row-wise sum

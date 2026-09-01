@@ -18,20 +18,18 @@ classdef FieldTripFixtures
 %   is why it cannot simply call ensureFieldTrip and why the logic is worth
 %   having in exactly one place.
 %
-%   See also REPORTFIXTURES, TRANSTOOLS.ENSUREFIELDTRIP.
+%   See also REPORTFIXTURES, TRANSTOOLS.ENSUREFIELDTRIP,
+%   TRANSTOOLS.ISFIELDTRIPAVAILABLE.
 
     methods (Static)
         function require(testCase)
         %REQUIRE  Put an EXISTING FieldTrip on the path, or skip the test.
         %   Never downloads and never prompts: see the class comment.
-            if isempty(which('ft_defaults'))
-                existing = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m');
-                if ~isempty(existing)
-                    addpath(existing);
-                    evalc('ft_defaults');
-                end
-            end
-            testCase.assumeNotEmpty(which('ft_defaults'), ...
+        %   Delegates to TransTools.isFieldTripAvailable, which now also
+        %   backs GenerateSourceEstimateReportAssets' own "skip, don't
+        %   prompt" batch path -- one non-prompting check, not two copies
+        %   of the same which()/findInstalled() logic drifting apart.
+            testCase.assumeTrue(TransTools.isFieldTripAvailable(), ...
                 'FieldTrip is not installed, so the source-modelling path cannot be exercised.');
         end
 

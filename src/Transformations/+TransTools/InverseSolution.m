@@ -68,7 +68,15 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 %   see INFO.ScaleLabel.
 %
 %   INFO reports .Method, .Lambda, .ScaleLabel (what to write on a
-%   colorbar) and .ScaleNote (the caveat that belongs next to it).
+%   colorbar), .ScaleNote (the caveat that belongs next to it), and
+%   .ResidualVariance: the fraction of the scalp data's own variance NOT
+%   reproduced when this estimate is projected back through the leadfield
+%   it came from. Reported in plain scalp-voltage units, never touching a
+%   method's own scale, so it IS comparable between 'mne' and 'eloreta' --
+%   unusually for anything in this file. It is NaN for 'sloreta', whose
+%   filter output is a standardized statistic rather than a current, so
+%   back-projecting it is not a meaningful operation; see the computation's
+%   own comment below, and for what the number does and does not tell you.
 %
 %   See also TRANSTOOLS.COMPUTESOURCEESTIMATE (the hand-rolled dSPM path
 %   this is validated against, see tests/SourceInverseTest.m),
@@ -87,6 +95,26 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 
     L      = cell2mat(leadfield.leadfield(insideIdx)); % nChan x (3*nInside)
     nChan  = size(L, 1);
+
+    % THE DATA IS AVERAGE-REFERENCED HERE TO MATCH THE LEADFIELD, and this
+    % is a correctness fix rather than a nicety. FieldTrip's EEG leadfields
+    % are average-referenced by construction: every column sums to zero
+    % across channels (measured at ~1e-19 relative to the column norms), so
+    % the forward model CANNOT produce a common-mode component. Data on any
+    % other reference carries one, and that part of it is unexplainable by
+    % any source configuration whatsoever.
+    %
+    % Left unmatched, the inverse does not fail, it silently misfits: on a
+    % real 61-channel recording referenced to linked mastoids, 74% of the
+    % data's power sat in the common mode and the minimum norm explained
+    % only 25% of the variance -- and did not improve as lambda went to
+    % zero, which is the giveaway, since an underdetermined system should
+    % fit perfectly once regularisation is removed. Average-referencing the
+    % data first takes the same recording to 100%.
+    %
+    % Unconditional because it is idempotent: subtracting the channel mean
+    % from already-average-referenced data changes nothing.
+    values = values - mean(values, 1);
     lambda = TransTools.FieldOr(opts, 'Lambda', regParam * trace(L * L') / nChan);
 
     % The data covariance eLORETA and sLORETA both take as their 5th
@@ -140,6 +168,46 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 
     M = stackFilters(est, insideIdx, nChan);
     J = M * values;
+
+    % RESIDUAL VARIANCE: how much of the measured scalp data is left
+    % unexplained when this RAW current estimate is projected back through
+    % the same leadfield it came from --
+    %     predicted = L * J,   RV = sum((values - predicted).^2) / sum(values.^2)
+    % -- computed HERE, from J before dSPM's own normalization overwrites
+    % it below, deliberately: RV is a statement about the physical current
+    % estimate and the forward model that produced it, not about whichever
+    % per-method scale ends up on the colour bar. That is exactly why it
+    % stays comparable across mne/eloreta/sloreta when info.ScaleLabel is
+    % not -- it never touches a method's own normalization, only the
+    % original scalp-voltage units.
+    %
+    % WHAT THIS DOES NOT TELL YOU: it is a check on the FORWARD MODEL
+    % (electrode registration, a bad channel, a wrong reference), not on
+    % anatomical accuracy. With a few dozen electrodes explaining a
+    % ~20000-vertex cortical sheet, the inverse problem is wildly
+    % underdetermined, so a low residual variance does not by itself mean
+    % any one vertex's activity is correctly localized -- an implausible,
+    % poorly-conditioned deep/medial-wall estimate (see this file's own
+    % 'mne' Cnoise=lambda*I simplification above) can sit comfortably
+    % alongside an excellent RV, because plenty of OTHER, better-localized
+    % current could have explained the same data just as well.
+    % NOT REPORTED FOR sLORETA, and this is not a gap but a units
+    % argument. Back-projection is only meaningful where J is a CURRENT in
+    % the units the leadfield maps to volts. That holds for the minimum
+    % norm and for eLORETA, both of which estimate an amplitude. sLORETA's
+    % filter is standardized by its own resolution matrix, so its output is
+    % a dimensionless statistic; L * J then has no physical meaning and the
+    % residual is nonsense. Measured on a real 61-channel recording it came
+    % out at 45x the data power, i.e. "-4403% variance explained", which is
+    % exactly the sort of number that is worse than no number at all
+    % because it looks like a measurement.
+    if strcmp(method, 'sloreta')
+        info.ResidualVariance = NaN;
+    else
+        predicted = L * J;
+        dataPower = sum(values(:) .^ 2);
+        info.ResidualVariance = sum((values(:) - predicted(:)) .^ 2) / max(dataPower, eps);
+    end
 
     if strcmp(method, 'mne')
         % dSPM (Dale et al. 2000): divide each dipole-moment row by its own

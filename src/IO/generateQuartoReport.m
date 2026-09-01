@@ -1,4 +1,4 @@
-﻿function qmdText = generateQuartoReport(entries, csvFileName)
+﻿function qmdText = generateQuartoReport(entries, csvFileName, sourceEstimates)
 %GENERATEQUARTOREPORT  A design-aware Quarto (.qmd) report for an exported
 %   measurements CSV: rendering it (self-contained HTML) produces a short,
 %   APA-styled results report -- narrative prose with inline-computed
@@ -78,13 +78,25 @@
 %   CSVFILENAME is the bare file name the report's own read_csv() call
 %   references, relative to where the report itself is written.
 %
+%   SOURCEESTIMATES is optional: generateSourceEstimateReportAssets' own
+%   return value (a struct array, possibly empty/omitted). When non-empty,
+%   a "Source Estimate (Exploratory)" section is appended after the
+%   statistical summary, built by ReportSections.sourceEstimateSection --
+%   pure markdown (pre-rendered images, pre-computed fit percentages), so
+%   accepting this argument adds no R/FieldTrip dependency to THIS
+%   function; it stays exactly the text-assembly orchestrator its own
+%   header already describes. Omitting the argument (every existing call
+%   site does) reproduces the exact same document as before this section
+%   existed -- see GenerateQuartoReportTest for the guard that pins that.
+%
 %   Rendering needs a working Quarto installation (https://quarto.org) and
 %   R with tidyverse, rstatix, ggpubr, gt, BayesFactor, lme4, lmerTest,
 %   emmeans, performance and effectsize -- the setup chunk installs
 %   whichever are missing on the first render.
 %
 %   See also DERIVEDESIGN, REPORTDESIGNPLAN, DESIGNRECORDS,
-%   EXPORTMEASUREMENTSCSV, EXPORTSPECTRALCSV, MEASUREROWTYPES.
+%   EXPORTMEASUREMENTSCSV, EXPORTSPECTRALCSV, MEASUREROWTYPES,
+%   GENERATESOURCEESTIMATEREPORTASSETS, REPORTSECTIONS.SOURCEESTIMATESECTION.
     if isempty(entries)
         throw(MException('Alakazam:generateQuartoReport', ...
             'I''m afraid generateQuartoReport needs at least one Measure result to build a report from.'));
@@ -181,6 +193,21 @@
     end
 
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan)}, sections, {closingText()}];
+
+    % Appended LAST, after the statistical summary, not interleaved with
+    % the per-window sections above: this is an exploratory, non-
+    % statistical addendum (no p-value, nothing feeds the omnibus table),
+    % so it reads as a supplementary appendix to the confirmatory testing
+    % above rather than as part of it. nargin < 3 (every pre-existing call
+    % site) and an empty/omitted SOURCEESTIMATES both leave PARTS, and so
+    % QMDTEXT, byte-for-byte identical to before this argument existed.
+    if nargin >= 3 && ~isempty(sourceEstimates)
+        sourceText = ReportSections.sourceEstimateSection(sourceEstimates);
+        if ~isempty(sourceText)
+            parts = [parts, {sourceText}];
+        end
+    end
+
     qmdText = char(strjoin(parts, [newline newline]));
 end
 

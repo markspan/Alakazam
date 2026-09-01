@@ -36,6 +36,15 @@ classdef Brain3DView < handle
 %       leadfield/inverse computation, not just a redraw -- shown with a
 %       modal busy indicator (see ensureSourceReady/beginBusy).
 %
+%       Every source-mode redraw titles the axes with a one-line fit
+%       readout ("Fit: NN% variance explained", see fitVarianceLabel),
+%       backed by TransTools.InverseSolution's own INFO.ResidualVariance.
+%       This is comparable across all three methods (unlike their colour
+%       scales), but it is a check on the FORWARD MODEL/registration, not
+%       on anatomical accuracy -- a good fit does not mean any one
+%       vertex's activity is correctly localized, only that SOME current
+%       distribution close to this one explains the scalp data well.
+%
 %   The 3D-mesh sibling of ScalpDistributionView: same shared resolution
 %   (TransTools.ResolveScalpDistribution, via the Brain3D transformation
 %   instead of ScalpDistribution), same time-scrubbing uislider/Play
@@ -109,6 +118,7 @@ classdef Brain3DView < handle
         SourceMapLimit      % shared [0, max] colour scale for the bin SourcePower holds
         SourceScaleLabel    % colorbar label for SourcePower's own method, from TransTools.InverseSolution's INFO
         SourceScaleNote     % the caveat belonging next to that label (shown in the dropdown tooltip)
+        SourceResidualVariance % TransTools.InverseSolution's own INFO.ResidualVariance for the current bin/method -- shown as the axes title, see fitVarianceLabel
     end
 
     methods
@@ -230,10 +240,18 @@ classdef Brain3DView < handle
             if Brain3DView.isSourceMode(this.Mode)
                 this.BrainPatch = TransTools.DrawSourceMap(this.Axes, this.SourcePower(:, idx), ...
                     this.SourceModel, this.SourceMapLimit, this.BrainPatch, this.Signed);
+                % Set on every redraw rather than once per estimate: title()
+                % on a uiaxes is cheap, and this keeps the title correct
+                % without having to reason about whether DrawBrainPatch's own
+                % cla() (rebuild path only, see its header) would otherwise
+                % clear it -- the same "just set it every time" choice
+                % TimeLabel.Text above already makes.
+                title(this.Axes, this.fitVarianceLabel());
             else
                 values = eeg.data(eeg.ScalpHasPos, idx, this.BinIndices(this.SelectedBin));
                 this.BrainPatch = TransTools.DrawBrainMap(this.Axes, values, eeg.ScalpChanlocs, ...
                     eeg.ScalpMapLimit, this.Mesh, this.BrainPatch);
+                title(this.Axes, ''); % nothing to report for a plain scalp projection
             end
         end
 
@@ -469,6 +487,7 @@ classdef Brain3DView < handle
             this.SourcePowerSigned = signed;
             this.SourceScaleLabel  = info.ScaleLabel;
             this.SourceScaleNote   = info.ScaleNote;
+            this.SourceResidualVariance = info.ResidualVariance;
             if signed
                 this.SourceScaleLabel = [info.ScaleLabel ', signed'];
                 this.SourceScaleNote  = [info.ScaleNote ' Projected onto the cortical normal, ' ...
@@ -482,6 +501,38 @@ classdef Brain3DView < handle
             if ~isfinite(this.SourceMapLimit) || this.SourceMapLimit == 0
                 this.SourceMapLimit = 1;
             end
+        end
+
+        function s = fitVarianceLabel(this)
+        %FITVARIANCELABEL  A one-line readout of how much of the scalp
+        %   data the CURRENT source estimate reproduces when projected
+        %   back through the leadfield it came from -- shown as the axes
+        %   title in Source-estimate mode (see redraw()).
+        %
+        %   Backed by TransTools.InverseSolution's own INFO.ResidualVariance
+        %   (see its computation's own comment for exactly what this is a
+        %   check on -- the forward model/registration, not anatomical
+        %   accuracy). Reported as "variance explained" (1 - RV) rather
+        %   than RV itself, since a higher number reading as "better" needs
+        %   no separate legend the way a residual would.
+        %
+        %   Independent of this.Signed on purpose: ResidualVariance is
+        %   computed from the raw current estimate BEFORE the
+        %   magnitude/normal orientation collapse, so it does not change
+        %   when the Signed checkbox is toggled, only when the bin or
+        %   method does.
+        %
+        %   EMPTY FOR sLORETA, which reports no residual variance at all
+        %   (NaN): its filter yields a standardized statistic rather than a
+        %   current, so there is nothing to project back through the
+        %   leadfield. No title is better than a title reading "Fit: NaN%",
+        %   or worse, the -4403% a real recording produced when this was
+        %   computed for it regardless.
+            if isnan(this.SourceResidualVariance)
+                s = '';
+                return;
+            end
+            s = sprintf('Fit: %.0f%% variance explained', 100 * (1 - this.SourceResidualVariance));
         end
 
         function rebuildColorbar(this)

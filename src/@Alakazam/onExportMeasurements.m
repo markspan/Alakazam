@@ -12,6 +12,15 @@ function onExportMeasurements(this)
 %   not the Measure node's own generic "Measure..." tree label; a Grand
 %   Average node uses its own name directly (it has no root/raw-file
 %   ancestor the same way).
+%
+%   The companion Quarto report also gets a best-effort "Source Estimate
+%   (Exploratory)" section (see generateSourceEstimateReportAssets) when
+%   this export includes a Grand Average entry AND FieldTrip is already
+%   installed -- checked, never triggered: this runs as a side effect of
+%   Export Measurements, not because the analyst asked for Source-
+%   estimate mode, so it must never pop FieldTrip's own consent-gated
+%   ~400 MB download. Missing either condition simply omits the section;
+%   it is never an export failure.
     entries = this.collectMeasurementEntries();
     if isempty(entries)
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
@@ -84,12 +93,28 @@ function onExportMeasurements(this)
                 'I wasn''t able to copy the CSV into the Reports folder: %s', copyMsg));
         end
 
+        % Best effort, and deliberately its OWN try/catch rather than
+        % relying on the block-wide one below: a source-estimate failure
+        % must not cost the analyst the CSV/statistical report that
+        % already works today, so this degrades to "no Source Estimate
+        % section" on ANY problem (FieldTrip not installed -- the common,
+        % entirely expected case, see
+        % TransTools.isFieldTripAvailable -- or a real rendering error)
+        % rather than letting an unexpected error here propagate up and
+        % skip generateQuartoReport entirely.
+        imagesDir = fullfile(reportsDir, [stem '_' stampTxt '_images']);
+        try
+            sourceEstimates = generateSourceEstimateReportAssets(entries, imagesDir);
+        catch
+            sourceEstimates = [];
+        end
+
         % Generate the report text FIRST, before touching the .qmd file:
         % opening (and so truncating) it before generateQuartoReport has
         % actually succeeded would leave an empty, unexplained .qmd
         % behind if it throws -- exactly what a silent catch below used
         % to produce, with no way to tell why.
-        qmdText = generateQuartoReport(entries, reportCsvName);
+        qmdText = generateQuartoReport(entries, reportCsvName, sourceEstimates);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportMeasurements');
 
