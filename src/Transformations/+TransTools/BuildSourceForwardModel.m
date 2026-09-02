@@ -1,4 +1,4 @@
-function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSourceForwardModel(labels)
+function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSourceForwardModel(labels, sourceSpace)
 %BUILDSOURCEFORWARDMODEL  The EEG forward model (leadfield) for
 %   Brain3DView's Source-estimate mode: FieldTrip's own template BEM head
 %   model, paired with its own template electrode positions (NOT
@@ -9,6 +9,16 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   channels present in FieldTrip's own 10-5 template are used, the same
 %   "look up by label, drop anything unresolved" approach
 %   TransTools.TemplateScalpLocs already uses for dipfit's copy).
+%
+%   SOURCESPACE selects the template cortical sheet: 20484 (default, the
+%   full-resolution one), 8196 or 5124. FEWER VERTICES IS NOT A LOSS OF
+%   RESOLUTION HERE. The leadfield's rank is bounded by the channel count,
+%   so ~30 electrodes cannot distinguish 20484 independent sources; the
+%   fine sheet buys smoothness of rendering, not information. It does cost
+%   heavily in any vertex-wise permutation test, where runtime grows
+%   slightly faster than linearly in vertex count, which is why
+%   SourceClusterStats exposes the choice. The default stays at 20484 so
+%   that existing analyses and Brain3D's own view are unchanged.
 %
 %   Returns LEADFIELD (FieldTrip's own leadfield struct) and SOURCEMODEL
 %   (the cortical-sheet struct, .pos/.tri, the same one
@@ -81,8 +91,16 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 
     TransTools.ensureFieldTrip();
 
+    if nargin < 2 || isempty(sourceSpace)
+        sourceSpace = 20484;
+    end
+    sourceSpace = validateSourceSpace(sourceSpace);
+
     labelsCell = cellstr(string(labels));
-    key = strjoin(sort(lower(labelsCell)), '|');
+    % The mesh belongs in the cache key: two analyses in one session may
+    % legitimately use different sheets, and returning the cached leadfield
+    % for the wrong one would be silently, catastrophically wrong.
+    key = sprintf('%d|%s', sourceSpace, strjoin(sort(lower(labelsCell)), '|'));
     if strcmp(key, cache.key)
         leadfield      = cache.leadfield;
         sourcemodel    = cache.sourcemodel;
@@ -139,7 +157,12 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
     % itself marks some points outside the head), so .inside is set
     % explicitly rather than left to ft_read_headshape, which does not set
     % it for a plain surface file.
-    sourcemodelFile = fullfile(ftRoot, 'template', 'sourcemodel', 'cortex_20484.surf.gii');
+    sourcemodelFile = fullfile(ftRoot, 'template', 'sourcemodel', ...
+        sprintf('cortex_%d.surf.gii', sourceSpace));
+
+    % See TransTools.EnsureGiftiReader for why reading a template surface
+    % needs a guard at all.
+    TransTools.EnsureGiftiReader();
     sourcemodel = ft_read_headshape(sourcemodelFile);
     sourcemodel = ft_convert_units(sourcemodel, 'mm');
     sourcemodel.inside = true(size(sourcemodel.pos, 1), 1);
@@ -191,4 +214,18 @@ function v = loadSoleVariable(matFile)
             'I expected to find exactly one variable in %s, but found %d instead.', matFile, numel(f)));
     end
     v = s.(f{1});
+end
+
+function n = validateSourceSpace(sourceSpace)
+%VALIDATESOURCESPACE  Only the sheets FieldTrip actually ships.
+%   Checked here rather than left to a missing-file error, because the
+%   failure would otherwise surface deep inside ft_read_headshape as a path
+%   that means nothing to the analyst who typed the number.
+    allowed = [20484, 8196, 5124];
+    n = double(sourceSpace);
+    if ~isscalar(n) || ~ismember(n, allowed)
+        throw(MException('Alakazam:BuildSourceForwardModel:sourceSpace', ...
+            'SourceSpace must be one of %s, not %s.', ...
+            mat2str(allowed), mat2str(sourceSpace)));
+    end
 end

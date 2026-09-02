@@ -76,7 +76,7 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
     subjects = restrictToScalpChannels(subjects);
     validateCompatibility(subjects, sourceFiles, contrast);
 
-    [timelocks, design, ivar, uvar, statistic] = buildDesign(subjects, contrast);
+    [timelocks, design, ivar, uvar, statistic] = ClusterStats.buildDesign(subjects, contrast);
     [tlSubjects, tlConditions] = timelockLabels(subjects, contrast);
     % Upgrade to an exhaustive 'all' rather than a merely-close-to-it random
     % sample when the requested count would already trigger FieldTrip's own
@@ -240,41 +240,6 @@ function subjects = restrictToScalpChannels(subjects)
     end
 end
 
-function [timelocks, design, ivar, uvar, statistic] = buildDesign(subjects, contrast)
-    nSubjects = numel(subjects);
-    switch contrast.mode
-        case 'vsZero'
-            condA = cell(1, nSubjects);
-            condB = cell(1, nSubjects);
-            for i = 1:nSubjects
-                condA{i} = ClusterStats.toFieldTripTimelock(subjects{i}, contrast.bin);
-                condB{i} = ClusterStats.zeroTimelock(condA{i});
-            end
-            timelocks = [condA, condB];
-            [design, ivar, uvar] = ClusterStats.pairedDesign(nSubjects);
-            statistic = 'depsamplesT';
-
-        case 'paired'
-            condA = cell(1, nSubjects);
-            condB = cell(1, nSubjects);
-            for i = 1:nSubjects
-                condA{i} = ClusterStats.toFieldTripTimelock(subjects{i}, contrast.binA);
-                condB{i} = ClusterStats.toFieldTripTimelock(subjects{i}, contrast.binB);
-            end
-            timelocks = [condA, condB];
-            [design, ivar, uvar] = ClusterStats.pairedDesign(nSubjects);
-            statistic = 'depsamplesT';
-
-        case 'independent'
-            timelocks = cell(1, nSubjects);
-            for i = 1:nSubjects
-                timelocks{i} = ClusterStats.toFieldTripTimelock(subjects{i}, contrast.bin);
-            end
-            [design, ivar] = ClusterStats.independentDesign(contrast.groupOf);
-            uvar = [];
-            statistic = 'indepsamplesT';
-    end
-end
 
 function [elec, chanlocs] = buildElec(referenceEEG)
 %BUILDELEC  A FieldTrip 'elec' struct (.label, .elecpos, .chanpos, .unit)

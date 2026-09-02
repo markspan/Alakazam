@@ -31,8 +31,12 @@ function onClusterStats(this)
         return; % cancelled
     end
 
-    restoreDir = this.enterRepoRoot();
-    [restoreBusy, setBusy] = beginBusy(this.MainFigure, 'Running cluster permutation test...');
+    % Both are onCleanup handles whose whole job is to stay alive until this
+    % function returns, so neither is "unused" and neither can become a ~:
+    % dropping restoreBusy would tear the busy overlay down immediately.
+    restoreDir = this.enterRepoRoot(); %#ok<NASGU>
+    [restoreBusy, setBusy] = beginBusy(this.MainFigure, ...
+        'Running cluster permutation test...'); %#ok<ASGLU>
     try
         summary = ClusterStats(spec.sourceFiles, spec.contrast, spec.opts);
     catch err
