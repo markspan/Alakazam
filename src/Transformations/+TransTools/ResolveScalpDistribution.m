@@ -55,7 +55,7 @@ function EEG = ResolveScalpDistribution(EEG, errorId)
             'first.'], name, EEG.DataFormat)));
     end
 
-    [chanlocs, hasPos] = TransTools.TemplateScalpLocs(EEG.chanlocs, TransTools.Dipfit1005File(errorId));
+    [chanlocs, hasPos] = TransTools.TemplateScalpLocs(EEG.chanlocs, TransTools.Template1005File(errorId));
 
     if ~any(hasPos)
         throw(MException(errorId, sprintf([ ...

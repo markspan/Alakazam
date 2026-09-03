@@ -104,20 +104,30 @@ classdef MarkdownRenderTest < matlab.unittest.TestCase
         % ---- what would actually break -------------------------------------
         function theSyntaxButtonPointsAtARealFile(testCase)
         %THESYNTAXBUTTONPOINTSATAREALFILE  The button builds the reference's
-        %   path from the dialog's own location, two fileparts up and back
-        %   down. Move either file and that silently points at nothing --
-        %   which would only show as a failure when somebody clicked it.
+        %   path from the dialog's own location. Move either file and that
+        %   silently points at nothing -- which would only show as a failure
+        %   when somebody clicked it. It has moved once already: the dialog
+        %   used to live in src/Dialogs and walk up to src and back down,
+        %   and this test caught the break when it was relocated into its
+        %   own transformation's folder.
+        %
+        %   Asserted as a SIBLING relationship rather than against a written
+        %   path, so it keeps holding wherever the pair is moved next, as
+        %   long as they move together.
             root = fileparts(fileparts(mfilename('fullpath')));
-            src = fileread(fullfile(root, 'src', 'Dialogs', 'DefineBinsDialog.m'));
+            dialogPath = fullfile(root, 'src', 'Transformations', 'DefineBins', ...
+                'DefineBinsDialog.m');
+            testCase.assertEqual(exist(dialogPath, 'file'), 2, ...
+                'DefineBinsDialog is not where this test expects it.');
+            src = fileread(dialogPath);
 
             testCase.verifySubstring(src, 'MarkdownDialog(', ...
                 'The Syntax button no longer opens the reference viewer.');
             testCase.verifySubstring(src, 'bin_language.md');
 
-            % The path the button computes: src/Dialogs/.. -> src, then down.
-            testCase.verifyEqual(exist(fullfile(root, 'src', 'Transformations', ...
-                'DefineBins', 'bin_language.md'), 'file'), 2, ...
-                'The language reference is not where the Syntax button looks for it.');
+            testCase.verifyEqual(exist(fullfile(fileparts(dialogPath), ...
+                'bin_language.md'), 'file'), 2, ...
+                'The language reference is no longer beside the dialog that opens it.');
         end
 
         function theReferenceIsWorthOpening(testCase)

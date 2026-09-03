@@ -67,6 +67,29 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
             testCase.verifySubstring(qmd, 'signed, projected onto the cortical normal');
         end
 
+        function aCombinationBinShowsItsConstituentTrialCounts(testCase)
+        %ACOMBINATIONBINSHOWSITSCONSTITUENTTRIALCOUNTS  DefineBins records a
+        %   difference bin's .n as text ('39-161'), not a number, because it
+        %   has no single trial count. Reading it as a number crashed a
+        %   completed analysis with "Non-scalar in Uniform Output" from the
+        %   provenance bookkeeping, long after the statistics had finished.
+        %   The text is worth more than "not recorded", so it is shown.
+            summary = testCase.summaryFixture();
+            summary.provenance = struct( ...
+                'subjects', struct('id', {'sub01', 'sub02'}, 'file', {'', ''}, ...
+                    'trials', {NaN, 210}, 'trialsText', {'39-161', ''}, ...
+                    'residualVariance', {0.03, 0.04}), ...
+                'software', struct('matlab', 'x', 'fieldtrip', 'y', 'alakazam', 'z'));
+
+            qmd = generateSourceClusterStatsReport(summary, testCase.assetFixture());
+
+            testCase.verifySubstring(qmd, '39-161');
+            testCase.verifySubstring(qmd, '| 210 |');
+            % A subject with no countable trials must not be reported as
+            % having had zero of them.
+            testCase.verifyEmpty(strfind(qmd, '| sub01 | 0 |'));
+        end
+
         function aClusterTouchingTheWindowEdgeIsFlagged(testCase)
         %ACLUSTERTOUCHINGTHEWINDOWEDGEISFLAGGED  Its reported time range is
         %   then a property of the analysis window, not of the effect, and a

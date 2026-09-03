@@ -1,4 +1,4 @@
-classdef CoherenceTopographyView < handle
+classdef CoherenceTopographyView < AlakazamView
 %COHERENCETOPOGRAPHYVIEW  One scalp coherence topography, with a bin
 %   dropdown when there is more than one.
 %
@@ -22,7 +22,6 @@ classdef CoherenceTopographyView < handle
 %   SCALPDISTRIBUTIONVIEW, BRAIN3DVIEW.
 
     properties
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -72,11 +71,6 @@ classdef CoherenceTopographyView < handle
                 [0, this.EEG.CohTopoLimit], sprintf('Coherence to %s', this.EEG.CohTopoRef));
         end
 
-        function notifyActivated(this)
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

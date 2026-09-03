@@ -4,7 +4,14 @@ function entries = collectEntriesWithField(this, fieldName)
 %   .datasetType ('subject'/'grand_average'), .group (see
 %   WorkSpace.groupFor/editSubjects), .person (WorkSpace.personFor,
 %   defaults to .subject itself -- see its own header comment), .session
-%   (WorkSpace.sessionFor) and .EEG (already loaded).
+%   (WorkSpace.sessionFor), .EEG (already loaded) and .file (the node it
+%   was loaded from).
+%
+%   .file exists so that a caller which computes something expensive from
+%   an entry can attach the result back to the node it came from, rather
+%   than recomputing it on every report. See
+%   generateSourceEstimateReportAssets, which does exactly that with a
+%   source estimate.
 %
 %   Shared by collectMeasurementEntries (FIELDNAME = "measurements", see
 %   onExportMeasurements/exportMeasurementsCSV) and collectSpectralEntries
@@ -27,7 +34,8 @@ function entries = collectEntriesWithField(this, fieldName)
 %   group filtering already excludes rows with no group -- this just
 %   makes that exclusion automatic for grand averages rather than
 %   requiring a per-subject lookup that would not mean anything for one.
-    entries = struct('subject', {}, 'datasetType', {}, 'group', {}, 'person', {}, 'session', {}, 'EEG', {});
+    entries = struct('subject', {}, 'datasetType', {}, 'group', {}, 'person', {}, ...
+        'session', {}, 'EEG', {}, 'file', {});
 
     dataNodes = this.Workspace.Tree.allNodes();
     for i = 1:numel(dataNodes)
@@ -56,7 +64,8 @@ function entries = collectEntriesWithField(this, fieldName)
         loaded = load(node.UserData, "EEG");
         entries(end + 1) = struct('subject', subject, 'datasetType', 'subject', ...
             'group', this.Workspace.groupFor(subject), 'person', this.Workspace.personFor(subject), ...
-            'session', this.Workspace.sessionFor(subject), 'EEG', loaded.EEG); %#ok<AGROW>
+            'session', this.Workspace.sessionFor(subject), 'EEG', loaded.EEG, ...
+            'file', node.UserData); %#ok<AGROW>
     end
 
     gaNodes = this.Workspace.GrandAveragesTree.allNodes();
@@ -70,6 +79,7 @@ function entries = collectEntriesWithField(this, fieldName)
         end
         loaded = load(node.UserData, "EEG");
         entries(end + 1) = struct('subject', node.Name, 'datasetType', 'grand_average', ...
-            'group', '', 'person', node.Name, 'session', '', 'EEG', loaded.EEG); %#ok<AGROW>
+            'group', '', 'person', node.Name, 'session', '', 'EEG', loaded.EEG, ...
+            'file', node.UserData); %#ok<AGROW>
     end
 end

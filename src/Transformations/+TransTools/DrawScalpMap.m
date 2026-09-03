@@ -27,7 +27,7 @@ function DrawScalpMap(ax, values, chanlocs, mapLimit)
 %   Coordinate convention: [a,b] = pol2cart(theta,radius) reproduces
 %   topoplot.m's own raw electrode positions exactly (verified directly
 %   against real topoplot() output -- see below), which for
-%   Dipfit1005File's standard_1005.elc template plots the
+%   Template1005File's standard_1005.elc template plots the
 %   anterior-posterior (Fpz-Cz-Oz) axis *horizontally* and the left-right
 %   (T7-T8) axis *vertically*, not the more usual "nose up" cartoon-head
 %   orientation. Rotated 90 degrees clockwise here on request (horiz = a,

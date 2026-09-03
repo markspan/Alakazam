@@ -60,7 +60,10 @@ if interactive
         {'Zero-padding ratio'; 'PadRatio'}, stored.PadRatio);
     if isempty(opts)
         EEG = [];   % cancelled
-        options = [];   % the contract is two outputs; both must be assigned
+        opts = [];   % the contract is two outputs; both must be assigned
+        % (named for THIS function's own second output: assigning a
+        % variable called "options" here left opts holding the Init
+        % sentinel, which is what the caller then tried to store)
         return;
     end
     TransformSettings.set('CoherenceMap', opts);

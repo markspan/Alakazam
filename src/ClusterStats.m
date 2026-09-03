@@ -263,7 +263,7 @@ function [elec, chanlocs] = buildElec(referenceEEG)
 %   chanlocs originally carried. CHANLOCS (the positioned channels
 %   themselves) is returned too, for buildLayout's own 2D projection.
     [locs, hasPos] = TransTools.TemplateScalpLocs(referenceEEG.chanlocs, ...
-        TransTools.Dipfit1005File('Alakazam:ClusterStats'));
+        TransTools.Template1005File('Alakazam:ClusterStats'));
 
     if ~all(hasPos)
         unpositioned = {locs(~hasPos).labels};

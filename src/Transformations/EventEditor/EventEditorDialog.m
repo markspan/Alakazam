@@ -22,8 +22,8 @@ function ops = EventEditorDialog(EEG)
     ops = [];
     recorded = emptyOps();
 
-    srate = fieldOr(EEG, 'srate', NaN);
-    pnts  = fieldOr(EEG, 'pnts', NaN);
+    srate = doubleFieldOr(EEG, 'srate', NaN);
+    pnts  = doubleFieldOr(EEG, 'pnts', NaN);
     original = EEG.event;
 
     fig = uifigure('Name', 'Event editor', 'Position', centredOn([], 1040, 660));
@@ -353,7 +353,9 @@ function writeEventCsv(file, events, srate)
     end
 end
 
-function value = fieldOr(s, name, default)
+function value = doubleFieldOr(s, name, default)
+%DOUBLEFIELDOR  A DOUBLE accessor, not TransTools.FieldOr: the dialog needs numerics for
+%   its edit fields whatever the stored options carried.
     if isfield(s, name) && ~isempty(s.(name))
         value = double(s.(name));
     else

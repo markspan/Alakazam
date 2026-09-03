@@ -17,7 +17,7 @@ if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
 end
 
 if interactive
-    elcFile = TransTools.Dipfit1005File('Alakazam:ChannelEditor');
+    elcFile = TransTools.Template1005File('Alakazam:ChannelEditor');
     edited = ChannelEditorDialog(input.chanlocs, elcFile);
     if isempty(edited)
         EEG = [];   % cancelled -- no node, no compute

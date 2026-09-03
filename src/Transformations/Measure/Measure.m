@@ -258,42 +258,16 @@ function m = computeWindow(EEG, win, allLabels, nBins)
     localPoints = winLocalPoints(win);
     fraction    = winFraction(win);
     areaMode    = winAreaMode(win);
-    measure     = lower(strtrim(char(string(win.measure))));
-
-    % Fold the pre-unification names into the one Area measure:
-    %   Integral  -> Area over the whole window (signed).
-    %   Peak Area -> Area over a peak-locked band (signed).
-    % Kept so saved templates / tree nodes and .alm files from before the
-    % unification still replay. forceBand overrides the width-based scope
-    % choice for these; otherwise Area's scope is set by its Width (0/blank
-    % = whole window, >0 = a peak-locked band that wide).
-    forceBand = [];
-    if strcmp(measure, 'integral')
-        measure = 'area'; forceBand = false;
-    elseif strcmp(measure, 'peak area')
-        measure = 'area'; forceBand = true;
-    end
-    useBand = false;
-    if strcmp(measure, 'area')
-        if ~isempty(forceBand)
-            useBand = forceBand;
-        else
-            useBand = ~isnan(width) && width > 0;
-        end
-    end
-
-    % Measure-specific parameter validation, up front so a bad definition
-    % fails with a clear message rather than a NaN column later.
-    if strcmp(measure, 'area') && useBand && (isnan(width) || width <= 0)
-        throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is set up as a peak-band Area measure, but has no positive Width (ms) to integrate over -- could you add one?', win.label)));
-    end
-    if any(strcmp(measure, {'fractional peak latency', 'fractional area latency'})) ...
-            && (isnan(fraction) || fraction <= 0 || fraction >= 1)
-        throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is a %s measure, but is missing a Fraction strictly between 0 and 1 -- would you set one?', ...
-            win.label, char(string(win.measure)))));
-    end
+    % WHAT THE ANALYST ASKED FOR, AND WHAT THAT MEANS, KEPT APART. Two names
+    % because they genuinely differ: the pre-unification "Integral" and
+    % "Peak Area" both compute an Area, and a single variable rewritten from
+    % one to the other loses the only record of what was chosen. That is not
+    % hypothetical -- the error message below has to report win.measure
+    % rather than the resolved name, precisely because the resolved one
+    % would tell the analyst about a measure they never picked.
+    requested = lower(strtrim(char(string(win.measure))));
+    [measure, useBand] = resolveMeasureKind(requested, width);
+    validateMeasureParameters(measure, useBand, width, fraction, win);
 
     % Optional per-window baseline: subtract each virtual channel's own mean
     % over the baseline interval before ANY measure, so amplitude, area and
@@ -415,6 +389,58 @@ function m = computeWindow(EEG, win, allLabels, nBins)
         'localPoints', localPoints, 'fraction', fraction, 'areaMode', outMode, ...
         'scope', outScope, 'refChannel', win.refChannel, 'channels', {{specs.label}}, ...
         'amplitude', amplitude, 'latency', latency, 'area', area);
+end
+
+function [measure, useBand] = resolveMeasureKind(requested, width)
+%RESOLVEMEASUREKIND  The computation a requested measure name asks for.
+%
+%   Folds the pre-unification names into the one Area measure:
+%     Integral  -> Area over the whole window (signed).
+%     Peak Area -> Area over a peak-locked band (signed).
+%
+%   Kept so that saved templates, tree nodes and .alm files from before the
+%   unification still replay. Otherwise Area's scope is set by its Width
+%   (0 or blank = the whole window, >0 = a peak-locked band that wide).
+%
+%   THE ONLY PLACE A MEASURE NAME IS TRANSLATED. Everything downstream sees
+%   the resolved name and nothing re-derives it, which is what keeps the
+%   translation checkable: one function to read, rather than a rewrite here
+%   and assumptions about it scattered over the next hundred lines.
+    forceBand = [];
+    measure = requested;
+    if strcmp(requested, 'integral')
+        measure = 'area'; forceBand = false;
+    elseif strcmp(requested, 'peak area')
+        measure = 'area'; forceBand = true;
+    end
+
+    useBand = false;
+    if strcmp(measure, 'area')
+        if ~isempty(forceBand)
+            useBand = forceBand;
+        else
+            useBand = ~isnan(width) && width > 0;
+        end
+    end
+end
+
+function validateMeasureParameters(measure, useBand, width, fraction, win)
+%VALIDATEMEASUREPARAMETERS  Refuse a window definition that cannot be
+%   measured, up front, so a bad one fails with a clear message rather than
+%   a column of NaN discovered later.
+%
+%   Reports win.measure, not the resolved name: an analyst who chose "Peak
+%   Area" should not be told about "area".
+    if strcmp(measure, 'area') && useBand && (isnan(width) || width <= 0)
+        throw(MException('Alakazam:Measure', sprintf( ...
+            'Window "%s" is set up as a peak-band Area measure, but has no positive Width (ms) to integrate over -- could you add one?', win.label)));
+    end
+    if any(strcmp(measure, {'fractional peak latency', 'fractional area latency'})) ...
+            && (isnan(fraction) || fraction <= 0 || fraction >= 1)
+        throw(MException('Alakazam:Measure', sprintf( ...
+            'Window "%s" is a %s measure, but is missing a Fraction strictly between 0 and 1 -- would you set one?', ...
+            win.label, char(string(win.measure)))));
+    end
 end
 
 function w = winWidth(win)

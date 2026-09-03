@@ -1,4 +1,4 @@
-classdef ScalpDistributionView < handle
+classdef ScalpDistributionView < AlakazamView
 %SCALPDISTRIBUTIONVIEW  One scalp topography, scrubbable by time, with a
 %   bin dropdown when there is more than one.
 %
@@ -39,15 +39,6 @@ classdef ScalpDistributionView < handle
 %   TRANSTOOLS.RESOLVESCALPDISTRIBUTION, TIMEFREQUENCYVIEW, AVERAGEVIEW.
 
     properties
-        % Called (no args) when the user clicks the topography, the bin
-        % dropdown, or the slider. Wired by AlakazamPlotter to
-        % Alakazam.registerTileClick, so keyboard/wheel shortcuts route to
-        % whichever tile was last clicked while several are visible at
-        % once in Grid/Stack mode -- see Alakazam.dispatchKey/dispatchWheel
-        % and migration.md. (ScalpDistributionView has no keyboard
-        % navigation -- but the mouse wheel scrubs the time slider, see
-        % onWheel.)
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -141,13 +132,6 @@ classdef ScalpDistributionView < handle
             this.Strip.onWheel(callbackData);
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

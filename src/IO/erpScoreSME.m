@@ -51,14 +51,14 @@ function [sme, method, score] = erpScoreSME(trials, times, win, nBoot)
     sme   = nan(nChan, 1);
     score = nan(nChan, 1);
 
-    measure = lower(strtrim(char(string(fieldOr(win, 'measure', 'mean amplitude')))));
+    measure = lower(strtrim(char(string(TransTools.FieldOr(win, 'measure', 'mean amplitude')))));
     if strcmp(measure, 'mean amplitude')
         method = "analytic";
     else
         method = "bootstrap";
     end
 
-    [lo, hi] = windowRange(times, fieldOr(win, 'start', times(1)), fieldOr(win, 'stop', times(end)));
+    [lo, hi] = windowRange(times, TransTools.FieldOr(win, 'start', times(1)), TransTools.FieldOr(win, 'stop', times(end)));
     if isempty(lo)
         return;
     end
@@ -133,8 +133,8 @@ function v = scoreWaveform(wave, times, lo, hi, win, measure)
     if all(isnan(seg))
         return;
     end
-    polarity = lower(strtrim(char(string(fieldOr(win, 'polarity', 'positive')))));
-    fraction = fieldOr(win, 'fraction', 0.5);
+    polarity = lower(strtrim(char(string(TransTools.FieldOr(win, 'polarity', 'positive')))));
+    fraction = TransTools.FieldOr(win, 'fraction', 0.5);
 
     switch measure
         case 'mean amplitude'
@@ -153,7 +153,7 @@ function v = scoreWaveform(wave, times, lo, hi, win, measure)
             end
 
         case {'area', 'integral', 'peak area'}
-            v = areaOf(segTimes, seg, lower(strtrim(char(string(fieldOr(win, 'areaMode', 'signed'))))));
+            v = areaOf(segTimes, seg, lower(strtrim(char(string(TransTools.FieldOr(win, 'areaMode', 'signed'))))));
 
         case 'fractional peak latency'
             v = fractionalPeakLatency(seg, segTimes, polarity, fraction);
@@ -271,10 +271,3 @@ function [lo, hi] = windowRange(times, startMs, stopMs)
     end
 end
 
-function v = fieldOr(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
-        v = s.(name);
-    else
-        v = default;
-    end
-end

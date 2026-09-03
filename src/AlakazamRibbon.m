@@ -659,6 +659,21 @@ classdef AlakazamRibbon < handle
             uri = this.encodeSvgIcon(markup);
         end
     end
+
+    methods (Static)
+        function transInfo = ScanTransformations(transRoot)
+        %SCANTRANSFORMATIONS  The manifests found under TRANSROOT.
+        %
+        %   A TEST SEAM, and the reason it exists is worth stating. Deciding
+        %   which folders are transformations is a pure function of a
+        %   directory, but it used to be reachable only by constructing the
+        %   whole ribbon, which needs a figure. So it was never tested, and
+        %   when it broke it broke at startup: the exception was thrown
+        %   before the main window existed, so the app did not open at all.
+        %   Anything that runs that early should be testable without a UI.
+            transInfo = getTransInfos(transRoot);
+        end
+    end
 end
 
 function info = getIndividualTransInfos(transformName, transRoot)
@@ -672,7 +687,18 @@ function info = getIndividualTransInfos(transformName, transRoot)
     transformName = char(transformName);
 
     manifestFile = dir(fullfile(transRoot, transformName, [transformName '.json']));
-    manifestFile = fullfile(manifestFile.folder, manifestFile.name);
+    % A folder without its manifest is skipped rather than fatal. The ribbon
+    % is built during startup, so an unreadable folder here means no window
+    % at all: losing one button is a far better failure than losing the app,
+    % and the warning says which folder to look at.
+    if isempty(manifestFile)
+        warning('Alakazam:AlakazamRibbon', ...
+            ['"%s" is under Transformations but has no %s.json manifest, so it is ' ...
+             'not offered in the ribbon.'], transformName, transformName);
+        info = struct([]);
+        return;
+    end
+    manifestFile = fullfile(manifestFile(1).folder, manifestFile(1).name);
     fid = fopen(manifestFile);
     raw = fread(fid, inf);
     fclose(fid);
@@ -683,14 +709,27 @@ end
 
 function transInfo = getTransInfos(transRoot)
 %GETTRANSINFOS  Every transformation's manifest under TRANSROOT, as a
-%   struct array (one entry per subfolder, +TransTools excluded).
+%   struct array (one entry per subfolder; +package and @class folders are
+%   not transformations and are skipped).
     entries = dir(fullfile(transRoot, '.'));
     folderNames = {entries([entries.isdir]).name};
-    folderNames = folderNames(~ismember(folderNames, {'.', '..', '+TransTools'}));
+    % EXCLUDED BY SHAPE, NOT BY NAME. A folder beginning with + or @ is a
+    % MATLAB package or class, never a transformation, so it can never carry
+    % a manifest. This used to exclude '+TransTools' by name, which meant the
+    % first new package added under Transformations was scanned as a
+    % transformation, found no manifest, and took down app startup before the
+    % window appeared. Naming the rule instead of the instance means the next
+    % package cannot do it again.
+    isReserved = startsWith(folderNames, '+') | startsWith(folderNames, '@');
+    folderNames = folderNames(~isReserved & ~ismember(folderNames, {'.', '..'}));
 
     transInfo = {};
     for folderName = folderNames
-        transInfo{end+1} = getIndividualTransInfos(folderName{1}, transRoot); %#ok<AGROW>
+        info = getIndividualTransInfos(folderName{1}, transRoot);
+        if isempty(info)
+            continue;   % no manifest: warned about above, not offered
+        end
+        transInfo{end+1} = info; %#ok<AGROW>
     end
     transInfo = [transInfo{:}];
 end

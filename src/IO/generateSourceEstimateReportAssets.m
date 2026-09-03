@@ -106,9 +106,14 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
     % wrong silently scrambles which amplitude gets attributed to which
     % electrode, with no error to catch it.
     scalpLabels = {eeg.ScalpChanlocs.labels};
+    % The sheet this dataset already has estimates on, when it has any. Same
+    % reasoning as Brain3D: an estimate is a vector over its own vertices,
+    % so insisting on the full-resolution sheet would refuse every estimate
+    % stored at a coarser one.
+    space = SourceCache.Space(eeg, 20484);
     try
         [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = ...
-            TransTools.BuildSourceForwardModel(scalpLabels);
+            TransTools.BuildSourceForwardModel(scalpLabels, space);
     catch err
         warning('Alakazam:generateSourceEstimateReportAssets', ...
             ['Could not build the source forward model, so no source-estimate section ' ...
@@ -132,6 +137,19 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
         binLabels = {char(string(eeg.id))};
     end
 
+    % ONE ESTIMATE PER METHOD, HOLDING EVERY BIN, which is the shape a
+    % stored estimate has. Solved values are collected as the loops run and
+    % attached to the grand-average node afterwards, so the next report
+    % reads them instead of inverting again. Whether a method can be stored
+    % at all is decided per method: a partial one is never written, because
+    % a consumer asking for a bin it lacks would fall back to computing and
+    % the half-estimate would be dead weight.
+    % Every field collectSolved ever sets is declared here: assigning a
+    % struct with an extra field back into a preallocated array is an error
+    % in MATLAB, not a widening.
+    solved = repmat(struct('values', [], 'info', [], 'filled', [], ...
+        'complete', false), 1, numel(methods));
+
     for b = 1:numel(binIndices)
         scalpData = eeg.data(eeg.ScalpHasPos, :, binIndices(b));
         values = scalpData(reorder, :);
@@ -140,15 +158,30 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
             method = methods{m};
             fileName = sprintf('source_bin%d_%s.png', b, method);
             pngPath = fullfile(imagesDir, fileName);
+
+            wanted = SourceCache.SnapshotKey(resolvedLabels, space, method);
+            [storedValues, storedInfo] = SourceCache.Lookup( ...
+                eeg, binLabels{b}, wanted);
+            precomputed = [];
+            if ~isempty(storedValues)
+                precomputed = struct('values', storedValues, ...
+                    'info', infoFromStored(storedInfo, method));
+            end
+
             try
-                info = TransTools.RenderSourceEstimateSnapshot(values, eeg.times, ...
-                    leadfield, elec, headmodel, sourcemodel, method, pngPath);
+                [info, power] = TransTools.RenderSourceEstimateSnapshot(values, eeg.times, ...
+                    leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed);
             catch err
                 warning('Alakazam:generateSourceEstimateReportAssets', ...
                     'Could not render the %s source estimate for bin "%s", skipping it: %s', ...
                     method, binLabels{b}, err.message);
                 continue;
             end
+
+            if isempty(storedValues)
+                solved(m) = collectSolved(solved(m), power, info, b, numel(binIndices));
+            end
+
             assets(end + 1) = struct( ...
                 'BinLabel', binLabels{b}, ...
                 'Method', method, ...
@@ -158,9 +191,77 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
                 'InstantMs', info.InstantMs); %#ok<AGROW>
         end
     end
+
+    attachSolved(entries(gaIdx), eeg, solved, methods, resolvedLabels, space, binLabels);
 end
 
 % ======================================================================= %
+
+function info = infoFromStored(storedInfo, method)
+%INFOFROMSTORED  A stored estimate's descriptive fields, in the shape the
+%   renderer's own INFO has, so that the drawing code cannot tell the
+%   difference between a fresh solve and a stored one.
+    info = struct( ...
+        'ScaleLabel',       TransTools.FieldOr(storedInfo, 'scaleLabel', ''), ...
+        'ScaleNote',        TransTools.FieldOr(storedInfo, 'scaleNote', ''), ...
+        'ResidualVariance', TransTools.FieldOr(storedInfo, 'residualVariance', NaN), ...
+        'Method',           method, ...
+        'Lambda',           TransTools.FieldOr(storedInfo, 'lambda', NaN));
+end
+
+function state = collectSolved(state, power, info, bin, nBins)
+%COLLECTSOLVED  Gather one method's bins as they are computed.
+    if isempty(state.values)
+        state.values = zeros(size(power, 1), size(power, 2), nBins);
+        state.info = repmat(struct('residualVariance', NaN, 'scaleLabel', '', ...
+            'scaleNote', '', 'lambda', NaN), 1, nBins);
+        state.filled = false(1, nBins);
+    end
+    state.values(:, :, bin) = power;
+    state.info(bin) = struct( ...
+        'residualVariance', info.ResidualVariance, ...
+        'scaleLabel', info.ScaleLabel, ...
+        'scaleNote', TransTools.FieldOr(info, 'ScaleNote', ''), ...
+        'lambda', TransTools.FieldOr(info, 'Lambda', NaN));
+    state.filled(bin) = true;
+    state.complete = all(state.filled);
+end
+
+function attachSolved(entry, eeg, solved, methods, resolvedLabels, space, binLabels)
+%ATTACHSOLVED  Hand freshly computed estimates to the cache.
+%   Only complete methods: an estimate missing a bin would be refused for
+%   that bin anyway, so storing it would cost disk and buy nothing. The
+%   writing itself, and the size limit on it, belong to
+%   SourceCache.AttachToNode rather than to a report.
+    if ~isfield(entry, 'file') || isempty(entry.file)
+        return;
+    end
+    fresh = [];
+    for m = 1:numel(methods)
+        if ~solved(m).complete
+            continue;
+        end
+        fresh = SourceCache.Attach(fresh, struct( ...
+            'values', solved(m).values, ...
+            'times', reshape(double(eeg.times), 1, []), ...
+            'bins', {binLabels}, ...
+            'vertexLabels', {TransTools.SourceVertexLabels(size(solved(m).values, 1))}, ...
+            'info', solved(m).info, ...
+            'key', SourceCache.SnapshotKey(resolvedLabels, space, methods{m}), ...
+            'dataFingerprint', SourceCache.Fingerprint(eeg)));
+    end
+    if isempty(fresh)
+        return;
+    end
+    if ~SourceCache.AttachToNode(entry.file, fresh)
+        warning('Alakazam:generateSourceEstimateReportAssets', ...
+            ['The source estimate was not kept on the node, so the next report will ' ...
+             'compute it again. A whole-epoch estimate at the full-resolution sheet is ' ...
+             'too large to cache; running the Source Estimate transformation at a ' ...
+             'coarser sheet stores one that fits.']);
+    end
+end
+
 function assets = emptyAssets()
 %EMPTYASSETS  A 0x0 struct array with every field ASSETS ever carries, so
 %   an early return (no grand average, FieldTrip unavailable, ...) hands

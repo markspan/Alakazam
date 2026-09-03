@@ -122,6 +122,15 @@ input = varargin{1};
 output = input;
 
 output.DataType = 'FrequencyDomain';
+% WHICH QUANTITY THIS IS, recorded on the dataset rather than only in the
+% node's stored options. Averaging a spectrum across trials is only
+% meaningful for a power quantity: averaging a voltage one is a COHERENT
+% average, which cancels everything not phase-locked and yields a quiet,
+% entirely plausible spectrum answering a question nobody asked. Average
+% cannot warn about that without knowing what it is holding, and a
+% downstream transformation should not have to go and read the provenance
+% record to find out.
+output.FourierOutput = char(string(options.Output));
 [nchan,nsamp,nseg] = size(input.data);
 
 %% use full spectrum: power * 2;

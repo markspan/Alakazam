@@ -1,4 +1,4 @@
-function assets = generateSourceClusterAssets(summary, imagesDir, opts)
+function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts)
 %GENERATESOURCECLUSTERASSETS  Rendered figures and readable descriptions for
 %   the clusters a source cluster test found.
 %
@@ -10,6 +10,14 @@ function assets = generateSourceClusterAssets(summary, imagesDir, opts)
 %     SignificantOnly  render only clusters below alpha (default true)
 %     Atlas            atlas used to name locations     (default 'aal')
 %     MaxClusters      cap on how many are rendered     (default 8)
+%
+%   EXTRAS (optional second output) carries figures that describe the
+%   analysis rather than one cluster: currently .UnthresholdedMapPath, the
+%   whole statistic map with nothing masked out. Reporting practice asks for
+%   unthresholded maps to be available so that sub-threshold structure can
+%   be seen, while the per-cluster maps stay masked because an unmasked map
+%   presented as the result is reliably over-read. Both, each doing its own
+%   job, rather than choosing.
 %
 %   ASSETS is a struct array, one row per rendered cluster:
 %     .Index .Sign .PValue .Significant .TimeRangeMs .NVertices
@@ -44,6 +52,19 @@ function assets = generateSourceClusterAssets(summary, imagesDir, opts)
     maxClusters     = TransTools.FieldOr(opts, 'MaxClusters', 8);
 
     assets = emptyAssets();
+    extras = struct('UnthresholdedMapPath', '');
+
+    if ~exist(imagesDir, 'dir')
+        mkdir(imagesDir);
+    end
+    [~, imagesFolderName] = fileparts(imagesDir);
+
+    % Rendered whether or not anything was significant: a null result is
+    % exactly when a reader most wants to see what the statistic did.
+    unthresholdedFile = fullfile(imagesDir, 'statistic_unthresholded.png');
+    renderUnthresholdedMap(summary, unthresholdedFile);
+    extras.UnthresholdedMapPath = sprintf('%s/%s', imagesFolderName, 'statistic_unthresholded.png');
+
     if isempty(summary.clusters)
         return;
     end
@@ -61,11 +82,6 @@ function assets = generateSourceClusterAssets(summary, imagesDir, opts)
         return;
     end
     pick = pick(1:min(maxClusters, numel(pick)));
-
-    if ~exist(imagesDir, 'dir')
-        mkdir(imagesDir);
-    end
-    [~, imagesFolderName] = fileparts(imagesDir);
 
     for k = 1:numel(pick)
         cluster = summary.clusters(pick(k));
@@ -248,6 +264,87 @@ function drawHemisphere(ax, pos, tri, rgb, keep, azimuth, box)
     axis(ax, 'off');
     view(ax, azimuth, 0);
     camzoom(ax, 1.08);
+end
+
+function renderUnthresholdedMap(summary, pngPath)
+%RENDERUNTHRESHOLDEDMAP  The whole statistic, nothing masked, with a scale.
+%
+%   THE COMPANION TO THE MASKED CLUSTER MAPS, NOT A REPLACEMENT. Masking is
+%   right for a figure captioned "this is the cluster we found", because an
+%   unmasked map invites reading structure the test makes no claim about.
+%   But suppressing the unthresholded map entirely hides how close the rest
+%   of the cortex came, and reporting guidance now asks for it. So it is
+%   here, once, in an appendix, with a colour bar and an explicit caption.
+%
+%   Averaged over the whole tested window rather than a cluster's own range:
+%   this figure belongs to the analysis, not to any one cluster.
+%
+%   A COLOUR BAR IS POSSIBLE HERE AND NOT ON THE MASKED MAPS, because this
+%   map is continuous. The masked ones mix a signed scale with a neutral
+%   grey for "not in the cluster", which is not a scale a bar can describe.
+    values = mean(summary.stat.stat, 2);
+    limit = max(abs(values), [], 'omitnan');
+    if ~isfinite(limit) || limit == 0
+        limit = 1;
+    end
+
+    pos = summary.sourcemodel.pos;
+    tri = summary.sourcemodel.tri;
+    half = size(pos, 1) / 2;
+    panels = { ...
+        'Left, lateral',  1:half,                 -90; ...
+        'Right, lateral', (half + 1):size(pos, 1),  90; ...
+        'Left, medial',   1:half,                  90; ...
+        'Right, medial',  (half + 1):size(pos, 1), -90};
+
+    box = [min(pos, [], 1); max(pos, [], 1)];
+    pad = 0.02 * (box(2, :) - box(1, :));
+    box = [box(1, :) - pad; box(2, :) + pad];
+
+    rgb = blueWhiteRedContinuous(values / limit);
+
+    fig = figure('Visible', 'off', 'HandleVisibility', 'off', 'Color', 'white', ...
+        'Position', [100 100 900 700]);
+    closeFig = onCleanup(@() close(fig));
+    layout = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    for k = 1:size(panels, 1)
+        keep = panels{k, 2};
+        ax = nexttile(layout);
+        drawHemisphere(ax, pos, tri, rgb, keep, panels{k, 3}, box);
+        text(ax, 0.5, 0.02, panels{k, 1}, 'Units', 'normalized', ...
+            'HorizontalAlignment', 'center', 'FontSize', 10, 'Color', [0.25 0.25 0.25]);
+    end
+
+    % The colour bar describes the mapping directly, so it is built from the
+    % same function the surfaces were coloured with rather than from a
+    % colormap that merely resembles it.
+    ramp = linspace(-1, 1, 256)';
+    colormap(fig, blueWhiteRedContinuous(ramp));
+    ax4 = nexttile(layout, 4);
+    clim(ax4, [-limit limit]);
+    cb = colorbar(ax4);
+    % Spanning the layout rather than hanging off the fourth tile, where it
+    % sat on top of that panel's own label.
+    cb.Layout.Tile = 'south';
+    cb.Label.String = 'Test statistic, mean over the tested window';
+    cb.Label.FontSize = 9;
+
+    exportgraphics(layout, pngPath, 'Resolution', 150, 'BackgroundColor', 'white');
+end
+
+function rgb = blueWhiteRedContinuous(scaled)
+%BLUEWHITEREDCONTINUOUS  blueWhiteRed without the visibility floor.
+%   The floor exists so that cluster membership stays legible against the
+%   grey of non-members; on a continuous map there are no non-members, and
+%   the floor would put a visible tint on vertices whose statistic is zero.
+    scaled = max(-1, min(1, scaled(:)));
+    magnitude = abs(scaled);
+    rgb = ones(numel(scaled), 3);
+    negative = scaled < 0;
+    rgb(negative, 1) = 1 - magnitude(negative);
+    rgb(negative, 2) = 1 - magnitude(negative);
+    rgb(~negative, 2) = 1 - magnitude(~negative);
+    rgb(~negative, 3) = 1 - magnitude(~negative);
 end
 
 function rgb = blueWhiteRed(scaled)

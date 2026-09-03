@@ -1,4 +1,4 @@
-classdef SpectralMeasureView < handle
+classdef SpectralMeasureView < AlakazamView
 %SPECTRALMEASUREVIEW  Keyboard-driven view of a SpectralMeasure result.
 %
 %   Draws one channel's evoked amplitude spectrum at a time (EEG.spectrum /
@@ -14,7 +14,6 @@ classdef SpectralMeasureView < handle
 %   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMPANBUTTONS.
 
     properties
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -124,11 +123,6 @@ classdef SpectralMeasureView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

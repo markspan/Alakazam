@@ -1,4 +1,4 @@
-classdef FourierView < handle
+classdef FourierView < AlakazamView
 %FOURIERVIEW  Keyboard-driven view of a frequency-domain dataset.
 %
 %   FourierView draws one channel's power spectrum at a time, with the
@@ -18,14 +18,20 @@ classdef FourierView < handle
 %   buildOuterGrid) that a single persistent axes, redrawn in place like
 %   EpochView/AverageView, does not.
 %
-%   When the dataset carries EEG.bindesc (Fourier run on already-binned/
-%   averaged data: Fourier.m's own `output = input;` start means bindesc
-%   survives unchanged, still describing EEG.data's 3rd dimension), the
-%   3rd-dimension label shows the actual bin name ("Bin: <name>") instead
-%   of a bare "Trial N" -- matching SpectralMeasureView's own binLabel
-%   convention (its near-twin, see below), rather than the generic
-%   trial-numbering label a genuinely trial-wise (un-binned) dataset falls
-%   back to.
+%   WHAT THE 3RD DIMENSION IS depends on whether the data has been
+%   averaged, and that is not the same question as whether it has bins.
+%   Fourier.m starts with `output = input;`, so EEG.bindesc survives it
+%   either way: on averaged data the 3rd dimension is one spectrum per bin,
+%   but on epoched data it is one spectrum per TRIAL and bindesc is merely
+%   along for the ride, describing which trials belong to which bin. This
+%   view used to key off "bindesc is present", which is true in both cases,
+%   and so labelled single-trial spectra "Bin 37 of 197" -- a confident,
+%   wrong name for the thing on screen. It asks DataFormat instead.
+%
+%   Trial-wise titles also name the bin the trial belongs to ("Trial 37 of
+%   197, in bin: Rare"), since the trial number alone says nothing about
+%   the condition, which is usually the thing you actually want to know
+%   while stepping through.
 %
 %   X/y zoom are sliders, not buttons (frequency data commonly needs
 %   zooming into a specific band, clamped to [0, srate/2] -- something the
@@ -45,12 +51,6 @@ classdef FourierView < handle
 %   ZOOMPANBUTTONS.
 
     properties
-        % Called (no args) when the user clicks this view's axes or presses
-        % a zoom/pan/trial button. Wired by AlakazamPlotter to
-        % Alakazam.registerTileClick, so keyboard shortcuts route to
-        % whichever tile was last clicked while several are visible at once
-        % in Grid/Stack mode -- see Alakazam.dispatchKey and migration.md.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -89,7 +89,7 @@ classdef FourierView < handle
             if size(eeg.data, 1) > 1
                 channelStepFcn = @(delta) this.channelStep(delta);
             end
-            if isfield(eeg, 'bindesc') && ~isempty(eeg.bindesc)
+            if thirdDimIsBins(eeg)
                 stepLabel = 'Bin';
             else
                 stepLabel = 'Trial';
@@ -128,11 +128,18 @@ classdef FourierView < handle
                 % as "nothing happened" -- the count makes a real step
                 % unambiguous even when the label text does not obviously
                 % change.
-                if isfield(this.EEG, 'bindesc') && ~isempty(this.EEG.bindesc)
+                if thirdDimIsBins(this.EEG)
                     titleStr = sprintf('%s   (Bin %i of %i: %s)', titleStr, ...
                         this.CurrentTrial, nseg, binLabel(this.EEG, this.CurrentTrial));
                 else
-                    titleStr = sprintf('%s   (Trial %i of %i)', titleStr, this.CurrentTrial, nseg);
+                    where = trialBinPhrase(this.EEG, this.CurrentTrial);
+                    if isempty(where)
+                        titleStr = sprintf('%s   (Trial %i of %i)', titleStr, ...
+                            this.CurrentTrial, nseg);
+                    else
+                        titleStr = sprintf('%s   (Trial %i of %i, %s)', titleStr, ...
+                            this.CurrentTrial, nseg, where);
+                    end
                 end
             end
             title(ax, titleStr);
@@ -180,13 +187,6 @@ classdef FourierView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)
@@ -230,6 +230,31 @@ classdef FourierView < handle
             this.Channel = min(nchan, max(1, this.Channel - delta));
             this.redraw();
         end
+    end
+end
+
+function phrase = trialBinPhrase(EEG, t)
+%TRIALBINPHRASE  The bin(s) trial T belongs to, as title text ('' if none).
+%
+%   Membership itself is Support/trialBins; this is only the wording.
+%
+%   THE LABEL IS QUOTED because bin labels routinely contain commas -- real
+%   ones from DefineBins read like 'frequent (c), preceded by rare (c)' --
+%   and the phrase is dropped into an already comma-separated title.
+%   Unquoted, 'Trial 40 of 197, in bin: frequent (c), preceded by rare (c)'
+%   leaves the reader no way to see where the bin name ends, or whether
+%   they are looking at one bin or two.
+    phrase = '';
+    bins = trialBins(EEG, t);
+    if isempty(bins)
+        return;
+    end
+    quoted = arrayfun(@(b) sprintf('"%s"', binLabel(EEG, b)), bins, ...
+        'UniformOutput', false);
+    if isscalar(quoted)
+        phrase = sprintf('in bin %s', quoted{1});
+    else
+        phrase = sprintf('in bins %s', strjoin(quoted, ', '));
     end
 end
 

@@ -1,4 +1,4 @@
-classdef TimeFrequencyView < handle
+classdef TimeFrequencyView < AlakazamView
 %TIMEFREQUENCYVIEW  Grid of per-bin ERSP heatmaps, one channel at a time.
 %
 %   Draws every bin's precomputed EEG.ersp (channels x freqs x time x
@@ -18,12 +18,6 @@ classdef TimeFrequencyView < handle
 %   See also ALAKAZAMPLOTTER, TIMEFREQUENCY, AVERAGEVIEW, FOURIERVIEW.
 
     properties
-        % Called (no args) when the user clicks a tile. Wired by
-        % AlakazamPlotter to Alakazam.registerTileClick, so keyboard
-        % shortcuts route to whichever tile was last clicked while
-        % several are visible at once in Grid/Stack mode -- see
-        % Alakazam.dispatchKey and migration.md.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -172,12 +166,5 @@ classdef TimeFrequencyView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 end

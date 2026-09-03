@@ -1,4 +1,4 @@
-classdef AverageView < handle
+classdef AverageView < AlakazamView
 %AVERAGEVIEW  View of trial-averaged data with error bands, one line per bin.
 %
 %   AverageView draws the per-channel trial average of an averaged dataset
@@ -17,12 +17,6 @@ classdef AverageView < handle
 %   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW.
 
     properties
-        % Called (no args) when the user clicks this view's axes or toggles
-        % a tickbox. Wired by AlakazamPlotter to Alakazam.registerTileClick,
-        % so keyboard shortcuts route to whichever tile was last clicked
-        % while several are visible at once in Grid/Stack mode -- see
-        % Alakazam.dispatchKey and migration.md.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -225,13 +219,6 @@ classdef AverageView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

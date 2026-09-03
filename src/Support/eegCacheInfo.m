@@ -7,10 +7,10 @@ function info = eegCacheInfo(EEG)
 %   without paying to load it (these cache trees run to tens of GB, almost
 %   all of it continuous data no such scan actually needs).
     info = struct();
-    info.id             = fieldOr(EEG, 'id', '');
-    info.Call           = fieldOr(EEG, 'Call', '');
-    info.DataFormat     = fieldOr(EEG, 'DataFormat', '');
-    info.DataType       = fieldOr(EEG, 'DataType', '');
+    info.id             = charFieldOr(EEG, 'id', '');
+    info.Call           = charFieldOr(EEG, 'Call', '');
+    info.DataFormat     = charFieldOr(EEG, 'DataFormat', '');
+    info.DataType       = charFieldOr(EEG, 'DataType', '');
     info.hasErsp        = isfield(EEG, 'ersp') && ~isempty(EEG.ersp);
     info.hasCoherence   = isfield(EEG, 'coherence') && ~isempty(EEG.coherence);
     info.isGrandAverage = isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage') ...
@@ -28,7 +28,9 @@ function info = eegCacheInfo(EEG)
     info.fieldNames = fieldnames(EEG)';
 end
 
-function v = fieldOr(EEG, name, default)
+function v = charFieldOr(EEG, name, default)
+%CHARFIELDOR  A CHAR accessor, not TransTools.FieldOr: it coerces through string() so
+%   the sidecar records text whatever the field held.
     if isfield(EEG, name) && ~isempty(EEG.(name))
         v = char(string(EEG.(name)));
     else

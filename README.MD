@@ -261,6 +261,7 @@ The current library:
 | `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real source estimate: dSPM, eLORETA or sLORETA, as a magnitude or signed onto the cortical normal (see [3D brain view](#3d-brain-view)). |
 | `Measure` | Quantifies ERP components in named time windows: mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency), on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference, [Measurement export](#measurement-export) and [Statistical analysis](#statistical-analysis). |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
+| `SourceEstimate` | Inverts every bin of an averaged dataset onto the template cortical sheet and stores the result on the node, so that a source cluster test reads it instead of computing it again. Reuse is granted only when the settings and the underlying data both match what the analysis needs. Shown in the ribbon as "Source Estimate". See [Computing the source estimates once](#computing-the-source-estimates-once). |
 | `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT: the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
 | `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
@@ -735,6 +736,82 @@ is latency within the epoch, in milliseconds relative to the time-locking
 event, restricted to the tested window. It lands in the **Reports**
 tree labelled `Source Cluster Stats (<contrast>) - <timestamp>`.
 
+### What the report states, and why
+
+The document is written to the reporting items COBIDAS MEEG (Pernet et al.,
+2020) asks for, on the principle that a methods section which omits a free
+parameter is not reproducible even when it is correct. Beyond the results
+themselves it records:
+
+- **Every free parameter of the inverse**, including the regularisation both
+  as the dimensionless setting and as the absolute lambda the solver used,
+  and the noise covariance, which here is a scaled identity rather than a
+  covariance estimated from the data. Both determine which solution is
+  returned out of the infinitely many that fit.
+- **Every free parameter of the correction**: for TFCE the variant and its E
+  and H exponents, and explicitly that no cluster-forming threshold applies.
+  A cluster-forming alpha is printed only when the classic method is used,
+  because printing it under TFCE states that a threshold was applied when
+  none was.
+- **The smallest attainable p**, which is 1/(N+1) for N permutations, so that
+  "p < 0.001" is read as the resolution of the test rather than as a
+  vanishingly small probability.
+- **The forward model in full**: template head model, template electrodes, no
+  coregistration, the source template file, the adjacency definition, the
+  reference, and how many of the offered channels were actually used.
+  Channels the 10-5 template does not recognise are dropped rather than
+  placed by guesswork, so this count can be lower than the recording's.
+- **Per subject**, the trials contributing to the contrast and the fraction
+  of that subject's scalp data the fitted sources fail to reproduce. The
+  latter checks the forward model rather than the effect, and is only
+  informative in the negative: a near-total fit is guaranteed by the
+  problem being underdetermined, whereas a poor fit for one subject points
+  at that subject's channels or reference.
+- **The unthresholded statistic**, once, in an appendix. The per-cluster maps
+  stay masked because an unmasked map presented as a result is reliably
+  over-read, but suppressing it entirely hides how close the rest of the
+  cortex came, and a reader is entitled to see the statistic the correction
+  was applied to.
+- **Software versions**: MATLAB, FieldTrip and the Alakazam commit, marked
+  when the working tree had uncommitted changes, since a report generated
+  from a modified tree corresponds to no commit at all.
+- That only this contrast was tested, and that nothing corrects across
+  several contrasts if several were run.
+
+### How this differs from the scalp cluster report
+
+The two reports answer the same question over different spaces, and the
+differences follow from that rather than from taste:
+
+| | Scalp (**Cluster Test...**) | Source (**Source Cluster Test...**) |
+| --- | --- | --- |
+| Unit of the test | Channels x time | Cortical vertices x time |
+| Adjacency | Electrode positions (`ft_prepare_neighbours`, triangulation) | Cortical mesh triangulation |
+| Document | Quarto with R chunks that plot from exported CSVs | Markdown only, no R |
+| Data export | Three CSVs (statistic, waveforms, cluster outlines) | None |
+| "Where" figure | Scalp topography per cluster | Four cortical views per cluster, plus an unthresholded appendix |
+| "When" figure | Cluster window shaded on each condition's grand average | Cluster window shaded on the statistic averaged over the cluster's vertices |
+| Overview figure | Heatmap of the whole channel-by-time grid with cluster outlines | Its equivalent is the unthresholded cortical map |
+| Location naming | Channel labels | Atlas region plus peak MNI coordinate |
+| Forward model section | Not applicable | Head model, electrodes, source space, coregistration, channels used |
+| Per-subject section | Not applicable | Trials and unexplained variance per subject |
+
+Two of those deserve the explanation rather than the row. Neither report has
+R run the test: the permutation happens in MATLAB in both cases, because
+FieldTrip is a MATLAB toolbox and R has no equivalent. What differs is the
+**plotting**. The scalp report exports three long-format CSVs and has R draw
+the heatmap, the topographies and the waveforms from them, which also leaves
+the analyst a flat table to plot differently if they wish. The source
+report's figures are cortical surfaces, which cannot be drawn from a flat
+CSV without shipping the mesh alongside it, so they are rendered in MATLAB
+and the document is plain markdown. That has the side benefit of rendering
+without R installed at all.
+
+And **channel labels do not survive** into source space: a cluster covering
+ten thousand vertices cannot be identified by listing them, which is why the
+source report names locations anatomically, and why the on-screen result
+dialog is a separate one rather than the scalp dialog with a flag.
+
 ### What the source estimate is, and is not
 
 The source stage does not locate sources. Source positions are fixed before
@@ -788,6 +865,92 @@ differ, and that the model attributes that difference to approximately this
 region of a template cortex. It does not establish a focal generator at the
 reported coordinate. The peak coordinate is given alongside the region name
 so that this distinction remains checkable rather than implicit.
+
+### Computing the source estimates once
+
+The inversion is expensive and repeatable, so it can be done as its own step
+rather than inside every analysis that needs it. **Source Estimate** (the
+transformation, in the Frequency and Component Analysis group) inverts every
+bin of an averaged dataset onto the template cortical sheet and stores the
+result on the node, the same way `Measure` stores its measurements. A source
+cluster test then reads it instead of computing it again.
+
+It is a transformation rather than a private cache because Alakazam already
+has the mechanism: a node carries provenance, is invalidated when anything
+upstream changes, can be seen and deleted, and is found through the JSON
+sidecar without loading the node itself. A second caching mechanism beside
+that would do the same job worse.
+
+**Reuse has to prove itself.** A stored estimate is used only when two
+independent checks both pass:
+
+| Check | What it catches |
+| --- | --- |
+| Settings key | The estimate was made with different channels, a different mesh, method, orientation, regularisation, time window or rate. Any of those is a different answer, not a different precision. |
+| Data fingerprint | The settings match but the data does not. Every transformation downstream of Source Estimate copies the field forward, so a node can inherit an estimate computed from its parent's data while the settings still match perfectly. |
+
+The second is the one worth dwelling on: without it, running Source Estimate
+and then a Baseline would leave a node whose stored estimate belongs to the
+previous step, with nothing to reveal it. On any mismatch the analysis
+recomputes and the report records how many subjects were reused, so a run
+that reuses nothing says so rather than silently doing the work twice.
+
+The channel set is part of the key, and that is the usual reason reuse
+misses. Source Estimate builds its forward model from the dataset's own
+channels; a group test must use the channels every subject shares. When
+subjects have different montages the two differ and the estimates are
+correctly refused. Keeping one montage across the subjects in a test is what
+makes reuse work, and is worth doing for the analysis itself in any case.
+
+**The 3D brain view reads the same node.** `Brain3D` inverts on demand and
+re-inverts whenever the bin, method or orientation changes; where a stored
+estimate matches, it uses that instead. It also **adopts the sheet the
+estimate was computed on** rather than insisting on the full-resolution one,
+because an estimate is a vector over its own vertices and can only be drawn
+on the sheet it belongs to. Insisting on 20484 would refuse every estimate
+stored at a coarser mesh, which is the size worth keeping: a whole-epoch
+estimate is 499 MB per subject at 20484 vertices and 128 MB at 5124, for a
+fit that differs by 0.04% (5.58% unexplained against 5.62%). The view names
+the sheet it is drawing in its scale note, since a coarser surface renders
+smoother rather than obviously worse and would otherwise pass for a better
+estimate.
+
+That difference in fit is worth pausing on. Four times the vertices buys
+essentially nothing, because how many spatial patterns a forward model can
+distinguish is bounded by the channel count and not by the mesh: see
+[What the source estimate is, and is not](#what-the-source-estimate-is-and-is-not).
+
+Note that the view scrubs the whole epoch, so it can only use an estimate
+stored over all of it at full rate. One windowed for a cluster test is a
+different fit, not a croppable superset, and is correctly refused; the two
+uses share a node only when the wide one was deliberately stored.
+
+**What it is worth.** The inversion is about 55% of a short test but only
+~3% of a thousand-permutation one, where the permutations dominate. The gain
+is mostly in iterating: several contrasts or windows against one set of
+estimates. Measured on four subjects, a 20-permutation test went from 10.9 s
+to 6.3 s, with an identical observed statistic.
+
+The stored estimate is large by the standards of other nodes: vertices x
+samples x bins x 8 bytes, which is tens of megabytes at the full-resolution
+sheet. The dialog shows the size before computing, and a coarser sheet or a
+narrower window is the lever.
+
+Generated by [`SourceEstimate.m`](src/Transformations/SourceEstimate/SourceEstimate.m).
+The two checks live in
+[`TransTools.SourceEstimateKey`](src/Transformations/+TransTools/SourceEstimateKey.m)
+and [`TransTools.DataFingerprint`](src/Transformations/+TransTools/DataFingerprint.m),
+and both consumers ask through one lookup,
+[`TransTools.StoredSourceEstimate`](src/Transformations/+TransTools/StoredSourceEstimate.m),
+so that they cannot drift into asking slightly different questions of the
+same stored data. Which sheet to work on is
+[`TransTools.StoredSourceSpace`](src/Transformations/+TransTools/StoredSourceSpace.m),
+kept separate on purpose: choosing a mesh and then recomputing costs a
+slower inverse, whereas accepting an estimate that does not match would cost
+a wrong answer.
+Tested by `tests/SourceEstimateTest.m`, which asserts that a reused estimate
+gives the same observed statistic as a computed one and that each way of
+being wrong is refused.
 
 ### Making it finish this decade
 
@@ -1829,6 +1992,21 @@ Scientific/methodological:
   Quantifies the localisation error contributed by head-model and electrode
   position inaccuracies, which is the error this pipeline's template
   anatomy and template electrodes incur.
+- Pernet, C. R., Garrido, M. I., Gramfort, A., Maurits, N., Michel, C. M.,
+  Pang, E., Salmelin, R., Schoffelen, J. M., Valdes-Sosa, P. A., & Puce, A.
+  (2020). Issues and recommendations from the OHBM COBIDAS MEEG committee for
+  reproducible EEG and MEG research. *Nature Neuroscience*, 23(12),
+  1473-1483. DOI:
+  [10.1038/s41593-020-00709-0](https://doi.org/10.1038/s41593-020-00709-0).
+  The reporting checklist the source cluster report is written against, and
+  the source of its forward-model, regularisation and software-version
+  sections.
+- Sassenhagen, J., & Draschkow, D. (2019). Cluster-based permutation tests of
+  MEG/EEG data do not establish significance of effect latency or location.
+  *Psychophysiology*, 56(6), e13335. DOI:
+  [10.1111/psyp.13335](https://doi.org/10.1111/psyp.13335). The specific
+  misreading both cluster reports open by warning against: a cluster
+  establishes that an effect exists, not where or when it begins and ends.
 - Delorme, A., & Makeig, S. (2004). EEGLAB: an open source toolbox for
   analysis of single-trial EEG dynamics. *Journal of Neuroscience Methods*,
   134(1), 9-21. [sccn.ucsd.edu/eeglab](https://sccn.ucsd.edu/eeglab/index.php).

@@ -1,4 +1,4 @@
-classdef SignalView < handle
+classdef SignalView < AlakazamView
 %SIGNALVIEW  Fast scrolling view of a continuous multichannel signal.
 %
 %   SignalView draws a continuous EEGLAB dataset into a scrollable, zoomable
@@ -25,12 +25,6 @@ classdef SignalView < handle
 %   See also MINMAXPYRAMID, ALAKAZAMPLOTTER.
 
     properties
-        % Called (no args) when the user clicks this view's axes. Wired by
-        % AlakazamPlotter to Alakazam.registerTileClick, so keyboard/wheel
-        % shortcuts route to whichever tile was last clicked while several
-        % are visible at once in Grid/Stack mode -- see
-        % Alakazam.dispatchWheel/dispatchKey and migration.md.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -219,13 +213,6 @@ classdef SignalView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

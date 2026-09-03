@@ -10,7 +10,7 @@ function [EEG, opts] = AutoEyeICA(input, varargin)
 %
 %   ICA decomposition and ICLabel classification both need a real X/Y/Z
 %   scalp position for every included channel (dipfit's standard 10-5
-%   template, see Dipfit1005File). A channel the template does not
+%   template, see Template1005File). A channel the template does not
 %   recognise -- most commonly an EOG or ECG channel, which has no scalp
 %   position at all -- is excluded from decomposition entirely and spliced
 %   back into its original slot, unmodified, once pruning is done: the same
@@ -47,7 +47,10 @@ if interactive
         % untouched) and nothing to run -- Alakazam.onTransformation
         % treats an empty EEG as "cancelled", not an error.
         EEG = [];
-        options = [];   % the contract is two outputs; both must be assigned
+        opts = [];   % the contract is two outputs; both must be assigned
+        % (named for THIS function's own second output: assigning a
+        % variable called "options" here left opts holding the Init
+        % sentinel, which is what the caller then tried to store)
         return;
     end
     TransformSettings.set('AutoEyeICA', opts);
@@ -63,7 +66,7 @@ EEG.id = name;
 %  from decomposition entirely and spliced back into its original slot,
 %  unmodified, once pruning is done -- see AutoGEDAI for the same pattern.
 EEG = TransTools.FillChanlocs(EEG, 'Alakazam:AutoEyeICA', ...
-    TransTools.Dipfit1005File('Alakazam:AutoEyeICA'));
+    TransTools.Template1005File('Alakazam:AutoEyeICA'));
 % Eligible = has a scalp position AND is not a peripheral (EOG/ECG/...). EOG
 % electrodes often carry real coordinates beside the eyes, so they pass hasPos
 % and, if decomposed, dominate the ICA and plot outside the head; exclude them
@@ -92,9 +95,11 @@ end
 %  (and its dialog), unchanged from before.
 eegOnly = pop_select(EEG, 'channel', eegIdx);
 if ~isempty(which('fastica'))
-    eegOnly = pop_runica(eegOnly, 'icatype', 'fastica');
+    % See TransTools.WithRestoredRng: runica leaves the session's random
+    % number generator in legacy mode, where rng() is an error.
+    eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
 else
-    eegOnly = pop_runica(eegOnly);
+    eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly));
 end
 
 %% Classify

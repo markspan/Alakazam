@@ -71,7 +71,10 @@ if interactive
         % untouched) and nothing to run -- Alakazam.onTransformation
         % treats an empty EEG as "cancelled", not an error.
         EEG = [];
-        options = [];   % the contract is two outputs; both must be assigned
+        opts = [];   % the contract is two outputs; both must be assigned
+        % (named for THIS function's own second output: assigning a
+        % variable called "options" here left opts holding the Init
+        % sentinel, which is what the caller then tried to store)
         return;
     end
     TransformSettings.set('TimeFrequency', opts);

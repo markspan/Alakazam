@@ -111,6 +111,12 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     subjects = cell(1, numel(sourceFiles));
     for i = 1:numel(sourceFiles)
         loaded = load(sourceFiles{i}, 'EEG');
+        % Tagged with its own path because nothing inside the dataset
+        % identifies the subject: EEG.id is the node name ('Average') and is
+        % therefore identical for everyone, and setname is empty. Keying
+        % per-subject diagnostics on EEG.id collapsed all 18 subjects into
+        % one row before this was noticed.
+        loaded.EEG.AlakazamSourceFile = sourceFiles{i};
         subjects{i} = loaded.EEG;
     end
 
@@ -124,9 +130,16 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     normals = TransTools.SurfaceNormals(sourcemodel);
     [neighbours, vertexLabels, adjacency] = TransTools.SourceNeighbours(sourcemodel);
 
+    % A containers.Map is a HANDLE object, so the timelock factory can
+    % record what each subject's inverse actually did and have it survive
+    % back here. The alternative was returning diagnostics through
+    % ClusterStats.buildDesign, which is shared with the scalp test and has
+    % no business knowing about inverse solutions.
+    diagnostics = containers.Map('KeyType', 'char', 'ValueType', 'any');
+
     inverse = struct('leadfield', leadfield, 'elec', elec, 'headmodel', headmodel, ...
         'resolvedLabels', {resolvedLabels}, 'normals', normals, ...
-        'vertexLabels', {vertexLabels}, 'opts', opts);
+        'vertexLabels', {vertexLabels}, 'opts', opts, 'diagnostics', diagnostics);
 
     % The timelock factory is the ONLY thing that differs from the scalp
     % test; the design, permutation and correction are ClusterStats' own.
@@ -198,6 +211,8 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     summary.sourcemodel  = sourcemodel;
     summary.vertexLabels = vertexLabels;
     summary.times        = timelocks{1}.time * 1000;   % s -> ms
+    summary.provenance   = buildProvenance(opts, labels, resolvedLabels, ...
+        sourcemodel, diagnostics, subjects, sourceFiles);
 end
 
 % ======================================================================= %
@@ -207,9 +222,9 @@ function tl = sourceTimelock(EEG, binLabel, inverse)
     bins = {EEG.bindesc.label};
     match = find(strcmp(bins, binLabel), 1);
     if isempty(match)
-        throw(MException('Alakazam:SourceClusterStats', sprintf( ...
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
             'Bin "%s" was not found on "%s" (bins present: %s).', ...
-            binLabel, string(EEG.id), strjoin(bins, ', '))));
+            binLabel, datasetName(EEG), strjoin(bins, ', '))));
     end
 
     % Reorder to the forward model's own channel order -- REQUIRED, and
@@ -217,69 +232,86 @@ function tl = sourceTimelock(EEG, binLabel, inverse)
     have = {EEG.chanlocs.labels};
     [tf, reorder] = ismember(lower(inverse.resolvedLabels), lower(have));
     if ~all(tf)
-        throw(MException('Alakazam:SourceClusterStats', sprintf( ...
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
             ['"%s" is missing a channel the shared forward model needs. Every subject in ' ...
              'one test must resolve the same channel set, or their vertices are not ' ...
-             'comparable.'], string(EEG.id))));
+             'comparable.'], datasetName(EEG))));
+    end
+
+    if size(EEG.data, 3) < match
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
+            ['"%s" describes %d bins but its data holds %d. The dataset is ' ...
+             'inconsistent and cannot be inverted.'], ...
+            datasetName(EEG), numel(bins), size(EEG.data, 3))));
+    end
+
+    % A STORED ESTIMATE IS USED ONLY IF IT PROVES IT MATCHES. The
+    % SourceEstimate transformation may have inverted this dataset already,
+    % but it did so against ITS OWN channel set, while a group test must use
+    % the one set every subject shares. The key carries everything that
+    % decides the answer (SourceCache.Key), so agreement can be
+    % checked rather than assumed; on any disagreement this recomputes, and
+    % the caller reports how many subjects were reused.
+    wanted = SourceCache.Key(inverse.resolvedLabels, inverse.opts);
+    [storedValues, storedInfo] = SourceCache.Lookup(EEG, binLabel, wanted);
+    if ~isempty(storedValues)
+        tl = struct('label', {inverse.vertexLabels(:)}, 'time', storedInfo.times / 1000, ...
+            'avg', storedValues, 'dimord', 'chan_time');
+        inverse.diagnostics(sprintf('%s|%s|reused', subjectKey(EEG), binLabel)) = true;
+        return;
     end
 
     values = double(EEG.data(reorder, :, match));
     times  = reshape(EEG.times, 1, []);
 
-    [values, times] = restrictTime(values, times, inverse.opts.TimeWindow);
-    [values, times] = decimateTime(values, times, inverse.opts.ResampleHz);
+    % Note the '%s' in the throws below and above: MException treats its
+    % message as a FORMAT string, so a Windows path inside one is read as
+    % escape sequences and the message is truncated at the first of them
+    % ("C:\Users..." stops dead at \U). Passing the text as an argument
+    % rather than as the format is the fix, and it is why these errors name
+    % a subject rather than a path.
+    %
+    % CHECKED BECAUSE THE FAILURE WOULD BE SILENT. The restriction step
+    % (TransTools.RestrictAndDecimate) selects data
+    % columns with a logical mask built from times. MATLAB errors on a mask
+    % LONGER than the dimension, but a mask that is too SHORT simply selects
+    % a prefix, so a times vector out of step with the data would quietly
+    % shift every latency in the analysis and report a cluster at the wrong
+    % moment. Nothing downstream could detect that, so it is caught here.
+    if numel(times) ~= size(values, 2)
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
+            ['"%s" has %d latencies for %d samples of data. Timing cannot be ' ...
+             'trusted on this dataset, so the analysis is stopped rather than ' ...
+             'reporting effects at latencies that may be wrong.'], ...
+            datasetName(EEG), numel(times), size(values, 2))));
+    end
+
+    [values, times] = TransTools.RestrictAndDecimate(values, times, ...
+        inverse.opts.TimeWindow, inverse.opts.ResampleHz, 'Alakazam:SourceClusterStats');
 
     solveOpts = struct('RegParam', inverse.opts.RegParam);
     if strcmpi(inverse.opts.Orientation, 'normal')
         solveOpts.Orientation = 'normal';
         solveOpts.Normals     = inverse.normals;
     end
-    sourcePower = TransTools.InverseSolution(values, inverse.leadfield, ...
+    [sourcePower, info] = TransTools.InverseSolution(values, inverse.leadfield, ...
         inverse.elec, inverse.headmodel, inverse.opts.Method, solveOpts);
+
+    % Recorded per subject and bin so the report can state how well the
+    % forward model actually explained each subject's scalp data. This is
+    % the quantity that exposed a reference mismatch during development:
+    % a fit of 25% where 96% was available.
+    [trials, trialsText] = binTrialCount(EEG, match);
+    inverse.diagnostics(sprintf('%s|%s', subjectKey(EEG), binLabel)) = struct( ...
+        'residualVariance', scalarOrNan(info.ResidualVariance), ...
+        'lambda', scalarOrNan(info.Lambda), ...
+        'trials', trials, 'trialsText', trialsText);
 
     tl = struct();
     tl.label  = inverse.vertexLabels(:);
     tl.time   = times / 1000;    % ms -> s, FieldTrip's own convention
     tl.avg    = sourcePower;
     tl.dimord = 'chan_time';
-end
-
-function [values, times] = restrictTime(values, times, window)
-%RESTRICTTIME  Keep only the requested latency range.
-%   Applied BEFORE the inverse rather than after, so the solve itself is
-%   cheaper -- and, for eLORETA/sLORETA, so the data covariance those
-%   methods take is computed over the window actually under test rather
-%   than over an epoch mostly outside it.
-    if isempty(window)
-        return;
-    end
-    keep = times >= window(1) & times <= window(2);
-    if ~any(keep)
-        throw(MException('Alakazam:SourceClusterStats', sprintf( ...
-            'The time window [%g %g] ms contains no samples of this epoch (%g to %g ms).', ...
-            window(1), window(2), times(1), times(end))));
-    end
-    values = values(:, keep);
-    times  = times(keep);
-end
-
-function [values, times] = decimateTime(values, times, targetHz)
-%DECIMATETIME  Take every Nth sample, to approximately TARGETHZ.
-%   Plain subsampling, not a filtered resample: these are already
-%   baseline-corrected, low-pass-filtered averages, so the frequencies a
-%   decimation filter would remove are not present to alias. Using
-%   downsample here would also shift the latencies, and a cluster's
-%   reported timing has to stay the recording's own.
-    if isempty(targetHz) || numel(times) < 2
-        return;
-    end
-    currentHz = 1000 / median(diff(times));
-    step = max(1, floor(currentHz / targetHz));
-    if step <= 1
-        return;
-    end
-    values = values(:, 1:step:end);
-    times  = times(1:step:end);
 end
 
 function labels = commonChannels(subjects, sourceFiles)
@@ -291,7 +323,7 @@ function labels = commonChannels(subjects, sourceFiles)
         labels = labels(ismember(lower(labels), lower({subjects{i}.chanlocs.labels})));
     end
     if numel(labels) < 8
-        throw(MException('Alakazam:SourceClusterStats', sprintf( ...
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
             ['These %d datasets share only %d channel(s), which is far too few to " ' ...
              'estimate sources from. Do they come from the same montage?'], ...
             numel(sourceFiles), numel(labels))));
@@ -302,7 +334,7 @@ function validateOptions(opts, contrast)
 %VALIDATEOPTIONS  Refuse the combinations that would produce a confidently
 %   wrong answer, rather than letting them run.
     if ~ismember(lower(opts.Method), {'mne', 'sloreta'})
-        throw(MException('Alakazam:SourceClusterStats', sprintf( ...
+        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
             ['Method must be "mne" (dSPM) or "sloreta" for a group test, not "%s". A ' ...
              'vertex-wise test compares vertices with one another, so they have to be ' ...
              'on comparable footing: dSPM and sLORETA correct the depth bias that makes ' ...
@@ -378,4 +410,248 @@ function n = resolveWorkers(requested)
         return;
     end
     n = max(1, min(round(n), feature('numcores')));
+end
+
+function name = datasetName(EEG)
+%DATASETNAME  Something to call this dataset in an error message.
+%   Used only in error paths, which is exactly why it cannot assume a field
+%   exists: reading a missing EEG.id while building an error message
+%   replaces the real diagnosis with "Unrecognized field name", and the
+%   analyst then debugs the wrong problem. Prefers the source file, since
+%   EEG.id is the node name and is the same for every subject anyway.
+    if isfield(EEG, 'AlakazamSourceFile') && ~isempty(EEG.AlakazamSourceFile)
+        % The subject folder, not the whole path: a cache path is a dozen
+        % transformation nodes deep and unreadable in a sentence.
+        name = subjectDisplayName(EEG.AlakazamSourceFile);
+        if ~isempty(name)
+            return;
+        end
+    end
+    for candidate = {'setname', 'id'}
+        if isfield(EEG, candidate{1}) && ~isempty(EEG.(candidate{1}))
+            value = EEG.(candidate{1});
+            if ischar(value) || isstring(value)
+                name = char(string(value));
+                return;
+            end
+        end
+    end
+    name = 'this dataset';
+end
+
+function key = subjectKey(EEG)
+%SUBJECTKEY  A per-subject key that is actually unique.
+%   The dataset's own path, since nothing inside it distinguishes subjects.
+    if isfield(EEG, 'AlakazamSourceFile') && ~isempty(EEG.AlakazamSourceFile)
+        key = char(string(EEG.AlakazamSourceFile));
+    else
+        key = char(string(EEG.id));
+    end
+end
+
+function name = subjectDisplayName(file)
+%SUBJECTDISPLAYNAME  The subject folder a cached dataset sits under.
+%   Cache paths are <root>/<subject>/<Transform><stamp>/.../<Transform><stamp>.mat,
+%   so walking up from the file past every folder that looks like a
+%   transformation node lands on the subject. Derived by shape rather than
+%   by assuming a folder called 'Cache', so a relocated or renamed cache
+%   still names subjects correctly.
+    name = '';
+    if isempty(file)
+        return;
+    end
+    folder = fileparts(char(file));
+    previous = '';
+    while ~isempty(folder)
+        [parent, leaf] = fileparts(folder);
+        if isempty(leaf)
+            break;
+        end
+        if isempty(regexp(leaf, '^[A-Za-z]+\d{6,}$', 'once'))
+            name = leaf;      % first folder that is not a transformation node
+            return;
+        end
+        previous = leaf;
+        folder = parent;
+    end
+    if isempty(name)
+        name = previous;
+    end
+end
+
+function [n, text] = binTrialCount(EEG, match)
+%BINTRIALCOUNT  How many trials went into this subject's bin.
+%   Signal-to-noise in a source estimate follows directly from it, and
+%   reporting guidelines ask for it, so it is carried rather than left for
+%   a reader to go and look up in a different report.
+%
+%   A COMBINATION BIN HAS NO SINGLE COUNT. DefineBins records .n for an
+%   ordinary bin as a number, but for a difference bin it records the
+%   constituents as text ('39-161'), which is not something that can be
+%   summed. Returning it unchecked put a six-character array where a scalar
+%   was expected and failed the whole test with "Non-scalar in Uniform
+%   Output", from a line that has nothing to do with the statistics.
+%
+%   Both forms are kept: N for arithmetic (NaN when there is no number),
+%   TEXT for display, so the report can show '39-161' rather than pretending
+%   the information is missing.
+    n = NaN;
+    text = '';
+    if ~isfield(EEG.bindesc, 'n')
+        return;
+    end
+    value = EEG.bindesc(match).n;
+    if isnumeric(value) && isscalar(value)
+        n = double(value);
+        text = sprintf('%d', round(n));
+    elseif ischar(value) || isstring(value)
+        text = char(value);
+    end
+end
+
+function v = scalarOrNan(x)
+%SCALARORNAN  Guarantee something that can go in a numeric array.
+%   Defensive for the same reason as binTrialCount above: these values are
+%   aggregated across subjects and bins, and one non-scalar among them takes
+%   down an analysis that had already finished computing.
+    if isnumeric(x) && isscalar(x)
+        v = double(x);
+    else
+        v = NaN;
+    end
+end
+
+function provenance = buildProvenance(opts, requestedLabels, resolvedLabels, ...
+        sourcemodel, diagnostics, subjects, sourceFiles)
+%BUILDPROVENANCE  Everything the report needs to describe the analysis that
+%   ran, as opposed to the analysis that was requested.
+%
+%   COLLECTED HERE BECAUSE THIS IS WHERE IT IS KNOWN. The report is handed a
+%   summary, not the pipeline, and every value below would otherwise have to
+%   be guessed from defaults, which is exactly how a methods section comes
+%   to describe something that did not happen. Assembled to answer the
+%   COBIDAS MEEG (Pernet et al., 2020) reporting items for source analysis:
+%   forward model, inverse and its regularisation, noise model, channel set,
+%   and software versions.
+    provenance = struct();
+    provenance.requestedChannels = numel(requestedLabels);
+    % WHAT EACH SUBJECT ACTUALLY BROUGHT, not just what they shared. A
+    % vertex-wise test needs one montage, so it uses the intersection -- and
+    % a single subject with a reduced montage silently decides it for
+    % everyone. Reporting only the shared count reads as "we used
+    % everything", which is exactly wrong in that case, and the loss is
+    % substantial: the number of spatial patterns a forward model can
+    % distinguish is bounded by the channel count.
+    provenance.subjectChannels = subjectChannelCounts(subjects);
+    provenance.limitingSubject = limitingSubjectName(subjects, sourceFiles);
+    provenance.channels          = {resolvedLabels};
+    provenance.nChannels         = numel(resolvedLabels);
+    provenance.reference         = 'average (imposed by the leadfield)';
+    provenance.headModel         = 'FieldTrip template BEM (standard_bem)';
+    provenance.electrodes        = 'FieldTrip template 10-5 (standard_1005)';
+    provenance.coregistration    = 'none (template anatomy, no individual MRI or digitised electrodes)';
+    provenance.sourceTemplate    = sprintf('cortex_%d.surf.gii', opts.SourceSpace);
+    provenance.nVertices         = size(sourcemodel.pos, 1);
+    provenance.adjacency         = 'mesh triangulation (vertices sharing a triangle)';
+    provenance.regParam          = opts.RegParam;
+    provenance.noiseCovariance   = 'identity, scaled by lambda (not estimated from data)';
+    provenance.tfce              = struct('variant', 'exact', 'E', 0.5, 'H', 2);
+    provenance.software          = TransTools.SoftwareVersions();
+    provenance.subjects          = subjectRows(diagnostics);
+
+    provenance.reusedEstimates = countReused(diagnostics);
+
+    lambdas = collectField(diagnostics, 'lambda');
+    provenance.lambda = median(lambdas, 'omitnan');
+    rv = collectField(diagnostics, 'residualVariance');
+    provenance.residualVariance = rv;
+end
+
+function counts = subjectChannelCounts(subjects)
+    counts = cellfun(@(s) numel(s.chanlocs), subjects);
+end
+
+function name = limitingSubjectName(subjects, sourceFiles)
+%LIMITINGSUBJECTNAME  Whoever has the fewest channels, since they set the
+%   montage for the whole analysis. Named so the analyst can decide whether
+%   that trade is worth it, rather than discovering the channel count and
+%   having no way to act on it.
+    name = '';
+    counts = subjectChannelCounts(subjects);
+    if isempty(counts)
+        return;
+    end
+    [~, at] = min(counts);
+    if at <= numel(sourceFiles)
+        name = subjectDisplayName(sourceFiles{at});
+    end
+end
+
+function rows = subjectRows(diagnostics)
+%SUBJECTROWS  One row per subject: which file, how many trials, how well the
+%   forward model fitted. Keyed back from the diagnostics map, whose keys
+%   are '<id>|<bin>'.
+    rows = struct('id', {}, 'file', {}, 'trials', {}, 'trialsText', {}, ...
+        'residualVariance', {});
+    % The reuse markers are booleans keyed '<subject>|<bin>|reused', not
+    % per-bin diagnostics, so they are skipped rather than counted as bins.
+    keys_ = keys(diagnostics);
+    keys_ = keys_(~endsWith(keys_, '|reused'));
+    ids = cell(1, numel(keys_));
+    for i = 1:numel(keys_)
+        parts = strsplit(keys_{i}, '|');
+        ids{i} = parts{1};
+    end
+    uniqueIds = unique(ids, 'stable');
+    for i = 1:numel(uniqueIds)
+        mine = strcmp(ids, uniqueIds{i});
+        entries = cellfun(@(k) diagnostics(k), keys_(mine), 'UniformOutput', false);
+        trials = cellfun(@(e) e.trials, entries);
+        rv     = cellfun(@(e) e.residualVariance, entries);
+        texts  = cellfun(@(e) e.trialsText, entries, 'UniformOutput', false);
+        % The key IS the file, so the display name comes from it directly
+        % rather than from a positional guess into sourceFiles.
+        file = uniqueIds{i};
+        % Summed when every bin reported a number; otherwise the bins'
+        % own descriptions are shown, because a difference bin's '39-161'
+        % is information and "not recorded" is not.
+        if any(~isnan(trials))
+            trialsText = '';
+            total = sum(trials, 'omitnan');
+        else
+            named = texts(~cellfun(@isempty, texts));
+            trialsText = strjoin(unique(named, 'stable'), ', ');
+            % NaN, not 0: sum() of nothing is zero, and storing zero would
+            % state that this subject contributed no trials at all.
+            total = NaN;
+        end
+        rows(end + 1) = struct('id', subjectDisplayName(file), 'file', file, ...
+            'trials', total, 'trialsText', trialsText, ...
+            'residualVariance', mean(rv, 'omitnan')); %#ok<AGROW>
+    end
+end
+
+function n = countReused(diagnostics)
+%COUNTREUSED  How many subject-by-bin inversions came from a stored estimate.
+%   Worth reporting: an analyst who has just run SourceEstimate on every
+%   subject and sees zero reuse needs to know the keys did not match, rather
+%   than concluding the step did nothing.
+    n = 0;
+    keys_ = keys(diagnostics);
+    for i = 1:numel(keys_)
+        if endsWith(keys_{i}, '|reused')
+            n = n + 1;
+        end
+    end
+end
+
+function values = collectField(diagnostics, field)
+    keys_ = keys(diagnostics);
+    values = nan(1, numel(keys_));
+    for i = 1:numel(keys_)
+        entry = diagnostics(keys_{i});
+        if isstruct(entry) && isfield(entry, field)
+            values(i) = entry.(field);
+        end
+    end
 end

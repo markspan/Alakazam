@@ -40,11 +40,22 @@ if interactive
     % those directly would draw every map rotated 90 degrees. Re-derive the
     % polar coordinates straight from the template by label instead.
     dispLocs = TransTools.TemplateScalpLocs(EEG.chanlocs(EEG.icachansind), ...
-        TransTools.Dipfit1005File('Alakazam:RemoveComponents'));
-    [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs, EEG.icaact, EEG.srate);
+        TransTools.Template1005File('Alakazam:RemoveComponents'));
+    % An equivalent dipole per component, for its residual variance: a
+    % physical criterion independent of ICLabel's classifier, and most
+    % informative where the two disagree. Only on the interactive path,
+    % because it costs seconds per component and nothing but the selector
+    % reads it. See TransTools.ComponentDipoles for why a dipole fit is the
+    % right question to ask of a component and the wrong one to ask of an ERP.
+    rv = TransTools.ComponentDipoles(EEG);
+
+    [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs, EEG.icaact, EEG.srate, rv);
     if ~ok
         EEG = [];   % cancelled -- no node, no compute
-        options = [];   % the contract is two outputs; both must be assigned
+        opts = [];   % the contract is two outputs; both must be assigned
+        % (named for THIS function's own second output: assigning a
+        % variable called "options" here left opts holding the Init
+        % sentinel, which is what the caller then tried to store)
         return;
     end
     opts = struct('components', removed(:)');
@@ -89,7 +100,7 @@ function EEG = ensureDecomposition(input)
     end
 
     EEG = TransTools.FillChanlocs(EEG, 'Alakazam:RemoveComponents', ...
-        TransTools.Dipfit1005File('Alakazam:RemoveComponents'));
+        TransTools.Template1005File('Alakazam:RemoveComponents'));
     % Decompose the scalp EEG channels only. A channel needs a scalp position
     % (hasPos) AND must not be a peripheral (EOG/ECG/...): EOG electrodes often
     % carry real coordinates beside/below the eyes, so they pass hasPos and,
@@ -112,10 +123,14 @@ function EEG = ensureDecomposition(input)
     % no options it opens EEGLAB's own ICA GUI. ICA needs no epoching -- runica
     % decomposes continuous and epoched data alike (epoched data is just
     % reshaped to 2-D internally), so nothing here requires segmented data.
+    % Wrapped because runica seeds itself with the legacy rand('state', ...)
+    % syntax, which leaves the whole session unable to call rng(). See
+    % TransTools.WithRestoredRng.
     if ~isempty(which('fastica'))
-        eegOnly = pop_runica(eegOnly, 'icatype', 'fastica');
+        eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
     else
-        eegOnly = pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1);
+        eegOnly = TransTools.WithRestoredRng(@() ...
+            pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1));
     end
     eegOnly = iclabel(eegOnly, 'beta');
 

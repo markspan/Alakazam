@@ -64,8 +64,11 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
             figure(syntaxFig);
             return;
         end
-        mdFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), ...
-            'Transformations', 'DefineBins', 'bin_language.md');
+        % A sibling now: this dialog lives in its own transformation's
+        % folder, alongside the language reference it opens. It previously
+        % lived in src/Dialogs and walked up to src and back down, which
+        % broke the moment the file moved.
+        mdFile = fullfile(fileparts(mfilename('fullpath')), 'bin_language.md');
         try
             syntaxFig = MarkdownDialog('Bin-definition language', mdFile, fig);
         catch err

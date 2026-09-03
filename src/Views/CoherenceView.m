@@ -1,4 +1,4 @@
-classdef CoherenceView < handle
+classdef CoherenceView < AlakazamView
 %COHERENCEVIEW  Per-bin time x frequency coherence heatmaps, one channel at a
 %   time -- the coherence counterpart of TimeFrequencyView.
 %
@@ -14,7 +14,6 @@ classdef CoherenceView < handle
 %   See also ALAKAZAMPLOTTER, COHERENCEMAP, TIMEFREQUENCYVIEW.
 
     properties
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -143,11 +142,6 @@ classdef CoherenceView < handle
             this.notifyActivated();
         end
 
-        function notifyActivated(this)
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)

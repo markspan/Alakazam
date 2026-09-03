@@ -138,7 +138,7 @@ classdef TransformContractTest < matlab.unittest.TestCase
         %   treats a graphics handle as "a plugin that only draws", so the
         %   seam must not reject one on its way through.
             fig = figure('Visible', 'off');
-            cleanup = onCleanup(@() delete(fig)); %#ok<NASGU>
+            cleanup = onCleanup(@() delete(fig));
             testCase.writeFixture('DrawsOnly', [ ...
                 "function [EEG, options] = DrawsOnly(input, varargin)" newline ...
                 "    EEG = input;" newline ...
@@ -180,7 +180,57 @@ classdef TransformContractTest < matlab.unittest.TestCase
                 testCase.verifyEmpty(strfind(src, 'feval(transformId'), ...
                     sprintf(['%s calls a transformation directly. Every call goes ' ...
                         'through TransTools.invoke, or the contract is unenforced ' ...
-                        'again.'], files(k).name)); %#ok<STREMP>
+                        'again.'], files(k).name));
+            end
+        end
+
+        function noTransformAssignsTheWrongOutputName(testCase)
+        %NOTRANSFORMASSIGNSTHEWRONGOUTPUTNAME  A transformation's second
+        %   output is called either "options" or "opts", and assigning the
+        %   other one is silent: it creates a local nobody reads, while the
+        %   real output keeps whatever InitGuard left in it (the 'Init'
+        %   sentinel on the interactive path). The caller then stores the
+        %   sentinel as if it were a settings struct.
+        %
+        %   This is not hypothetical. A round of cancel-contract fixes wrote
+        %   "options = []" into seven transformations whose second output is
+        %   "opts", and everyCancelPathAssignsBothOutputs below passed
+        %   throughout, because it looked for the literal name "options"
+        %   rather than the declared one. Reading the signature was not
+        %   enough on its own either: every transformation assigns its real
+        %   output somewhere on the success path, so a file-wide search finds
+        %   one and is satisfied. Naming the mistake directly is what catches
+        %   it.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            folders = dir(fullfile(root, 'src', 'Transformations'));
+            folders = folders([folders.isdir] & ~startsWith({folders.name}, '.'));
+
+            for k = 1:numel(folders)
+                name = folders(k).name;
+                file = fullfile(folders(k).folder, name, [name '.m']);
+                if ~isfile(file); continue; end
+
+                lines = string(splitlines(fileread(file)));
+                code = regexprep(lines, '%.*$', '');
+                declared = regexp(code{1}, ...
+                    '^\s*function\s*\[\s*\w+\s*,\s*(\w+)\s*\]', 'tokens', 'once');
+                if isempty(declared); continue; end
+
+                if strcmp(declared{1}, 'options')
+                    wrong = 'opts';
+                else
+                    wrong = 'options';
+                end
+                % An assignment TO the wrong name, not a read of it: opts is
+                % legitimately read (it is InitGuard's own output) and
+                % legitimately appears as [opts, interactive] = ...
+                offenders = find(~cellfun(@isempty, ...
+                    regexp(code, sprintf('^\\s*%s\\s*=[^=]', wrong), 'once')));
+                testCase.verifyEmpty(offenders, sprintf( ...
+                    ['%s declares its second output as "%s" but assigns "%s" at ' ...
+                     'line(s) %s. That assignment goes nowhere, and "%s" keeps ' ...
+                     'whatever it already held.'], ...
+                    name, declared{1}, wrong, mat2str(offenders(:)'), declared{1}));
             end
         end
 
@@ -214,10 +264,22 @@ classdef TransformContractTest < matlab.unittest.TestCase
                 lines = string(splitlines(fileread(file)));
                 code = regexprep(lines, '%.*$', '');   % comments say nothing
 
+                % THE NAME COMES FROM THE SIGNATURE, NOT FROM THIS TEST.
+                % An earlier version looked for a variable literally called
+                % "options", which is what the first round of cancel fixes
+                % duly wrote -- into seven files whose second output is
+                % called "opts". Every assignment went to a stray local, the
+                % real output kept the Init sentinel, and this test passed
+                % throughout. Reading the declared name is the whole point.
+                declared = regexp(code{1}, ...
+                    '^\s*function\s*\[\s*\w+\s*,\s*(\w+)\s*\]', 'tokens', 'once');
+                if isempty(declared); continue; end     % not a two-output transform
+                outputName = declared{1};
+
                 cancels = find(~cellfun(@isempty, ...
                     regexp(code, 'EEG\s*=\s*\[\s*\]\s*;', 'once')));
                 assigns = find(~cellfun(@isempty, ...
-                    regexp(code, '(^|[\s;,)])options\s*=[^=]', 'once')));
+                    regexp(code, sprintf('(^|[\\s;,)])%s\\s*=[^=]', outputName), 'once')));
 
                 % What must hold is that options is assigned before the RETURN
                 % that ends the cancel branch, not before the EEG = [] line:
@@ -229,10 +291,11 @@ classdef TransformContractTest < matlab.unittest.TestCase
                     r = returns(find(returns >= c, 1));
                     if isempty(r); r = numel(code) + 1; end
                     testCase.verifyTrue(any(assigns < r), sprintf( ...
-                        ['%s cancels at line %d without assigning options. ' ...
-                         'Called with two outputs -- which is how TransTools.invoke ' ...
-                         'calls every transformation -- that is an error, so Cancel ' ...
-                         'would raise one instead of doing nothing.'], name, c));
+                        ['%s cancels at line %d without assigning its own second ' ...
+                         'output (%s). Called with two outputs -- which is how ' ...
+                         'TransTools.invoke calls every transformation -- that is an ' ...
+                         'error, so Cancel would raise one instead of doing nothing.'], ...
+                        name, c, outputName));
                 end
             end
         end

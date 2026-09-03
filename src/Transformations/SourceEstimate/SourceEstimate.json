@@ -1,0 +1,1 @@
+{"Name":"Source Estimate","Description":"Invert every bin onto a template cortical sheet and store the result for later analyses","Entry":"SourceEstimate.m","Icon":"SourceEstimate.png","Section":"4. Frequency and Component Analysis","Category":"Source"}

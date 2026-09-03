@@ -1,4 +1,4 @@
-classdef ReportView < handle
+classdef ReportView < AlakazamView
 %REPORTVIEW  Displays a rendered Quarto/R statistics report (a static
 %   HTML file) inside a tab, via uihtml -- the same "point uihtml
 %   straight at a file" idiom WorkSpaceTree/AlakazamRibbon already use
@@ -15,12 +15,6 @@ classdef ReportView < handle
 %   RENDERQUARTOREPORT.
 
     properties
-        % Set uniformly by AlakazamPlotter alongside every other view's
-        % own ActivatedFcn, for interface consistency with
-        % Alakazam.registerTileClick -- not wired to anything inside this
-        % class, since a static HTML report has no keyboard/wheel
-        % interaction of its own that would need to activate a tile.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)

@@ -17,11 +17,11 @@ function EEG = FillChanlocs(EEG, errorId, elcFile)
 %   afterward to split channels into an eligible/ineligible set.
 %
 %   Callers pick their own template: AutoEyeICA uses dipfit's standard 10-5
-%   template (see Dipfit1005File); AutoGEDAI uses GEDAI's own bundled copy
+%   template (see Template1005File); AutoGEDAI uses GEDAI's own bundled copy
 %   (see GedaiElcFile), so its electrode set exactly matches what GEDAI
 %   itself expects.
 %
-%   See also: Dipfit1005File, AutoEyeICA, AutoGEDAI.
+%   See also: Template1005File, AutoEyeICA, AutoGEDAI.
 
     hasAllLocs = isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) ...
         && isfield(EEG.chanlocs, 'X') ...

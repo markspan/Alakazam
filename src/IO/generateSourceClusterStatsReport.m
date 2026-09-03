@@ -1,4 +1,4 @@
-function qmdText = generateSourceClusterStatsReport(summary, assets)
+function qmdText = generateSourceClusterStatsReport(summary, assets, extras)
 %GENERATESOURCECLUSTERSTATSREPORT  A Quarto report for a source-space
 %   cluster permutation test.
 %
@@ -6,13 +6,15 @@ function qmdText = generateSourceClusterStatsReport(summary, assets)
 %   the document from SourceClusterStats' own return value and the figures
 %   generateSourceClusterAssets rendered from it.
 %
-%   PURE MARKDOWN, NO R CHUNK, unlike the scalp cluster report. Every number
-%   here -- the p-values, the cluster extents, the anatomical labels -- was
-%   computed in MATLAB by FieldTrip's permutation, and every figure was
-%   rendered in MATLAB from the cortical mesh. There is no per-subject table
-%   for R to run a test over, so a code chunk would have nothing to compute.
-%   This also keeps the report renderable without R being able to reach
-%   FieldTrip, which it cannot.
+%   PURE MARKDOWN, NO R CHUNK, unlike the scalp cluster report. The
+%   difference is not about who runs the test: the permutation runs in
+%   MATLAB for both, since FieldTrip is a MATLAB toolbox. It is about the
+%   figures. The scalp report exports long-format CSVs and has R plot a
+%   heatmap, topographies and waveforms from them; this report's figures are
+%   cortical surfaces, which cannot be drawn from a flat CSV without
+%   shipping the mesh with it, so they are rendered in MATLAB and the
+%   document is plain markdown. It therefore also renders on a machine with
+%   no R at all.
 %
 %   THE DOCUMENT LEADS WITH WHAT THE TEST DOES NOT SHOW. Cluster inference
 %   is among the most over-read results in the literature: a significant
@@ -23,6 +25,10 @@ function qmdText = generateSourceClusterStatsReport(summary, assets)
 %
 %   See also SOURCECLUSTERSTATS, GENERATESOURCECLUSTERASSETS,
 %   GENERATECLUSTERSTATSREPORT, TRANSTOOLS.DESCRIBECLUSTER.
+    if nargin < 3 || isempty(extras)
+        extras = struct('UnthresholdedMapPath', '');
+    end
+
     lines = [ReportDoc.yamlHeader('Alakazam Source Cluster Statistics'), { ...
         '' ...
         '<!--' ...
@@ -33,8 +39,12 @@ function qmdText = generateSourceClusterStatsReport(summary, assets)
         '-->' ...
         ''}, ...
         methodLines(summary), ...
+        forwardModelLines(summary), ...
         limitationLines(), ...
-        resultLines(summary, assets)];
+        resultLines(summary, assets), ...
+        subjectLines(summary), ...
+        appendixLines(extras), ...
+        provenanceLines(summary)];
 
     qmdText = char(strjoin(lines, newline));
 end
@@ -61,10 +71,274 @@ function lines = methodLines(summary)
             numel(summary.vertexLabels)) ...
         sprintf('| Time window | %s |', windowText(summary.times)) ...
         sprintf('| Sampling for the test | %.0f Hz |', samplingHz(summary.times)) ...
+        sprintf('| Regularisation | %s |', regularisationText(summary)) ...
+        sprintf('| Noise covariance | %s |', provenanceField(summary, 'noiseCovariance', 'not recorded')) ...
         sprintf('| Multiple-comparison correction | %s |', correctionName(opts.correctm)) ...
-        sprintf('| Permutations | %d |', opts.numrandomization) ...
+        correctionParameterRow(summary) ...
+        sprintf('| Permutations | %s |', permutationText(opts.numrandomization)) ...
+        sprintf('| Smallest attainable p | %s |', smallestPText(opts.numrandomization)) ...
         sprintf('| Alpha | %g, %s |', opts.alpha, tailText(opts.tail)) ...
+        '' ...
+        ['Only the contrast above was tested. If several contrasts were run on ' ...
+         'these data, nothing here corrects across them: the correction below is ' ...
+         'family-wise over the vertex-by-time volume of this one test.'] ...
         ''};
+end
+
+function row = correctionParameterRow(summary)
+%CORRECTIONPARAMETERROW  The correction's OWN free parameters.
+%   TFCE's E and H are choices, and a cluster-forming alpha applies only to
+%   the classic method. Printing clusteralpha under TFCE, as an earlier
+%   version did, states that a threshold was used when none was.
+    opts = summary.opts;
+    if strcmpi(opts.correctm, 'tfce')
+        tfce = provenanceField(summary, 'tfce', struct('variant', 'exact', 'E', 0.5, 'H', 2));
+        row = sprintf(['| TFCE parameters | %s variant, E = %g, H = %g ' ...
+            '(no cluster-forming threshold is used) |'], tfce.variant, tfce.E, tfce.H);
+    else
+        row = sprintf('| Cluster-forming threshold | p < %g, minimum %d neighbours |', ...
+            opts.clusteralpha, TransTools.FieldOr(opts, 'minnbchan', 0));
+    end
+end
+
+function lines = forwardModelLines(summary)
+%FORWARDMODELLINES  How the scalp data was mapped onto the cortex.
+%   Its own table because these are a separate set of reporting items from
+%   the statistics, and because every entry in it is a template rather than
+%   a measurement of these participants. Stating that plainly is the point.
+    if ~isfield(summary, 'provenance')
+        lines = {};
+        return;
+    end
+    % EVERY FIELD READ THROUGH A FALLBACK, none directly. A summary can
+    % reach here from an older cached run, or with provenance only partly
+    % filled, and a report generator is the wrong place to discover that:
+    % the analysis has already finished by the time this runs, so an
+    % "Unrecognized field name" here throws away work that succeeded. The
+    % same assumption -- that a struct holds what its name suggests -- has
+    % already cost one crash on a bin whose trial count was text.
+    p = summary.provenance;
+    lines = { ...
+        '## The forward model' ...
+        '' ...
+        '| Component | Value |' ...
+        '| --- | --- |' ...
+        sprintf('| Head model | %s |', provenanceField(summary, 'headModel', 'not recorded')) ...
+        sprintf('| Electrode positions | %s |', provenanceField(summary, 'electrodes', 'not recorded')) ...
+        sprintf('| Coregistration | %s |', provenanceField(summary, 'coregistration', 'not recorded')) ...
+        sprintf('| Source space | %s, %s vertices |', ...
+            provenanceField(summary, 'sourceTemplate', 'not recorded'), ...
+            countText(provenanceField(summary, 'nVertices', NaN))) ...
+        sprintf('| Vertex adjacency | %s |', provenanceField(summary, 'adjacency', 'not recorded')) ...
+        sprintf('| Channels used | %s |', channelsText(summary)) ...
+        sprintf('| Reference | %s |', provenanceField(summary, 'reference', 'not recorded')) ...
+        sprintf('| Variance explained by the fitted sources | %s |', varianceExplainedText(p)) ...
+        '' ...
+        ['Channels whose labels the 10-5 template does not recognise are dropped ' ...
+         'rather than placed by guesswork, so the channel count may be lower than ' ...
+         'the recording''s own. Where subjects differ, the analysis uses only what ' ...
+         'they share: how many spatial patterns a forward model can distinguish is ' ...
+         'bounded by that number, so a single reduced montage limits the whole ' ...
+         'group, and excluding that subject may buy more than including them does.'] ...
+        '' ...
+        ['A HIGH VARIANCE EXPLAINED IS EXPECTED AND IS NOT EVIDENCE THAT THE ' ...
+         'MODEL IS RIGHT. There are far more vertices than electrodes, so the ' ...
+         'inverse can reproduce almost any scalp data almost exactly; near-total ' ...
+         'fit is a property of the problem, not a validation of the solution. It ' ...
+         'is worth reporting only in the negative: a subject whose fit is poor ' ...
+         'indicates something wrong with that subject''s channels or reference, ' ...
+         'and it was a fit of 25% where 96% was available that revealed a ' ...
+         'reference mismatch during this feature''s development.'] ...
+        ''};
+end
+
+function lines = subjectLines(summary)
+%SUBJECTLINES  Who was in it, with the two per-subject numbers that bear on
+%   a source estimate: how many trials were averaged, and how much of that
+%   subject's scalp data the fitted sources actually account for.
+    if ~isfield(summary, 'provenance') || isempty(summary.provenance.subjects)
+        lines = {};
+        return;
+    end
+    rows = summary.provenance.subjects;
+    lines = {'## Subjects' '' ...
+        '| Subject | Trials in contrast | Unexplained variance |' '| --- | --- | --- |'};
+    for i = 1:numel(rows)
+        lines{end + 1} = sprintf('| %s | %s | %s |', ...
+            ReportSections.mdLit(rows(i).id), trialsCell(rows(i)), ...
+            percentText(rows(i).residualVariance)); %#ok<AGROW>
+    end
+    lines = [lines, {'' ...
+        ['Unexplained variance is the fraction of a subject''s scalp data the ' ...
+         'fitted sources do not reproduce. It checks the forward model, not the ' ...
+         'effect: a value near 100% means the model failed for that subject and ' ...
+         'their source estimate should not be trusted. It is not defined for ' ...
+         'sLORETA, whose filter output is a standardised statistic rather than a ' ...
+         'current, and appears as "n/a" there.'] ''}];
+end
+
+function lines = appendixLines(extras)
+%APPENDIXLINES  The unthresholded statistic, once, at the end.
+%   At the end deliberately: it is a check on the analysis rather than a
+%   result, and placing it beside the cluster figures would invite reading
+%   it as one.
+    if ~isfield(extras, 'UnthresholdedMapPath') || isempty(extras.UnthresholdedMapPath)
+        lines = {};
+        return;
+    end
+    lines = { ...
+        '## Appendix: the unthresholded statistic' ...
+        '' ...
+        sprintf('![The test statistic across the whole cortex](<%s>)', extras.UnthresholdedMapPath) ...
+        '' ...
+        ['The test statistic everywhere, averaged over the tested window, with ' ...
+         'nothing masked and no threshold applied. **None of this is a result:** ' ...
+         'the test makes no claim about any vertex here except through the ' ...
+         'clusters above. It is included because a masked map alone hides how ' ...
+         'close the rest of the cortex came, and because a reader is entitled to ' ...
+         'see the statistic the correction was applied to.'] ...
+        ''};
+end
+
+function lines = provenanceLines(summary)
+%PROVENANCELINES  What produced this document.
+%   Last, because nobody reads it until they need it, and then they need it
+%   exactly. Required by COBIDAS MEEG (Pernet et al., 2020): an inverse
+%   solution or a permutation scheme can change between releases, and a
+%   result without a version is not reproducible.
+    if ~isfield(summary, 'provenance')
+        lines = {};
+        return;
+    end
+    v = provenanceField(summary, 'software', struct());
+    lines = { ...
+        '## Software' ...
+        '' ...
+        '| Component | Version |' ...
+        '| --- | --- |' ...
+        sprintf('| MATLAB | %s |', ReportSections.mdLit(softwareField(v, 'matlab'))) ...
+        sprintf('| FieldTrip | %s |', ReportSections.mdLit(softwareField(v, 'fieldtrip'))) ...
+        sprintf('| Alakazam | %s |', ReportSections.mdLit(softwareField(v, 'alakazam'))) ...
+        '' ...
+        ['Permutations are drawn with a seed taken fresh for each run, so ' ...
+         'repeating this analysis gives slightly different p-values. That ' ...
+         'variation is the Monte Carlo error of the test, and it shrinks as the ' ...
+         'permutation count rises.'] ...
+        ''};
+end
+
+% ---- provenance formatting helpers -------------------------------------- %
+function value = provenanceField(summary, field, fallback)
+    value = fallback;
+    if isfield(summary, 'provenance') && isfield(summary.provenance, field)
+        value = summary.provenance.(field);
+    end
+end
+
+function s = regularisationText(summary)
+%REGULARISATIONTEXT  Both the dimensionless knob and the absolute lambda it
+%   produced. The knob is what the analyst set; the absolute value is what
+%   the inverse actually used, and only the latter reproduces the result.
+    reg = provenanceField(summary, 'regParam', TransTools.FieldOr(summary.opts, 'RegParam', NaN));
+    lambda = provenanceField(summary, 'lambda', NaN);
+    if isfinite(lambda)
+        s = sprintf('RegParam %g, giving lambda = %.4g', reg, lambda);
+    else
+        s = sprintf('RegParam %g', reg);
+    end
+end
+
+function s = channelsText(summary)
+%CHANNELSTEXT  The shared montage, and what it cost.
+%   A vertex-wise test must use the channels every subject has, so one
+%   subject with a reduced montage sets the count for everyone. Reporting
+%   only the shared number reads as though nothing was given up.
+    shared = provenanceField(summary, 'nChannels', NaN);
+    counts = provenanceField(summary, 'subjectChannels', []);
+    if isempty(counts) || ~isnumeric(counts)
+        s = sprintf('%s, shared by every subject', countText(shared));
+        return;
+    end
+    if min(counts) == max(counts)
+        s = sprintf('%s, and every subject carries exactly these', countText(shared));
+        return;
+    end
+    limiting = provenanceField(summary, 'limitingSubject', '');
+    s = sprintf(['%s, the set shared by all %d subjects. They carry %d to %d ' ...
+        'channels each (median %d)'], countText(shared), numel(counts), ...
+        min(counts), max(counts), round(median(counts)));
+    if ~isempty(limiting)
+        s = sprintf('%s; %s has the fewest and therefore sets this montage', ...
+            s, ReportSections.mdLit(limiting));
+    end
+end
+
+function s = varianceExplainedText(p)
+    if ~isfield(p, 'residualVariance') || all(isnan(p.residualVariance))
+        s = 'not defined for this inverse (see Subjects)';
+        return;
+    end
+    rv = p.residualVariance(~isnan(p.residualVariance));
+    s = sprintf('%.1f%% to %.1f%% across subjects and bins', ...
+        100 * (1 - max(rv)), 100 * (1 - min(rv)));
+end
+
+function s = softwareField(v, name)
+    if isstruct(v) && isfield(v, name) && ~isempty(v.(name))
+        s = char(string(v.(name)));
+    else
+        s = 'unknown';
+    end
+end
+
+function s = trialsCell(row)
+%TRIALSCELL  A trial count, or the bins' own description when there is no
+%   single number to give (a difference bin records '39-161', not a count).
+    if isfield(row, 'trialsText') && ~isempty(row.trialsText)
+        s = ReportSections.mdLit(row.trialsText);
+        return;
+    end
+    if ~isfield(row, 'trials')
+        s = 'not recorded';
+        return;
+    end
+    s = countText(row.trials);
+end
+
+function s = countText(n)
+    if ~isnumeric(n) || ~isscalar(n) || isnan(n)
+        s = 'not recorded';
+    else
+        s = sprintf('%d', round(n));
+    end
+end
+
+function s = percentText(x)
+    if ~isnumeric(x) || ~isscalar(x) || isnan(x)
+        s = 'n/a';
+    else
+        s = sprintf('%.0f%%', 100 * x);
+    end
+end
+
+function s = permutationText(n)
+    if ischar(n) || isstring(n)
+        s = 'all (exhaustive)';
+    else
+        s = sprintf('%d', n);
+    end
+end
+
+function s = smallestPText(n)
+%SMALLESTPTEXT  A Monte Carlo p-value cannot fall below 1/(N+1). Stated so
+%   that "p < 0.001" is read as the resolution of the test rather than as a
+%   vanishingly small probability.
+    if ischar(n) || isstring(n)
+        s = 'exact (every permutation enumerated)';
+    else
+        s = sprintf('%.4g (= 1/(%d+1), the resolution of a Monte Carlo test)', ...
+            1 / (double(n) + 1), n);
+    end
 end
 
 function lines = limitationLines()

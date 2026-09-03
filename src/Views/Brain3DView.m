@@ -1,4 +1,4 @@
-classdef Brain3DView < handle
+classdef Brain3DView < AlakazamView
 %BRAIN3DVIEW  A rotatable 3D brain surface, coloured by an averaged ERP,
 %   scrubbable by time, in any of four Projection modes:
 %     "Scalp topography" (default) -- the scalp-measured amplitude,
@@ -79,11 +79,6 @@ classdef Brain3DView < handle
 %   TRANSTOOLS.DRAWSOURCEMAP, TRANSTOOLS.ENSUREFIELDTRIP.
 
     properties
-        % Called (no args) when the user clicks the head, the bin dropdown
-        % or the slider. Wired by AlakazamPlotter to
-        % Alakazam.registerTileClick -- see ScalpDistributionView's own
-        % ActivatedFcn for why.
-        ActivatedFcn = function_handle.empty
     end
 
     properties (SetAccess = private)
@@ -263,16 +258,59 @@ classdef Brain3DView < handle
             this.Strip.onWheel(callbackData);
         end
 
-        function notifyActivated(this)
-        %NOTIFYACTIVATED  Call ActivatedFcn, if set, guarding the usual
-        %   empty-function_handle case.
-            if ~isempty(this.ActivatedFcn)
-                this.ActivatedFcn();
-            end
-        end
     end
 
     methods (Access = private)
+        function label = binLabelFor(this, selected)
+        %BINLABELFOR  The bin name a stored estimate would be filed under.
+        %   SourceEstimate keys its bins by label, not by index, because an
+        %   index means nothing once a dataset has been reordered or a bin
+        %   dropped. Returns '' when this dataset has no bin descriptions,
+        %   which simply means nothing can be matched.
+            label = '';
+            eeg = this.EEG;
+            if ~isfield(eeg, 'bindesc') || isempty(eeg.bindesc)
+                return;
+            end
+            index = this.BinIndices(selected);
+            if index <= numel(eeg.bindesc)
+                label = eeg.bindesc(index).label;
+            end
+        end
+
+        function key = storedEstimateKey(this, method, signed)
+        %STOREDESTIMATEKEY  What this view would need a stored estimate to be.
+        %
+        %   The window and rate are deliberately EMPTY. This view scrubs the
+        %   whole epoch at its own sample rate, so only an estimate stored
+        %   over all of it can serve; one windowed for a cluster test is a
+        %   different fit, and asking for it here would be asking for the
+        %   wrong thing rather than for less of the right thing.
+        %
+        %   RegParam is TransTools.InverseSolution's own default because this
+        %   view does not expose regularisation. If it ever does, this has to
+        %   follow, or the view would silently accept estimates made at a
+        %   different one.
+            if signed
+                orientation = 'normal';
+            else
+                orientation = 'magnitude';
+            end
+            % THE RESOLVED LABELS, not the dataset's own. The stored
+            % estimate's key records the channels BuildSourceForwardModel
+            % actually resolved against the 10-5 template, which is a subset
+            % in a different order from what the dataset offered. Building
+            % this key from the dataset's labels instead meant it could
+            % never match anything, and the reuse path was simply dead.
+            key = SourceCache.Key(this.SourceResolvedLabels, struct( ...
+                'SourceSpace', size(this.SourceModel.pos, 1), ...
+                'Method',      method, ...
+                'Orientation', orientation, ...
+                'RegParam',    0.05, ...
+                'TimeWindow',  [], ...
+                'ResampleHz',  []));
+        end
+
         function onBinChanged(this, binIdx)
         %ONBINCHANGED  TimeScrubStrip's OnBinChangedFcn hook: switch the
         %   displayed bin (redraw() itself is called by TimeScrubStrip
@@ -423,7 +461,21 @@ classdef Brain3DView < handle
             % method that produced it, and the three are on different scales,
             % so reusing one under another's colorbar would mislabel it.
             % METHOD, not this.Mode -- see this function's own header.
-            needsModel = isempty(this.SourceModel);
+            % THE MESH FOLLOWS THE STORED ESTIMATE WHEN THERE IS ONE.
+            % A stored estimate is a vector over ITS OWN vertices, so it can
+            % only be drawn on the sheet it was computed for; demanding the
+            % full-resolution one would refuse every estimate stored at a
+            % coarser mesh, which is the size most analysts can afford. So
+            % this view adopts the stored sheet instead, and rebuilds its
+            % model when that differs from the one it is holding.
+            %
+            % The consequence is visible and deliberate: the surface really
+            % is coarser, so the scale note says which sheet is being drawn
+            % rather than letting a smoother-looking render pass for the
+            % full one.
+            space = SourceCache.Space(eeg, 20484);
+            needsModel = isempty(this.SourceModel) || ...
+                size(this.SourceModel.pos, 1) ~= space;
             needsSolve = ~(isequal(this.SourcePowerBin, this.SelectedBin) && ...
                            isequal(this.SourcePowerMethod, method) && ...
                            isequal(this.SourcePowerSigned, signed));
@@ -439,17 +491,25 @@ classdef Brain3DView < handle
             % fast half and the app looked frozen through the slow one --
             % which is the exact case beginBusy's own two-phase updateFcn
             % exists for.
+            % Both are onCleanup handles whose whole job is to stay alive
+            % until this function returns, so neither is "unused" and
+            % neither can become a ~: dropping restoreBusy would tear the
+            % busy overlay down immediately.
             fig = ancestor(this.Axes, "figure");
             if needsModel
-                [restoreBusy, setBusy] = beginBusy(fig, "Building the head model...");
+                [restoreBusy, setBusy] = beginBusy(fig, "Building the head model..."); %#ok<ASGLU>
             else
-                restoreBusy = beginBusy(fig, "Computing source estimate...");
+                restoreBusy = beginBusy(fig, "Computing source estimate..."); %#ok<NASGU>
             end
 
             if needsModel
                 [this.SourceLeadfield, this.SourceModel, this.SourceResolvedLabels, ...
                     this.SourceElec, this.SourceHeadmodel] = ...
-                    TransTools.BuildSourceForwardModel(scalpLabels);
+                    TransTools.BuildSourceForwardModel(scalpLabels, space);
+                % The normals belong to the sheet, so a new sheet invalidates
+                % them; keeping the old ones would project onto the wrong
+                % geometry without any error.
+                this.SourceNormals = [];
                 setBusy("Computing source estimate...");
             end
 
@@ -457,37 +517,73 @@ classdef Brain3DView < handle
                 return; % the model was missing, but this bin/method is already solved
             end
 
-            % Reorder this bin's channel-by-time data to SourceResolvedLabels'
-            % own order -- REQUIRED, not optional, see
-            % TransTools.BuildSourceForwardModel's own header comment.
-            [tf, reorder] = ismember(lower(this.SourceResolvedLabels), lower(scalpLabels));
-            if ~all(tf)
-                throw(MException("Alakazam:Brain3DView", ...
-                    ["Something appears to have gone wrong internally, I'm afraid: a resolved " ...
-                     "source-model channel is missing from this dataset's own positioned channels."]));
-            end
-            scalpData = eeg.data(eeg.ScalpHasPos, :, this.BinIndices(this.SelectedBin)); % nScalpChan x nTime
-            values = scalpData(reorder, :);
+            % A STORED ESTIMATE IS USED WHEN THERE IS AN EXACTLY MATCHING
+            % ONE, and only then. The SourceEstimate transformation may have
+            % inverted this dataset already; SourceCache.Lookup
+            % checks both that the settings agree and that the data is still
+            % the data the estimate was computed from, and returns nothing on
+            % any doubt. The residual variance and scale labels come back
+            % with it, since those are displayed and recomputing an inverse
+            % to recover two strings would defeat the point.
+            %
+            % In practice this matches only when the estimate was stored over
+            % the WHOLE epoch at full rate, because that is what this view
+            % scrubs through. A stored estimate windowed for a cluster test
+            % is a different fit and is correctly refused, so the two uses do
+            % not share a node unless the analyst asked for the wide one.
+            %
+            % Asked BEFORE the data is reordered and the surface normals are
+            % built: both are pure setup for an inverse that may not need to
+            % happen, and the normals in particular are not free.
+            [stored, storedInfo] = SourceCache.Lookup(eeg, ...
+                this.binLabelFor(this.SelectedBin), this.storedEstimateKey(method, signed));
 
-            solveOpts = struct();
-            if signed
-                if isempty(this.SourceNormals)
-                    % Pure geometry, so once per source model rather than
-                    % per bin: the template sheet never changes.
-                    this.SourceNormals = TransTools.SurfaceNormals(this.SourceModel);
+            if ~isempty(stored)
+                this.SourcePower = stored;
+                info = struct( ...
+                    'ScaleLabel',       TransTools.FieldOr(storedInfo, 'scaleLabel', ''), ...
+                    'ScaleNote',        TransTools.FieldOr(storedInfo, 'scaleNote', ''), ...
+                    'ResidualVariance', TransTools.FieldOr(storedInfo, 'residualVariance', NaN));
+            else
+                % Reorder this bin's channel-by-time data to
+                % SourceResolvedLabels' own order -- REQUIRED, not optional,
+                % see TransTools.BuildSourceForwardModel's own header.
+                [tf, reorder] = ismember(lower(this.SourceResolvedLabels), lower(scalpLabels));
+                if ~all(tf)
+                    throw(MException("Alakazam:Brain3DView", ...
+                        ["Something appears to have gone wrong internally, I'm afraid: a resolved " ...
+                         "source-model channel is missing from this dataset's own positioned channels."]));
                 end
-                solveOpts.Orientation = 'normal';
-                solveOpts.Normals     = this.SourceNormals;
-            end
+                scalpData = eeg.data(eeg.ScalpHasPos, :, this.BinIndices(this.SelectedBin));
+                values = scalpData(reorder, :);
 
-            [this.SourcePower, info] = TransTools.InverseSolution(values, this.SourceLeadfield, ...
-                this.SourceElec, this.SourceHeadmodel, method, solveOpts);
+                solveOpts = struct();
+                if signed
+                    if isempty(this.SourceNormals)
+                        % Pure geometry, so once per source model rather than
+                        % per bin: the template sheet never changes.
+                        this.SourceNormals = TransTools.SurfaceNormals(this.SourceModel);
+                    end
+                    solveOpts.Orientation = 'normal';
+                    solveOpts.Normals     = this.SourceNormals;
+                end
+
+                [this.SourcePower, info] = TransTools.InverseSolution(values, this.SourceLeadfield, ...
+                    this.SourceElec, this.SourceHeadmodel, method, solveOpts);
+            end
             this.SourcePowerBin    = this.SelectedBin;
             this.SourcePowerMethod = method;
             this.SourcePowerSigned = signed;
             this.SourceScaleLabel  = info.ScaleLabel;
             this.SourceScaleNote   = info.ScaleNote;
             this.SourceResidualVariance = info.ResidualVariance;
+            % Named on the scale note because a coarser sheet is a real
+            % difference in what is being shown, not an implementation
+            % detail: 5124 vertices renders visibly smoother than 20484 and
+            % would otherwise be indistinguishable from a better estimate.
+            this.SourceScaleNote = sprintf('%s Drawn on the %d-vertex template sheet.', ...
+                this.SourceScaleNote, size(this.SourceModel.pos, 1));
+
             if signed
                 this.SourceScaleLabel = [info.ScaleLabel ', signed'];
                 this.SourceScaleNote  = [info.ScaleNote ' Projected onto the cortical normal, ' ...
@@ -592,3 +688,4 @@ classdef Brain3DView < handle
         end
     end
 end
+

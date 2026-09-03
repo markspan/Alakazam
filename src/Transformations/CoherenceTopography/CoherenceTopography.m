@@ -59,7 +59,10 @@ if interactive
         {'Stop'; 'TimeStop'}, stored.TimeStop);
     if isempty(opts)
         EEG = [];   % cancelled
-        options = [];   % the contract is two outputs; both must be assigned
+        opts = [];   % the contract is two outputs; both must be assigned
+        % (named for THIS function's own second output: assigning a
+        % variable called "options" here left opts holding the Init
+        % sentinel, which is what the caller then tried to store)
         return;
     end
     TransformSettings.set('CoherenceTopography', opts);
@@ -91,7 +94,7 @@ computeOpts.RefIndex = refIdx;
 %  a direct readlocs lookup by label, so no eeg_checkset is run on an averaged/
 %  bin-based struct, and the template's own nose-up orientation is kept).
 [scalpLocs, hasPos] = TransTools.TemplateScalpLocs(input.chanlocs, ...
-    TransTools.Dipfit1005File('Alakazam:CoherenceTopography'));
+    TransTools.Template1005File('Alakazam:CoherenceTopography'));
 if ~any(hasPos)
     throw(MException('Alakazam:CoherenceTopography', ...
         ['Problem in CoherenceTopography: I''m afraid none of this dataset''s channels match a ' ...

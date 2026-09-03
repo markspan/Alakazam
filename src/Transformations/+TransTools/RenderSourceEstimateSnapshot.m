@@ -1,4 +1,4 @@
-function info = RenderSourceEstimateSnapshot(values, times, leadfield, elec, headmodel, sourcemodel, method, pngPath)
+function [info, sourcePower] = RenderSourceEstimateSnapshot(values, times, leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed)
 %RENDERSOURCEESTIMATESNAPSHOT  Solve METHOD's inverse for one bin's full
 %   time course, render it at that bin's global-field-power peak onto an
 %   offscreen figure, and save the result to PNGPATH -- the batch/report
@@ -44,7 +44,23 @@ function info = RenderSourceEstimateSnapshot(values, times, leadfield, elec, hea
 %
 %   See also TRANSTOOLS.INVERSESOLUTION, TRANSTOOLS.DRAWSOURCEMAP,
 %   TRANSTOOLS.BUILDSOURCEFORWARDMODEL, GENERATESOURCEESTIMATEREPORTASSETS.
-    [sourcePower, info] = TransTools.InverseSolution(values, leadfield, elec, headmodel, method);
+    % The estimate this function would compute is described by
+    % SourceCache.SnapshotKey. A caller that wants to supply a
+    % stored one asks THAT for the key rather than reconstructing it from
+    % assumptions about the InverseSolution call below, which is how a
+    % caller's key silently stops matching when this function changes.
+    %
+    % SOLVED HERE ONLY IF NOBODY HAS SOLVED IT ALREADY. A caller holding a
+    % stored estimate for this exact method passes it in; everything below
+    % is then identical, which is the point -- a snapshot must not depend on
+    % whether the inverse ran now or last week.
+    if nargin >= 9 && ~isempty(precomputed) && isstruct(precomputed) && ...
+            isfield(precomputed, 'values') && ~isempty(precomputed.values)
+        sourcePower = precomputed.values;
+        info = precomputed.info;
+    else
+        [sourcePower, info] = TransTools.InverseSolution(values, leadfield, elec, headmodel, method);
+    end
 
     gfp = sqrt(mean(double(values) .^ 2, 1));
     [~, peakIdx] = max(gfp);
@@ -66,7 +82,7 @@ function info = RenderSourceEstimateSnapshot(values, times, leadfield, elec, hea
     % folder), so a failed report never leaves stray offscreen figures
     % accumulating in the caller's session.
     fig = figure('Visible', 'off', 'HandleVisibility', 'off', 'Color', 'white');
-    closeFig = onCleanup(@() close(fig)); %#ok<NASGU>
+    closeFig = onCleanup(@() close(fig));
     ax = axes('Parent', fig);
 
     TransTools.DrawSourceMap(ax, sourcePower(:, peakIdx), sourcemodel, mapLimit, [], false);

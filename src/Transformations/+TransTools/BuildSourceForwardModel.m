@@ -44,20 +44,19 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   TransTools.ComputeSourceEstimate path ignores them entirely, and the
 %   three-output call it uses stays valid.
 %
-%   COORDINATE CHOICE, AND WHY THIS DOES NOT REUSE ALAKAZAM'S OWN CHANLOCS
-%   POSITIONS: Brain3DView's existing Scalp-projection mode
-%   (TransTools.DrawBrainMap) projects dipfit's own standard_1005.elc
-%   positions onto a BrainNet Viewer mesh, verified directly to be
-%   compatible (comparable head radius, same coordinate convention). This
-%   function instead reads electrode positions straight from FieldTrip's
-%   OWN copy of the 10-5 template (template/electrode/standard_1005.elc,
-%   read with ft_read_sens), which -- even though it likely traces back to
-%   the same lineage as dipfit's copy -- is not independently verified
-%   here to be numerically identical. FieldTrip ships and tests its own
-%   template electrodes/headmodel/sourcemodel together specifically for
-%   this "no digitised positions, no per-subject MRI" scenario, so using
-%   FieldTrip's own self-consistent set end to end avoids ever having to
-%   trust a cross-toolkit coordinate assumption this file cannot verify
+%   COORDINATE CHOICE: electrode positions come from
+%   TransTools.Template1005File, the single accessor every part of the
+%   application now reads its 10-5 template through. It returns FieldTrip's
+%   own copy here, which keeps the electrodes self-consistent with the BEM
+%   head model and cortical sheet FieldTrip ships and tests alongside them
+%   for exactly this "no digitised positions, no per-subject MRI" case.
+%
+%   An earlier version of this comment warned that dipfit's copy of the
+%   same template was "not independently verified here to be numerically
+%   identical" and avoided it on that basis. It has since been measured:
+%   the two files carry the same 346 labels in the same order with a
+%   maximum displacement of 0 mm, and Template1005Test now asserts it. The
+%   caution was reasonable and the answer turned out to be that they agree
 %   (no FieldTrip installation was available while writing this).
 %
 %   CACHING: this is expensive (a leadfield over several thousand cortical
@@ -114,8 +113,7 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 
     % Template electrodes: FieldTrip's own 10-5 set, not Alakazam's dipfit
     % copy -- see the header comment for why.
-    elecFile = fullfile(ftRoot, 'template', 'electrode', 'standard_1005.elc');
-    elec = ft_read_sens(elecFile);
+    elec = ft_read_sens(TransTools.Template1005File('Alakazam:BuildSourceForwardModel'));
     elec = ft_convert_units(elec, 'mm');
 
     keep = ismember(lower(elec.label), lower(labelsCell));

@@ -15,7 +15,7 @@ function EEG = EnsureChanlocs(EEG, errorId, elcFile)
 %   unmodified. Kept here in case a future caller genuinely needs the
 %   all-or-nothing behaviour; delete if it stays unused.
 %
-%   See also: FillChanlocs, Dipfit1005File, AutoEyeICA, AutoGEDAI.
+%   See also: FillChanlocs, Template1005File, AutoEyeICA, AutoGEDAI.
 
     EEG = TransTools.FillChanlocs(EEG, errorId, elcFile);
 

@@ -20,7 +20,7 @@ function [EEG, options] = DefineBins(input, varargin)
 % The language itself (lexer, parser, evaluator, epoch cutter) lives in
 % @DefineBinsEngine, one method per file, alongside this transformation
 % (src/Transformations/DefineBins/); the modal script editor lives in
-% src/Dialogs/DefineBinsDialog.m, matching every other transformation's own
+% DefineBinsDialog.m (beside this file), matching every other transformation's own
 % dialog. This file stays the callable transformation itself, orchestrating
 % the two: the plugin contract dispatches transformations with
 % feval('DefineBins', ...), which needs a plain function returning
