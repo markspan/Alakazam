@@ -97,5 +97,47 @@ classdef AverageTest < matlab.unittest.TestCase
             EEG = rmfield(EEG, 'trials');
             testCase.verifyError(@() Average(EEG), 'Alakazam:Average');
         end
+
+        function averagesASpectrumPerBin(testCase)
+        %AVERAGESASPECTRUMPERBIN  A frequency-domain dataset averages per
+        %   bin, over that bin's own trials, like any other.
+        %
+        %   THERE IS NOTHING HERE TO DISTINGUISH VOLT FROM POWER, and that
+        %   is the point. A guard once refused Volt spectra, reasoning that
+        %   averaging voltage across trials is a coherent average that
+        %   cancels whatever is not phase locked. Fourier.m stores
+        %   abs(fft(...)), so phase is gone before Average ever sees the
+        %   data and there is nothing left to cancel with: mean(|X|) is an
+        %   ordinary incoherent mean amplitude spectrum that KEEPS induced
+        %   activity. The coherent average is the other order entirely --
+        %   Fourier of an already-averaged dataset -- which is a different
+        %   and equally valid thing to compute. Average cannot tell the
+        %   quantities apart, and does not need to.
+            EEG = spectrumEEG();
+            result = Average(EEG);
+
+            testCase.verifyEqual(size(result.data, 3), 2, ...
+                'One spectrum per bin.');
+            testCase.verifyEqual(result.data(:, :, 1), ...
+                mean(EEG.data(:, :, [1 2]), 3, 'omitnan'), 'AbsTol', 1e-10);
+            testCase.verifyEqual(result.data(:, :, 2), ...
+                mean(EEG.data(:, :, [3 4]), 3, 'omitnan'), 'AbsTol', 1e-10);
+            testCase.verifyEqual(result.DataType, 'FrequencyDomain', ...
+                'Averaging a spectrum leaves it a spectrum.');
+        end
     end
+end
+
+function EEG = spectrumEEG()
+%SPECTRUMEEG  A frequency-domain dataset, two bins over four trials.
+%
+%   Built by hand rather than by running Fourier: this file is about what
+%   Average does with a spectrum, not about how the spectrum was made.
+    EEG = makeTestEEG('nbchan', 2, 'trials', 4);
+    EEG.DataType = 'FrequencyDomain';
+    EEG.freqs = linspace(0, EEG.srate / 2, size(EEG.data, 2));
+    EEG.bindesc = struct( ...
+        'label',  {'A', 'B'}, ...
+        'index',  {1, 2}, ...
+        'trials', {[1 2], [3 4]});
 end

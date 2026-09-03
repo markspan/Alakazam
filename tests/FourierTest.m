@@ -159,6 +159,90 @@ classdef FourierTest < matlab.unittest.TestCase
         %   of the app's usual "Problem in Fourier: ..." message.
             testCase.verifyError(@() Fourier(), 'Alakazam:Fourier');
         end
+
+        function complexOutputKeepsThePhase(testCase)
+        %COMPLEXOUTPUTKEEPSTHEPHASE  'Complex' stores the raw coefficients,
+        %   and its magnitude is exactly the 'Volt' output.
+            EEG = struct('data', testSignal(), 'srate', 250);
+            base = struct('FullSpectrum', true, 'Window', 'No', ...
+                'Window_Length', 100, 'Resolution', 'Max', 'ResVal', 1);
+
+            cOpts = base; cOpts.Output = 'Complex';
+            vOpts = base; vOpts.Output = 'Volt';
+            [C, ~] = Fourier(EEG, cOpts);
+            [V, ~] = Fourier(EEG, vOpts);
+
+            testCase.verifyFalse(isreal(C.data), 'Complex output must keep phase.');
+            testCase.verifyTrue(isreal(V.data), 'Volt output is a magnitude.');
+            testCase.verifyEqual(abs(C.data), V.data, 'AbsTol', 1e-12, ...
+                'abs(Complex) must reproduce Volt exactly: same quantity, one step earlier.');
+        end
+
+        function averagingComplexSpectraEqualsTransformingTheAverage(testCase)
+        %AVERAGINGCOMPLEXSPECTRAEQUALSTRANSFORMINGTHEAVERAGE  The reason
+        %   the option exists.
+        %
+        %   The DFT is linear, so a coherent (complex) average of per-trial
+        %   spectra IS the spectrum of the averaged signal. That identity
+        %   is unavailable from the magnitude outputs, where abs() has
+        %   already discarded the phase the cancellation needs.
+        %
+        %   WINDOW='NO' IS LOAD-BEARING HERE, not incidental. Fourier's
+        %   window correction divides by var(unwindowed)/var(windowed)
+        %   computed from each segment's OWN data, so with a taper the
+        %   per-trial and averaged runs apply different effective windows
+        %   and the identity fails by ~15% on real data. Untapered, norm is
+        %   1 and the two agree to machine precision, which is what this
+        %   pins down.
+            nTrials = 5;
+            rng(42);
+            trials = zeros(1, 128, nTrials);
+            for k = 1:nTrials
+                trials(1, :, k) = testSignal() + 0.3 * randn(1, 128);
+            end
+
+            base = struct('Output', 'Complex', 'FullSpectrum', true, ...
+                'Window', 'No', 'Window_Length', 100, ...
+                'Resolution', 'Max', 'ResVal', 1);
+
+            perTrial = struct('data', trials, 'srate', 250);
+            [C, ~] = Fourier(perTrial, base);
+            coherent = mean(C.data, 3);
+
+            averaged = struct('data', mean(trials, 3), 'srate', 250);
+            [B, ~] = Fourier(averaged, base);
+
+            testCase.verifyEqual(coherent, B.data, 'AbsTol', 1e-10, ...
+                'mean(Fourier) and Fourier(mean) must agree for complex output.');
+        end
+
+        function magnitudeAveragingIsNotTheSameThing(testCase)
+        %MAGNITUDEAVERAGINGISNOTTHESAMETHING  And the difference is not an
+        %   error: mean(|X|) >= |mean(X)| by the triangle inequality, the
+        %   gap being the induced, non-phase-locked part. This is why the
+        %   two outputs both need to exist.
+            nTrials = 5;
+            rng(42);
+            trials = zeros(1, 128, nTrials);
+            for k = 1:nTrials
+                trials(1, :, k) = testSignal() + 0.3 * randn(1, 128);
+            end
+            base = struct('FullSpectrum', true, 'Window', 'No', ...
+                'Window_Length', 100, 'Resolution', 'Max', 'ResVal', 1);
+
+            cOpts = base; cOpts.Output = 'Complex';
+            vOpts = base; vOpts.Output = 'Volt';
+            C = Fourier(struct('data', trials, 'srate', 250), cOpts);
+            V = Fourier(struct('data', trials, 'srate', 250), vOpts);
+
+            incoherent = mean(V.data, 3);          % mean of magnitudes
+            coherent   = abs(mean(C.data, 3));     % magnitude of the mean
+
+            testCase.verifyGreaterThanOrEqual(incoherent + 1e-12, coherent, ...
+                'mean(|X|) >= |mean(X)| everywhere.');
+            testCase.verifyGreaterThan(max(incoherent(:) - coherent(:)), 1e-6, ...
+                'With noise across trials the two must actually differ.');
+        end
     end
 end
 

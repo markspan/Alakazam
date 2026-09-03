@@ -61,6 +61,7 @@ classdef FourierView < AlakazamView
         Buttons         % ZoomPanButtons, the zoom/pan/channel/trial-step row + sliders
         Channel = 1     % channel currently shown
         CurrentTrial = 1
+        ShowPhase = false   % complex data only: plot angle() rather than abs()
     end
 
     methods
@@ -107,7 +108,25 @@ classdef FourierView < AlakazamView
             delete(allchild(ax));
             freqs    = this.EEG.freqs;
             spectrum = reshape(this.EEG.data(this.Channel, :, this.CurrentTrial), 1, []);
-            if AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
+
+            % COMPLEX DATA MUST NEVER REACH plot() AS-IS. Fourier's
+            % 'Complex' output keeps the raw coefficients, and plot() given
+            % complex y IGNORES the x argument entirely and draws real
+            % against imaginary -- a picture that looks like a plot, is not
+            % a spectrum, and carries no frequency axis at all. Reduce to a
+            % real quantity here, once, before anything draws.
+            phaseMode = this.ShowPhase && ~isreal(spectrum);
+            if phaseMode
+                spectrum = unwrap(angle(spectrum));
+            elseif ~isreal(spectrum)
+                spectrum = abs(spectrum);
+            end
+
+            % Phase is not smoothed and gets no band fills: a moving mean
+            % over a wrapped-then-unwrapped angle is not a meaningful
+            % average, and shading the area under a phase curve implies an
+            % integral that means nothing.
+            if ~phaseMode && AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
                 % Smoothed once, here, before either the line or the band
                 % shading is drawn: both should show the same trend, not a
                 % smoothed line over raw-jagged band fills.
@@ -115,9 +134,14 @@ classdef FourierView < AlakazamView
             end
 
             hold(ax, "on");
-            this.drawBands(ax, freqs, spectrum);
+            if ~phaseMode
+                this.drawBands(ax, freqs, spectrum);
+            end
             plot(ax, freqs, spectrum, "Color", "k", "LineWidth", 1);
             hold(ax, "off");
+            if phaseMode
+                ylabel(ax, 'phase (rad, unwrapped)');
+            end
 
             titleStr = sprintf("Channel %i: %s", this.Channel, this.EEG.chanlocs(this.Channel).labels);
             nseg = size(this.EEG.data, 3);
@@ -142,6 +166,13 @@ classdef FourierView < AlakazamView
                     end
                 end
             end
+            if ~isreal(this.EEG.data)
+                if phaseMode
+                    titleStr = sprintf('%s   [phase -- P for magnitude]', titleStr);
+                else
+                    titleStr = sprintf('%s   [magnitude -- P for phase]', titleStr);
+                end
+            end
             title(ax, titleStr);
 
             % x-limits are owned by this.Buttons (persists zoom/pan across a
@@ -153,7 +184,8 @@ classdef FourierView < AlakazamView
 
         function onKey(this, event)
         %ONKEY  Up/down arrows step the channel; left/right step the
-        %   trial/bin (multi-trial data only). Public (not a private
+        %   trial/bin (multi-trial data only); P switches between magnitude
+        %   and phase when the data is complex. Public (not a private
         %   helper): dispatched by Alakazam.dispatchKey for whichever tab
         %   is currently selected -- see the constructor comment.
             switch lower(event.Key)
@@ -165,6 +197,14 @@ classdef FourierView < AlakazamView
                     this.CurrentTrial = max(1, this.CurrentTrial - 1);
                 case "rightarrow"
                     this.CurrentTrial = min(size(this.EEG.data, 3), this.CurrentTrial + 1);
+                case "p"
+                    % Only meaningful for Fourier's 'Complex' output; on a
+                    % magnitude spectrum there is no phase to show, so the
+                    % key does nothing rather than toggling to a blank plot.
+                    if isreal(this.EEG.data)
+                        return;
+                    end
+                    this.ShowPhase = ~this.ShowPhase;
                 otherwise
                     return;
             end

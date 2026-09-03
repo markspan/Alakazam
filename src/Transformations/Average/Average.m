@@ -46,24 +46,6 @@ if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
          'run Average on the segmented result.']));
 end
 
-% AVERAGING A VOLTAGE SPECTRUM IS ALMOST NEVER WHAT IS WANTED. Fourier on
-% epoched data gives one spectrum per trial, and averaging those is the
-% right move for a POWER quantity: an incoherent average, which is what a
-% spectrum of a group of trials means. For a voltage quantity the same mean
-% is a COHERENT average -- it cancels every component that is not phase
-% locked to the epoch, so the result is real, quiet, plausible, and answers
-% a different question. Nothing downstream could detect it, which is why it
-% is refused here rather than warned about.
-if isfield(input, 'DataType') && strcmpi(input.DataType, 'FrequencyDomain') && ...
-        isfield(input, 'FourierOutput') && ...
-        any(strcmpi(input.FourierOutput, {'Volt', 'VoltDens'}))
-    throw(MException('Alakazam:Average', '%s', sprintf( ...
-        ['Problem in Average: this is a %s spectrum, and averaging voltage across ' ...
-         'trials cancels everything that is not phase-locked, which is rarely what ' ...
-         'a spectrum is for. Re-run Fourier with Power (or PowerDens) and average ' ...
-         'that instead.'], input.FourierOutput)));
-end
-
 if ~isfield(input, 'trials')
     throw(MException('Alakazam:Average', ...
         'Problem in Average: I''m afraid this dataset is missing its trial count, so it cannot be treated as segmented data.'));

@@ -27,7 +27,21 @@ function [ output, options ] = Fourier( varargin )
 %       the parameters for the Fourier transformation (only these fields are
 %       read by the compute; the app-styled TransformOptionsDialog collects
 %       exactly this set):
-%       - Output : Output format ('Volt', 'Power', 'VoltDens', 'PowerDens').
+%       - Output : Output format ('Volt', 'Power', 'VoltDens', 'PowerDens',
+%         'Complex'). The first four are MAGNITUDES: abs() is applied per
+%         segment, so phase is discarded and .data is real. 'Complex' keeps
+%         the raw coefficients instead, .data is complex, and abs() of it
+%         reproduces 'Volt' exactly.
+%
+%         WHICH ONE YOU WANT DEPENDS ON THE ORDER YOU INTEND TO AVERAGE IN.
+%         Averaging magnitude spectra across trials is an INCOHERENT
+%         average: it keeps induced (non-phase-locked) activity, and is the
+%         total spectrum. Averaging complex spectra is a COHERENT average:
+%         everything not phase locked to the epoch cancels, leaving the
+%         evoked spectrum, and it equals running Fourier on an already
+%         averaged dataset (the DFT is linear, so those two agree exactly).
+%         The two differ by the induced power, which is frequently most of
+%         the signal, so this is a real choice and not a formatting one.
 %       - FullSpectrum : logical; when true the (one-sided) magnitude is
 %         doubled (fs = 2 below) to account for the folded negative half.
 %       - Window : Windowing function used ('Hanning', 'Hamming', etc.; see
@@ -89,7 +103,11 @@ if interactive
         end
     end
 
-    outputs     = {'Volt', 'Power', 'VoltDens', 'PowerDens'};
+    % 'Complex' is a UNIT here rather than a separate "keep phase" tick
+    % box, so the invalid combinations cannot be expressed: power is
+    % |X|^2 by definition, and a "Power + keep phase" checkbox state would
+    % have no meaning to honour.
+    outputs     = {'Volt', 'Power', 'VoltDens', 'PowerDens', 'Complex'};
     windows     = {'No', 'Hanning', 'Hamming', 'Bartlett', 'BlackmanHarris', ...
                    'BohmanWin', 'NuttallWin', 'ParzenWin', 'RectWin', 'Triang'};
     resolutions = {'Max', 'Other'};
@@ -122,15 +140,6 @@ input = varargin{1};
 output = input;
 
 output.DataType = 'FrequencyDomain';
-% WHICH QUANTITY THIS IS, recorded on the dataset rather than only in the
-% node's stored options. Averaging a spectrum across trials is only
-% meaningful for a power quantity: averaging a voltage one is a COHERENT
-% average, which cancels everything not phase-locked and yields a quiet,
-% entirely plausible spectrum answering a question nobody asked. Average
-% cannot warn about that without knowing what it is holding, and a
-% downstream transformation should not have to go and read the provenance
-% record to find out.
-output.FourierOutput = char(string(options.Output));
 [nchan,nsamp,nseg] = size(input.data);
 
 %% use full spectrum: power * 2;
@@ -163,7 +172,13 @@ if (strcmpi(options.Resolution, 'Other'))
     NFFT = 2^nextpow2(floor(input.srate/options.ResVal)); 
 end
 
-data = zeros(nchan, NFFT, nseg);
+if strcmpi(options.Output, 'Complex')
+    % Preallocated complex up front: assigning a complex page into a real
+    % array works, but reallocates the whole thing on the first segment.
+    data = complex(zeros(nchan, NFFT, nseg));
+else
+    data = zeros(nchan, NFFT, nseg);
+end
 
 output.trials = nseg;
 
@@ -181,23 +196,30 @@ for seg = 1:nseg
         
         corrwin = repmat(fullwin ./ norm, nchan,1);
 
-        % Volt is the base quantity (BVA CORRECT -- verified against
-        % BrainVision Analyzer's own output); Power/VoltDens/PowerDens are
-        % all a fixed transform of it, so it is computed once per segment
-        % and reshaped per Output rather than the same fft() call repeated
-        % under four near-identical if-branches (the four used to each
-        % independently recompute it, only one of them ever actually
-        % running since options.Output is a single fixed string).
-        volt = fs*(abs(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp)))';
+        % The complex spectrum is the base quantity: every Output is a
+        % fixed transform of it (Volt is its magnitude, BVA CORRECT --
+        % verified against BrainVision Analyzer's own output; Power and the
+        % two densities follow from that). So it is computed once per
+        % segment and reshaped per Output, rather than the same fft() call
+        % repeated under near-identical branches that each recompute it
+        % while only one ever runs, options.Output being a single fixed
+        % string.
+        %
+        % 'Complex' is simply this quantity before abs() is taken, which is
+        % why it costs nothing to offer: the phase was always computed here
+        % and then thrown away.
+        spec = fs*(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp))';
         switch lower(options.Output)
+            case 'complex'
+                data(:,:,seg) = spec;
             case 'volt'
-                data(:,:,seg) = volt;
+                data(:,:,seg) = abs(spec);
             case 'power'
-                data(:,:,seg) = volt .^ 2;
+                data(:,:,seg) = abs(spec) .^ 2;
             case 'voltdens'
-                data(:,:,seg) = volt ./ (input.srate/NFFT);
+                data(:,:,seg) = abs(spec) ./ (input.srate/NFFT);
             case 'powerdens'
-                data(:,:,seg) = (volt .^ 2) ./ (input.srate/NFFT);
+                data(:,:,seg) = (abs(spec) .^ 2) ./ (input.srate/NFFT);
         end
 end
 
