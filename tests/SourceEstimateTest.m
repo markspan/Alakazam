@@ -44,13 +44,20 @@ classdef SourceEstimateTest < matlab.unittest.TestCase
             base = testCase.settings();
             baseKey = SourceCache.Key(labels, base);
 
+            % TIMEWINDOW AND RESAMPLEHZ ARE ABSENT ON PURPOSE. They were
+            % here, and they were wrong to be: the spatial filter is
+            % data-independent, so cropping commutes with inverting (a
+            % relative 1.5e-16, measured for mne, sloreta and eloreta) and
+            % a wider estimate genuinely is a superset of a narrower one.
+            % Keyed on them, a whole-epoch estimate could not answer for
+            % 200-400 ms and every subject re-inverted per window tried.
+            % SourceCache.Lookup checks coverage at the point of use
+            % instead, which the cropping tests below cover.
             changes = { ...
                 'SourceSpace', 8196; ...
                 'Method',      'sloreta'; ...
                 'Orientation', 'magnitude'; ...
-                'RegParam',    0.10; ...
-                'TimeWindow',  [100 300]; ...
-                'ResampleHz',  50};
+                'RegParam',    0.10};
             for k = 1:size(changes, 1)
                 changed = base;
                 changed.(changes{k, 1}) = changes{k, 2};
@@ -82,16 +89,101 @@ classdef SourceEstimateTest < matlab.unittest.TestCase
                 SourceCache.Key({'FZ', 'cz'}, opts)));
         end
 
-        function anUnsetWindowIsNotTheSameAsOneCoveringEverything(testCase)
-        %ANUNSETWINDOWISNOTTHESAMEASONECOVERINGEVERYTHING  [] means
-        %   "whatever this dataset spans", which is a different instruction
-        %   from an explicit range and can differ between datasets.
-            labels = {'Fz', 'Cz'};
-            unset = testCase.settings(); unset.TimeWindow = [];
-            explicit = testCase.settings(); explicit.TimeWindow = [-200 800];
-            testCase.verifyFalse(isequaln( ...
-                SourceCache.Key(labels, unset), ...
-                SourceCache.Key(labels, explicit)));
+        % ---- cropping a stored estimate to what was asked for -----------
+        function aStoredEstimateIsCroppedToTheRequestedWindow(testCase)
+        %ASTOREDESTIMATEISCROPPEDTOTHEREQUESTEDWINDOW  The reuse that the
+        %   window-in-the-key design made impossible.
+            EEG = testCase.datasetWithEstimate(0:10:190);   % 0..190 ms, 100 Hz
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+
+            [values, info] = SourceCache.Lookup(EEG, 'A', key, ...
+                struct('TimeWindow', [50 150], 'ResampleHz', []));
+
+            testCase.verifyNotEmpty(values);
+            testCase.verifyEqual(info.times, 50:10:150);
+            testCase.verifyEqual(size(values, 2), 11);
+            % and it is the stored data, not a recomputation of it
+            testCase.verifyEqual(values, EEG.sourceEstimate.values(:, 6:16, 1));
+        end
+
+        function aStoredEstimateIsThinnedToTheRequestedRate(testCase)
+            EEG = testCase.datasetWithEstimate(0:10:190);
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+
+            [values, info] = SourceCache.Lookup(EEG, 'A', key, ...
+                struct('TimeWindow', [], 'ResampleHz', 50));
+
+            testCase.verifyEqual(info.times, 0:20:180);
+            testCase.verifyEqual(values, EEG.sourceEstimate.values(:, 1:2:19, 1));
+        end
+
+        function aWindowWiderThanTheEstimateIsRefused(testCase)
+        %AWINDOWWIDERTHANTHEESTIMATEISREFUSED  Cropping is free, inventing
+        %   latencies the estimate never had is not.
+        %
+        %   The estimate has to be narrower than its EPOCH for this to mean
+        %   anything. Asking for a window wider than the epoch itself is not
+        %   refused and should not be: the restriction clamps to the times
+        %   the dataset actually has, so both paths agree and the request is
+        %   answerable. An earlier version of this test asked for exactly
+        %   that and passed only while the coverage rule was too strict.
+            EEG = testCase.datasetWithEstimate(100:10:200, [], 0:10:300);
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+            testCase.verifyEmpty(SourceCache.Lookup(EEG, 'A', key, ...
+                struct('TimeWindow', [0 300], 'ResampleHz', [])), ...
+                'An estimate over 100-200 ms cannot answer for 0-300 ms.');
+        end
+
+        function aRateFinerThanTheEstimateIsRefused(testCase)
+        %ARATEFINERTHANTHEESTIMATEISREFUSED  Likewise: the epoch must be
+        %   finer than the estimate, or the compute path could not have
+        %   produced the finer sampling either and there is nothing to
+        %   refuse.
+            EEG = testCase.datasetWithEstimate(0:20:200, [], 0:5:200);  % 50 Hz stored, 200 Hz epoch
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+            testCase.verifyEmpty(SourceCache.Lookup(EEG, 'A', key, ...
+                struct('TimeWindow', [], 'ResampleHz', 200)), ...
+                'A 50 Hz estimate cannot answer a 200 Hz request.');
+        end
+
+        function noRequestReturnsTheStoredEstimateWhateverItsExtent(testCase)
+        %NOREQUESTRETURNSTHESTOREDESTIMATEWHATEVERITSEXTENT  Brain3DView and
+        %   the report assets ask for what is stored and slice it
+        %   themselves. Omitting the request must not be read as asking for
+        %   the whole epoch: a deliberately narrow estimate is exactly what
+        %   they hold, and demanding it cover the epoch refused every one of
+        %   them.
+            EEG = testCase.datasetWithEstimate(100:10:200, [], 0:10:300);
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+            [values, info] = SourceCache.Lookup(EEG, 'A', key);
+            testCase.verifyEqual(info.times, 100:10:200);
+            testCase.verifyEqual(size(values, 2), 11);
+        end
+
+        function askingForNothingInParticularReturnsTheWholeEstimate(testCase)
+            EEG = testCase.datasetWithEstimate(0:10:190);
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+            [values, info] = SourceCache.Lookup(EEG, 'A', key);
+            testCase.verifyEqual(info.times, 0:10:190);
+            testCase.verifyEqual(size(values, 2), 20);
+        end
+
+        function aCroppedEstimateDropsItsResidualVariance(testCase)
+        %ACROPPEDESTIMATEDROPSITSRESIDUALVARIANCE  RV is the share of the
+        %   scalp data the estimate fails to explain over the samples it
+        %   saw, so the stored figure describes the whole epoch. Carrying it
+        %   onto a narrower window would look like a measurement of that
+        %   window and would not be one.
+            EEG = testCase.datasetWithEstimate(0:10:190, 0.25);
+            key = SourceCache.Key({'fz', 'cz'}, testCase.settings());
+
+            [~, whole] = SourceCache.Lookup(EEG, 'A', key);
+            testCase.verifyEqual(whole.ResidualVariance, 0.25, ...
+                'An uncropped reuse keeps the figure it was given.');
+
+            [~, cropped] = SourceCache.Lookup(EEG, 'A', key, ...
+                struct('TimeWindow', [50 150], 'ResampleHz', []));
+            testCase.verifyTrue(isnan(cropped.ResidualVariance));
         end
 
         % ---- which sheet a consumer should work on ----------------------
@@ -313,6 +405,43 @@ classdef SourceEstimateTest < matlab.unittest.TestCase
             opts = struct('SourceSpace', 5124, 'Method', 'mne', ...
                 'Orientation', 'normal', 'RegParam', 0.05, ...
                 'TimeWindow', [250 450], 'ResampleHz', 100);
+        end
+
+        function EEG = datasetWithEstimate(testCase, times, residualVariance, epochTimes)
+        %DATASETWITHESTIMATE  A dataset carrying one stored estimate over
+        %   TIMES, with each vertex's value equal to its latency index so a
+        %   crop is recognisable in the result rather than merely the right
+        %   shape.
+        %
+        %   EPOCHTIMES defaults to TIMES, the ordinary case of an estimate
+        %   spanning its whole epoch. Pass a wider or finer one to build the
+        %   case where the estimate CANNOT answer: coverage is judged
+        %   against the latencies the compute path would select from the
+        %   epoch, so an estimate narrower than its own epoch is the only
+        %   way to be short of them.
+            if nargin < 4 || isempty(epochTimes)
+                epochTimes = times;
+            end
+            rng(4);
+            EEG = struct('data', randn(2, numel(epochTimes), 1), 'times', epochTimes);
+            values = repmat(1:numel(times), 3, 1);
+
+            info = struct('ScaleLabel', 'dSPM');
+            if nargin > 2
+                info.ResidualVariance = residualVariance;
+            end
+
+            % The fingerprint is taken before the estimate is attached, the
+            % same order SourceEstimate itself uses: it identifies the DATA,
+            % not the struct that ends up carrying it.
+            EEG.sourceEstimate = struct( ...
+                'values', values, ...
+                'times', times, ...
+                'bins', {{'A'}}, ...
+                'vertexLabels', {{{'v1', 'v2', 'v3'}}}, ...
+                'info', info, ...
+                'key', SourceCache.Key({'fz', 'cz'}, testCase.settings()), ...
+                'dataFingerprint', SourceCache.Fingerprint(EEG));
         end
 
         function EEG = tinyDataset(~)

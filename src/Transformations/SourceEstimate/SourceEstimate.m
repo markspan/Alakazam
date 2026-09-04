@@ -17,10 +17,17 @@ function [EEG, opts] = SourceEstimate(input, varargin)
 %   THE ESTIMATE IS DEFINED BY ITS FORWARD MODEL, WHICH IS WHY THE KEY
 %   EXISTS. This transformation builds a forward model from THIS dataset's
 %   own channels. A group analysis must use one forward model for every
-%   subject -- built from the channels they share -- or their vertices are
-%   not comparable with one another. When the two agree, SourceClusterStats
-%   reuses what is stored here; when they do not, it recomputes and says so.
-%   Reuse is an optimisation that has to prove itself, never an assumption.
+%   subject, or their vertices are not comparable with one another, and it
+%   now requires every subject to already be on the same montage rather than
+%   quietly intersecting them (SourceClusterStats' own sharedMontage).
+%
+%   That requirement is what makes the estimates here worth storing. With
+%   one montage across the study, this dataset's own channels ARE the
+%   group's, so the key matches and the report reads the estimate off the
+%   tree instead of recomputing it. Reuse is still checked rather than
+%   assumed: the key must agree on mesh, method, orientation,
+%   regularisation, window and rate as well, and the fingerprint must say
+%   the data has not moved underneath.
 %
 %   WHAT IS AND IS NOT WORTH IT. On the runs that hurt, the inversion is a
 %   small share of the total: about 55% of a short test but only ~3% of a

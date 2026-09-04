@@ -22,13 +22,19 @@ function key = Key(resolvedLabels, opts)
 %     regParam     chooses which of the infinitely many solutions is
 %                  returned; two estimates at different regularisation are
 %                  different answers, not different precisions.
-%     timeWindow   applied BEFORE the inverse, deliberately, so that
-%     resampleHz   sLORETA's data covariance comes from the tested window.
-%                  An estimate made over a different window is therefore not
-%                  a superset that can be cropped: it is a different fit.
+%   WHAT IS DELIBERATELY ABSENT: the time window and the sample rate. They
+%   used to be here, on the grounds that a data-covariance method such as
+%   sLORETA sees only the window under analysis, so an estimate over a wider
+%   one was a different fit rather than a superset that could be cropped.
 %
-%   That last one is the subtle one, and the reason this key cannot simply
-%   record the widest window and trim.
+%   That turned out not to describe this code. Every ft_inverse_* spatial
+%   filter is data-independent (bit-identical operators from two entirely
+%   different datasets on one leadfield, for mne, eloreta and sloreta), so
+%   the data covariance never reaches the estimate and cropping commutes
+%   with inverting: measured at a relative 1.5e-16, decimation likewise.
+%   Keeping them here meant a whole-epoch estimate could not answer for
+%   200-400 ms and every subject re-inverted per window tried. Coverage is
+%   checked instead, at the point of use, by SourceCache.Lookup.
 %
 %   See also SOURCEESTIMATE, SOURCECLUSTERSTATS.
     key = struct();
@@ -37,27 +43,4 @@ function key = Key(resolvedLabels, opts)
     key.method      = lower(char(string(TransTools.FieldOr(opts, 'Method', 'mne'))));
     key.orientation = lower(char(string(TransTools.FieldOr(opts, 'Orientation', 'normal'))));
     key.regParam    = double(TransTools.FieldOr(opts, 'RegParam', 0.05));
-    key.timeWindow  = normaliseWindow(TransTools.FieldOr(opts, 'TimeWindow', []));
-    key.resampleHz  = normaliseRate(TransTools.FieldOr(opts, 'ResampleHz', []));
-end
-
-% ======================================================================= %
-function w = normaliseWindow(window)
-%NORMALISEWINDOW  [] and a window covering everything are NOT the same key.
-%   [] means "whatever this dataset happens to span", which differs between
-%   datasets; an explicit window is the same for all of them. Conflating
-%   them would let an estimate made on one epoch be reused for another.
-    if isempty(window)
-        w = [];
-    else
-        w = double(window(:))';
-    end
-end
-
-function r = normaliseRate(rate)
-    if isempty(rate)
-        r = [];
-    else
-        r = double(rate);
-    end
 end

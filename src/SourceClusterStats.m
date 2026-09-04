@@ -120,11 +120,11 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
         subjects{i} = loaded.EEG;
     end
 
-    % ONE forward model for the whole study, from the channel set the
-    % subjects share. Anything else would invert different subjects onto
-    % different source spaces and make their vertices incomparable, which is
-    % the one thing a vertex-wise group test cannot survive.
-    labels = commonChannels(subjects, sourceFiles);
+    % ONE forward model for the whole study, and every subject must already
+    % be on it. Anything else would invert different subjects onto different
+    % source spaces and make their vertices incomparable, which is the one
+    % thing a vertex-wise group test cannot survive.
+    labels = sharedMontage(subjects);
     [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = ...
         TransTools.BuildSourceForwardModel(labels, opts.SourceSpace);
     normals = TransTools.SurfaceNormals(sourcemodel);
@@ -252,8 +252,15 @@ function tl = sourceTimelock(EEG, binLabel, inverse)
     % decides the answer (SourceCache.Key), so agreement can be
     % checked rather than assumed; on any disagreement this recomputes, and
     % the caller reports how many subjects were reused.
+    % The window and rate are asked for rather than keyed on: a stored
+    % estimate that COVERS them is cropped to them on the way out, since
+    % cropping commutes with inverting (see SourceCache.Lookup). One
+    % whole-epoch estimate per subject therefore serves every window later
+    % analysed, instead of one estimate per window.
     wanted = SourceCache.Key(inverse.resolvedLabels, inverse.opts);
-    [storedValues, storedInfo] = SourceCache.Lookup(EEG, binLabel, wanted);
+    [storedValues, storedInfo] = SourceCache.Lookup(EEG, binLabel, wanted, ...
+        struct('TimeWindow', inverse.opts.TimeWindow, ...
+               'ResampleHz', inverse.opts.ResampleHz));
     if ~isempty(storedValues)
         tl = struct('label', {inverse.vertexLabels(:)}, 'time', storedInfo.times / 1000, ...
             'avg', storedValues, 'dimord', 'chan_time');
@@ -314,20 +321,107 @@ function tl = sourceTimelock(EEG, binLabel, inverse)
     tl.dimord = 'chan_time';
 end
 
-function labels = commonChannels(subjects, sourceFiles)
-%COMMONCHANNELS  The channels every subject has, in the first subject's own
-%   order. A vertex-wise group test needs one shared source space, so the
-%   forward model is built from the intersection rather than per subject.
+function labels = sharedMontage(subjects)
+%SHAREDMONTAGE  The montage every subject is on, refusing anything else.
+%
+%   THIS USED TO INTERSECT SILENTLY, and that was the wrong kind of helpful.
+%   One subject with a rejected electrode quietly removed that channel from
+%   the forward model for the whole group: the analysis ran, the report said
+%   nothing, and the source space was not the one the analyst thought they
+%   had asked for. It was unstable too, since adding a subject could change
+%   the model, and so every result, with no setting having changed.
+%
+%   Which channels to drop is a scientific decision, so it belongs to the
+%   analyst rather than to an intersection buried inside a group test.
+%   Making it explicit also makes stored source estimates reusable:
+%   SourceEstimate keys on its own dataset's channels, so only when those
+%   already equal the group's can the estimates on the tree serve the report
+%   instead of being recomputed here.
+%
+%   ONLY CHANNELS THE TEMPLATE CAN POSITION ARE COMPARED, which is what
+%   makes the demand a reasonable one. BuildSourceForwardModel keeps exactly
+%   the channels that match FieldTrip's 10-5 template and drops the rest, so
+%   two subjects differing only in a photodiode, an EOG or an ECG derivation
+%   produce the identical forward model. Comparing raw label lists would
+%   refuse those, and the first real pair this was run against differed in
+%   precisely that way: one subject carried a photodiode channel the other
+%   did not, with all 62 scalp electrodes in common. Refusing that would be
+%   the sort of strictness that teaches people to work around the check.
+    elcFile = TransTools.Template1005File();
+
+    reference = sourceChannels(subjects{1}, elcFile);
     labels = {subjects{1}.chanlocs.labels};
+
+    differs = false(1, numel(subjects));
     for i = 2:numel(subjects)
-        labels = labels(ismember(lower(labels), lower({subjects{i}.chanlocs.labels})));
+        differs(i) = ~isequal(sourceChannels(subjects{i}, elcFile), reference);
     end
-    if numel(labels) < 8
-        throw(MException('Alakazam:SourceClusterStats', '%s', sprintf( ...
-            ['These %d datasets share only %d channel(s), which is far too few to " ' ...
-             'estimate sources from. Do they come from the same montage?'], ...
-            numel(sourceFiles), numel(labels))));
+    if ~any(differs)
+        return;
     end
+
+    shared = reference;
+    for i = 2:numel(subjects)
+        shared = shared(ismember(shared, sourceChannels(subjects{i}, elcFile)));
+    end
+
+    idx = find(differs);
+    offenders = cell(1, numel(idx));
+    for k = 1:numel(idx)
+        EEG = subjects{idx(k)};
+        name = subjectDisplayName(subjectKey(EEG));
+        if isempty(name)
+            name = sprintf('subject %d', idx(k));
+        end
+        theirs = sourceChannels(EEG, elcFile);
+        offenders{k} = sprintf('%s (%s)', name, ...
+            differenceText(setdiff(reference, theirs, 'stable'), ...
+                           setdiff(theirs, reference, 'stable')));
+    end
+
+    first = subjectDisplayName(subjectKey(subjects{1}));
+    if isempty(first)
+        first = 'the first subject';
+    end
+
+    % Assembled from lines and joined with newline rather than written with
+    % escape sequences: easier to read, and it survives being edited by
+    % tools that treat backslashes as their own.
+    throw(MException('Alakazam:SourceClusterStats', '%s', strjoin({ ...
+        sprintf(['These datasets are not all on the same montage, so there is no ' ...
+                 'single source space to compare their vertices in. Counting only ' ...
+                 'the electrodes that can be positioned on the template, and ' ...
+                 'compared with %s: %s.'], first, strjoin(offenders, '; ')), ...
+        '', ...
+        sprintf('All %d share these %d electrodes:', numel(subjects), numel(shared)), ...
+        strjoin(shared, ' '), ...
+        '', ...
+        ['Select those with SelectData and Apply to All, then run this again. ' ...
+         '(Interpolate is the other way round: it puts a rejected electrode back, ' ...
+         'so a subject keeps the full montage.)']}, newline)));
+end
+
+function labels = sourceChannels(EEG, elcFile)
+%SOURCECHANNELS  The channels of EEG a forward model could actually use:
+%   those FieldTrip's 10-5 template can position, sorted and lower-cased so
+%   that two montages compare on their content rather than their order.
+    [~, hasPos] = TransTools.TemplateScalpLocs(EEG.chanlocs, elcFile);
+    labels = sort(lower({EEG.chanlocs(hasPos).labels}));
+end
+
+function text = differenceText(missing, extra)
+%DIFFERENCETEXT  How one subject's montage differs from the reference.
+    parts = {};
+    if ~isempty(missing)
+        parts{end+1} = sprintf('missing %s', strjoin(missing, ' '));
+    end
+    if ~isempty(extra)
+        parts{end+1} = sprintf('extra %s', strjoin(extra, ' '));
+    end
+    if isempty(parts)
+        parts = {'a different montage'};
+    end
+    text = strjoin(parts, ', ');
 end
 
 function validateOptions(opts, contrast)
@@ -535,13 +629,12 @@ function provenance = buildProvenance(opts, requestedLabels, resolvedLabels, ...
 %   and software versions.
     provenance = struct();
     provenance.requestedChannels = numel(requestedLabels);
-    % WHAT EACH SUBJECT ACTUALLY BROUGHT, not just what they shared. A
-    % vertex-wise test needs one montage, so it uses the intersection -- and
-    % a single subject with a reduced montage silently decides it for
-    % everyone. Reporting only the shared count reads as "we used
-    % everything", which is exactly wrong in that case, and the loss is
-    % substantial: the number of spatial patterns a forward model can
-    % distinguish is bounded by the channel count.
+    % WHAT EACH SUBJECT ACTUALLY BROUGHT. Every subject is now required to
+    % be on the same montage (sharedMontage above), so these counts should
+    % agree -- and reporting them is how a reader confirms that rather than
+    % taking it on trust. They also still differ legitimately in channels
+    % the template cannot position, an EOG or a photodiode, which the
+    % requirement ignores because they never reach the forward model.
     provenance.subjectChannels = subjectChannelCounts(subjects);
     provenance.limitingSubject = limitingSubjectName(subjects, sourceFiles);
     provenance.channels          = {resolvedLabels};

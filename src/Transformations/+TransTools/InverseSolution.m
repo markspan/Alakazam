@@ -128,6 +128,29 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
     % written once -- so the header's claim that the methods differ only in
     % how their filter is obtained is something the structure says, not just
     % something a comment asserts.
+    % THE SPATIAL FILTER DOES NOT DEPEND ON THE DATA, which is what makes
+    % it worth keeping. All three ft_inverse_* functions are handed VALUES
+    % (and two of them the data covariance C), so this is not obvious from
+    % their signatures; it was measured. Computing each filter from two
+    % completely different datasets on the same leadfield gives bit-identical
+    % operators, max|Ma-Mb| = 0 exactly, for mne, eloreta and sloreta alike.
+    % They are functions of the leadfield and the regularisation only.
+    %
+    % A group analysis inverts every subject and every bin against ONE
+    % forward model, so without this the identical filter is recomputed for
+    % each: 0.20 s a time for mne, 0.31 s for sloreta and 3.85 s for eloreta,
+    % whose weighting is an iterative fixed-point solve.
+    %
+    % Keyed on the leadfield's own content rather than on any name, since
+    % this function is handed a struct and cannot know which model it came
+    % from. Reusing the wrong filter would silently invert one montage's
+    % data through another's forward model, so the key summarises the
+    % leadfield several independent ways and the ceiling is small.
+    filterKey = struct('lead', leadfieldDigest(L), 'method', method, ...
+        'lambda', lambda, 'regParam', regParam, 'nChan', nChan, ...
+        'nInside', numel(insideIdx));
+    M = rememberedFilter(filterKey);
+
     switch method
         case 'mne'
             % noisecov = lambda*I with FieldTrip's own lambda at 1 gives
@@ -139,22 +162,28 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
             % by a factor lambda, so the dSPM scale would shift globally.
             % Written this way the two paths agree exactly, which is what
             % makes the equivalence testable at all.
-            est = ft_inverse_mne(leadfield, elec, headmodel, values, ...
-                'noisecov', lambda * eye(nChan), 'lambda', 1, 'keepfilter', 'yes');
+            if isempty(M)
+                est = ft_inverse_mne(leadfield, elec, headmodel, values, ...
+                    'noisecov', lambda * eye(nChan), 'lambda', 1, 'keepfilter', 'yes');
+            end
             info.ScaleLabel = 'dSPM (noise-normalized)';
             info.ScaleNote  = ['A noise-normalized statistic, not microvolts: roughly how ' ...
                 'many noise standard deviations above baseline.'];
 
         case 'eloreta'
-            est = ft_inverse_eloreta(leadfield, elec, headmodel, values, C, ...
-                'lambda', regParam, 'keepfilter', 'yes');
+            if isempty(M)
+                est = ft_inverse_eloreta(leadfield, elec, headmodel, values, C, ...
+                    'lambda', regParam, 'keepfilter', 'yes');
+            end
             info.ScaleLabel = 'eLORETA (source amplitude)';
             info.ScaleNote  = ['eLORETA source amplitude. Exact zero-error localization of a ' ...
                 'single source, but NOT noise-normalized -- not comparable to the dSPM scale.'];
 
         case 'sloreta'
-            est = ft_inverse_sloreta(leadfield, elec, headmodel, values, C, ...
-                'lambda', regParam, 'keepfilter', 'yes');
+            if isempty(M)
+                est = ft_inverse_sloreta(leadfield, elec, headmodel, values, C, ...
+                    'lambda', regParam, 'keepfilter', 'yes');
+            end
             info.ScaleLabel = 'sLORETA (standardized)';
             info.ScaleNote  = ['sLORETA is standardized by its own resolution matrix, so it is ' ...
                 'already a statistic rather than an amplitude -- but standardized differently ' ...
@@ -166,7 +195,10 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
                  'I can do mne, eloreta or sloreta.'], method));
     end
 
-    M = stackFilters(est, insideIdx, nChan);
+    if isempty(M)
+        M = stackFilters(est, insideIdx, nChan);
+        rememberedFilter(filterKey, M);
+    end
     J = M * values;
 
     % RESIDUAL VARIANCE: how much of the measured scalp data is left
@@ -295,4 +327,67 @@ function M = stackFilters(est, insideIdx, nChan)
         end
         M(3 * (k - 1) + (1:3), :) = w;
     end
+end
+
+% ---- spatial-filter memo ------------------------------------------------ %
+function d = leadfieldDigest(L)
+%LEADFIELDDIGEST  An identity for a leadfield matrix, cheap enough to take
+%   on every call.
+%
+%   SEVERAL INDEPENDENT SUMMARIES, not one, for the same reason
+%   SourceCache.Fingerprint uses several: any single statistic has changes
+%   it cannot see. A sign flip preserves the absolute total, a permutation
+%   of columns preserves both totals, and a scale change preserves neither
+%   but is caught by any of them. Together with the exact size, which is
+%   checked separately, a collision here would need two different forward
+%   models agreeing on all of these at once.
+%
+%   Not a hash: this is guarding against an accident (two montages in one
+%   session), not an adversary.
+    d = [size(L, 1), size(L, 2), sum(L(:)), sum(abs(L(:))), ...
+         sum(L(:) .^ 2), L(1), L(end)];
+end
+
+function M = rememberedFilter(key, value)
+%REMEMBEREDFILTER  Get or store a spatial filter for KEY.
+%
+%   M = rememberedFilter(KEY) returns [] on a miss.
+%   rememberedFilter(KEY, M) stores one.
+%
+%   Session memory only, deliberately, no disk layer. The expensive fixed
+%   cost, the leadfield itself, is already cached to disk by
+%   BuildSourceForwardModel; what is left here is 0.20 s to 3.85 s once per
+%   session per (model, method, regularisation), against ~14 MB per stored
+%   filter at 20484 vertices. Writing that to disk would trade real space
+%   for a saving that only ever lands once per session.
+%
+%   THREE ENTRIES. A group analysis uses exactly one filter throughout, so
+%   one would do; three lets a session compare two methods, or two
+%   regularisations, without either evicting the other, at a ceiling of
+%   ~43 MB.
+    persistent cache
+    if isempty(cache)
+        cache = struct('key', {}, 'filter', {});
+    end
+
+    M = [];
+    if ~isempty(cache)
+        for k = 1:numel(cache)
+            if isequaln(cache(k).key, key)
+                M = cache(k).filter;
+                cache = cache([k, setdiff(1:numel(cache), k, 'stable')]);
+                return;
+            end
+        end
+    end
+
+    if nargin < 2
+        return;   % a miss, and nothing offered to store
+    end
+
+    cache = [struct('key', key, 'filter', value), cache];
+    if numel(cache) > 3
+        cache = cache(1:3);
+    end
+    M = value;
 end

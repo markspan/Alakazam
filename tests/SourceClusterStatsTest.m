@@ -201,6 +201,72 @@ classdef SourceClusterStatsTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function refusesSubjectsWhoseScalpMontagesDiffer(testCase)
+        %REFUSESSUBJECTSWHOSESCALPMONTAGESDIFFER  A group source analysis
+        %   needs one source space, so differing montages are refused rather
+        %   than silently intersected, and the error has to be actionable.
+        %
+        %   THE NEGATIVE CASE IS COVERED BY theWholePipelineRunsOnRealSubjects,
+        %   not by an assertion here. That test runs on a real pair which
+        %   differs by a photodiode channel, and it passes only because the
+        %   comparison counts electrodes the template can position and
+        %   ignores everything else. Were auxiliary channels compared, it
+        %   would fail: a genuine test of the same property, and a far
+        %   cheaper one than running a whole analysis to prove a negative.
+            FieldTripFixtures.require(testCase);
+            files = testCase.realSubjectAverages();
+            testCase.assumeNotEmpty(files, 'Needs the cached BCN2025 averages.');
+
+            folder = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture()).Folder;
+
+            copies = cell(1, 2);
+            for k = 1:2
+                loaded = load(files{k}, 'EEG');
+                if k == 2
+                    % Drop a real scalp electrode: Cz if present, else the
+                    % first one the template positions.
+                    labels = lower({loaded.EEG.chanlocs.labels});
+                    drop = find(strcmp(labels, 'cz'), 1);
+                    if isempty(drop)
+                        [~, hasPos] = TransTools.TemplateScalpLocs( ...
+                            loaded.EEG.chanlocs, TransTools.Template1005File());
+                        drop = find(hasPos, 1);
+                    end
+                    keep = true(1, numel(loaded.EEG.chanlocs));
+                    keep(drop) = false;
+                    loaded.EEG.chanlocs = loaded.EEG.chanlocs(keep);
+                    loaded.EEG.data = loaded.EEG.data(keep, :, :);
+                    loaded.EEG.nbchan = nnz(keep);
+                end
+                copies{k} = fullfile(folder, sprintf('Average_subject%d.mat', k));
+                EEG = loaded.EEG; %#ok<NASGU>
+                save(copies{k}, 'EEG', '-v7.3');
+            end
+
+            L = load(copies{1}, 'EEG');
+            bins = {L.EEG.bindesc.label};
+            testCase.assumeGreaterThanOrEqual(numel(bins), 2, 'Needs two bins.');
+            contrast = struct('mode', 'paired', 'binA', bins{1}, 'binB', bins{2});
+
+            % errorFrom, not verifyError: verifyError returns nothing, and
+            % the message is the thing under test here, not just the id.
+            err = testCase.errorFrom(@() SourceClusterStats(copies, contrast, ...
+                struct('TimeWindow', [200, 400], 'ResampleHz', 100, ...
+                       'numrandomization', 10)));
+            testCase.verifyEqual(err.identifier, 'Alakazam:SourceClusterStats');
+
+            testCase.verifySubstring(err.message, 'not all on the same montage', ...
+                'The error should say what is wrong.');
+            testCase.verifySubstring(lower(err.message), 'selectdata', ...
+                'and how to fix it.');
+            testCase.verifySubstring(err.message, 'share these', ...
+                'and list the electrodes they do share, ready to paste in.');
+        end
+
+    end
+
     methods (Access = private)
         function err = errorFrom(~, fn)
             try

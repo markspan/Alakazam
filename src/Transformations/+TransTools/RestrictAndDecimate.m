@@ -15,10 +15,18 @@ function [values, times] = RestrictAndDecimate(values, times, window, targetHz, 
 %   logic was written with round() where the original had floor(), and
 %   produced a different number of samples at the same requested rate.
 %
-%   APPLIED BEFORE THE INVERSE by both callers, deliberately: a
-%   data-covariance method such as sLORETA must see the window actually
-%   under analysis, so an estimate over a wider window is a different fit
-%   rather than a superset that could be cropped afterwards.
+%   APPLIED BEFORE THE INVERSE by the callers that compute one, and AFTER it
+%   when SourceCache.Lookup crops a stored estimate. Both give the same
+%   answer, and that is measured rather than assumed: every ft_inverse_*
+%   spatial filter is data-independent, so cropping commutes with inverting
+%   to a relative 1.5e-16 for mne, sloreta and eloreta alike.
+%
+%   This comment used to claim the opposite, that a data-covariance method
+%   must see the window under analysis and a wider estimate was therefore a
+%   different fit. It is recorded here because that claim was load-bearing:
+%   it put the window in the reuse key, which meant a whole-epoch estimate
+%   could not serve a windowed analysis and every subject re-inverted for
+%   each window tried.
 %
 %   PLAIN SUBSAMPLING, NOT A FILTERED RESAMPLE. These are already
 %   baseline-corrected, low-pass-filtered averages, so the frequencies a

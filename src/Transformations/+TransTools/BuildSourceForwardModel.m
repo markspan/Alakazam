@@ -60,11 +60,26 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   (no FieldTrip installation was available while writing this).
 %
 %   CACHING: this is expensive (a leadfield over several thousand cortical
-%   points x N electrodes), and the channel set is normally fixed for a
-%   given dataset/montage, so the result is cached (persistent) keyed by
-%   the sorted, resolved label list -- switching bins/scrubbing time in
-%   Brain3DView calls this every redraw, but only actually recomputes
-%   when the channel set itself changes.
+%   points x N electrodes), measured at 18.0 s for 29 channels on the 20484
+%   sheet and 4.4 s on 5124, so the result is kept in a small in-memory LRU
+%   keyed by mesh + sorted label list.
+%
+%   FOUR ENTRIES RATHER THAN ONE. One is right for the case this was written
+%   for, Brain3DView redrawing a fixed montage, and wrong for every other:
+%   alternating between two meshes, or two channel sets, evicted the other
+%   on every call and rebuilt it, measured at 16.1 s per switch for a model
+%   computed seconds earlier.
+%
+%   SESSION ONLY, no disk layer, and that is a deliberate reversal. One was
+%   written, then removed once source analyses came to require every subject
+%   in the study to be on the same montage (SourceClusterStats' own
+%   sharedMontage): with one montage per study the leadfield is built once
+%   per session and reused throughout, so persisting it bought a single
+%   startup's 18 s in exchange for unbounded growth in prefdir, a second
+%   invalidation rule of its own (the FieldTrip version), and cached state
+%   the analyst could neither see nor clear. The tree already holds what is
+%   worth keeping between sessions, which is the source estimates
+%   themselves, on their own node.
 %
 %   NOTE: this pipeline was originally written without a FieldTrip
 %   installation available to test against (see TransTools.ensureFieldTrip),
@@ -84,8 +99,7 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   TRANSTOOLS.ENSUREFIELDTRIP.
     persistent cache
     if isempty(cache)
-        cache = struct('key', '', 'leadfield', [], 'sourcemodel', [], ...
-            'resolvedLabels', {{}}, 'elec', [], 'headmodel', []);
+        cache = emptyCacheEntry();
     end
 
     TransTools.ensureFieldTrip();
@@ -100,12 +114,15 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
     % legitimately use different sheets, and returning the cached leadfield
     % for the wrong one would be silently, catastrophically wrong.
     key = sprintf('%d|%s', sourceSpace, strjoin(sort(lower(labelsCell)), '|'));
-    if strcmp(key, cache.key)
-        leadfield      = cache.leadfield;
-        sourcemodel    = cache.sourcemodel;
-        resolvedLabels = cache.resolvedLabels;
-        elec           = cache.elec;
-        headmodel      = cache.headmodel;
+
+    hit = find(strcmp(key, {cache.key}), 1);
+    if ~isempty(hit)
+        leadfield      = cache(hit).leadfield;
+        sourcemodel    = cache(hit).sourcemodel;
+        resolvedLabels = cache(hit).resolvedLabels;
+        elec           = cache(hit).elec;
+        headmodel      = cache(hit).headmodel;
+        cache = promote(cache, hit);   % most recently used first
         return;
     end
 
@@ -190,12 +207,7 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
     % purpose.
     leadfield = ft_prepare_leadfield(cfg);
 
-    cache.key            = key;
-    cache.leadfield      = leadfield;
-    cache.sourcemodel    = sourcemodel;
-    cache.resolvedLabels = resolvedLabels;
-    cache.elec           = elec;
-    cache.headmodel      = headmodel;
+    cache = remember(cache, key, leadfield, sourcemodel, resolvedLabels, elec, headmodel);
 end
 
 function v = loadSoleVariable(matFile)
@@ -227,3 +239,37 @@ function n = validateSourceSpace(sourceSpace)
             mat2str(allowed), mat2str(sourceSpace)));
     end
 end
+
+% ---- caching ------------------------------------------------------------ %
+
+function entry = emptyCacheEntry()
+%EMPTYCACHEENTRY  A 0x0 struct array with the right fields, so the LRU can be
+%   indexed and grown without special-casing the first insertion.
+    entry = struct('key', {}, 'leadfield', {}, 'sourcemodel', {}, ...
+        'resolvedLabels', {}, 'elec', {}, 'headmodel', {});
+end
+
+function cache = promote(cache, hit)
+%PROMOTE  Move the entry just used to the front (most recently used).
+    cache = cache([hit, setdiff(1:numel(cache), hit, 'stable')]);
+end
+
+function cache = remember(cache, key, leadfield, sourcemodel, resolvedLabels, elec, headmodel)
+%REMEMBER  Insert at the front, dropping the least recently used past the
+%   limit. Four entries, for the reason the file header gives; each is
+%   ~22 MB at 20484 vertices, so the ceiling is ~90 MB of session memory.
+    fresh = struct('key', key, 'leadfield', leadfield, 'sourcemodel', sourcemodel, ...
+        'resolvedLabels', {resolvedLabels}, 'elec', elec, 'headmodel', headmodel);
+    if ~isempty(cache)
+        cache = cache(~strcmp({cache.key}, key));
+    end
+    cache = [fresh, cache];
+    if numel(cache) > 4
+        cache = cache(1:4);
+    end
+end
+
+
+
+
+
