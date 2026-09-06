@@ -45,7 +45,10 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
 %     RegParam          inverse regularization         (default 0.05)
 %     SourceSpace       template sheet: 20484|8196|5124 (default 20484)
 %     Accelerate        use the compiled TFCE kernel     (default true)
-%     Workers           parallel workers for permutations (default 1)
+%     Workers           parallel workers for permutations. 0 (the default)
+%                       decides from the size of the job: a run long enough
+%                       to repay starting a pool uses every core, a short
+%                       one stays serial. 1 forces serial, n forces n.
 %     correctm          'tfce' | 'cluster' | 'no' | ... (default 'tfce')
 %     numrandomization  permutations                   (default 1000)
 %     alpha, tail, clusteralpha, minnbchan             (as ClusterStats)
@@ -195,7 +198,8 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
         % reproducible would behave differently from the serial one for no
         % reason the analyst could see.
         cfg.randomseedBase = randi(2^31 - 1024);
-        workers = resolveWorkers(opts.Workers);
+        workers = resolveWorkers(opts.Workers, numel(vertexLabels) * nTime, ...
+            permutationCount(opts.numrandomization, numel(subjects)));
     end
 
     stat = ClusterStats.runMontecarlo(cfg, timelocks, workers);
@@ -460,7 +464,7 @@ function opts = withDefaults(opts)
     defaults = struct( ...
         'Method', 'mne', 'Orientation', 'normal', 'TimeWindow', [], ...
         'ResampleHz', 200, 'RegParam', 0.05, ...
-        'SourceSpace', 20484, 'Accelerate', true, 'Workers', 1, ...
+        'SourceSpace', 20484, 'Accelerate', true, 'Workers', 0, ...
         'correctm', 'tfce', 'clusteralpha', 0.05, 'alpha', 0.05, ...
         'numrandomization', 1000, 'tail', 0, 'minnbchan', 0);
     fields = fieldnames(defaults);
@@ -489,12 +493,25 @@ function stat = restoreStatNaming(stat)
     stat = rmfield(stat, 'statraw');
 end
 
-function n = resolveWorkers(requested)
+function n = resolveWorkers(requested, nodes, nPerm)
 %RESOLVEWORKERS  How many workers can actually be used.
 %   Capped at the physical core count and silently reduced to 1 when the
 %   Parallel Computing Toolbox is absent: asking for parallelism the
 %   machine cannot provide should cost speed, never results.
+%
+%   0 MEANS DECIDE FROM THE JOB, and it is the default because neither
+%   fixed answer is right. Starting a pool costs tens of seconds and a
+%   parallel run was measured at about 2.4x, so it is a clear loss on a
+%   short analysis and a clear win on a long one. The estimate below is
+%   calibrated against measured per-permutation times (0.643 s at 20484
+%   vertices by 41 latencies, scaling as nodes^1.1: predicted within ~20%
+%   from 0.8 to 78 minutes of real runs), which is far more precision than
+%   a yes/no decision needs.
     n = double(requested);
+    if isequal(n, 0)
+        n = autoWorkers(nodes, nPerm);
+        return;
+    end
     if isempty(n) || ~isscalar(n) || n <= 1
         n = 1;
         return;
@@ -504,6 +521,55 @@ function n = resolveWorkers(requested)
         return;
     end
     n = max(1, min(round(n), feature('numcores')));
+end
+
+function n = permutationCount(requested, nSubjects)
+%PERMUTATIONCOUNT  How many permutations will actually run.
+%
+%   FieldTrip's numrandomization accepts the string 'all', meaning every
+%   distinct relabelling, and that is what this pipeline asks for by
+%   default. A paired design permutes by flipping each subject's sign, so
+%   'all' is 2^nSubjects: for ten subjects that is the 1024 a real run
+%   reported, not a number anyone typed.
+%
+%   WORTH A NAMED FUNCTION because taking it for a number is a mistake that
+%   does not announce itself. Comparing the char 'all' against a threshold
+%   compares three characters elementwise and yields a three-element
+%   logical, which fails only later and somewhere else -- as it did here,
+%   inside the worker heuristic, in a stack that pointed nowhere near the
+%   option that caused it.
+    if isnumeric(requested) && isscalar(requested) && isfinite(requested)
+        n = double(requested);
+        return;
+    end
+    if nSubjects >= 1 && nSubjects <= 30
+        n = 2 ^ double(nSubjects);
+    else
+        n = 1e6;    % beyond 30 subjects FieldTrip caps it; treat as many
+    end
+end
+
+function n = autoWorkers(nodes, nPerm)
+%AUTOWORKERS  Parallel only when the job is long enough to repay a pool.
+%   Serial below the threshold, every core above it. The threshold is
+%   deliberately generous: being wrong costs a pool startup, while being
+%   too cautious costs more than half of a long run.
+    n = 1;
+    if ~isnumeric(nodes) || ~isscalar(nodes) || ~isnumeric(nPerm) || ~isscalar(nPerm)
+        return;     % not something to estimate from; stay serial
+    end
+    if nodes <= 0 || nPerm <= 0
+        return;
+    end
+    if isempty(ver('parallel')) || ~license('test', 'Distrib_Computing_Toolbox')
+        return;
+    end
+
+    perPermutation = 0.643 * (double(nodes) / 839844) ^ 1.1;
+    if double(nPerm) * perPermutation < 120
+        return;   % under two minutes serial: a pool would not pay for itself
+    end
+    n = max(1, feature('numcores'));
 end
 
 function name = datasetName(EEG)
