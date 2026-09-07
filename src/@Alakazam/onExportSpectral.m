@@ -74,7 +74,18 @@ function onExportSpectral(this)
                 'Unfortunately, I wasn''t able to copy the CSV into the Reports folder: %s', copyMsg));
         end
 
-        qmdText = generateQuartoReport(entries, reportCsvName);
+        % The spectra behind the numbers, written beside the report so it can
+        % draw them. Best effort: an entry without a stored spectrum simply
+        % contributes no rows, and a failed write costs the figure alone.
+        spectraCsvName = '';
+        try
+            spectraCsvName = [stem '_' stampTxt '_spectra.csv'];
+            exportSpectraCSV(entries, fullfile(reportsDir, spectraCsvName));
+        catch
+            spectraCsvName = '';
+        end
+
+        qmdText = generateQuartoReport(entries, reportCsvName, '', '', '', spectraCsvName);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportSpectral');
 

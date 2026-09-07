@@ -54,8 +54,17 @@ function clusters = summarizeClusterStat(stat, alpha)
         return;
     end
 
+    % clusterStat is the cluster's own MASS -- the summed test statistic over
+    % its points -- and it is the quantity the permutation test actually
+    % compares against its null distribution. It used to be dropped here,
+    % which left the report able to say a cluster was significant but not
+    % how large it was, unable to mark the observed value on the null
+    % distribution, and unable to offer any effect size at the cluster level
+    % at all. A p-value with no magnitude beside it is exactly what the rest
+    % of this application refuses to print.
     clusters = struct('sign', {}, 'pValue', {}, 'significant', {}, ...
-        'channels', {}, 'timeRangeMs', {}, 'nPoints', {}, 'clusterIndex', {});
+        'channels', {}, 'timeRangeMs', {}, 'nPoints', {}, 'clusterIndex', {}, ...
+        'clusterStat', {});
     clusters = appendSignClusters(clusters, stat, alpha, 'positive');
     clusters = appendSignClusters(clusters, stat, alpha, 'negative');
 
@@ -86,6 +95,14 @@ function clusters = appendSignClusters(clusters, stat, alpha, sign)
         entry.timeRangeMs  = [min(stat.time(timeIdx)), max(stat.time(timeIdx))] * 1000;
         entry.nPoints      = nnz(mask);
         entry.clusterIndex = c;
+        % FieldTrip spells it 'clusterstat'; read defensively, because a
+        % correction other than 'cluster' produces cluster records without
+        % it and a missing mass must leave the field NaN rather than throw.
+        if isfield(clusterList(c), 'clusterstat')
+            entry.clusterStat = clusterList(c).clusterstat;
+        else
+            entry.clusterStat = NaN;
+        end
         clusters(end + 1) = entry; %#ok<AGROW>
     end
 end
@@ -96,7 +113,8 @@ function clusters = summarizeFromMaskOnly(stat, alpha)
 %   from stat.stat's own sign at each masked point rather than a cluster
 %   index, since TFCE has none.
     clusters = struct('sign', {}, 'pValue', {}, 'significant', {}, ...
-        'channels', {}, 'timeRangeMs', {}, 'nPoints', {}, 'clusterIndex', {});
+        'channels', {}, 'timeRangeMs', {}, 'nPoints', {}, 'clusterIndex', {}, ...
+        'clusterStat', {});
     if ~isfield(stat, 'mask') || ~any(stat.mask(:))
         return;
     end
@@ -117,6 +135,13 @@ function clusters = summarizeFromMaskOnly(stat, alpha)
         entry.timeRangeMs  = [min(stat.time(timeIdx)), max(stat.time(timeIdx))] * 1000;
         entry.nPoints       = nnz(mask);
         entry.clusterIndex = NaN;
+        % TFCE HAS NO CLUSTER MASS, and that is a property of the method
+        % rather than a gap in this record: it scores every point by the
+        % support it receives across thresholds instead of forming discrete
+        % clusters to sum over. NaN says "not defined here", which the
+        % report can render as "--" honestly; a 0 would be a number, and
+        % wrong.
+        entry.clusterStat  = NaN;
         clusters(end + 1) = entry; %#ok<AGROW>
     end
 end

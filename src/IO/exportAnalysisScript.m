@@ -664,6 +664,64 @@ function lines = oneSubjectLines(subject, index, book)
     lines{end + 1} = '';
 end
 
+function call = nativeCall(book, step, inputVar, outputVar)
+%NATIVECALL  The step as a direct library call, or '' when it cannot be one.
+%
+%   ONLY WHERE THE ARGUMENTS ARE LITERALS ALREADY IN THE STORED OPTIONS.
+%   The moment a native call would need Alakazam to resolve something first
+%   (a channel label to an index, a transition band to a filter order) the
+%   emitted line would be a re-implementation rather than a translation, and
+%   a re-implementation that nothing checks is worse than an honest wrapper
+%   call: it looks authoritative and can quietly differ.
+    call = '';
+    params = paramsFor(book, step);
+    switch step.transformId
+        case 'Resample'
+            % Resample.m is pop_resample(input, options.NewRate) and nothing
+            % else, so this is the same call by a shorter route.
+            if isstruct(params) && isfield(params, 'NewRate') && ...
+                    isnumeric(params.NewRate) && isscalar(params.NewRate)
+                call = sprintf('%s = pop_resample(%s, %s);', ...
+                    outputVar, inputVar, num2str(params.NewRate, '%.10g'));
+            end
+    end
+end
+
+function params = paramsFor(book, step)
+%PARAMSFOR  The stored options for STEP, or [] when they are not a struct.
+    params = [];
+    if isfield(step, 'params')
+        params = step.params;
+    end
+    if ~isstruct(params)
+        params = [];
+    end
+end
+
+function note = libraryNote(transformId)
+%LIBRARYNOTE  Which third-party function actually performs this step.
+%
+%   Written from reading each transformation rather than from memory, and
+%   deliberately silent for the ones that have no such function: Alakazam
+%   computes ArtefactDetect, Measure, DefineBins, Average, Baseline and
+%   SpectralMeasure itself, and claiming a library for them would be worse
+%   than saying nothing.
+    switch transformId
+        case 'Filter'
+            note = 'EEGLAB firfilt: windowed-sinc FIR (firwsord/windows/firws, applied by firfilt).';
+        case 'ReRef'
+            note = 'EEGLAB pop_reref, with channel labels resolved to indices first.';
+        case 'Interpolate'
+            note = 'EEGLAB pop_interp, with channel labels resolved to indices first.';
+        case 'AutoEyeICA'
+            note = 'EEGLAB pop_runica + ICLabel, components removed with pop_subcomp.';
+        case 'AutoGEDAI'
+            note = 'GEDAI (Ros et al., 2025), an EEGLAB plugin; SENSAI is its own thresholding.';
+        otherwise
+            note = '';
+    end
+end
+
 function lines = stepLines(steps, book, prefix, indent, nameExpression)
 %STEPLINES  One call per step, each holding its result in its own variable
 %   so a fork starts from the right dataset. collectBranchTree guarantees a
@@ -687,8 +745,36 @@ function lines = stepLines(steps, book, prefix, indent, nameExpression)
             sprintf('%s_%s', prefix, step.transformId)), varOf);
         varOf{k} = outputVar;
 
-        lines{end + 1} = sprintf('%s%s = %s(%s, %s);', pad, outputVar, ...
-            step.transformId, inputVar, optionExpression(book, step)); %#ok<AGROW>
+        % A NATIVE CALL WHERE THAT IS FAITHFUL, THE TRANSFORMATION OTHERWISE.
+        % Most of this pipeline is a thin wrapper over EEGLAB, FieldTrip or
+        % GEDAI, and a script that names those functions is worth more than
+        % one that names Alakazam's: it can be read by anyone in the field,
+        % run without this application, and quoted in a methods section.
+        %
+        % The line is only drawn where a native call would have to
+        % RE-DERIVE something. Resample passes a number straight through, so
+        % pop_resample(EEG, 250) is the same call by a shorter route.
+        % Filter designs its own windowed-sinc kernel through firwsord,
+        % windows and firws before handing it to firfilt; emitting that
+        % inline would copy fifteen lines of design logic into the script
+        % and silently diverge the day Filter.m changed. ReRef and
+        % Interpolate resolve channel labels to indices through Alakazam's
+        % own matching rules, which a bare pop_reref would have to restate.
+        %
+        % Those keep the transformation call and carry a comment naming the
+        % library function that actually does the work, so the script still
+        % documents the method even where it cannot spell it natively.
+        note = libraryNote(step.transformId);
+        if ~isempty(note)
+            lines{end + 1} = sprintf('%s%% %s', pad, note); %#ok<AGROW>
+        end
+        native = nativeCall(book, step, inputVar, outputVar);
+        if isempty(native)
+            lines{end + 1} = sprintf('%s%s = %s(%s, %s);', pad, outputVar, ...
+                step.transformId, inputVar, optionExpression(book, step)); %#ok<AGROW>
+        else
+            lines{end + 1} = sprintf('%s%s', pad, native); %#ok<AGROW>
+        end
         % Results worth keeping past the end of the loop are collected as
         % they are produced. Without this a Measure result is computed and
         % then thrown away when the next recording overwrites the variable,

@@ -296,7 +296,13 @@ classdef QuartoReportDispatchTest < matlab.unittest.TestCase
             txt = generateQuartoReport(entries, 'x.csv');
 
             nBlocks = numel(sectionProduct.windowLabels);
-            expectedHeadings = nBlocks * sectionProduct.nTypes * (1 + sectionProduct.nCombo) + 1;
+            % Two headings belong to the document rather than to any analysis:
+            % the reader's guide that precedes the results and the closing
+            % summary that follows them. Everything else is one section per
+            % (window x measure type) plus one per combination bin.
+            documentHeadings = 2;
+            expectedHeadings = nBlocks * sectionProduct.nTypes * (1 + sectionProduct.nCombo) ...
+                + documentHeadings;
             testCase.verifyNumElements(ReportFixtures.headings(txt), expectedHeadings, ...
                 'The report emitted a different number of sections than blocks x measure types x (1 + combos) + 1.');
         end

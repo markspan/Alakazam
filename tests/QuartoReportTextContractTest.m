@@ -473,10 +473,18 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
             txt = generateQuartoReport(ReportFixtures.erpEntries(), ...
                 QuartoReportTextContractTest.CsvName);
 
+            % THE CORRECTION IS APPLIED TO A FAMILY, NOT TO EVERY ROW. It used
+            % to run across every test in the document, which pooled a
+            % condition omnibus with the difference-bin test and the
+            % single-trial re-analysis of the very same contrast -- three
+            % rows, one hypothesis. The prose and the code now say "within
+            % that family", and this contract follows them.
             testCase.verifySubstring(txt, 'mutate(p_bh = p.adjust(p, method = "BH"))', ...
                 'The summary no longer applies a Benjamini-Hochberg correction.');
+            testCase.verifySubstring(txt, 'filter(role == "primary")', ...
+                'The summary no longer restricts the correction to the primary family.');
             testCase.verifySubstring(txt, ...
-                'significant after Benjamini-Hochberg (BH/FDR) correction across all of them.', ...
+                'Benjamini-Hochberg (BH/FDR) correction within that family.', ...
                 'The summary prose no longer names the Benjamini-Hochberg correction it applies.');
         end
 

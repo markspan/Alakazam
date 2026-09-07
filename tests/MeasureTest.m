@@ -203,12 +203,69 @@ classdef MeasureTest < matlab.unittest.TestCase
             testCase.verifyEqual(result.amplitude, 5, 'AbsTol', 1e-10);
         end
 
-        function rejectsNonAveragedData(testCase)
-            EEG = measureFixture({'Ch1'}, [1 2 3], [0 4 8]);
-            EEG.DataFormat = 'Epoched';
+        function rejectsDataItCannotMeasure(testCase)
+        %REJECTSDATAITCANNOTMEASURE  Continuous data and a dataset that
+        %   never declared its format are still refused. Epoched data is
+        %   NOT: it is measured per trial, which this file's own
+        %   measuresEachTrialOnEpochedData pins.
             win = defaultWindow();
             opts = struct('windows', {{win}}, 'derivations', '');
+
+            EEG = measureFixture({'Ch1'}, [1 2 3], [0 4 8]);
+            EEG.DataFormat = 'CONTINUOUS';
             testCase.verifyError(@() Measure(EEG, opts), 'Alakazam:Measure');
+
+            EEG = rmfield(measureFixture({'Ch1'}, [1 2 3], [0 4 8]), 'DataFormat');
+            testCase.verifyError(@() Measure(EEG, opts), 'Alakazam:Measure');
+        end
+
+        function measuresEachTrialOnEpochedData(testCase)
+        %MEASURESEACHTRIALONEPOCHEDDATA  Epoched input yields one value per
+        %   TRIAL, in trialMeasurements, leaving measurements unset.
+        %
+        %   THE EQUIVALENCE IS THE POINT, not merely the shape: computeWindow
+        %   iterates EEG.data's third dimension without asking what it means,
+        %   so the same code measures bins on an average and trials on
+        %   epochs. For a linear measure the mean of the per-trial values
+        %   must therefore equal the value measured on their average -- if it
+        %   did not, the two paths would be computing different things and
+        %   single-trial modelling would not be decomposing the same quantity
+        %   the group analysis reports.
+        %
+        %   Built with this file's own measureFixture and averaged by hand,
+        %   NOT with makeTestEEG and Average: neither is on this class's
+        %   declared path. A first version of this test used both and passed
+        %   alone, because the command that checked it had added
+        %   tests/fixtures by hand, then failed in the suite.
+            times = 0:100:400;
+            trials = cat(3, ...
+                [1 2 3 4 5; 10 20 30 40 50], ...
+                [3 4 5 6 7; 12 22 32 42 52], ...
+                [2 3 4 5 6; 11 21 31 41 51]);
+
+            EEG = measureFixture({'Ch1', 'Ch2'}, trials, times);
+            EEG.DataFormat = 'EPOCHED';
+            EEG.bindesc = struct('label', {'A'}, 'index', {1}, 'trials', {[1 2 3]});
+
+            win = defaultWindow();
+            win.start = 0;
+            win.stop = 400;
+            opts = struct('windows', {{win}}, 'derivations', '');
+
+            perTrial = Measure(EEG, opts);
+            testCase.verifyTrue(isfield(perTrial, 'trialMeasurements'));
+            testCase.verifyFalse(isfield(perTrial, 'measurements'), ...
+                'Epoched input must not also claim to have averaged measurements.');
+            testCase.verifySize(perTrial.trialMeasurements{1}.amplitude, [2, 3]);
+            testCase.verifyEqual(perTrial.trialBinIndex{1}, 1);
+
+            avgEEG = measureFixture({'Ch1', 'Ch2'}, mean(trials, 3), times);
+            averaged = Measure(avgEEG, opts);
+
+            testCase.verifyEqual( ...
+                mean(perTrial.trialMeasurements{1}.amplitude(1, :), 'omitnan'), ...
+                averaged.measurements{1}.amplitude(1, 1), 'AbsTol', 1e-12, ...
+                'The mean of the per-trial values must equal the measure on their average.');
         end
 
         function rejectsEmptyWindows(testCase)

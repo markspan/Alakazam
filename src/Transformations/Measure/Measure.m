@@ -102,16 +102,30 @@ function [EEG, options] = Measure(input, varargin)
 
 EEG = input;
 
-if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'Averaged')
+% EPOCHED DATA IS ACCEPTED, AND MEANS SOMETHING DIFFERENT. On an average
+% the third dimension of EEG.data is bins and every window yields one value
+% per bin; on epoched data it is TRIALS, and the identical computation
+% yields one value per trial. computeWindow below simply iterates that
+% dimension and never asks what it represents, so single-trial measurement
+% needs no second implementation of peak-picking, fractional-area latency
+% or channel pooling -- which is the only reason it is offered here rather
+% than as a parallel transformation that would have to duplicate all of it.
+%
+% The two are not interchangeable and the result says which it is:
+% averaged input fills EEG.measurements, epoched input fills
+% EEG.trialMeasurements. Nothing downstream has to guess.
+dataFormat = char(string(TransTools.FieldOr(input, 'DataFormat', 'not set')));
+perTrial = strcmpi(dataFormat, 'EPOCHED');
+if ~perTrial && ~strcmpi(dataFormat, 'Averaged')
     % TransTools.FieldOr, not input.DataFormat: the condition above is true
     % when the field is ABSENT as well as when it is wrong, and reading it
     % directly then threw a bare MATLAB "Unrecognized field name" from
     % inside the very sprintf meant to explain the problem.
     throw(MException('Alakazam:Measure', sprintf([ ...
-        'Problem in Measure: this only works on an averaged ERP (a subject Average or a Grand ' ...
-        'Average), and not on this dataset (DataFormat = "%s"). Would you run Average -- or ' ...
-        'Grand Average, for a group result -- on it first?'], ...
-        char(string(TransTools.FieldOr(input, 'DataFormat', 'not set'))))));
+        'Problem in Measure: this works on an averaged ERP (a subject Average or a Grand ' ...
+        'Average), or on epoched data for per-trial measurement, and not on this dataset ' ...
+        '(DataFormat = "%s"). Would you run Average -- or Grand Average, for a group result ' ...
+        '-- on it first?'], dataFormat)));
 end
 
 if interactive
@@ -205,13 +219,26 @@ EEG = measureDerivations(EEG, derivations);
 
 %% Compute
 allLabels = string({EEG.chanlocs.labels});
-nBins = size(EEG.data, 3); % 1 for an unbinned average (2-D EEG.data)
+nBins = size(EEG.data, 3); % bins on an average, TRIALS on epoched input
+                           % (1 for an unbinned average, 2-D EEG.data)
 
 measurements = cell(1, numel(windows));
 for w = 1:numel(windows)
     measurements{w} = computeWindow(EEG, windows{w}, allLabels, nBins);
 end
-EEG.measurements = measurements;
+
+if perTrial
+    % WHICH BIN EACH TRIAL BELONGS TO, recorded alongside the values,
+    % because a per-trial value is useless for a group model without its
+    % condition. Read through Support/trialBins, the same membership the
+    % rest of the app uses, so a trial in two bins (a combination bin
+    % overlapping a base one) is reported as being in both rather than
+    % silently assigned to the first.
+    EEG.trialMeasurements = measurements;
+    EEG.trialBinIndex = arrayfun(@(t) {trialBins(EEG, t)}, 1:nBins);
+else
+    EEG.measurements = measurements;
+end
 end
 
 % ======================================================================= %

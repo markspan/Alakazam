@@ -62,13 +62,14 @@ function onClusterStats(this)
         stampTxt = char(string(stamp, 'yyyyMMdd_HHmmss'));
         stem = fullfile(reportsDir, ['cluster_stats_' stampTxt]);
 
-        [statCsv, waveformCsv, outlineCsv] = exportClusterStatsCSVs(summary, stem);
+        [statCsv, waveformCsv, outlineCsv, nullCsv] = exportClusterStatsCSVs(summary, stem);
         [~, statName]     = fileparts(statCsv);
         [~, waveformName] = fileparts(waveformCsv);
         [~, outlineName]  = fileparts(outlineCsv);
+        [~, nullName]     = fileparts(nullCsv);
 
         qmdText = generateClusterStatsReport(summary, [statName '.csv'], ...
-            [waveformName '.csv'], [outlineName '.csv']);
+            [waveformName '.csv'], [outlineName '.csv'], [nullName '.csv']);
         qmdFile = [stem '.qmd'];
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onClusterStats');
 

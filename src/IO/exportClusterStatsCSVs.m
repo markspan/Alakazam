@@ -1,4 +1,4 @@
-function [statCsv, waveformCsv, outlineCsv] = exportClusterStatsCSVs(summary, targetStem)
+function [statCsv, waveformCsv, outlineCsv, nullCsv] = exportClusterStatsCSVs(summary, targetStem)
 %EXPORTCLUSTERSTATSCSVS  Write the three long-format CSVs
 %   generateClusterStatsReport.m's own R plots read from: TARGETSTEM +
 %   "_stat.csv" (one row per channel x time point: the raw test
@@ -17,13 +17,77 @@ function [statCsv, waveformCsv, outlineCsv] = exportClusterStatsCSVs(summary, ta
     statCsv     = [targetStem '_stat.csv'];
     waveformCsv = [targetStem '_waveform.csv'];
     outlineCsv  = [targetStem '_outline.csv'];
+    nullCsv     = [targetStem '_nulldist.csv'];
 
     writeStatCsv(statCsv, summary);
+    writeNullCsv(nullCsv, summary);
     writeWaveformCsv(waveformCsv, summary);
     writeOutlineCsv(outlineCsv, summary.layout);
 end
 
 % ----------------------------------------------------------------------- %
+function writeNullCsv(file, summary)
+%WRITENULLCSV  The permutation null distribution, one row per draw, plus the
+%   observed cluster masses so a plot can mark them on it.
+%
+%   WHY THIS IS WORTH A FILE OF ITS OWN. A cluster-based permutation test
+%   works by comparing one observed number -- a cluster's mass -- against
+%   the distribution of that same number under relabelling. The report
+%   described that in prose and never showed it, which asks the reader to
+%   take "p = .03" on trust. Drawn, it is immediately legible: how far into
+%   the tail the observed cluster sits, whether the null is tight or broad,
+%   and whether the largest cluster is exceptional or merely the largest of
+%   many similar ones.
+%
+%   Columns are tail ("positive"/"negative"), kind ("null"/"observed") and
+%   value. One long file rather than two wide ones, because that is the
+%   shape ggplot wants and it keeps the observed values in the same units
+%   and the same file as the distribution they belong to.
+%
+%   Written empty (header only) when the correction produced no
+%   distribution: TFCE scores points rather than forming clusters, and an
+%   empty file lets the report say so rather than fail to find it.
+    fid = fopen(file, 'w');
+    if fid < 0
+        throw(MException('Alakazam:exportClusterStatsCSVs', '%s', sprintf( ...
+            'Im afraid I wasnt able to open "%s" for writing.', file)));
+    end
+    closeFile = onCleanup(@() fclose(fid));
+
+    fprintf(fid, 'tail,kind,value\n');
+
+    stat = [];
+    if isfield(summary, 'stat')
+        stat = summary.stat;
+    end
+    writeDraws(fid, stat, 'posdistribution', 'positive');
+    writeDraws(fid, stat, 'negdistribution', 'negative');
+
+    if isfield(summary, 'clusters')
+        for k = 1:numel(summary.clusters)
+            c = summary.clusters(k);
+            if ~isfield(c, 'clusterStat') || ~isfinite(c.clusterStat)
+                continue;
+            end
+            fprintf(fid, '%s,observed,%.10g\n', csvField(c.sign), c.clusterStat);
+        end
+    end
+end
+
+function writeDraws(fid, stat, field, tail)
+    if isempty(stat) || ~isfield(stat, field) || isempty(stat.(field))
+        return;
+    end
+    draws = double(stat.(field));
+    draws = draws(isfinite(draws));
+    if isempty(draws)
+        return;
+    end
+    % compose() broadcasts the scalar tail across the vector, so the whole
+    % distribution is formatted in one call rather than a thousand fprintfs.
+    fprintf(fid, '%s\n', compose('%s,null,%.10g', string(tail), draws(:)));
+end
+
 function writeStatCsv(file, summary)
     stat = summary.stat;
     nChan = numel(stat.label);

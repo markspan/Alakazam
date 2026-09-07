@@ -548,8 +548,16 @@ function stats = apaPairedStatistics(htmlFile)
 %   "Cohen's", which the rendered HTML writes as a typographic apostrophe
 %   that may arrive as more than one char depending on the encoding.
     plain = plainTextOf(htmlFile);
+    % A BOUNDED GAP BETWEEN p AND Cohen, because the sentence around these
+    % numbers is prose and prose gets rewritten. It once read
+    % "..., p = .004, Cohen's dz = ..." and now reads "..., p = .004, with a
+    % standardised effect of Cohen's dz = ...", which the old contiguous
+    % pattern could not find at all -- so the case failed for wording rather
+    % than for the sign invariant it exists to protect. The gap forbids a
+    % full stop, so it still cannot wander into the following sentence and
+    % pair a t with some other test's effect size.
     pattern = ['t\s*\(\s*(\d+)\s*\)\s*=\s*(-?[\d.]+)\s*,\s*' ...
-               'p\s*[<=]\s*[\d.]+\s*,\s*Cohen.{1,3}s\s*d\s*z\s*=\s*(-?[\d.]+)\s*' ...
+               'p\s*[<=]\s*[\d.]+\s*,[^.]{0,80}?Cohen.{1,3}s\s*d\s*z\s*=\s*(-?[\d.]+)\s*' ...
                '\([^)]*\)\s*,\s*95%\s*CI\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]'];
     tokens = regexp(plain, pattern, 'tokens', 'once');
 

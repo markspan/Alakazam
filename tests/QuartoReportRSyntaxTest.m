@@ -91,7 +91,17 @@ classdef QuartoReportRSyntaxTest < matlab.unittest.TestCase
             ids = ReportFixtures.censusIds();
             scriptFiles = cell(1, numel(ids));
             for k = 1:numel(ids)
-                qmdText = generateQuartoReport(ReportFixtures.censusEntries(ids{k}), 'x.csv');
+                % FOUR ARGUMENTS, so the waveform sections are generated and
+                % therefore parsed. Called with two, they are omitted entirely
+                % and this file would report every cell green while the R it
+                % never saw was broken -- which is exactly what happened when
+                % the sections were first written.
+                % FIVE arguments, so the waveform AND single-trial sections are
+                % generated and therefore parsed. Called with fewer, they are
+                % omitted entirely and this file would report every cell green
+                % while the R it never saw was broken.
+                qmdText = generateQuartoReport(ReportFixtures.censusEntries(ids{k}), 'x.csv', ...
+                    '', 'grandaverages.csv', 'trials.csv', 'spectra.csv');
                 scriptFiles{k} = fullfile(folder, [ids{k} '.R']);
                 writeText(scriptFiles{k}, ReportFixtures.rCode(qmdText));
             end

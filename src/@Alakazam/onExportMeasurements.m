@@ -114,7 +114,41 @@ function onExportMeasurements(this)
         % actually succeeded would leave an empty, unexplained .qmd
         % behind if it throws -- exactly what a silent catch below used
         % to produce, with no way to tell why.
-        qmdText = generateQuartoReport(entries, reportCsvName, sourceEstimates);
+        % THE WAVEFORMS THE MEASUREMENTS CAME FROM, written beside the
+        % report so it can draw them. Best effort in both directions: a
+        % workspace with no grand averages simply gets a report without
+        % waveform sections, and a write that fails costs the figures
+        % rather than the export. Naming it after the same stem keeps the
+        % pair together if the folder is later moved.
+        gaCsvName = '';
+        try
+            gaNodes = this.Workspace.GrandAveragesTree.allNodes();
+            if ~isempty(gaNodes)
+                gaCsvName = [stem '_' stampTxt '_grandaverages.csv'];
+                exportGrandAveragesCSV(gaNodes, fullfile(reportsDir, gaCsvName));
+            end
+        catch
+            gaCsvName = '';
+        end
+
+        % THE TRIALS, when any node carries them. Measure run on epoched data
+        % fills EEG.trialMeasurements, and those nodes are found the same
+        % way the averaged ones are, through the field index rather than by
+        % guessing at names. A workspace that has only averaged Measure
+        % nodes simply gets a report without single-trial sections.
+        trialCsvName = '';
+        try
+            trialEntries = this.collectEntriesWithField('trialMeasurements');
+            if ~isempty(trialEntries)
+                trialCsvName = [stem '_' stampTxt '_trials.csv'];
+                exportTrialMeasurementsCSV(trialEntries, fullfile(reportsDir, trialCsvName));
+            end
+        catch
+            trialCsvName = '';
+        end
+
+        qmdText = generateQuartoReport(entries, reportCsvName, sourceEstimates, ...
+            gaCsvName, trialCsvName);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportMeasurements');
 
