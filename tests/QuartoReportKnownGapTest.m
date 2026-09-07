@@ -46,7 +46,12 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
 %         tests/QuartoReportPersonGroupingTest.m, and the model choice it
 %         belongs to is decided in src/IO/reportDesignPlan.m.
 %
-%     SIGN  THE PAIRED EFFECT SIZE DISAGREES WITH ITS OWN t.
+%     SIGN  CLOSED. cohens_d is now given an explicitly ordered factor, so
+%         it subtracts in the same direction as the t-test it is reported
+%         beside, and rstatix's bootstrap CI is kept. Its case has turned
+%         green. The original description follows.
+%
+%     SIGN (historical)  THE PAIRED EFFECT SIZE DISAGREES WITH ITS OWN t.
 %         pairedSection computes t.test(wide[[BIN2]], wide[[BIN1]]) --
 %         bin2 minus bin1, in EEG.bindesc order -- but takes Cohen's dz
 %         from rstatix::cohens_d(value ~ bin, paired = TRUE), which is
@@ -78,7 +83,18 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
 %         fix: de-duplicate labels within a document.
 %         Case: chunkLabelsAreUniqueWithinADocument.
 %
-%     ESCAPE  THE MARKDOWN ESCAPING LEAKS INTO R STRING LITERALS.
+%     ESCAPE  CLOSED. The markdown escaping leaked into R string literals:
+%         a label bound for an R double-quoted string went through mdLit
+%         rather than rLit, so 'targ_left' emitted "targ\_left" into R,
+%         where '\_' is not a recognised escape, and a label inside a
+%         sprintf FORMAT string died at run time on a '%'. fillToken now
+%         offers a third form, __X_MDR__, for the case that was missing --
+%         markdown prose emitted FROM a chunk, escaped markdown-then-R --
+%         and every label that reaches such prose is passed as a sprintf
+%         ARGUMENT rather than spliced into its format. Its four cases have
+%         turned green. The original description follows.
+%
+%     ESCAPE (historical)  THE MARKDOWN ESCAPING LEAKS INTO R STRING LITERALS.
 %         A label bound for an R double-quoted string must go through
 %         ReportSections.rLit; one bound for markdown prose through
 %         ReportSections.mdLit. pairedSection splices an mdLit-escaped
@@ -339,9 +355,17 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
         %   mdLit one and the label is skipped rather than reported as a
         %   false positive.
         %
-        %   Fails today for every judgeable label in the corpus, because
-        %   pairedSection splices an mdLit-escaped bin label inside an R
-        %   double-quoted string.
+        %   A THIRD INDISTINGUISHABLE CASE, found when the gap was closed.
+        %   Prose emitted FROM a chunk has to be escaped for both layers,
+        %   markdown then R, and for some labels the correct double form
+        %   CONTAINS the single markdown form as a substring: '#hash'
+        %   markdown-escapes to '\#hash', whose correct R literal is
+        %   "\\#hash", and that contains '\#hash'. A substring search
+        %   cannot tell the right answer from the wrong one there, so such
+        %   labels are skipped too. R's own parser was asked directly about
+        %   every label in this corpus, '#hash' included, and reported
+        %   PARSE-OK for all of them; the three parse-oracle cases below
+        %   are what actually holds the escaping honest.
             offenders = {};
             candidates = ReportFixtures.hostileLabels();
             for k = 1:numel(candidates)
@@ -349,6 +373,9 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
                 markdownForm = ReportSections.mdLit(label);
                 if strcmp(markdownForm, label) || strcmp(markdownForm, ReportSections.rLit(label))
                     continue;
+                end
+                if contains(ReportSections.rLit(markdownForm), markdownForm)
+                    continue;   % correct double escaping is not distinguishable here
                 end
 
                 entries = ReportFixtures.erpEntries( ...
