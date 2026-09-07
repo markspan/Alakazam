@@ -151,13 +151,42 @@
     useLmm = hasGroups || useSession;
 
     sections = {};
+
+    % A DESIGN WITH NO ORDINARY BINS USED TO FAIL SILENTLY. When every
+    % bindesc entry carries a .combo, the dispatch below has nothing to
+    % match and simply emits no omnibus section -- and said nothing about
+    % it, so the document still had its headings, still rendered, and
+    % still ended with a summary, while the comparison a reader would
+    % assume was there was absent. The combination bins are analysed
+    % perfectly well, so the report is worth producing; it just has to say
+    % what it does not contain.
+    if isempty(ordinaryLabels)
+        sections{end + 1} = strjoin({ ...
+            '## Condition comparison', ...
+            '', ...
+            ['This design has no ordinary condition bins: every bin defined for it is a ' ...
+             'combination (difference) bin. There is therefore nothing to compare between ' ...
+             'conditions, and no omnibus section appears below. The combination bins ' ...
+             'themselves are analysed in full, each in its own section.'], ...
+            '', ''}, newline);
+    end
+
     for bl = 1:numel(blocks)
         blockLabel = blocks(bl).label;
         types = blocks(bl).measureTypes;
         for ti = 1:numel(types)
             measureType = types{ti};
 
-            if isscalar(ordinaryLabels)
+            if ReportSections.isCircularType(measureType)
+                % CIRCULAR TYPES LEAVE THE LINEAR CHAIN BEFORE IT STARTS.
+                % Every branch below is linear -- a t-test, a mixed model,
+                % or a mean/SD -- and none of them mean anything on angles
+                % that wrap at +/-pi. The combination-bin branch further
+                % down has always refused these types a linear test, so
+                % without this the same document could call such a test
+                % invalid in one section and report it in the next.
+                sections{end + 1} = ReportSections.circularSection(blockLabel, measureType, ordinaryLabels); %#ok<AGROW>
+            elseif isscalar(ordinaryLabels)
                 if hasGroups
                     sections{end + 1} = ReportSections.betweenSection(blockLabel, measureType, ordinaryLabels{1}); %#ok<AGROW>
                 else
@@ -193,6 +222,7 @@
     end
 
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan)}, sections, {closingText()}];
+    parts = uniqueChunkLabels(parts);
 
     % Appended LAST, after the statistical summary, not interleaved with
     % the per-window sections above: this is an exploratory, non-
@@ -297,6 +327,45 @@ function txt = comboRecipeText(bindesc, entry)
     txt = char(strjoin(parts, ""));
 end
 
+function parts = uniqueChunkLabels(parts)
+%UNIQUECHUNKLABELS  Make every '#| label:' in the document distinct.
+%
+%   ReportSections.labelPiece is lossy on purpose -- it lowercases and
+%   collapses every run of non-alphanumerics to a single hyphen -- so two
+%   different window or measure labels can sanitise to the same chunk
+%   label. 'N400 (a)' and 'N400 [a]' both become 'n400-a'. knitr then
+%   refuses the document outright at render time, and R's own parse()
+%   cannot warn about it, because parse() never looks at '#|' option
+%   lines: the failure arrives only once someone tries to render.
+%
+%   Resolved at assembly rather than in labelPiece, because uniqueness is
+%   a property of the whole document and no single section can know what
+%   the others chose. A repeat gets '-2', '-3' and so on appended, which
+%   keeps the readable stem that makes these labels worth having.
+    seen = containers.Map('KeyType', 'char', 'ValueType', 'double');
+    for i = 1:numel(parts)
+        lines = strsplit(parts{i}, newline);
+        changed = false;
+        for k = 1:numel(lines)
+            token = regexp(lines{k}, '^#\|\s*label:\s*(\S+)\s*$', 'tokens', 'once');
+            if isempty(token)
+                continue;
+            end
+            label = token{1};
+            if isKey(seen, label)
+                seen(label) = seen(label) + 1;
+                lines{k} = sprintf('#| label: %s-%d', label, seen(label));
+                changed = true;
+            else
+                seen(label) = 1;
+            end
+        end
+        if changed
+            parts{i} = strjoin(lines, newline);
+        end
+    end
+end
+
 function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan)
 %PREAMBLETEXT  The YAML header + setup chunk shared by every report kind.
 %   REPORTTITLE ("ERP" or "Spectral") names the report in its own title
@@ -379,7 +448,15 @@ function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, p
         '# effect size alongside it. estimate/conf.low/conf.high are NA for a test' ...
         '# that does not report a CI-bearing effect size (e.g. an omnibus ANOVA''s' ...
         '# own generalized eta-squared, which rstatix does not attach a CI to).' ...
-        'omnibus <- tibble(group = character(), design = character(), test = character(), p = double(),' ...
+        '# group is the glued-together key kept for continuity; the four columns' ...
+        '# after it are the same information taken apart, which is what makes a' ...
+        '# summary row readable. A tag like "N400_mean_amplitude_N400_Cz" is' ...
+        '# window + measure + contrast + channel, and the doubled "N400" there is' ...
+        '# simply a combination bin sharing the window''s name -- unreadable glued,' ...
+        '# obvious in columns.' ...
+        'omnibus <- tibble(group = character(), window = character(), measure = character(),' ...
+        '                  channel = character(), contrast = character(),' ...
+        '                  design = character(), test = character(), p = double(),' ...
         '                  estimate = double(), conf.low = double(), conf.high = double())' ...
         '' ...
         }, ReportDoc.apaHelpers(), { ...
@@ -536,7 +613,11 @@ function text = closingText()
         '  cat(sprintf("\nAcross %d test(s), %d were significant at *p* < .05 uncorrected, and %d remained\n",' ...
         '              nrow(omnibus2), sum(omnibus2$p < .05, na.rm = TRUE), sum(omnibus2$p_bh < .05, na.rm = TRUE)))' ...
         '  cat("significant after Benjamini-Hochberg (BH/FDR) correction across all of them.\n\n")' ...
-        '  cat(as_raw_html(apa_gt(omnibus2 %>% select(-any_of(c("estimate", "conf.low", "conf.high"))),' ...
+        '  # The glued tag is dropped from the display, not from the tibble: the' ...
+        '  # forest plot below still labels its points with it.' ...
+        '  cat(as_raw_html(apa_gt(omnibus2 %>%' ...
+        '        select(-any_of(c("group", "estimate", "conf.low", "conf.high"))) %>%' ...
+        '        mutate(contrast = ifelse(is.na(contrast), "--", contrast)),' ...
         '                         "Summary of All Tests (BH-Corrected)")))' ...
         '' ...
         '  # A forest plot alongside the table: every test''s own point effect-size' ...
