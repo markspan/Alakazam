@@ -43,10 +43,19 @@ function setupMainWindow(this)
     % the ribbon's own uihtml round trip), so the window never opens
     % narrower than the ribbon itself needs and starts with its own
     % horizontal scrollbar.
+    %
+    % THE POSITION IS CLAMPED TO A REAL DISPLAY. 1280 x 720 at (100, 100)
+    % is an ordinary default and an unusable one on a 1366 x 768 laptop
+    % panel: its top edge lands at 820, above a 768-pixel screen, and the
+    % title bar above that again. The window then opens, draws correctly,
+    % and cannot be moved or resized, because a uifigure's Position
+    % describes its drawable area and the frame sits outside it. See
+    % fitOnScreen, which also keeps a window on the monitor it was asked
+    % for rather than relocating it.
     this.MainFigure = uifigure( ...
         "Name",   "Alakazam", ...
         "Tag",    "AlakazamApp", ...
-        "Position", [100 100 1280 720], ...
+        "Position", fitOnScreen([100 100 1280 720]), ...
         "Visible", "off", ...
         "CloseRequestFcn", @(~, ~) this.onCloseRequest());
 

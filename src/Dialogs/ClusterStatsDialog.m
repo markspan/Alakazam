@@ -78,7 +78,7 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
         titleText = 'Cluster Statistics';
         figHeight = 640;
     end
-    fig = uifigure('Name', titleText, 'Position', [100 100 560 figHeight], 'Color', bgColor);
+    fig = uifigure('Name', titleText, 'Position', fitOnScreen([100 100 560 figHeight]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', ['  ' titleText], 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

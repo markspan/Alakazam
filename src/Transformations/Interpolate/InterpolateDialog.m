@@ -15,7 +15,7 @@ function options = InterpolateDialog(chanlocs, stored)
     seed = mergeSeedFields(seed, stored);
     seedMethodDisplay = METHODS{max(1, find(strcmp(METHODCODES, seed.method), 1))};
 
-    fig = uifigure('Name', 'Interpolate', 'Position', [100 100 460 430], 'Color', bgColor);
+    fig = uifigure('Name', 'Interpolate', 'Position', fitOnScreen([100 100 460 430]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Interpolate bad channels', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

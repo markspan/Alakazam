@@ -68,7 +68,7 @@ function settings = TransformOptionsDialog(varargin)
     figHeight = headerHeight + descHeight + fieldsHeight + buttonHeight;
     figWidth = 420;
 
-    fig = uifigure('Name', dlgTitle, 'Position', [400 300 figWidth figHeight], ...
+    fig = uifigure('Name', dlgTitle, 'Position', fitOnScreen([400 300 figWidth figHeight]), ...
         'Color', bgColor, 'Resize', 'off');
 
     outerRows = {headerHeight};

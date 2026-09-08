@@ -49,7 +49,7 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     % dialog that skipped it, with no apparent reason to look unstyled
     % next to its siblings.
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Grand Average', 'Position', [100 100 480 460], 'Color', bgColor);
+    fig = uifigure('Name', 'Grand Average', 'Position', fitOnScreen([100 100 480 460]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Grand Average', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

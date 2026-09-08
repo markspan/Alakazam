@@ -24,7 +24,7 @@ function opts = SourceEstimateDialog(EEG, previous)
     nBins = binCount(EEG);
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Source Estimate', 'Position', [100 100 560 460], 'Color', bgColor);
+    fig = uifigure('Name', 'Source Estimate', 'Position', fitOnScreen([100 100 560 460]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Source Estimate', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

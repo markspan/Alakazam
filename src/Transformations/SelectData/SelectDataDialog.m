@@ -28,7 +28,7 @@ function options = SelectDataDialog(chanlocs, npnts, ntrials, stored, timeUnit)
         'trials',   struct('mode', '(off)', 'indices', []));
     seed = mergeSeed(seed, stored);
 
-    fig = uifigure('Name', 'SelectData', 'Position', [100 100 460 490], 'Color', bgColor);
+    fig = uifigure('Name', 'SelectData', 'Position', fitOnScreen([100 100 460 490]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Select data', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

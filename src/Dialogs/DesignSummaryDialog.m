@@ -28,7 +28,7 @@ function DesignSummaryDialog(design, parentFig)
         position(2) = parentPos(2) + (parentPos(4) - position(4)) / 2;
     end
 
-    fig = uifigure('Name', 'Study design', 'Position', position, 'Color', bgColor);
+    fig = uifigure('Name', 'Study design', 'Position', fitOnScreen(position), 'Color', bgColor);
     outer = uigridlayout(fig, [3, 1], 'RowHeight', {40, '1x', 46}, ...
         'Padding', [0 0 0 0], 'RowSpacing', 0);
 

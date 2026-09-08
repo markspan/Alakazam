@@ -11,7 +11,7 @@ function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
     [accentColor, bgColor] = dialogChromeColors();
     result = [];
 
-    fig = uifigure('Name', 'Channel editor', 'Position', [100 100 560 480], 'Color', bgColor);
+    fig = uifigure('Name', 'Channel editor', 'Position', fitOnScreen([100 100 560 480]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Channel editor', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

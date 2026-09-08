@@ -52,7 +52,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     selectedRow = 0; % 1-based row last clicked in the table, 0 = none
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Measure', 'Position', [100 100 1160 550], 'Color', bgColor);
+    fig = uifigure('Name', 'Measure', 'Position', fitOnScreen([100 100 1160 550]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Measure', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

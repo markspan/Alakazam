@@ -62,7 +62,7 @@ classdef SettingsDialog < handle
             % previously the one dialog left unstyled, with no apparent
             % reason to look different from its siblings.
             [accentColor, bgColor] = dialogChromeColors();
-            this.Fig = uifigure('Name', 'Settings', 'Position', [200 200 540 460], 'Color', bgColor);
+            this.Fig = uifigure('Name', 'Settings', 'Position', fitOnScreen([200 200 540 460]), 'Color', bgColor);
             root = uigridlayout(this.Fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
             uilabel(root, 'Text', '  Settings', 'FontSize', 14, 'FontWeight', 'bold', ...
                 'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

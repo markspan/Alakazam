@@ -30,7 +30,7 @@ function onHelp(this)
         return;
     end
 
-    this.HelpFigure = uifigure("Name", "Alakazam Help", "Position", [160 120 1000 700]);
+    this.HelpFigure = uifigure("Name", "Alakazam Help", "Position", fitOnScreen([160 120 1000 700]));
     grid = uigridlayout(this.HelpFigure, [1 1], "Padding", [0 0 0 0]);
     % Every link in the page is handed back here rather than followed in
     % place: a uihtml embeds a browser with no window to open into, so an

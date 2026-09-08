@@ -26,4 +26,10 @@ function pos = centredOn(parent, width, height)
         screen = get(groot, 'ScreenSize');
         pos = [(screen(3) - width) / 2, (screen(4) - height) / 2, width, height];
     end
+
+    % Centred is not the same as reachable. A tall dialog centred on a
+    % short screen hangs off both ends, and one centred over a main window
+    % that is itself near an edge inherits that. Either way the title bar,
+    % and often the buttons, end up somewhere the user cannot reach.
+    pos = fitOnScreen(pos);
 end

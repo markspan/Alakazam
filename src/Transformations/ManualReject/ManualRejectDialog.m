@@ -107,7 +107,7 @@ function options = ManualRejectDialog(EEG, prior)
     end
 
     figWidth = min(1800, max(1180, 320 * numColumns));
-    fig = uifigure('Name', 'Manually reject trials/channels', 'Position', [100 100 figWidth 660], 'Color', bgColor);
+    fig = uifigure('Name', 'Manually reject trials/channels', 'Position', fitOnScreen([100 100 figWidth 660]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Manually reject trials/channels', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

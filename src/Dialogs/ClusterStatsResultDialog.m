@@ -11,7 +11,7 @@ function ClusterStatsResultDialog(summary, contrastLabel)
 %   renders, not a competing report format, so it has no save/export of
 %   its own.
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Cluster Statistics Result', 'Position', [120 120 640 480], 'Color', bgColor);
+    fig = uifigure('Name', 'Cluster Statistics Result', 'Position', fitOnScreen([120 120 640 480]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Cluster Statistics Result', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

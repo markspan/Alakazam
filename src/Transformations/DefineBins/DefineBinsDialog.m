@@ -12,7 +12,7 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
     % padding and gaps need 646px before the flexible spacer gets anything,
     % so adding "Syntax..." pushed the last button off the edge. This leaves
     % the spacer real room rather than only just fitting.
-    fig = uifigure('Name', 'DefineBins', 'Position', [100 100 780 520]);
+    fig = uifigure('Name', 'DefineBins', 'Position', fitOnScreen([100 100 780 520]));
     outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 44});
 
     % Row 1: epoch start/stop fields, side by side.

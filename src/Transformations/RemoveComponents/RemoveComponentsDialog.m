@@ -30,7 +30,7 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     probs   = icl.classifications;
     ncomp   = size(probs, 1);
 
-    fig = uifigure('Name', 'Remove ICA components', 'Position', [100 100 1040 560], 'Color', bgColor);
+    fig = uifigure('Name', 'Remove ICA components', 'Position', fitOnScreen([100 100 1040 560]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Remove ICA components', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');

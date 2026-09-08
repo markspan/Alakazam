@@ -29,7 +29,7 @@ function options = FilterDialog(srate, labels, stored)
 
     COLS = {'Channel', 'High-pass (Hz)', 'HP dB', 'Low-pass (Hz)', 'LP dB', 'Notch (Hz)', 'Notch dB'};
 
-    fig = uifigure('Name', 'Filter', 'Position', [100 100 620 410], 'Color', bgColor);
+    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 620 410]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
