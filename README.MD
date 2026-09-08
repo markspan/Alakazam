@@ -105,6 +105,14 @@ current publication standards, Keil et al. (2014) (see
   al., 2021), and whether the loss was even across conditions. Written as its
   own Quarto report alongside the others in the Reports tree (see
   [Data quality](#data-quality)).
+- **The analysis as a runnable script.** **Export as Code** (Export/Report
+  tab) writes the whole workspace out as a plain `.m` file: every recording's
+  chain with the options actually used, identical subjects collapsed into one
+  loop, settings hoisted to the top, and each step spelled as the underlying
+  EEGLAB call (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`)
+  wherever that is a faithful translation rather than a re-implementation
+  (see
+  [Exporting the analysis as code](#exporting-the-analysis-as-code)).
 - **Session workspaces.** Working directories and the processing tree are
   saved and reloaded as a workspace.
 
@@ -256,7 +264,8 @@ The current library:
 | `RemoveComponents` | Manually subtracts ICA components chosen by hand. Shown in the ribbon as "ICA". |
 | `AutoEyeICA` | Runs ICA, classifies components with ICLabel, and automatically removes eye components above a probability threshold. |
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
-| `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. |
+| `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. Six output units: the four magnitude forms (`Volt`, `Power`, `VoltDens`, `PowerDens`), which take `abs()` per segment and so discard phase; `Complex`, which keeps the raw coefficients so phase survives (the spectrum plot then answers the **P** key with the phase spectrum); and `PSD`, a calibrated one-sided power spectral density in units^2/Hz whose integral over frequency is the signal's mean square, which is the one to report. On epoched data, `Fourier` with `PSD` followed by `Average` is Welch's method with the trials as its segments. |
+| `Welch` | The same calibrated PSD for a **continuous** recording, which has no trials to average over: overlapping segments, each tapered, their periodograms averaged. Segment length sets the resolution/variance trade-off directly (1/length Hz bins). It refuses epoched input rather than duplicating the `Fourier` + `Average` route, which already averages one periodogram per trial and keeps the whole epoch's frequency resolution while doing it. Shown in the ribbon as "Welch PSD". |
 | `ScalpDistribution` | Scrubbable scalp-topography plot of an averaged ERP over a time window. |
 | `Brain3D` | The same scrubbable ERP, projected onto a rotatable 3D brain surface, either as a scalp-topography projection (default) or a real source estimate: dSPM, eLORETA or sLORETA, as a magnitude or signed onto the cortical normal (see [3D brain view](#3d-brain-view)). |
 | `Measure` | Quantifies ERP components in named time windows: mean amplitude; peak amplitude + latency (absolute or local peak); area (signed / rectified / positive / negative, over the whole window or a peak-locked band); and fractional peak / area latency (e.g. 50% area latency), on a subject Average or a Grand Average, with an optional per-window baseline and optionally locked to a reference channel's found peak. Derived channels can be defined inline with `let` statements (e.g. `let LRP = C3 - C4`), appended to the dataset so they also show on the ERP plot and in grand averages. Shown in the ribbon as "ERP Measure". See [`measure.md`](src/Transformations/Measure/measure.md) for the full reference, [Measurement export](#measurement-export) and [Statistical analysis](#statistical-analysis). |
@@ -405,6 +414,26 @@ measure reference, with worked examples, is
 renders a companion statistical report, see
 [Statistical analysis](#statistical-analysis).
 
+Two companion files are written into the same Reports folder when the
+material for them exists, both named after the same stem so the set stays
+together if the folder is moved:
+
+- **`..._grandaverages.csv`**, the waveforms the measurements were read from,
+  which is what lets the report draw the grand averages and the difference
+  wave with each measurement window shaded on them
+  ([`exportGrandAveragesCSV.m`](src/IO/exportGrandAveragesCSV.m)).
+- **`..._trials.csv`**, one row per dataset x window x **trial** x channel x
+  measure type, written whenever some node in the workspace carries per-trial
+  measurements. That happens when `Measure` is run on the **epoched** node
+  rather than on the Average: the same window definitions then yield one
+  value per trial instead of one per bin. It is what the report's
+  [single-trial models](#single-trial-models) are fitted to
+  ([`exportTrialMeasurementsCSV.m`](src/IO/exportTrialMeasurementsCSV.m)).
+
+Both are best effort: a workspace with no grand averages, or no epoched
+Measure node, simply gets a report without those sections, and a file that
+fails to write costs its figures rather than the export.
+
 <details>
 <summary><strong>Statistical analysis</strong> (click to expand)</summary>
 
@@ -450,6 +479,7 @@ frequency (Spectral) x measure type:
 | Design | Test(s) | Question it answers |
 |---|---|---|
 | One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
+| Any number of ordinary bins, a **circular** measure type (phase, phaselag) | Circular descriptive statistics: mean angle and resultant length *R&#772;*, no test | An angle wrapping at &plusmn;&pi; cannot go into a *t*-test, a mixed model, or even an ordinary mean: the arithmetic mean of 179&deg; and &minus;179&deg; is 0&deg;, the point opposite where the data are |
 | Two ordinary bins | Paired *t*-test + Cohen's *dz* (bootstrapped CI) + Bayes Factor, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
 | Three or more ordinary bins | Linear mixed model (random intercept + slope for bin **per person**, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects, using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
 | One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d* (bootstrapped CI) + Bayes Factor, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
@@ -459,7 +489,7 @@ frequency (Spectral) x measure type:
 | Two or more ordinary bins, **sessions and groups** assigned | Linear mixed model with every main effect and every two-way interaction, `(bin + session + group)^2`; the three-way interaction is deliberately omitted | Does the condition effect differ between sessions, and between groups, without asking for a three-way term the subject count rarely supports? |
 | Combination/difference bin (amplitude, area, power, SNR, ITC, coherence, ...) | One-sample *t*-test (+ Wilcoxon) against zero, Cohen's *dz* (bootstrapped CI) + Bayes Factor | Is this effect (a priming effect, an oddball effect, ...) actually present? |
 | Combination/difference bin, a **latency** (peak, fractional peak, fractional area) | Descriptive statistics only | (latency has no natural zero to test *against*: see below) |
-| Combination/difference bin, a **circular** quantity (phase, phaselag) | Descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test: see below) |
+| Combination/difference bin, a **circular** quantity (phase, phaselag) | Circular descriptive statistics only | (an angle wrapping at &plusmn;&pi; is not valid for an ordinary linear test: see below) |
 | Combination/difference bin (amplitude/area/power/...), **groups** assigned | One-sample test **within each group** + independent-samples test of the difference score **between groups**, each with Cohen's *d*/*dz* (bootstrapped CI) + Bayes Factor | Does the effect exist within each group? Does the effect's **size** differ between groups (e.g. "is the priming effect different in patients than in controls")? |
 | Combination/difference bin, a **latency**, **groups** assigned | Independent-samples test **between groups** only (still no vs.-zero test) | Does the effect's *timing* differ between groups? |
 | Combination/difference bin, **circular**, **groups** assigned | Descriptive statistics only, per group | (still no linear test is valid, one-sample or between-groups) |
@@ -571,6 +601,100 @@ It replaces an older implicit rule, where a recording with no group assigned
 was silently dropped from grouped tests: the decision is now the analyst's,
 and visible, rather than a side effect of leaving a field blank.
 
+### The signal behind the numbers
+
+Every test above reports a statistic **on a measurement**: a mean amplitude
+over 300-500 ms at Cz, or power at 10 Hz. The report also draws the signal
+that measurement was read from, because a window over the wrong peak, a
+polarity flip, a baseline that never got applied, or a component that simply
+is not there all produce numbers that test perfectly well and mean nothing,
+and all four are obvious at a glance on the wave.
+
+For an ERP export it draws the **grand-average waveforms** per condition with
+the measurement window shaded, and, for a two-condition design, the
+**difference wave**. The shaded band is read from `window_start_ms` and
+`window_stop_ms` in the export itself, so it cannot drift out of step with the
+interval that was actually measured. The condition ribbons are each
+condition's own standard error: they describe the conditions and not the
+difference between them, and whether they overlap is not evidence about a
+within-subject effect, which is exactly why the difference is drawn
+separately. No paired standard error is drawn on the difference wave, because
+that needs the covariance between the two conditions and a grand-average
+export carries only each condition's own error; a band appears only where
+there are several grand averages to take one across, and is labelled as the
+spread between those.
+
+For a Spectral export it draws the **evoked amplitude spectra** with the
+tested frequencies marked, taken from the export so a mark cannot drift from
+the value reported beside it. That catches the failures particular to
+frequency tagging: a tag that is simply absent still yields a power value and
+an SNR near 1, a response one bin away from where it was measured looks like a
+weak effect rather than a misplaced measurement, and an SNR computed against a
+neighbour band that is itself contaminated reads as an ordinary number.
+
+Both need their companion export to have been written (`..._grandaverages.csv`,
+`..._spectra.csv`), which the measurement and spectral exports now do
+automatically; without it the section says so and the rest of the report is
+unaffected.
+
+### Single-trial models
+
+Where a per-trial export is present, the report also fits the measure to the
+**individual trials** rather than to per-subject averages
+(`value ~ bin + trial_c + (1 + bin | person_id)`). Averaging first discards
+everything inside a subject, and weights a subject with 12 usable trials
+exactly like one with 90 though the first estimate is far noisier. Fitting the
+trials lets the model see that, and makes the within-subject variance
+estimable rather than averaged away. This is the current standard for ERP
+inference (Fr&ouml;mer et al., 2018; Volpert-Esmond et al., 2021).
+
+Trial order enters as a covariate, centred within person: single-trial
+amplitude drifts across a session with fatigue and habituation, and that drift
+is confounded with condition whenever the design is not perfectly
+counterbalanced in order. Controlling for it is one of the main reasons to
+model trials at all.
+
+The random structure starts maximal (Barr et al., 2013) and
+is reduced only when it will not stand up, dropping the **correlation** between
+random terms first and the slope only after that
+(Bates et al., 2015); the report names which structure was
+actually fitted, since singular fits are common at ERP trial counts and a
+reader cannot otherwise tell.
+
+To produce the per-trial export, run **Measure on the epoched node** rather
+than on the Average: the same window definitions then yield one value per
+trial instead of one per bin, stored as `EEG.trialMeasurements`. The
+measurement export writes them to `..._trials.csv` beside the report.
+
+### Primary and secondary tests
+
+Benjamini-Hochberg assumes a family of distinct tests, and the rows this
+report produces are not all distinct. A two-condition design yields an omnibus
+on the conditions, a one-sample test of the difference bin that re-expresses
+the same contrast, and (where trials are exported) a single-trial model that
+re-analyses the same data: three rows, one hypothesis.
+
+So the planned condition comparisons form the **primary family** and are
+corrected together. Difference-bin tests, between-group follow-ups on those,
+and single-trial re-analyses are reported as **secondary**, with their
+uncorrected *p* and no adjusted value at all. Correcting across them would
+enlarge the family with rows carrying no independent information, which makes
+the adjustment look stricter while protecting against nothing.
+
+The summary table names the two roles, and breaks each row's identity into
+`window`, `measure`, `channel` and `contrast` columns rather than gluing them
+into one key: a row reading `N400_mean_amplitude_N400_Cz` was window + measure
++ contrast + channel all along, its doubled `N400` merely a combination bin
+sharing the window's name.
+
+Each result is stated **estimate first**: which condition was larger, by how
+much, and with what confidence interval, before any test decision. The
+interval says which effect sizes are compatible with the data, where a
+*p*-value says only whether zero is among them. A short "How to read this
+report" section at the top of every document states these conventions,
+including a plain note that where windows and channels were chosen after
+seeing the data, the *p*-values are optimistic in a way no correction repairs.
+
 ### It's just R and Quarto underneath
 
 The generated `.qmd` is an ordinary, human-editable Quarto document, not a
@@ -680,7 +804,27 @@ the whole channel x time grid with cluster boundaries outlined, and, for
 the strongest few clusters, a topographic plot (**where** the cluster sits
 on the scalp) alongside a time-course plot (**when** it occurs, the
 cluster's own window shaded against each condition's grand-average
-waveform). It lands in the **Reports** tree exactly like the ERP/Spectral
+waveform).
+
+It also draws the **permutation null distribution itself**, per tail, with
+the observed cluster masses marked on it. A cluster-based permutation test
+compares one number, a cluster's mass (the test statistic summed over the
+points it contains), against the distribution of that same number under
+relabelling; every other figure shows where and when an effect was, and this
+one shows the comparison the *p*-value came from. It answers at a glance how
+far into the tail the observed cluster sits, whether the null is tight or
+broad, and whether the largest cluster is exceptional or merely the largest
+of several similar ones, which a single *p*-value cannot address. The
+distribution is exported too, as **`..._nulldist.csv`** (`tail,kind,value`)
+alongside the report's other CSVs
+([`exportClusterStatsCSVs.m`](src/IO/exportClusterStatsCSVs.m)). Under TFCE
+there is no such figure: it scores each point by the support it gathers
+across thresholds rather than forming discrete clusters, so no cluster mass
+exists to plot. The section says so rather than drawing an empty panel, and
+the CSV is written with its header alone, so nothing downstream has to
+distinguish a missing file from an empty one.
+
+It lands in the **Reports** tree exactly like the ERP/Spectral
 reports, labelled `Cluster Stats (<contrast>) - <timestamp>`.
 
 Needs channel positions the standard 10-5 system recognises (auto-filled
@@ -772,6 +916,17 @@ themselves it records:
   over-read, but suppressing it entirely hides how close the rest of the
   cortex came, and a reader is entitled to see the statistic the correction
   was applied to.
+- **How much detail the map can carry**, computed from this run rather than
+  asserted: an *N*-electrode montage, average-referenced, gives a leadfield of
+  rank at most *N* minus 1, and no inverse of any kind recovers more
+  independent spatial patterns than that. The report states the rank beside
+  the vertex count, so a 29-channel recording drawn on the 5124-vertex sheet
+  reads as about 28 independent numbers spread over 5124 vertices, roughly
+  180 vertices each. The smoothness of the picture is interpolation, not
+  measurement. It adds the scale of the error a resolution analysis of a
+  comparable montage on this template gives, tens of millimetres at the peak
+  even noise-free, which is what stops a peak vertex being quoted as a
+  location.
 - **Software versions**: MATLAB, FieldTrip and the Alakazam commit, marked
   when the working tree had uncommitted changes, since a report generated
   from a modified tree corresponds to no commit at all.
@@ -788,7 +943,7 @@ differences follow from that rather than from taste:
 | Unit of the test | Channels x time | Cortical vertices x time |
 | Adjacency | Electrode positions (`ft_prepare_neighbours`, triangulation) | Cortical mesh triangulation |
 | Document | Quarto with R chunks that plot from exported CSVs | Markdown only, no R |
-| Data export | Three CSVs (statistic, waveforms, cluster outlines) | None |
+| Data export | Four CSVs (statistic, waveforms, cluster outlines, permutation null distribution) | None |
 | "Where" figure | Scalp topography per cluster | Four cortical views per cluster, plus an unthresholded appendix |
 | "When" figure | Cluster window shaded on each condition's grand average | Cluster window shaded on the statistic averaged over the cluster's vertices |
 | Overview figure | Heatmap of the whole channel-by-time grid with cluster outlines | Its equivalent is the unthresholded cortical map |
@@ -1067,9 +1222,9 @@ Every `opts` field is optional:
 | `RegParam` | `0.05` | Inverse regularisation. |
 | `SourceSpace` | `20484` | Template sheet: `20484`, `8196` or `5124` vertices. |
 | `Accelerate` | `true` | Use the compiled TFCE kernel when one can be built. |
-| `Workers` | `1` | Split the permutations across this many workers. |
+| `Workers` | `0` | Split the permutations across this many workers. `0` decides from the size of the job, since a pool costs tens of seconds to start and returned about 2.4x when measured: a run predicted to take more than two minutes serial uses every core, a shorter one stays serial. `1` forces serial, *n* forces *n*, and any request is capped at the physical core count and reduced to serial without the Parallel Computing Toolbox. |
 | `correctm` | `'tfce'` | `'tfce'` or `'cluster'`. |
-| `numrandomization` | `1000` | Permutations. Raised to exhaustive automatically when the design's own limit is close. |
+| `numrandomization` | `1000` | Permutations, or `'all'` for every distinct relabelling. A within-subject design permutes by flipping each subject's sign, so exhaustive is 2^*nSubjects*, and a requested count above half of that is raised to `'all'` automatically, at exactly the point FieldTrip would otherwise warn about it. |
 | `alpha`, `tail` | `0.05`, `0` | Significance level, and one- or two-sidedness. |
 | `clusteralpha`, `minnbchan` | `0.05`, `0` | Cluster-forming threshold and minimum neighbours. Ignored by TFCE. |
 
@@ -1162,6 +1317,31 @@ The translation departs from the original in two places:
   the measurement: the standard error expected if the same subject were
   recorded again under the same condition. See
   [Measurement error](#measurement-error-sme) below.
+
+The report's **Worth a Look** section opens with a callout collecting
+everything that tripped a threshold, titled with the count, so a
+subject at 38% rejection or a channel interpolated in a third of the trials
+cannot be scrolled past. It is a shortlist and not a verdict: nothing has
+been excluded, and none of the thresholds is a standard. The values used
+(25% of trials discarded, fewer than 20 surviving trials in a bin that began
+with more than 20, a channel flagged or interpolated in more than 20% of
+trials, a subject more than 3 median absolute deviations noisier than the
+sample median, any trial truncated at a recording boundary) sit below the
+callout under *The criteria, and the reasoning behind each*, one row per rule
+saying why that number rather than another. Median absolute deviation rather
+than standard deviation, because with a handful of subjects the very outliers
+being looked for would inflate an SD enough to hide inside it.
+
+**Precision against trial count** plots each subject's SME against the trials
+that survived, with the 1/sqrt(*n*) curve drawn through it. The rest of the
+report says how much was lost; this says what the loss cost, which is a
+different question, since losing 40 trials from 200 barely moves the estimate
+while losing 20 from 40 changes what the average means. Averaging independent
+trials reduces the standard error by that factor and no faster, so a subject
+well above the curve is not short of trials but noisy within them, and
+collecting more would not fix it. It is an approximation to the fuller answer
+generalizability theory gives (Clayson & Miller, 2017), which needs per-trial
+*values* of the measure rather than per-trial noise, and is labelled as one.
 
 The report also contains a per-subject overview table, the distribution of
 per-trial noise (pooled, and z-scored within subject), noise against trial
@@ -1265,13 +1445,107 @@ companion statistical report for it (see
 [Statistical analysis](#statistical-analysis)): phase and phaselag are
 reported descriptively only where a test would not be statistically valid
 (see that section), power/amplitude/SNR/ITC/coherence get the full
-within-subjects/between-subjects/mixed treatment like any ERP measure. Like
-any transformation, a whole tagging pipeline can be replayed across a study
-with Apply to All Raw Files or a saved template. The full reference is the
+within-subjects/between-subjects/mixed treatment like any ERP measure.
+
+A **`..._spectra.csv`** is written beside it, holding the evoked amplitude
+spectrum behind every one of those numbers, one row per dataset x bin x
+channel x frequency ([`exportSpectraCSV.m`](src/IO/exportSpectraCSV.m);
+thinned above 100 Hz, which for a tagging design is otherwise mostly noise
+floor). The report draws those spectra per bin with the tested frequencies
+marked on them, read from the same file as the values reported beside them,
+so a mark cannot drift from its number. That is what makes the failures
+peculiar to frequency tagging visible rather than merely tabulated: a tag
+that is simply absent still yields a power value and an SNR near 1, a
+response one bin away from where it was measured looks like a weak effect
+rather than a misplaced measurement, and an SNR computed against a neighbour
+band that is itself contaminated reads as an ordinary number.
+
+Like any transformation, a whole tagging pipeline can be replayed across a
+study with Apply to All Raw Files or a saved template. The full reference is the
 [`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)
 header.
 
 </details>
+
+## Exporting the analysis as code
+
+The Export/Report tab's **Export as Code** button (its own *Reproducibility*
+group, since the batch-export buttons write out results and this writes out
+the method) turns the whole workspace into a runnable MATLAB script: every
+root recording's processing chain, in order, with the options that were
+actually used, through to the grand averages. Each `DefineBins` bin script
+travels beside it as its own file. The result is a plain `.m` that can be
+read, edited, version-controlled, quoted in a methods section, and re-run
+without the app.
+
+It is built from the **tree**, not from a scan of the cache directory: a
+cache outlives the workspaces that wrote it, and a script built from stale
+files would describe an analysis this workspace never performed.
+
+Four things make the output worth keeping rather than merely correct:
+
+- Recordings processed identically are emitted **once, as a loop**. Grouping
+  is by exact equality of the chain, so a subject who genuinely differs keeps
+  their own block instead of being silently given someone else's settings.
+- Every step's options are **hoisted into named variables** in one block at
+  the top, so the head of the script is the settings and the body is the
+  pipeline.
+- Each recording runs inside `try`/`catch`, with failures collected and
+  reported at the end. A batch that dies on subject 3 of 40 and discards the
+  other 37 is not a batch.
+- `%%` sections, so the editor can fold and run them and the structure shows
+  in the outline.
+
+**It names the underlying library where naming it is faithful.** Most of
+Alakazam's pipeline is a thin wrapper over EEGLAB, FieldTrip or GEDAI, and a
+line reading `pop_resample(EEG, 250)` carries further than one reading
+`Resample(EEG, opts)`: it can be read by anyone in the field and run without
+this application. Four steps are written that way today:
+
+| Step | Emitted as |
+|---|---|
+| `Resample` | `pop_resample` |
+| `ReRef` | `pop_reref`, with the reference resolved from labels by a plain `find(ismember(...))` |
+| `Interpolate` | `pop_interp`, the same way |
+| `SelectData` | `pop_select`, when the selection is channels only |
+
+Each carries whatever its transformation does *around* the library call,
+which is the part that is easy to get wrong: `Resample` re-derives the time
+axis in seconds and normalises `DataType`, `SelectData` restores the seconds
+axis only on continuous data and only when it actually selected something,
+and both `Interpolate` and `SelectData` keep their no-op guard for a stored
+channel the dataset does not have. Where the transformation refuses rather
+than no-ops, the emitted lines refuse too: `pop_reref` reads an empty
+reference as *average reference* and would apply one silently, so the
+emission asserts first.
+
+The line is drawn wherever a native call would have to *re-derive*
+something. `Filter` designs its own windowed-sinc kernel
+(`firwsord`/`windows`/`firws`, applied by `firfilt`), and inlining that would
+copy the design logic into the script and diverge the day the transformation
+changed. A `SelectData` carrying a time, point or trial range converts units
+first (the dialog collects milliseconds on epoched data, `pop_select` always
+wants seconds). `AutoEyeICA` and `AutoGEDAI` are pipelines rather than calls.
+Those keep the transformation call and carry a comment naming the library
+function that actually does the work, so the script documents the method even
+where it cannot spell it natively.
+
+That restraint is the point rather than a limitation. A re-implementation
+nothing checks is worse than an honest wrapper call, because it looks
+authoritative and can quietly disagree with the results it claims to
+reproduce. Every transformation the exporter is allowed to spell natively
+therefore has a case in
+[`NativeExportEquivalenceTest.m`](tests/NativeExportEquivalenceTest.m) that
+runs both routes and compares **every field**, not just the samples: an
+earlier version compared the data alone and passed while the `Resample`
+emission left a time axis a factor of 1000 out. That file's own last test
+reads the emitter's source and fails if a native emission was added without
+a case.
+
+Written by [`exportAnalysisScript.m`](src/IO/exportAnalysisScript.m), with
+the native spellings in
+[`nativeTransformCall.m`](src/IO/nativeTransformCall.m), and driven from
+[`onExportAnalysisScript.m`](src/@Alakazam/onExportAnalysisScript.m).
 
 ## Using your own data
 
@@ -1840,6 +2114,15 @@ Scientific/methodological:
   The SME reported by `Average` (whole-epoch) and by the
   [Data quality](#data-quality) report (per measurement window, analytic for
   mean amplitude and bootstrapped for the non-linear scores).
+- Clayson, P. E., & Miller, G. A. (2017). ERP Reliability Analysis (ERA)
+  Toolbox: An open-source toolbox for analyzing the reliability of
+  event-related brain potentials. *International Journal of
+  Psychophysiology*, 111, 68-79. DOI:
+  [10.1016/j.ijpsycho.2016.10.012](https://doi.org/10.1016/j.ijpsycho.2016.10.012).
+  The generalizability-theory account of ERP dependability, and of how many
+  trials a given component needs for a target reliability: the fuller answer
+  the [Data quality](#data-quality) report's precision-against-trial-count
+  figure approximates with SME and a 1/sqrt(*n*) curve.
 - Mathôt, S., & Vilotijević, A. (2023). Methods in cognitive pupillometry:
   Design, preprocessing, and statistical analysis. *Behavior Research
   Methods*, 55(6), 3055-3077. DOI:
@@ -1901,6 +2184,33 @@ Scientific/methodological:
   [research.ics.aalto.fi/ica/fastica](https://research.ics.aalto.fi/ica/fastica/).
   Used by `AutoEyeICA` when installed (falls back to `pop_runica`'s own
   default algorithm otherwise).
+- Fr&ouml;mer, R., Maier, M., & Abdel Rahman, R. (2018). Group-level EEG-processing
+  pipeline for flexible single trial-based analyses including linear mixed
+  models. *Frontiers in Neuroscience*, 12, 48. DOI:
+  [10.3389/fnins.2018.00048](https://doi.org/10.3389/fnins.2018.00048).
+  The case for fitting ERP measures to individual trials rather than to
+  per-subject averages, and the pipeline shape that makes it practical: the
+  argument behind [Single-trial models](#single-trial-models) and the
+  `..._trials.csv` export that feeds them.
+- Volpert-Esmond, H. I., Page-Gould, E., & Bartholow, B. D. (2021). Using
+  multilevel models for the analysis of event-related potentials.
+  *International Journal of Psychophysiology*, 162, 145-156. DOI:
+  [10.1016/j.ijpsycho.2021.02.006](https://doi.org/10.1016/j.ijpsycho.2021.02.006).
+  Why unequal trial counts and within-subject variance are handled properly by
+  a multilevel model and thrown away by averaging first, and why trial order
+  belongs in the model: the reasoning behind the single-trial report's
+  `value ~ bin + trial_c + (1 + bin | person_id)`.
+- Barr, D. J., Levy, R., Scheepers, C., & Tily, H. J. (2013). Random effects
+  structure for confirmatory hypothesis testing: Keep it maximal. *Journal of
+  Memory and Language*, 68(3), 255-278. DOI:
+  [10.1016/j.jml.2012.11.001](https://doi.org/10.1016/j.jml.2012.11.001).
+  The argument for the maximal random-effects structure the design justifies,
+  which is where the single-trial model starts before any reduction.
+- Bates, D., Kliegl, R., Vasishth, S., & Baayen, H. (2015). Parsimonious mixed
+  models. [arXiv:1506.04967](https://arxiv.org/abs/1506.04967). What to drop
+  first when the maximal model will not converge: the correlation between
+  random terms before the random slope itself, which is the reduction order
+  [Single-trial models](#single-trial-models) follows and reports.
 - Maris, E., & Oostenveld, R. (2007). Nonparametric statistical testing of
   EEG- and MEG-data. *Journal of Neuroscience Methods*, 164(1), 177-190.
   DOI:

@@ -22,15 +22,39 @@ function [code, sidecars] = exportAnalysisScript(subjects, grandAverages, option
 %                that could not be resolved, which then means "all")
 %   OPTIONS carries .rawDirectory and .outputDirectory for the header.
 %
-%   WHAT THE SCRIPT CALLS, AND WHY. It calls Alakazam's own transformation
-%   functions (Filter, DefineBins, Average, ...) with the recorded options,
-%   exactly as the app itself replays a step (see
-%   Alakazam.applyStepToTarget, which does the same feval). It deliberately
-%   does NOT attempt to emit equivalent EEGLAB or ERPLAB calls: those would
-%   be a re-implementation rather than a record, and any place the two
-%   differed would make the script quietly disagree with the results it
-%   claims to reproduce. The script needs Alakazam's src/ on the path, which
-%   it adds itself.
+%   WHAT THE SCRIPT CALLS, AND WHY. By default it calls Alakazam's own
+%   transformation functions (Filter, DefineBins, Average, ...) with the
+%   recorded options, exactly as the app itself replays a step (see
+%   Alakazam.applyStepToTarget, which does the same feval). The script needs
+%   Alakazam's src/ on the path, which it adds itself.
+%
+%   WHERE A NATIVE LIBRARY CALL IS FAITHFUL, IT IS EMITTED INSTEAD. Most of
+%   this pipeline is a thin wrapper over EEGLAB, FieldTrip or GEDAI, and a
+%   line that names the library function is worth more than one that names
+%   Alakazam's: it can be read by anyone in the field, run without this
+%   application, and quoted in a methods section. nativeTransformCall does
+%   that translation, currently for Resample (pop_resample), ReRef
+%   (pop_reref), Interpolate (pop_interp) and a channel-only SelectData
+%   (pop_select), each carrying whatever the transformation does around the
+%   call: its time-axis convention, its normalised DataType, its no-op
+%   guard. Those steps then take their arguments as literals, so their
+%   options are not hoisted either (see optionLines).
+%
+%   The line is drawn wherever a native call would have to RE-DERIVE
+%   something. Filter designs its own windowed-sinc kernel through
+%   firwsord/windows/firws before handing it to firfilt, and inlining that
+%   would copy the design logic into the script and silently diverge the day
+%   Filter.m changed. A SelectData carrying a time, point or trial range
+%   converts units first. AutoEyeICA and AutoGEDAI are pipelines rather than
+%   calls. Those keep the transformation call and carry a comment naming the
+%   library function that actually does the work (libraryNote), so the
+%   script still documents the method where it cannot spell it natively.
+%
+%   A re-implementation nothing checks is worse than an honest wrapper call,
+%   because it looks authoritative and can quietly differ. Every native
+%   emission therefore has a case in NativeExportEquivalenceTest that runs
+%   both routes and compares EVERY field: comparing only the samples let a
+%   Resample emission through whose time axis was a factor of 1000 out.
 %
 %   WHAT MAKES THE OUTPUT WORTH READING. Four things, each because the
 %   obvious alternative produces a script nobody would keep:
@@ -50,7 +74,8 @@ function [code, sidecars] = exportAnalysisScript(subjects, grandAverages, option
 %     * Sections (%%) so the MATLAB editor can fold and run them, and the
 %       structure is visible in the editor's own outline.
 %
-%   See also MATLABLITERAL, RAWCODE, ALAKAZAM.ONEXPORTANALYSISSCRIPT.
+%   See also MATLABLITERAL, NATIVETRANSFORMCALL, RAWCODE,
+%   ALAKAZAM.ONEXPORTANALYSISSCRIPT.
     if nargin < 3
         options = struct();
     end
@@ -70,11 +95,17 @@ function [code, sidecars] = exportAnalysisScript(subjects, grandAverages, option
     % threading a base indent through every emitter: the relative structure
     % inside loops, try blocks and multi-line literals is already correct,
     % and only the outermost level changes.
+    % The pipeline is built BEFORE the options block so the latter can drop
+    % anything the former never mentions. A step emitted as a native library
+    % call takes its arguments as literals and never reads its hoisted
+    % variable, and an opt_Resample sitting at the top of the script that
+    % changes nothing when edited is worse than clutter: it is a trap.
+    pipeline = pipelineLines(subjects, groups, optbook);
     body = [ ...
         setupLines(subjects, options), ...
         binScriptLines(sidecars), ...
-        optionLines(optbook), ...
-        pipelineLines(subjects, groups, optbook), ...
+        optionLines(optbook, pipeline), ...
+        pipeline, ...
         grandAverageLines(grandAverages), ...
         summaryLines(subjects)];
 
@@ -477,7 +508,26 @@ function lines = binScriptLines(sidecars)
     lines{end + 1} = '';
 end
 
-function lines = optionLines(book)
+function tf = mentionsVariable(lines, name)
+%MENTIONSVARIABLE  Does any line use NAME as a whole identifier?
+%   Word-bounded on purpose: a plain contains() would find opt_Filter
+%   inside opt_Filter_2 and keep a variable nothing reads.
+    pattern = ['(?<![A-Za-z0-9_])' regexptranslate('escape', name) '(?![A-Za-z0-9_])'];
+    tf = any(~cellfun(@isempty, regexp(lines, pattern, 'once')));
+end
+
+function lines = optionLines(book, pipeline)
+%OPTIONLINES  The hoisted settings block, minus anything unused.
+%   An entry survives only if the pipeline actually refers to its variable.
+%   See the note at the call site: a native emission carries its arguments
+%   as literals, so its option variable would otherwise sit at the top of
+%   the script looking editable and changing nothing.
+    keep = false(1, numel(book));
+    for i = 1:numel(book)
+        keep(i) = mentionsVariable(pipeline, book(i).variable);
+    end
+    book = book(keep);
+
     if isempty(book)
         lines = {};
         return;
@@ -664,29 +714,6 @@ function lines = oneSubjectLines(subject, index, book)
     lines{end + 1} = '';
 end
 
-function call = nativeCall(book, step, inputVar, outputVar)
-%NATIVECALL  The step as a direct library call, or '' when it cannot be one.
-%
-%   ONLY WHERE THE ARGUMENTS ARE LITERALS ALREADY IN THE STORED OPTIONS.
-%   The moment a native call would need Alakazam to resolve something first
-%   (a channel label to an index, a transition band to a filter order) the
-%   emitted line would be a re-implementation rather than a translation, and
-%   a re-implementation that nothing checks is worse than an honest wrapper
-%   call: it looks authoritative and can quietly differ.
-    call = '';
-    params = paramsFor(book, step);
-    switch step.transformId
-        case 'Resample'
-            % Resample.m is pop_resample(input, options.NewRate) and nothing
-            % else, so this is the same call by a shorter route.
-            if isstruct(params) && isfield(params, 'NewRate') && ...
-                    isnumeric(params.NewRate) && isscalar(params.NewRate)
-                call = sprintf('%s = pop_resample(%s, %s);', ...
-                    outputVar, inputVar, num2str(params.NewRate, '%.10g'));
-            end
-    end
-end
-
 function params = paramsFor(book, step)
 %PARAMSFOR  The stored options for STEP, or [] when they are not a struct.
     params = [];
@@ -702,17 +729,19 @@ function note = libraryNote(transformId)
 %LIBRARYNOTE  Which third-party function actually performs this step.
 %
 %   Written from reading each transformation rather than from memory, and
-%   deliberately silent for the ones that have no such function: Alakazam
-%   computes ArtefactDetect, Measure, DefineBins, Average, Baseline and
-%   SpectralMeasure itself, and claiming a library for them would be worse
-%   than saying nothing.
+%   deliberately silent for two kinds of step: the ones with no such
+%   function, since Alakazam computes ArtefactDetect, Measure, DefineBins,
+%   Average, Baseline and SpectralMeasure itself and claiming a library for
+%   them would be worse than saying nothing, and the ones nativeCall
+%   already emits as library calls, where the code says it better than a
+%   comment would.
     switch transformId
         case 'Filter'
             note = 'EEGLAB firfilt: windowed-sinc FIR (firwsord/windows/firws, applied by firfilt).';
-        case 'ReRef'
-            note = 'EEGLAB pop_reref, with channel labels resolved to indices first.';
-        case 'Interpolate'
-            note = 'EEGLAB pop_interp, with channel labels resolved to indices first.';
+        case 'SelectData'
+            note = 'EEGLAB pop_select (a time, point or trial selection; channel-only ones are emitted directly).';
+        case 'RemoveComponents'
+            note = 'EEGLAB pop_subcomp, over the decomposition already on the dataset.';
         case 'AutoEyeICA'
             note = 'EEGLAB pop_runica + ICLabel, components removed with pop_subcomp.';
         case 'AutoGEDAI'
@@ -745,35 +774,30 @@ function lines = stepLines(steps, book, prefix, indent, nameExpression)
             sprintf('%s_%s', prefix, step.transformId)), varOf);
         varOf{k} = outputVar;
 
-        % A NATIVE CALL WHERE THAT IS FAITHFUL, THE TRANSFORMATION OTHERWISE.
-        % Most of this pipeline is a thin wrapper over EEGLAB, FieldTrip or
-        % GEDAI, and a script that names those functions is worth more than
-        % one that names Alakazam's: it can be read by anyone in the field,
-        % run without this application, and quoted in a methods section.
+        % NATIVE LIBRARY CALLS WHERE THEY ARE FAITHFUL, THE TRANSFORMATION
+        % OTHERWISE. Most of this pipeline is a thin wrapper over EEGLAB,
+        % FieldTrip or GEDAI, and a script naming those functions is worth
+        % more than one naming Alakazam's: it can be read by anyone in the
+        % field, run without this application, and quoted in a methods
+        % section. See nativeCall for what qualifies and what does not.
         %
-        % The line is only drawn where a native call would have to
-        % RE-DERIVE something. Resample passes a number straight through, so
-        % pop_resample(EEG, 250) is the same call by a shorter route.
-        % Filter designs its own windowed-sinc kernel through firwsord,
-        % windows and firws before handing it to firfilt; emitting that
-        % inline would copy fifteen lines of design logic into the script
-        % and silently diverge the day Filter.m changed. ReRef and
-        % Interpolate resolve channel labels to indices through Alakazam's
-        % own matching rules, which a bare pop_reref would have to restate.
-        %
-        % Those keep the transformation call and carry a comment naming the
+        % A step that keeps its wrapper call gets a comment naming the
         % library function that actually does the work, so the script still
-        % documents the method even where it cannot spell it natively.
-        note = libraryNote(step.transformId);
-        if ~isempty(note)
-            lines{end + 1} = sprintf('%s%% %s', pad, note); %#ok<AGROW>
-        end
-        native = nativeCall(book, step, inputVar, outputVar);
+        % documents the method where it cannot spell it. A step emitted
+        % natively needs no such comment: the code now says it.
+        native = nativeTransformCall(step.transformId, paramsFor(book, step), ...
+            inputVar, outputVar);
         if isempty(native)
+            note = libraryNote(step.transformId);
+            if ~isempty(note)
+                lines{end + 1} = sprintf('%s%% %s', pad, note); %#ok<AGROW>
+            end
             lines{end + 1} = sprintf('%s%s = %s(%s, %s);', pad, outputVar, ...
                 step.transformId, inputVar, optionExpression(book, step)); %#ok<AGROW>
         else
-            lines{end + 1} = sprintf('%s%s', pad, native); %#ok<AGROW>
+            for n = 1:numel(native)
+                lines{end + 1} = sprintf('%s%s', pad, native{n}); %#ok<AGROW>
+            end
         end
         % Results worth keeping past the end of the loop are collected as
         % they are produced. Without this a Measure result is computed and

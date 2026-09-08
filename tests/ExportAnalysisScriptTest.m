@@ -486,6 +486,58 @@ classdef ExportAnalysisScriptTest < matlab.unittest.TestCase
             testCase.verifySubstring(code, 'opt_Baseline =');
         end
 
+        function aNativelyEmittedStepHoistsNoOptions(testCase)
+        %ANATIVELYEMITTEDSTEPHOISTSNOOPTIONS  A step written as a direct
+        %   library call takes its arguments as literals, so its options
+        %   variable would sit in the settings block looking editable while
+        %   changing nothing. That is worse than clutter: an analyst who
+        %   edits opt_Resample and re-runs gets the old rate and no warning.
+            steps = struct( ...
+                'transformId', {'Resample', 'Baseline'}, ...
+                'params', {struct('NewRate', 250), struct('Start', -100)}, ...
+                'parent', {-1, 1});
+            subjects = struct('name', 'sub01', 'rawFile', 'sub01.set', ...
+                'loader', 'set', 'steps', steps);
+
+            code = exportAnalysisScript(subjects, [], struct());
+
+            testCase.verifySubstring(code, 'pop_resample(EEG, 250)');
+            testCase.verifyEmpty(strfind(code, 'opt_Resample'), ...
+                ['Resample is emitted as a native call, so nothing reads its ' ...
+                 'hoisted variable and it should not be written.']); %#ok<STRIFCND>
+            testCase.verifySubstring(code, 'opt_Baseline =');
+        end
+
+        function everyHoistedOptionIsActuallyRead(testCase)
+        %EVERYHOISTEDOPTIONISACTUALLYREAD  The general form of the case
+        %   above, over a pipeline mixing both kinds of step: no variable
+        %   may be defined in the Options block without the pipeline using
+        %   it. Written as a sweep rather than a list so it keeps holding
+        %   when the next transformation is emitted natively.
+            steps = struct( ...
+                'transformId', {'Resample', 'ReRef', 'Interpolate', 'Filter', 'Baseline'}, ...
+                'params', { ...
+                    struct('NewRate', 250), ...
+                    struct('mode', 'Channels', 'refChannels', {{'M1'}}, 'keepref', false), ...
+                    struct('channels', {{'Fp1'}}, 'method', 'spherical'), ...
+                    struct('Low', 0.1), ...
+                    struct('Start', -100)}, ...
+                'parent', {-1, 1, 2, 3, 4});
+            subjects = struct('name', 'sub01', 'rawFile', 'sub01.set', ...
+                'loader', 'set', 'steps', steps);
+
+            code = exportAnalysisScript(subjects, [], struct());
+            defined = regexp(code, '^(opt_\w+) = ', 'tokens', 'lineanchors');
+
+            for k = 1:numel(defined)
+                name = defined{k}{1};
+                uses = regexp(code, ['(?<![A-Za-z0-9_])' name '(?![A-Za-z0-9_])'], 'start');
+                testCase.verifyGreaterThan(numel(uses), 1, sprintf( ...
+                    ['%s is defined in the Options block but never read: a setting ' ...
+                     'that looks editable and is not.'], name));
+            end
+        end
+
         function aVariantIsNamedAfterTheRecordingThatUsesIt(testCase)
         %AVARIANTISNAMEDAFTERTHERECORDINGTHATUSESIT  opt_X_2 says nothing
         %   about why it exists; the recording treated differently is the
@@ -717,15 +769,19 @@ classdef ExportAnalysisScriptTest < matlab.unittest.TestCase
             code = exportAnalysisScript(testCase.twoSubjects(), [], struct());
             % twoSubjects uses Baseline with Start -100 (a default) and
             % Stop 0 (also a default), so this checks the opposite case via
-            % a transformation with none declared.
-            steps = struct('transformId', 'ReRef', ...
-                'params', struct('mode', 'Average'), 'parent', -1);
+            % a transformation with none declared. Filter, whose defaults
+            % sit inside nested highpass/lowpass structs transformDefaults
+            % does not read, and which keeps its wrapper call so its options
+            % are still hoisted where this can see them.
+            steps = struct('transformId', 'Filter', ...
+                'params', struct('lowpass', struct('enabled', true, 'freq', 30)), ...
+                'parent', -1);
             subjects = struct('name', 'sub01', 'rawFile', 'sub01.set', ...
                 'cacheFile', 'sub01.mat', 'loader', 'set', 'steps', steps);
 
             plain = exportAnalysisScript(subjects, [], struct());
 
-            testCase.verifySubstring(plain, 'opt_ReRef = struct(''mode'', ''Average'');');
+            testCase.verifySubstring(plain, 'opt_Filter = struct(');
             testCase.verifyEmpty(strfind(plain, '% default')); %#ok<STRIFCND>
             testCase.verifyNotEmpty(code);
         end
