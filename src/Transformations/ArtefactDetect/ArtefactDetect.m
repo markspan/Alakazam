@@ -48,6 +48,7 @@ end
 
 METHODS = {'Absolute threshold', 'Step function', 'Moving-window peak-to-peak', 'Sample-to-sample'};
 SCOPES  = {'Whole epoch', 'This channel only', 'Interpolate this channel'};
+CHANNELS = {'All channels', 'Scalp EEG only'};
 
 if interactive
     stored = TransformSettings.get('ArtefactDetect');
@@ -72,6 +73,8 @@ if interactive
         'separator', 'Test window (ms, 0 to 0 = whole epoch):', ...
         {'Start'; 'TestStart'}, d('TestStart', 0), ...
         {'Stop'; 'TestStop'}, d('TestStop', 0), ...
+        'separator', 'Channels to test:', ...
+        {'Channels'; 'Channels'}, TransTools.PutFirst(CHANNELS, d('Channels', 'All channels')), ...
         'separator', 'Rejection:', ...
         {'Reject'; 'Scope'}, TransTools.PutFirst(SCOPES, d('Scope', 'Whole epoch')));
     if isempty(options)
@@ -116,9 +119,22 @@ interpolate = strcmpi(opt.Scope, 'Interpolate this channel');
 % to read the neighbouring channels of a trial, so it cannot run while the
 % same trial is still being NaN'd cell by cell: the flags are collected
 % first, then applied once, whole.
+% WHICH CHANNELS ARE TESTED AT ALL. An EOG channel swings past any
+% threshold chosen for scalp EEG every time the participant blinks, so
+% testing it flags it on a large fraction of trials by construction. That is
+% wanted under 'Whole epoch', where it is the classic blink rejection, and
+% is noise under the other two scopes: it marks the eye channel bad without
+% telling anyone anything, and it fills the data-quality report's
+% candidate-for-interpolation list with the one channel nobody would ever
+% interpolate.
+%
+% The default stays 'All channels', because changing it would silently
+% switch off blink rejection for anyone whose pipeline depends on it.
+scanIdx = channelsToScan(EEG, opt, nChan);
+
 flags = false(nChan, nTrials);
 for t = 1:nTrials
-    for c = 1:nChan
+    for c = scanIdx
         sig = EEG.data(c, lo:hi, t);
         if channelIsBad(sig, opt, winN, stepN)
             flags(c, t) = true;
@@ -137,9 +153,13 @@ if rejectEpoch
         methodLabel, sum(markedEpochs), nTrials);
 elseif interpolate
     warnCrowdedTrials(flags, nChan);
-    EEG = TransTools.InterpolateFlaggedCells(EEG, flags);
-    fprintf('ArtefactDetect (%s): interpolated %d channel-epoch(s).\n', ...
-        methodLabel, nnz(flags));
+    % The count comes back from the interpolator rather than from the flags:
+    % a channel with no scalp position is left flagged instead of being
+    % reconstructed, so the two numbers differ exactly when an EOG or ECG
+    % channel tripped a detector.
+    [EEG, nInterpolated] = TransTools.InterpolateFlaggedCells(EEG, flags);
+    fprintf('ArtefactDetect (%s): interpolated %d of %d flagged channel-epoch(s).\n', ...
+        methodLabel, nInterpolated, nnz(flags));
 else
     for t = 1:nTrials
         EEG.data(flags(:, t), :, t) = NaN;
@@ -179,6 +199,26 @@ function warnCrowdedTrials(flags, nChan)
 end
 
 % ======================================================================= %
+function idx = channelsToScan(EEG, opt, nChan)
+%CHANNELSTOSCAN  The channel indices this run tests.
+%   'Scalp EEG only' uses eegChannelMask, which excludes channels TYPED as
+%   a known peripheral (EOG, ECG, ...) and keeps everything else, so an
+%   untyped dataset behaves exactly as it always did rather than being
+%   silently emptied.
+    idx = 1:nChan;
+    if ~isfield(opt, 'Channels') || ~strcmpi(char(string(opt.Channels)), 'Scalp EEG only')
+        return;
+    end
+    if ~isfield(EEG, 'chanlocs') || numel(EEG.chanlocs) ~= nChan
+        return;     % nothing to decide from; test everything, as before
+    end
+    mask = eegChannelMask(EEG.chanlocs);
+    if numel(mask) ~= nChan || ~any(mask)
+        return;
+    end
+    idx = find(mask);
+end
+
 function bad = channelIsBad(sig, opt, winN, stepN)
 %CHANNELISBAD  Does this channel's signal (over the test window) trip any of
 %   the selected detectors? A single trip is enough to flag the channel.
@@ -254,6 +294,9 @@ function opt = normaliseOptions(options)
     opt.TestStart = TransTools.FieldOr(options, 'TestStart', 0);
     opt.TestStop  = TransTools.FieldOr(options, 'TestStop', 0);
     opt.Scope     = TransTools.FieldOr(options, 'Scope', 'Whole epoch');
+    % Defaults to every channel, so an options struct stored before this
+    % field existed replays exactly as it did.
+    opt.Channels  = TransTools.FieldOr(options, 'Channels', 'All channels');
 end
 
 function [lo, hi] = testRange(EEG, startMs, stopMs, nSamp)

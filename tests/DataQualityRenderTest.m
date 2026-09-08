@@ -83,6 +83,23 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
                 'The trial count for a dependability of .80 does not match its closed form.');
         end
 
+        function flaggedTrialsPerChannelAreShownAsCounts(testCase)
+        %FLAGGEDTRIALSPERCHANNELARESHOWNASCOUNTS  The question a reader
+        %   actually has about a flagged channel is how many trials it cost
+        %   them, which a threshold marker and a percentage both leave out.
+        %   Rendered rather than parsed: the section groups, joins and
+        %   labels, and all of that parses cleanly whatever it computes.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+            html = testCase.renderReport(temporary.Folder, '', true);
+            text = fileread(html);
+
+            testCase.verifySubstring(text, 'Trials flagged, per channel and subject');
+            testCase.verifySubstring(text, 'Most Frequently Flagged Channels');
+            testCase.verifyEmpty(strfind(text, 'No channel was flagged in any trial'), ...
+                'The fixture flags a channel, so the empty-case message is wrong here.'); %#ok<STRIFCND>
+        end
+
         function noMeasureFileSaysSoAndNamesTheFix(testCase)
         %NOMEASUREFILESAYSSOANDNAMESTHEFIX  The common case: a workspace
         %   that never ran Measure on epoched data. The section has to say
@@ -138,10 +155,13 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
             end
         end
 
-        function html = renderReport(testCase, folder, measureName)
+        function html = renderReport(testCase, folder, measureName, withFlags)
         %RENDERREPORT  The whole document, through the real generator and
         %   the real renderQuartoReport.
-            entries = testCase.qualityEntries();
+            if nargin < 4
+                withFlags = false;
+            end
+            entries = testCase.qualityEntries(withFlags);
             stem = fullfile(folder, 'dq');
             [summaryCsv, trialCsv, smeCsv] = exportDataQualityCSVs(entries, stem);
             [~, s] = fileparts(summaryCsv);
@@ -158,15 +178,24 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
                 'quarto could not render the data-quality report:\n%s', errorMessage));
         end
 
-        function entries = qualityEntries(~)
+        function entries = qualityEntries(~, withFlags)
         %QUALITYENTRIES  Two subjects in the shape collectDataQualityEntries
         %   returns, so the rest of the report has something to narrate.
+        %   WITHFLAGS additionally NaNs ONE channel of a few trials, which
+        %   is the per-channel flag convention (a whole-trial rejection
+        %   NaNs every channel and is counted separately).
+            if nargin < 2
+                withFlags = false;
+            end
             entries = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {});
             for s = 1:2
                 EEG = makeTestEEG('trials', 8, 'nbchan', 2);
                 EEG.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, ...
                     'trials', {1:4, 5:8});
                 EEG.data(:, :, s) = NaN;
+                if withFlags
+                    EEG.data(1, :, 3:5) = NaN;
+                end
                 entries(s) = struct('subject', sprintf('s%02d', s), 'group', '', ...
                     'session', '', 'quality', dataQualityMetrics(EEG));
             end

@@ -1,6 +1,12 @@
-function EEG = InterpolateFlaggedCells(EEG, flags)
+function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
 %INTERPOLATEFLAGGEDCELLS  Reconstruct every flagged (channel, trial) cell
 %   from its neighbours, one trial at a time, and record that it happened.
+%
+%   NINTERPOLATED is how many cells were ACTUALLY reconstructed, which is
+%   not always how many were flagged: a channel with no scalp position
+%   cannot be placed and is left flagged instead (see the guard below). A
+%   caller that reports nnz(flags) rather than this number tells the
+%   analyst it repaired data it did not touch.
 %
 %   EEG = TransTools.InterpolateFlaggedCells(EEG, FLAGS) takes a logical
 %   nChan x nTrials FLAGS matrix and replaces each flagged cell's samples
@@ -43,7 +49,34 @@ function EEG = InterpolateFlaggedCells(EEG, flags)
 %   analyst having looked.
 %
 %   See also INTERPOLATE, MANUALREJECT, ARTEFACTDETECT, DATAQUALITYMETRICS.
+    nInterpolated = 0;
     if isempty(flags) || ~any(flags(:))
+        return;
+    end
+
+    % ONLY CHANNELS WITH A SCALP POSITION CAN BE RECONSTRUCTED, and this is
+    % a guard rather than a nicety. eeg_interp places a bad channel by its
+    % coordinates; handed one without any (an EOG or ECG channel, which no
+    % 10-5 lookup positions) it removes that channel from the set instead,
+    % and the caller then indexes a channel that is no longer there:
+    % "Index in position 1 exceeds array bounds". Reproduced before this
+    % guard existed, with a VEOG flagged by ArtefactDetect.
+    %
+    % A cell that cannot be reconstructed stays FLAGGED rather than quietly
+    % kept: it was judged bad, and NaN is what the rest of the app already
+    % reads as bad (see dataQualityMetrics' own NaN convention).
+    positioned = positionedChannels(EEG, size(flags, 1));
+    unreconstructable = flags & ~positioned(:);
+    flags = flags & positioned(:);
+    if any(unreconstructable(:))
+        for k = 1:size(EEG.data, 3)
+            EEG.data(unreconstructable(:, k), :, k) = NaN;
+        end
+        fprintf(['InterpolateFlaggedCells: %d channel-epoch(s) on channel(s) with no ' ...
+            'scalp position were left flagged rather than interpolated.\n'], ...
+            nnz(unreconstructable));
+    end
+    if ~any(flags(:))
         return;
     end
 
@@ -60,7 +93,25 @@ function EEG = InterpolateFlaggedCells(EEG, flags)
         EEG.data(badIdx, :, t) = oneTrial.data(badIdx, :);
     end
 
+    nInterpolated = nnz(flags);
     EEG = recordInterpolated(EEG, flags);
+end
+
+% ======================================================================= %
+function mask = positionedChannels(EEG, nChan)
+%POSITIONEDCHANNELS  Which channels eeg_interp could actually place.
+%   A channel needs a finite X to be interpolated onto the scalp. Missing
+%   chanlocs entirely means nothing can be placed, which is the honest
+%   answer rather than an optimistic one.
+    mask = false(1, nChan);
+    if ~isfield(EEG, 'chanlocs') || numel(EEG.chanlocs) ~= nChan || ...
+            ~isfield(EEG.chanlocs, 'X')
+        return;
+    end
+    for c = 1:nChan
+        x = EEG.chanlocs(c).X;
+        mask(c) = ~isempty(x) && all(isfinite(x));
+    end
 end
 
 % ======================================================================= %

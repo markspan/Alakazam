@@ -260,7 +260,7 @@ The current library:
 | `DefineBins` | Assigns events to ERP bins with a small, purpose-built event-selection language: see [`bin_language.md`](src/Transformations/DefineBins/bin_language.md) for the full reference. Replaces the ERPLAB EVENTLIST + BINLISTER step. |
 | `Baseline` | Baseline-corrects epoched data. |
 | `Average` | Averages one dataset's epoched trials into an ERP, including bin-difference/interaction contrast bins (see `bin_language.md` §11-12). |
-| `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold. |
+| `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold, or a step, peak-to-peak or sample-to-sample criterion. What happens to a flagged cell is chosen separately: reject the whole epoch, mark that channel only, or interpolate that channel from its neighbours. **Channels to test** defaults to all channels, which is what makes a blink on VEOG reject the trial; set it to scalp EEG only where an eye or heart channel should not be tested against a threshold chosen for the scalp. A channel with no scalp position is never interpolated, since a spherical spline cannot place it. |
 | `RemoveComponents` | Manually subtracts ICA components chosen by hand. Shown in the ribbon as "ICA". |
 | `AutoEyeICA` | Runs ICA, classifies components with ICLabel, and automatically removes eye components above a probability threshold. |
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
@@ -1336,7 +1336,7 @@ Each metric, and the pupillometry measure it corresponds to:
 |---|---|---|
 | % trials rejected | % missing samples / blinks per trial | How much of the recording survived rejection |
 | % trials rejected **per bin** | blinks per trial by condition | Whether that loss is even. The one that can invalidate a result rather than merely weaken it |
-| % channel-epochs flagged | (no direct analogue) | Loss confined to single channels, usually one bad electrode |
+| % channel-epochs flagged | (no direct analogue) | Loss confined to single channels, usually one bad electrode. The report also gives the flagged trial **count** per channel per subject, which is what a decision to interpolate or exclude a channel rests on, and names any peripheral channels among them |
 | Pre-stimulus SD (µV) | baseline pupil size | Per-trial noise |
 | % baseline outlier trials | z-scored baseline, \|z\| > 2 | Trials whose noise is extreme *for that subject* |
 | SME | (no analogue) | Standardized measurement error (Luck et al., 2021), reported both over the whole epoch and per measurement window |
