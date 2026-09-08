@@ -35,7 +35,7 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
             qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
                 testCase.assetFixture());
 
-            caveatAt = strfind(qmd, 'means an effect exists, not where it is');
+            caveatAt = strfind(qmd, 'an effect exists, not where it is');
             resultsAt = strfind(qmd, '## Clusters');
             testCase.assertNotEmpty(caveatAt);
             testCase.assertNotEmpty(resultsAt);
@@ -51,8 +51,8 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
                 generateSourceClusterAssetsFixtureEmpty());
 
             testCase.verifySubstring(qmd, 'How much detail the map can carry');
-            testCase.verifySubstring(qmd, 'independent numbers');
-            testCase.verifySubstring(qmd, 'The cortical sheet is part of this analysis');
+            testCase.verifySubstring(qmd, 'independent values');
+            testCase.verifySubstring(qmd, 'The cortical sheet affects the statistic');
             testCase.verifySubstring(qmd, '38 mm');
         end
 
