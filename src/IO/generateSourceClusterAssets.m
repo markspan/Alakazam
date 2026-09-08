@@ -12,8 +12,10 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
 %     MaxClusters      cap on how many are rendered     (default 8)
 %
 %   EXTRAS (optional second output) carries figures that describe the
-%   analysis rather than one cluster: currently .UnthresholdedMapPath, the
-%   whole statistic map with nothing masked out. Reporting practice asks for
+%   analysis rather than one cluster: .UnthresholdedMapPath, the whole
+%   statistic map with nothing masked out, and .NullDistributionPath, the
+%   permutation null of the maximum statistic with the observed extreme
+%   marked on it (empty when the run kept no distribution). Reporting practice asks for
 %   unthresholded maps to be available so that sub-threshold structure can
 %   be seen, while the per-cluster maps stay masked because an unmasked map
 %   presented as the result is reliably over-read. Both, each doing its own
@@ -52,7 +54,7 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
     maxClusters     = TransTools.FieldOr(opts, 'MaxClusters', 8);
 
     assets = emptyAssets();
-    extras = struct('UnthresholdedMapPath', '');
+    extras = struct('UnthresholdedMapPath', '', 'NullDistributionPath', '');
 
     if ~exist(imagesDir, 'dir')
         mkdir(imagesDir);
@@ -64,6 +66,14 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
     unthresholdedFile = fullfile(imagesDir, 'statistic_unthresholded.png');
     renderUnthresholdedMap(summary, unthresholdedFile);
     extras.UnthresholdedMapPath = sprintf('%s/%s', imagesFolderName, 'statistic_unthresholded.png');
+
+    % The comparison the p-value actually came from, drawn whenever the run
+    % kept a null distribution. Also rendered for a null result, for the
+    % same reason as the map above: that is when it is most worth seeing.
+    nullFile = fullfile(imagesDir, 'permutation_null.png');
+    if renderNullDistribution(summary, nullFile)
+        extras.NullDistributionPath = sprintf('%s/%s', imagesFolderName, 'permutation_null.png');
+    end
 
     if isempty(summary.clusters)
         return;
@@ -416,6 +426,102 @@ function renderClusterTimeCourse(summary, vertexMask, statMap, cluster, pngPath)
     ylabel(ax, 'Mean t over cluster vertices');
     box(ax, 'off');
     exportgraphics(ax, pngPath, 'Resolution', 150, 'BackgroundColor', 'white');
+end
+
+function drawn = renderNullDistribution(summary, pngPath)
+%RENDERNULLDISTRIBUTION  The permutation null of the maximum statistic, per
+%   tail, with the observed maximum marked on it.
+%
+%   THE TEST MADE VISIBLE. Every other figure in this report shows WHERE
+%   and WHEN an effect was; this one shows the comparison the p-value came
+%   from. A max-statistic correction asks a single question, "how often did
+%   a relabelling produce an extreme this large anywhere in the volume",
+%   and without the distribution a reader is asked to take the answer on
+%   trust.
+%
+%   THE MAXIMUM, NOT CLUSTER MASS. The scalp report draws a null of cluster
+%   mass because its default forms discrete clusters. Here the default is
+%   TFCE, which scores every point by the support it gathers across
+%   thresholds and forms no clusters at all, so there is no mass to
+%   distribute. What the accelerated route does keep is the per-permutation
+%   extreme of the enhanced statistic, which is precisely the reference
+%   distribution its p-values were read against.
+%
+%   Returns false, drawing nothing, when the run kept no distribution:
+%   FieldTrip's own correctm='tfce' path does not return one, so an
+%   unaccelerated run has nothing to show and the report says so rather
+%   than presenting an empty panel.
+    drawn = false;
+    if ~isfield(summary, 'stat')
+        return;
+    end
+    stat = summary.stat;
+
+    tails = struct('field', {'posdistribution', 'negdistribution'}, ...
+                   'name',  {'Positive tail', 'Negative tail'}, ...
+                   'sign',  {'positive', 'negative'});
+    present = false(1, numel(tails));
+    for k = 1:numel(tails)
+        present(k) = isfield(stat, tails(k).field) && ~isempty(stat.(tails(k).field));
+    end
+    if ~any(present)
+        return;
+    end
+    tails = tails(present);
+
+    fig = figure('Visible', 'off', 'HandleVisibility', 'off', 'Color', 'white', ...
+        'Position', [100 100 760 300 * numel(tails)]);
+    closeFig = onCleanup(@() close(fig));
+    layout = tiledlayout(fig, numel(tails), 1, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+    for k = 1:numel(tails)
+        draws = double(stat.(tails(k).field));
+        draws = draws(isfinite(draws));
+        ax = nexttile(layout);
+        hold(ax, 'on');
+        histogram(ax, draws, 'FaceColor', [0.62 0.66 0.74], 'EdgeColor', 'none');
+
+        % The observed extreme in the same units, taken from the enhanced
+        % map the inference ran on rather than from a cluster summary: a
+        % TFCE run has no cluster statistic to quote here.
+        observed = observedExtreme(stat, tails(k).sign);
+        if ~isnan(observed)
+            xline(ax, observed, 'Color', [0.78 0.24 0.24], 'LineWidth', 1.8, ...
+                'Label', sprintf('observed %.3g', observed), ...
+                'LabelVerticalAlignment', 'top', 'LabelOrientation', 'horizontal');
+        end
+
+        title(ax, sprintf('%s (%d permutations)', tails(k).name, numel(draws)));
+        xlabel(ax, 'Maximum enhanced statistic under relabelling');
+        ylabel(ax, 'Permutations');
+        box(ax, 'off');
+        hold(ax, 'off');
+    end
+
+    exportgraphics(layout, pngPath, 'Resolution', 150, 'BackgroundColor', 'white');
+    drawn = true;
+end
+
+function value = observedExtreme(stat, whichSign)
+%OBSERVEDEXTREME  The observed maximum (or minimum) of the enhanced map.
+    value = NaN;
+    if isfield(stat, 'stattfce') && ~isempty(stat.stattfce)
+        map = stat.stattfce;
+    elseif isfield(stat, 'stat') && ~isempty(stat.stat)
+        map = stat.stat;
+    else
+        return;
+    end
+    map = double(map(:));
+    map = map(isfinite(map));
+    if isempty(map)
+        return;
+    end
+    if strcmp(whichSign, 'positive')
+        value = max(map);
+    else
+        value = min(map);
+    end
 end
 
 function assets = emptyAssets()

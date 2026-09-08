@@ -63,11 +63,17 @@ function onSourceClusterStats(this)
     stamp = datetime('now');
     stem = fullfile(reportsDir, ['source_cluster_stats_' char(string(stamp, 'yyyyMMdd_HHmmss'))]);
     assets = [];
+    % EXTRAS IS CAPTURED, NOT DISCARDED. It carries the figures that
+    % describe the analysis rather than one cluster (the unthresholded map,
+    % the permutation null), and a single-output call left the report's own
+    % appendix permanently empty: the PNGs were rendered into the images
+    % folder and then referenced by nothing.
+    extras = struct();
     try
         if ~exist(reportsDir, 'dir')
             mkdir(reportsDir);
         end
-        assets = generateSourceClusterAssets(summary, [stem '_images']);
+        [assets, extras] = generateSourceClusterAssets(summary, [stem '_images']);
     catch ME
         % Surfaced, not swallowed: the test itself is valid and is about to
         % be shown, so a failure to draw must not read as a failed analysis.
@@ -82,7 +88,7 @@ function onSourceClusterStats(this)
     % spirit as onClusterStats' own companion-report step.
     try
         qmdFile = [stem '.qmd'];
-        writeQmdFile(qmdFile, generateSourceClusterStatsReport(summary, assets), ...
+        writeQmdFile(qmdFile, generateSourceClusterStatsReport(summary, assets, extras), ...
             'Alakazam:onSourceClusterStats');
 
         setBusy('Rendering the report (quarto). The first run can take a minute.');

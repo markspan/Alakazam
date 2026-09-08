@@ -187,6 +187,38 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 '"succeeded" while reporting no analysis. See ' testCase.HtmlFile '.']);
         end
 
+        function theCircularSectionComputesRatherThanParses(testCase)
+        %THECIRCULARSECTIONCOMPUTESRATHERTHANPARSES  The one section whose R
+        %   no other test runs.
+        %
+        %   The syntax test hands every chunk to R's parser, which is a real
+        %   oracle for form and blind to everything else: the bootstrap
+        %   closure, group_modify and the sprintf calls all parse cleanly
+        %   and can still die at render time, and a per-channel tryCatch
+        %   would turn that into a bland italic note inside a document that
+        %   looks finished. The ground-truth render above is an ERP export
+        %   and reaches no circular section at all, so this renders a
+        %   spectral one, which carries phase and (with a reference)
+        %   phaselag.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+
+            entries = ReportFixtures.censusEntries('F-SPEC3CR');
+            qmdFile = ReportFixtures.writeReport(entries, temporary.Folder, 'circular');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+            testCase.assertEmpty(errorMessage, sprintf( ...
+                'quarto could not render the spectral report:\n%s', errorMessage));
+
+            text = plainTextOf(readWholeFile(html));
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A per-channel tryCatch swallowed a genuine R error in the ' ...
+                 'circular section. See ' html '.']);
+            testCase.verifySubstring(text, 'Circular Descriptive Statistics');
+            testCase.verifySubstring(text, 'mean angle');
+            testCase.verifySubstring(text, '95% CI');
+        end
+
     end
 end
 

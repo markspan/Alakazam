@@ -729,17 +729,28 @@ function note = libraryNote(transformId)
 %LIBRARYNOTE  Which third-party function actually performs this step.
 %
 %   Written from reading each transformation rather than from memory, and
-%   deliberately silent for two kinds of step: the ones with no such
-%   function, since Alakazam computes ArtefactDetect, Measure, DefineBins,
-%   Average, Baseline and SpectralMeasure itself and claiming a library for
-%   them would be worse than saying nothing, and the ones nativeCall
-%   already emits as library calls, where the code says it better than a
-%   comment would.
+%   deliberately silent for the steps with no such function: Alakazam
+%   computes ArtefactDetect, Measure, DefineBins, Average, Baseline and
+%   SpectralMeasure itself, and claiming a library for them would be worse
+%   than saying nothing.
+%
+%   IT STILL NAMES THE ONES nativeTransformCall USUALLY EMITS. The caller
+%   asks for a note only when the native emission was declined, so these
+%   cases cost nothing in the normal path and cover the odd one: an
+%   Interpolate whose stored channel list is empty keeps its wrapper call,
+%   and a script that then said nothing about pop_interp would document
+%   that step less well than every other.
     switch transformId
         case 'Filter'
             note = 'EEGLAB firfilt: windowed-sinc FIR (firwsord/windows/firws, applied by firfilt).';
         case 'SelectData'
             note = 'EEGLAB pop_select (a time, point or trial selection; channel-only ones are emitted directly).';
+        case 'ReRef'
+            note = 'EEGLAB pop_reref, with channel labels resolved to indices first.';
+        case 'Interpolate'
+            note = 'EEGLAB pop_interp, with channel labels resolved to indices first.';
+        case 'Resample'
+            note = 'EEGLAB pop_resample (anti-alias filtered), plus Alakazam''s seconds time axis.';
         case 'RemoveComponents'
             note = 'EEGLAB pop_subcomp, over the decomposition already on the dataset.';
         case 'AutoEyeICA'

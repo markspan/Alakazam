@@ -538,6 +538,32 @@ classdef ExportAnalysisScriptTest < matlab.unittest.TestCase
             end
         end
 
+        function theLibraryIsNamedExactlyWhereTheCallDoesNotNameIt(testCase)
+        %THELIBRARYISNAMEDEXACTLYWHERETHECALLDOESNOTNAMEIT  Two halves of
+        %   one rule. A step emitted as pop_interp needs no comment saying
+        %   pop_interp; a step that keeps its wrapper call does, or the
+        %   script documents that step less well than every other. The
+        %   second half is the one that regressed once already, when these
+        %   transformations moved to native emission and their notes were
+        %   removed along with them.
+            native = struct('name', 'sub01', 'rawFile', 'sub01.set', 'loader', 'set', ...
+                'steps', struct('transformId', 'Interpolate', ...
+                    'params', struct('channels', {{'Fp1'}}, 'method', 'spherical'), ...
+                    'parent', -1));
+            code = exportAnalysisScript(native, [], struct());
+            testCase.verifySubstring(code, 'pop_interp(');
+            testCase.verifyEmpty(strfind(code, '% EEGLAB pop_interp'), ...
+                'A native emission should not also carry a comment naming what it calls.'); %#ok<STRIFCND>
+
+            % The same transformation with nothing to interpolate: the
+            % emission is declined, so the wrapper call needs the note.
+            declined = native;
+            declined.steps.params.channels = {};
+            code = exportAnalysisScript(declined, [], struct());
+            testCase.verifySubstring(code, '= Interpolate(');
+            testCase.verifySubstring(code, 'EEGLAB pop_interp');
+        end
+
         function aVariantIsNamedAfterTheRecordingThatUsesIt(testCase)
         %AVARIANTISNAMEDAFTERTHERECORDINGTHATUSESIT  opt_X_2 says nothing
         %   about why it exists; the recording treated differently is the

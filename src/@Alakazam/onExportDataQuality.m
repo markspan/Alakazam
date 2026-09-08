@@ -51,8 +51,28 @@ function onExportDataQuality(this)
         % onExportMeasurements does it in that order: opening (and so
         % truncating) the file first would leave an empty, unexplained
         % .qmd behind if generation throws.
+        % THE PER-TRIAL MEASURE VALUES, when any node carries them. These are
+        % a different quantity from this report's own per-trial export: that
+        % one holds pre-stimulus noise per trial, this one holds the scored
+        % amplitude of each trial, and only the second can decompose variance
+        % into between-person and within-person parts. Best effort, like the
+        % other companions: a workspace that never ran Measure on epoched
+        % data simply gets a report that says so.
+        measureName = '';
+        try
+            measureEntries = this.collectEntriesWithField('trialMeasurements');
+            if ~isempty(measureEntries)
+                measureCsv = [stem '_measures.csv'];
+                exportTrialMeasurementsCSV(measureEntries, measureCsv);
+                [~, base] = fileparts(measureCsv);
+                measureName = [base '.csv'];
+            end
+        catch
+            measureName = '';
+        end
+
         qmdText = generateDataQualityReport(entries, [summaryName '.csv'], ...
-            [trialName '.csv'], [smeName '.csv']);
+            [trialName '.csv'], [smeName '.csv'], measureName);
         qmdFile = [stem '.qmd'];
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportDataQuality');
 

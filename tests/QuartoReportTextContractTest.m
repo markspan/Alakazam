@@ -341,6 +341,35 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
                 'The Wilcoxon check does not test bin2 against bin1.');
         end
 
+        function theEffectIsPlottedInTheDirectionItIsReported(testCase)
+        %THEEFFECTISPLOTTEDINTHEDIRECTIONITISREPORTED  The estimation panel
+        %   is drawn from the same diffs vector the sentence and the t-test
+        %   use, so it cannot point the other way. Asserted as a literal
+        %   because a panel fed wide[["A"]] - wide[["B"]] would render
+        %   perfectly and contradict the prose beside it.
+            txt = generateQuartoReport(ReportFixtures.censusEntries('F-ERP2'), ...
+                QuartoReportTextContractTest.CsvName);
+
+            testCase.verifySubstring(txt, 'ep <- estimation_panel(diffs, "B minus A', ...
+                'The estimation panel is not drawn from bin2 - bin1.');
+            testCase.verifySubstring(txt, 'estimation_panel <- function(', ...
+                'The estimation panel helper is not defined in the setup chunk.');
+            testCase.verifySubstring(txt, 'geom_hline(yintercept = 0', ...
+                'The estimation panel must always draw zero.');
+        end
+
+        function theRaincloudShowsDensityAndObservationsSeparately(testCase)
+        %THERAINCLOUDSHOWSDENSITYANDOBSERVATIONSSEPARATELY  The violin is
+        %   nudged aside rather than sitting behind the points. Before
+        %   this, the density and the observations that produced it
+        %   obscured each other in every section that plots a bin.
+            txt = generateQuartoReport(ReportFixtures.censusEntries('F-ERP2'), ...
+                QuartoReportTextContractTest.CsvName);
+
+            testCase.verifySubstring(txt, 'position = position_nudge(x = nudge)');
+            testCase.verifySubstring(txt, 'do.call(geom_boxplot, box)');
+        end
+
         function theAnovaTableCarriesItsEffectNames(testCase)
         %THEANOVATABLECARRIESITSEFFECTNAMES  lmerTest::anova() puts the
         %   effect names in the data frame's ROW names, and gt() drops row

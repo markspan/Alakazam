@@ -19,8 +19,16 @@ classdef SourceEstimateTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
+        %ADDSOURCETOPATH  src and src/Transformations are not enough. A
+        %   PathFixture adds one folder, not a tree, and SourceEstimate
+        %   itself sits in its own transformation folder below that, so
+        %   without the third entry the slow cases could only ever have
+        %   errored on an undefined function. Their assumeNotEmpty over the
+        %   local cache hid that for as long as the cache was absent.
             root = fileparts(fileparts(mfilename('fullpath')));
-            for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations')}
+            for p = {fullfile(root, 'src'), ...
+                     fullfile(root, 'src', 'Transformations'), ...
+                     fullfile(root, 'src', 'Transformations', 'SourceEstimate')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end

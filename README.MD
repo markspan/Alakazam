@@ -479,7 +479,7 @@ frequency (Spectral) x measure type:
 | Design | Test(s) | Question it answers |
 |---|---|---|
 | One ordinary bin | Descriptive statistics only | What is this measure's mean/SD? (no comparison is possible with one condition) |
-| Any number of ordinary bins, a **circular** measure type (phase, phaselag) | Circular descriptive statistics: mean angle and resultant length *R&#772;*, no test | An angle wrapping at &plusmn;&pi; cannot go into a *t*-test, a mixed model, or even an ordinary mean: the arithmetic mean of 179&deg; and &minus;179&deg; is 0&deg;, the point opposite where the data are |
+| Any number of ordinary bins, a **circular** measure type (phase, phaselag) | Circular descriptive statistics: mean angle with a bootstrap CI, and resultant length *R&#772;*; no test | An angle wrapping at &plusmn;&pi; cannot go into a *t*-test, a mixed model, or even an ordinary mean: the arithmetic mean of 179&deg; and &minus;179&deg; is 0&deg;, the point opposite where the data are |
 | Two ordinary bins | Paired *t*-test + Cohen's *dz* (bootstrapped CI) + Bayes Factor, Wilcoxon signed-rank robustness check, Shapiro-Wilk normality note | Does this measure differ between the two conditions, within subjects? |
 | Three or more ordinary bins | Linear mixed model (random intercept + slope for bin **per person**, falling back to intercept-only if that fails to converge) + partial eta-squared with CI + Holm-corrected model-based pairwise contrasts (`emmeans`), Friedman test robustness check | Does this measure differ across conditions, within subjects, using every subject's available bins even if one is missing for them? Which specific pairs of conditions differ? |
 | One ordinary bin, **2 groups** assigned | Independent-samples Welch *t*-test + Cohen's *d* (bootstrapped CI) + Bayes Factor, Mann-Whitney *U* robustness check | Does this measure differ **between** the two groups (e.g. patients vs. controls)? |
@@ -636,6 +636,32 @@ Both need their companion export to have been written (`..._grandaverages.csv`,
 `..._spectra.csv`), which the measurement and spectral exports now do
 automatically; without it the section says so and the rest of the report is
 unaffected.
+
+### Seeing the effect, not just the conditions
+
+Every plot of conditions answers "what did each condition look like"; none of
+them answers "how big is the difference, and how well is it pinned down",
+which is the quantity every test in the report is actually about. So a paired
+comparison and a combination bin each get a second panel: the effect itself,
+as a bootstrap distribution of the mean difference with its 95% interval, on
+an axis whose zero is always drawn. Where zero sits relative to that interval
+is the figure's whole point, and an axis that omitted zero would make any
+effect look decisive.
+
+The condition plots are **rainclouds** rather than bare violins. The density
+and the individual observations used to sit on top of each other, so neither
+could be read; nudging the density and a narrow box aside leaves the points
+clear, and bimodality or a single subject carrying an effect becomes visible
+rather than smoothed into a shape.
+
+For a circular measure there is no test, but there is now an interval: the
+mean angle carries a bootstrap CI over subjects. That matters more than it
+would for a linear measure, because an interval spanning much of the circle is
+how near-uniform angles announce themselves, and it is the signal that the
+mean direction should not be quoted at all. The resultant length *R&#772;*
+says how concentrated the angles are; the interval says how well the direction
+is pinned down, and the same *R&#772;* at five subjects and forty supports
+very different claims.
 
 ### Single-trial models
 
@@ -848,7 +874,7 @@ volume at once. The contrast picker, the subject list and the correction
 options are literally the same code as the scalp test; only what a row of
 the data means changes.
 
-Four settings are specific to it:
+Five settings are specific to it:
 
 | Setting | Default | Why |
 | --- | --- | --- |
@@ -856,10 +882,21 @@ Four settings are specific to it:
 | **Orientation** | Signed (cortical normal) | A magnitude estimate is a vector norm and therefore non-negative at every vertex, so testing one against zero would "find" the entire cortex. The signed projection keeps polarity and has a meaningful null; the "against zero" contrast refuses magnitude outright. Signs are comparable across subjects because every subject is inverted onto the *same* template sheet. |
 | **Time window** | whole epoch | The single biggest lever on runtime and on sensitivity: every sample outside the latencies of interest adds cost and dilutes the test. |
 | **Sampling for the test** | 200 Hz | Permutation cost is proportional to vertices x samples x randomizations, and a 1000 Hz epoch oversamples an effect tens of milliseconds wide. Decimating costs nothing statistically here and turns an intractable run into a feasible one. |
+| **Cortical sheet** | 20484 vertices | The one setting here that is not purely about runtime. TFCE measures extent by counting vertices, so a denser sheet raises the enhanced statistic for identical data, and in a measured contrast the coarsest sheet put the peak 38 mm from where the two finer ones agreed it was. Choose it once for a study and report it; see the `SourceSpace` row under [Calling it from a script](#calling-it-from-a-script). |
 
 Adjacency between vertices is taken from the mesh triangulation rather than
 from Euclidean distance, so two banks of a sulcus that nearly touch in space
 are not treated as neighbours.
+
+Like the scalp report, it draws **the permutation null itself**, per tail,
+with the observed extreme marked on it. What is distributed differs: the scalp
+default forms discrete clusters and so has a cluster mass to distribute, while
+TFCE scores every point by the support it gathers across thresholds and forms
+no clusters at all. What the accelerated route keeps instead is the
+per-permutation extreme of the enhanced statistic, which is exactly the
+reference distribution its p-values were read against. An unaccelerated run
+uses FieldTrip's own TFCE correction, which returns no such distribution, and
+the section says so rather than presenting an empty panel.
 
 The report leads with what the test does *not* show, before any result: a
 significant cluster establishes that an effect exists somewhere in a
@@ -1220,7 +1257,7 @@ Every `opts` field is optional:
 | `TimeWindow` | `[]` | `[startMs stopMs]`, or `[]` for the whole epoch. |
 | `ResampleHz` | `200` | Decimate to about this rate before testing; `[]` keeps every sample. |
 | `RegParam` | `0.05` | Inverse regularisation. |
-| `SourceSpace` | `20484` | Template sheet: `20484`, `8196` or `5124` vertices. |
+| `SourceSpace` | `20484` | Template sheet: `20484`, `8196` or `5124` vertices. **Not only a speed setting.** TFCE counts extent in vertices, so the enhanced statistic grows with the density of the sheet: one measured contrast (7 subjects, 250-400 ms, dSPM, signed) gave max TFCE of 6795 at 5124, 11858 at 8196 and 16329 at 20484, for identical data, and the growth is sub-linear in vertex count so it cannot be divided out. Values from different sheets are not comparable. In that run the peak also moved 38 mm between the coarsest sheet and the two finer ones, which agreed with each other, so quote the sheet alongside any peak coordinate. |
 | `Accelerate` | `true` | Use the compiled TFCE kernel when one can be built. |
 | `Workers` | `0` | Split the permutations across this many workers. `0` decides from the size of the job, since a pool costs tens of seconds to start and returned about 2.4x when measured: a run predicted to take more than two minutes serial uses every core, a shorter one stays serial. `1` forces serial, *n* forces *n*, and any request is capped at the physical core count and reduced to serial without the Parallel Computing Toolbox. |
 | `correctm` | `'tfce'` | `'tfce'` or `'cluster'`. |
@@ -1303,6 +1340,7 @@ Each metric, and the pupillometry measure it corresponds to:
 | Pre-stimulus SD (µV) | baseline pupil size | Per-trial noise |
 | % baseline outlier trials | z-scored baseline, \|z\| > 2 | Trials whose noise is extreme *for that subject* |
 | SME | (no analogue) | Standardized measurement error (Luck et al., 2021), reported both over the whole epoch and per measurement window |
+| Dependability | (no analogue) | The generalizability-theory reliability of a scored measure, and the trial count a target reliability would need (Clayson & Miller, 2017) |
 
 The translation departs from the original in two places:
 
@@ -1332,6 +1370,25 @@ saying why that number rather than another. Median absolute deviation rather
 than standard deviation, because with a handful of subjects the very outliers
 being looked for would inflate an SD enough to hide inside it.
 
+**Dependability** answers the question the rest of the report only circles:
+not how much data was lost or what the loss cost, but whether the measure is
+reliable enough to correlate with anything. Single-trial amplitude varies
+between people, which is the signal any correlation or group difference rests
+on, and within a person from trial to trial, which is noise that averaging
+reduces. Dependability is the first as a fraction of what an average of *n*
+trials actually measures, and the report inverts it to give the number an
+analyst actually wants: how many trials per person a dependability of .70 or
+.80 would take for this measure, at this channel, in this condition. The
+variance components come from a random-intercept model rather than from ANOVA
+mean squares, because trial counts differ per person after rejection and the
+mean-square estimator assumes they do not.
+
+It needs the score of every trial, so it appears only where `Measure` was run
+on the **epoched** node; the export writes those values beside the report as
+`..._measures.csv`. Where they are absent the section says so and names the
+step that would produce them, rather than vanishing and leaving a reader
+unable to tell an absent section from an absent feature.
+
 **Precision against trial count** plots each subject's SME against the trials
 that survived, with the 1/sqrt(*n*) curve drawn through it. The rest of the
 report says how much was lost; this says what the loss cost, which is a
@@ -1339,9 +1396,10 @@ different question, since losing 40 trials from 200 barely moves the estimate
 while losing 20 from 40 changes what the average means. Averaging independent
 trials reduces the standard error by that factor and no faster, so a subject
 well above the curve is not short of trials but noisy within them, and
-collecting more would not fix it. It is an approximation to the fuller answer
-generalizability theory gives (Clayson & Miller, 2017), which needs per-trial
-*values* of the measure rather than per-trial noise, and is labelled as one.
+collecting more would not fix it. It is the cruder cousin of the dependability
+section above, needing only SME and so always available, and it separates two
+failures the coefficient pools: a subject short of trials sits on the curve,
+one noisy within them sits above it.
 
 The report also contains a per-subject overview table, the distribution of
 per-trial noise (pooled, and z-scored within subject), noise against trial

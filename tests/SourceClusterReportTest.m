@@ -42,6 +42,38 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
             testCase.verifyLessThan(caveatAt(1), resultsAt(1));
         end
 
+        function theQuantitativeLimitsReachTheDocument(testCase)
+        %THEQUANTITATIVELIMITSREACHTHEDOCUMENT  The two paragraphs that put
+        %   numbers on the caveats. resolutionParagraph existed for a while
+        %   without ever being called, so the readme described a statement
+        %   no report contained; this fails if either stops being emitted.
+            qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
+                generateSourceClusterAssetsFixtureEmpty());
+
+            testCase.verifySubstring(qmd, 'How much detail the map can carry');
+            testCase.verifySubstring(qmd, 'independent numbers');
+            testCase.verifySubstring(qmd, 'The cortical sheet is part of this analysis');
+            testCase.verifySubstring(qmd, '38 mm');
+        end
+
+        function theCaveatsStayOneBlockquote(testCase)
+        %THECAVEATSSTAYONEBLOCKQUOTE  Each appended paragraph continues the
+        %   callout it belongs to. A blank line between them would split one
+        %   caveat into three and let a reader stop after the first, which
+        %   is a rendering detail with a real effect on what gets read.
+            qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
+                generateSourceClusterAssetsFixtureEmpty());
+
+            block = extractBetween(qmd, '## How to read this', '## ');
+            testCase.assertNotEmpty(block, 'The caveat section could not be located.');
+            lines = strsplit(block{1}, newline);
+            body = lines(3:end - 2);        % past the heading, before the trailing blank
+            body = body(~cellfun(@isempty, strtrim(body)));
+            starts = cellfun(@(L) startsWith(strtrim(L), '>'), body);
+            testCase.verifyTrue(all(starts), ...
+                'Every line of the caveat block must continue the blockquote.');
+        end
+
         function theTemplateAndSmoothnessLimitsAreStated(testCase)
             qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
                 testCase.assetFixture());
@@ -145,6 +177,68 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
                 testCase.assetFixture());
 
             testCase.verifySubstring(qmd, '](<images/cluster1_positive_map.png>)');
+        end
+
+        % ---- the permutation null -------------------------------------------
+        function theNullDistributionIsShownWhenTheRunKeptOne(testCase)
+        %THENULLDISTRIBUTIONISSHOWNWHENTHERUNKEPTONE  The figure the
+        %   p-values were read from. Every other figure says where and when
+        %   an effect was; this one is the comparison itself.
+            summary = testCase.summaryFixture();
+            summary.stat.posdistribution = abs(randn(1, 200)) * 100;
+            summary.stat.negdistribution = -abs(randn(1, 200)) * 100;
+            summary.stat.stattfce = summary.stat.stat * 500;
+
+            [~, extras] = generateSourceClusterAssets(summary, testCase.tempImages());
+            testCase.assertNotEmpty(extras.NullDistributionPath, ...
+                'A run with both tails kept should have produced the figure.');
+
+            qmd = generateSourceClusterStatsReport(summary, ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+
+            testCase.verifySubstring(qmd, '## The permutation null');
+            testCase.verifySubstring(qmd, extras.NullDistributionPath);
+            testCase.verifySubstring(qmd, 'smallest p this test can report');
+        end
+
+        function noNullDistributionMeansNoFigureAndNoClaim(testCase)
+        %NONULLDISTRIBUTIONMEANSNOFIGUREANDNOCLAIM  FieldTrip's own TFCE
+        %   route returns no per-permutation extremes. The section then has
+        %   to say why it is absent: silence would read as "this analysis
+        %   had no null distribution", which is wrong.
+            summary = testCase.summaryFixture();
+            summary.opts.Accelerate = false;
+
+            [~, extras] = generateSourceClusterAssets(summary, testCase.tempImages());
+            testCase.verifyEmpty(extras.NullDistributionPath, ...
+                'Nothing to draw, so nothing should have been drawn.');
+
+            qmd = generateSourceClusterStatsReport(summary, ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+            testCase.verifySubstring(qmd, 'does not return');
+        end
+
+        function theUnthresholdedAppendixReachesTheDocument(testCase)
+        %THEUNTHRESHOLDEDAPPENDIXREACHESTHEDOCUMENT  It did not, for as long
+        %   as the ribbon action called generateSourceClusterAssets with one
+        %   output: the PNG was rendered into the images folder and then
+        %   referenced by nothing, while the readme went on claiming the
+        %   report carried it. Both halves are checked here, the generator's
+        %   and the caller's.
+            summary = testCase.summaryFixture();
+            [~, extras] = generateSourceClusterAssets(summary, testCase.tempImages());
+            testCase.assertNotEmpty(extras.UnthresholdedMapPath);
+
+            qmd = generateSourceClusterStatsReport(summary, ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+            testCase.verifySubstring(qmd, 'Appendix: the unthresholded statistic');
+
+            % The caller, read rather than run: it needs a UI to run, and
+            % the defect was exactly that it discarded the second output.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            src = fileread(fullfile(root, 'src', '@Alakazam', 'onSourceClusterStats.m'));
+            testCase.verifySubstring(src, '[assets, extras] = generateSourceClusterAssets(');
+            testCase.verifySubstring(src, 'generateSourceClusterStatsReport(summary, assets, extras)');
         end
 
         % ---- rendering decisions --------------------------------------------
@@ -274,8 +368,15 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
             summary.nSubjects = 18;
             summary.contrast = struct('mode', 'paired', 'binA', 'Related', 'binB', 'Unrelated');
             summary.opts = struct('Method', 'mne', 'Orientation', 'normal', ...
-                'correctm', 'tfce', 'numrandomization', 1000, 'alpha', 0.05, 'tail', 0);
+                'correctm', 'tfce', 'numrandomization', 1000, 'alpha', 0.05, 'tail', 0, ...
+                'SourceSpace', 5124);
             summary.stat = struct('stat', randn(nVertex, nTime));
+            % Provenance carries the channel set, which is what lets the
+            % resolution paragraph state a rank bound. Without it that
+            % paragraph correctly says nothing, and a fixture missing the
+            % field would make the test pass by having nothing to check.
+            summary.provenance = struct('channels', ...
+                {{arrayfun(@(k) sprintf('E%d', k), 1:29, 'UniformOutput', false)}});
             summary.clusters = struct( ...
                 'sign', {'positive', 'negative'}, 'pValue', {0.004, 0.021}, ...
                 'significant', {true, true}, ...
