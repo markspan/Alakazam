@@ -93,11 +93,30 @@ classdef AlakazamPlotter < handle
             % Store the dataset on the tab for downstream access.
             setappdata(newTab, "EEG", eeg);
 
+            % WHAT THE LAST VIEW WAS SHOWING, carried to this one. Read
+            % BEFORE the new view is built, since building it changes which
+            % tab is current. Stepping through the workspace tree otherwise
+            % reset to the first electrode on every node, which made
+            % comparing the same channel across analyses a matter of
+            % clicking back to it each time.
+            focus = this.App.ViewFocus;
+            if ~isempty(focus)
+                focus.capture(this.viewOnTab(app.PlotsTabGroup.SelectedTab));
+            end
+
             % Draw the view that matches the dataset's format and type.
             if this.isEpoched(eeg)
                 this.plotEpoched(eeg, newTab);
             else
                 this.plotContinuous(eeg, newTab);
+            end
+
+            % Applied after construction rather than passed in: a view sets
+            % its own default while building, and every one of them ends
+            % that with a draw, so overriding afterwards is one code path
+            % instead of an extra constructor argument in nine classes.
+            if ~isempty(focus)
+                focus.apply(this.viewOnTab(newTab));
             end
 
             app.PlotsTabGroup.SelectedTab = newTab;
@@ -136,6 +155,28 @@ classdef AlakazamPlotter < handle
     end
 
     methods (Access = private)
+        function view = viewOnTab(~, tab)
+        %VIEWONTAB  The AlakazamView stored on TAB, or [] if there is none.
+        %   Each branch of plotEpoched stores its view under its own class
+        %   name (setappdata(tab, "EpochView", view) and so on), so there is
+        %   no single key to read. Asking for the one value that IS a view
+        %   avoids repeating that list of names here, where it would fall
+        %   out of step the first time a view was added.
+            view = [];
+            if isempty(tab) || ~isvalid(tab)
+                return;
+            end
+            stored = getappdata(tab);
+            names = fieldnames(stored);
+            for k = 1:numel(names)
+                candidate = stored.(names{k});
+                if isa(candidate, 'AlakazamView') && isscalar(candidate) && isvalid(candidate)
+                    view = candidate;
+                    return;
+                end
+            end
+        end
+
         function tf = isEpoched(~, eeg)
         %ISEPOCHED  True for epoched or averaged datasets.
         %   TF = ISEPOCHED(~, EEG) returns true when EEG.DataFormat is either

@@ -63,6 +63,11 @@ classdef Alakazam < handle
         LastClickedTag = "" % Tag of the tile last clicked/interacted with in Grid/Stack mode; see registerTileClick/activeTileTag
         Workspace       % WorkSpace, the data-browser tree and session state
         Plotter         % AlakazamPlotter, renders datasets into tabs
+        % Which channel and bin the analyst last looked at, carried to
+        % each newly opened plot tab so stepping through the tree keeps
+        % showing the same electrode. Session-only, never saved: see
+        % ViewFocus for why it remembers labels and not indices.
+        ViewFocus       % ViewFocus, the current channel/bin memory
         Debug = true    % logical, when true expose the instance in the base workspace.
     end
 
@@ -192,6 +197,7 @@ classdef Alakazam < handle
             this.setupDirectories();
             this.setupMainWindow();
             this.Plotter = AlakazamPlotter(this);
+            this.ViewFocus = ViewFocus();
 
             % Create the workspace (its constructor builds the tree into
             % TreeGrid; .open() below is the separate step that actually

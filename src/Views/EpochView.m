@@ -509,4 +509,27 @@ classdef EpochView < AlakazamView
             keys  = [zeros(1, numel(unbinned)), keys];
         end
     end
+
+    methods
+        function focus = currentFocus(this)
+        %CURRENTFOCUS  The channel this view is showing, by label.
+            focus = struct();
+            if this.Channel >= 1 && this.Channel <= numel(this.Labels)
+                focus.Channel = char(string(this.Labels{this.Channel}));
+            end
+        end
+
+        function applyFocus(this, focus)
+        %APPLYFOCUS  Show FOCUS.Channel if this dataset has it.
+            if ~isstruct(focus) || ~isfield(focus, 'Channel') || isempty(this.Labels)
+                return;
+            end
+            idx = ViewFocus.indexOfLabel(this.Labels, focus.Channel);
+            if isempty(idx) || idx == this.Channel
+                return;
+            end
+            this.Channel = idx;
+            this.redraw();
+        end
+    end
 end

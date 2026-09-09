@@ -108,4 +108,31 @@ classdef CoherenceTopographyView < AlakazamView
             this.redraw();
         end
     end
+
+    methods
+        function focus = currentFocus(this)
+        %CURRENTFOCUS  The bin this map is drawn for, by label.
+            focus = struct();
+            if ~isempty(this.SelectedBin) && this.SelectedBin >= 1 && ...
+                    this.SelectedBin <= numel(this.BinLabels)
+                focus.Bin = char(string(this.BinLabels{this.SelectedBin}));
+            end
+        end
+
+        function applyFocus(this, focus)
+        %APPLYFOCUS  Show FOCUS.Bin if this dataset has it, keeping the
+        %   dropdown in step with the map.
+            if ~isstruct(focus) || ~isfield(focus, 'Bin') || isempty(this.BinLabels)
+                return;
+            end
+            idx = ViewFocus.indexOfLabel(this.BinLabels, focus.Bin);
+            if isempty(idx) || isequal(idx, this.SelectedBin)
+                return;
+            end
+            this.onBinChanged(idx);
+            if ~isempty(this.BinDropdown) && isvalid(this.BinDropdown)
+                this.BinDropdown.Value = idx;
+            end
+        end
+    end
 end

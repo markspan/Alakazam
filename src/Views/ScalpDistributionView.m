@@ -146,4 +146,36 @@ classdef ScalpDistributionView < AlakazamView
             title(this.Axes, this.BinLabels{binIdx}, "Interpreter", "none");
         end
     end
+
+    methods
+        function focus = currentFocus(this)
+        %CURRENTFOCUS  The bin this map is drawn for, by label.
+            focus = struct();
+            if ~isempty(this.SelectedBin) && this.SelectedBin >= 1 && ...
+                    this.SelectedBin <= numel(this.BinLabels)
+                focus.Bin = char(string(this.BinLabels{this.SelectedBin}));
+            end
+        end
+
+        function applyFocus(this, focus)
+        %APPLYFOCUS  Show FOCUS.Bin if this dataset has it.
+        %   Goes through onBinChanged and the strip's own dropdown rather
+        %   than setting SelectedBin directly, so the control agrees with
+        %   the picture. A dropdown left showing the wrong bin would be
+        %   worse than not restoring the bin at all.
+            if ~isstruct(focus) || ~isfield(focus, 'Bin') || isempty(this.BinLabels)
+                return;
+            end
+            idx = ViewFocus.indexOfLabel(this.BinLabels, focus.Bin);
+            if isempty(idx) || isequal(idx, this.SelectedBin)
+                return;
+            end
+            this.onBinChanged(idx);
+            if ~isempty(this.Strip) && isvalid(this.Strip) && ...
+                    ~isempty(this.Strip.BinDropdown) && isvalid(this.Strip.BinDropdown)
+                this.Strip.BinDropdown.Value = idx;
+            end
+            this.redraw(this.Strip.Slider.Value);
+        end
+    end
 end

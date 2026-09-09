@@ -503,6 +503,47 @@ classdef AverageView < AlakazamView
             end
         end
     end
+
+    methods
+        function focus = currentFocus(this)
+        %CURRENTFOCUS  The channel every line is drawn for, by label.
+        %   The labels live on the series rather than on a chanlocs of this
+        %   view's own, since an AverageView draws several datasets at once.
+            focus = struct();
+            labels = this.channelLabels();
+            if this.Channel >= 1 && this.Channel <= numel(labels)
+                focus.Channel = char(string(labels{this.Channel}));
+            end
+        end
+
+        function applyFocus(this, focus)
+        %APPLYFOCUS  Show FOCUS.Channel if these series carry it.
+            if ~isstruct(focus) || ~isfield(focus, 'Channel')
+                return;
+            end
+            idx = ViewFocus.indexOfLabel(this.channelLabels(), focus.Channel);
+            if isempty(idx) || idx == this.Channel
+                return;
+            end
+            this.Channel = idx;
+            this.redraw();
+        end
+    end
+
+    methods (Access = private)
+        function labels = channelLabels(this)
+        %CHANNELLABELS  The first series' labels, which is what redraw and
+        %   the title already index with this.Channel.
+            labels = {};
+            if isempty(this.Series)
+                return;
+            end
+            first = this.Series{1};
+            if isstruct(first) && isfield(first, 'labels')
+                labels = first.labels;
+            end
+        end
+    end
 end
 
 function sme = binASME(eeg, b)

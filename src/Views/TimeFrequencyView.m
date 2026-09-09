@@ -167,4 +167,34 @@ classdef TimeFrequencyView < AlakazamView
         end
 
     end
+
+    methods
+        function focus = currentFocus(this)
+        %CURRENTFOCUS  The channel this view is showing, by label.
+        %   See ViewFocus for why the label rather than the index.
+            focus = struct();
+            if isempty(this.EEG) || ~isfield(this.EEG, 'chanlocs') || ...
+                    this.Channel < 1 || this.Channel > numel(this.EEG.chanlocs)
+                return;
+            end
+            focus.Channel = char(string(this.EEG.chanlocs(this.Channel).labels));
+        end
+
+        function applyFocus(this, focus)
+        %APPLYFOCUS  Show FOCUS.Channel if this dataset has it.
+        %   A label this montage does not carry leaves the view on its own
+        %   default, which is the ordinary case when moving between
+        %   datasets with different channel sets.
+            if ~isstruct(focus) || ~isfield(focus, 'Channel') || isempty(this.EEG) || ...
+                    ~isfield(this.EEG, 'chanlocs') || isempty(this.EEG.chanlocs)
+                return;
+            end
+            idx = ViewFocus.indexOfLabel({this.EEG.chanlocs.labels}, focus.Channel);
+            if isempty(idx) || idx == this.Channel
+                return;
+            end
+            this.Channel = idx;
+            this.redraw();
+        end
+    end
 end
