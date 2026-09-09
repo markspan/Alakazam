@@ -516,10 +516,25 @@ error on a specific score, so it belongs to a measurement window. The
 across every subject in the workspace, analytically for mean amplitude and by
 bootstrap for peak amplitude, peak latency, area and the fractional latencies,
 which have no closed form. The same report covers rejection and truncation
-counts per subject and per bin, per-trial noise, and a per-channel noise map.
-Its organising concern is whether trial loss is even across conditions, since
-uneven loss affects the validity of the contrast rather than only its power.
-See [Data quality](../README.MD#data-quality).
+counts per subject and per bin, per-trial noise, a per-channel noise map, and
+the **number of trials flagged per channel per subject** as a count rather than
+a proportion, which is what a decision to interpolate or drop a channel
+actually rests on. Its organising concern is whether trial loss is even across
+conditions, since uneven loss affects the validity of the contrast rather than
+only its power. See [Data quality](../README.MD#data-quality).
+
+**Dependability, where per-trial scores exist.** SME says what the loss cost in
+the units of the measure. It does not say whether the measure is reliable
+enough to correlate with anything, which is the question behind "how many
+trials do I need". Where `Measure` has been run on the **epoched** node rather
+than on the Average, the report decomposes single-trial variance into
+between-person and within-person parts with a random-intercept model and
+reports the **dependability** coefficient from generalizability theory
+(Clayson & Miller, 2017), together with the trial count a dependability of .70
+or .80 would need for that score, at that channel, in that condition. Read
+those counts as design numbers rather than criteria: they assume the trials you
+would add resemble the ones you have, which fatigue and drift make less true
+towards the end of a session.
 
 **Is there a "good" aSME?** There is no universal threshold: the value is in
 microvolts and depends on the component, montage, reference, filter, measurement
@@ -636,9 +651,22 @@ an empty selection quietly rejected on a default nobody had chosen; if you have
 rejections came from that fallback and are worth recalculating.
 
 A channel is flagged if **any** ticked detector trips. Detection runs over a
-**test window** (blank = the whole epoch), and a hit rejects either the **whole
-epoch** (all channels, the ERP-standard default) or **just that channel**;
-rejected data is set aside so averaging omits it. **Import BDF...** brings the
+**test window** (blank = the whole epoch), and a hit either rejects the **whole
+epoch** (all channels, the ERP-standard default), marks **just that channel**,
+or **interpolates that channel** from its neighbours for that trial; rejected
+data is set aside so averaging omits it.
+
+**Which channels are tested** is a separate choice, and it matters more than it
+looks. The default is every channel, which is what makes a blink on VEOG reject
+the trial, the classic rejection this chapter is about. But an eye channel
+exceeds any threshold chosen for the scalp on every blink, so under the other
+two scopes it is flagged on a large fraction of trials by construction: the
+result is an eye channel marked bad to no purpose, and a data-quality report
+listing VEOG as a candidate for interpolation. Set **Channels to test** to
+*Scalp EEG only* in that case, which uses the recorded channel types and leaves
+an untyped dataset testing everything as before. A channel with no scalp
+position is never interpolated whatever the scope, since a spherical spline has
+nowhere to place it. **Import BDF...** brings the
 MMN / N2pc bins over. For blink-heavy data you can instead **correct** the blinks
 (Chapter 9) rather than reject every blink epoch.
 
@@ -814,23 +842,45 @@ committing to a measure.
 - Export from the **Measurements** tab: a long, tidy, R-ready CSV (one row per
   measure x bin x channel) plus an HDF5 of the arrays.
 
-**Statistics.** The Measurements export also writes an **R analysis script** next
-to the CSV. It loads the tidy CSV with the **tidyverse**, and per
-measure / window / channel runs a **repeated-measures ANOVA** and **pairwise
-t-tests** (Holm-corrected, via `rstatix`), then draws publication figures with
-**ggplot** (per-subject lines plus condition means with standard-error bars and
-significance brackets, `theme_pubr`) and saves them to PDF. Missing R packages are
-installed on first run. So both halves of the chapter are addressed: the *scoring*
-in Alakazam, and a first *statistical* pass as a ready-to-run, editable R script.
-Treat the generated script as a **starting point**, not a finished analysis: it
-makes reasonable default choices (which factors, which corrections) that may not
-match your design or the book's recommendations, so read it, check it against
-Luck's guidance on the statistics for this experiment, and adapt it before
-reporting anything (or take the tidy CSV into JASP / SPSS instead).
+**Statistics.** The Measurements export also renders a **Quarto report** beside
+the CSV, and it is design-aware rather than one generic loop: each window and
+measure is routed to the test its own bins support, a paired *t*-test for two
+conditions, a repeated-measures ANOVA for three or more, a one-sample test
+against zero for a difference bin, a mixed model where sessions or groups make
+one appropriate. Every result is stated **estimate first**, which condition was
+larger and by how much with a confidence interval, before any test decision.
+
+Four things in it are worth knowing for this chapter:
+
+- **The waveforms the numbers came from** are drawn with the measurement window
+  shaded, read from the export itself so the shading cannot drift from the
+  interval actually measured. A window over the wrong peak or a baseline never
+  applied produces numbers that test perfectly well and mean nothing, and both
+  are obvious on the wave.
+- **The effect gets its own panel**, a bootstrap distribution of the mean
+  difference with its interval and zero always drawn, next to raincloud plots of
+  the conditions themselves.
+- **Single-trial models.** Where `Measure` was run on the epoched node, the
+  report also fits the measure to individual trials rather than to per-subject
+  averages (`value ~ bin + trial_c + (1 + bin | person_id)`), which is the
+  current standard for ERP inference and handles unequal trial counts properly.
+  Trial order enters as a covariate, centred within person.
+- **Primary and secondary families.** Planned condition comparisons are
+  corrected together; difference-bin tests and single-trial re-analyses are
+  reported as secondary with uncorrected *p*, because they re-express the same
+  hypothesis rather than adding one.
+
+An **R analysis script** is still written alongside for anyone who wants to take
+the analysis over. Treat both as a **starting point**, not a finished analysis:
+they make default choices that may not match your design or the book's
+recommendations, so check them against Luck's guidance for this experiment
+before reporting anything, or take the tidy CSV into JASP / SPSS instead. The
+report says as much itself, including that windows and channels chosen after
+seeing the data make the *p*-values optimistic in a way no correction repairs.
 
 ---
 
-## Chapter 11 -- Scripting and automation
+## Chapter 11 -- EEGLAB and ERPLAB Scripting
 
 **In the book.** Automate the pipeline with EEGLAB/ERPLAB MATLAB scripts, on the
 **N170** data.
@@ -867,6 +917,16 @@ than cars**, isolated as the face-minus-car difference at sites such as PO8.
 - The **bin language** (`.binscript`), the exported **R script**, and template
   files are all plain text you save, load, and version-control, the
   human-readable core of a "script".
+- The **exported analysis script** is MATLAB, and where a step is a faithful
+  translation it names **EEGLAB's own functions** rather than Alakazam's:
+  `pop_resample`, `pop_reref`, `pop_interp`, and `pop_select` for a channel
+  selection. That matters for readers of this book in particular, since the
+  result is a script in the vocabulary Luck teaches, runnable without Alakazam
+  and quotable in a methods section. Steps that cannot be translated faithfully
+  keep their own call and carry a comment naming the library function that does
+  the work: `Filter` designs its own Kaiser windowed-sinc kernel, and inlining
+  that would copy the design logic into the script and diverge the day the
+  transformation changed.
 
 **Difference.** The unit of reuse is a template/tree, not a `.m` file: the same
 recipe applies across subjects without any code. For a genuinely bespoke
@@ -917,23 +977,24 @@ check against it.
 | Channel / coordinate editor (Ch 5) | implemented | ChannelEditor: labels, types, X/Y/Z, 10-5 lookup, montage load |
 | Resampling (Ch 5) | implemented | Resample (`pop_resample`), continuous |
 | Bins + averaging + baseline (Ch 6) | implemented | bin language + BDF import + difference bins |
-| Data quality / aSME (Ch 6) | implemented | analytic aSME + standard-error band + trial counts |
+| Data quality / aSME (Ch 6) | implemented | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
 | EEG inspection (Ch 7) | implemented | SignalView / EpochView |
 | Bad-channel interpolation (Ch 7) | implemented | Interpolate (`pop_interp`): spline / invdist / spacetime |
-| Artifact detection (Ch 8) | implemented | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select) |
+| Artifact detection (Ch 8) | implemented | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
 | ICA artifact correction (Ch 9) | implemented | automatic (AutoEyeICA) + manual component removal (ICA), both ICLabel |
 | Amplitude / latency scoring (Ch 10) | implemented | ERP Measure, incl. fractional-area latency |
-| Inferential statistics (Ch 10) | implemented | auto-generated R script (tidyverse / rstatix / ggplot) + tidy CSV |
+| Inferential statistics (Ch 10) | implemented | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
 | Reproducible pipeline (Ch 11) | implemented | templates + Recalculate |
-| MATLAB scripting (Ch 11) | different by design | GUI + templates + generated R, instead of `.m` files |
+| MATLAB scripting (Ch 11) | implemented | exported MATLAB script naming EEGLAB's own functions where faithful (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`), plus templates and Recalculate |
 
 **The short version.** For the ERP CORE components the book teaches
 (N400, P3b, MMN, N2pc, LRP, N170), Alakazam has a step for every stage of the
 pipeline: import, filtering, referencing, montage editing and resampling,
 bad-channel interpolation, bin definition, artifact detection, ICA correction
 (automatic and manual), epoching, averaging, grand-averaging, data quality (aSME),
-amplitude/latency scoring, and export, with a generated R script for the
-statistics, and every chapter has a ready workspace over the real data. But
+amplitude/latency scoring, and export, with a design-aware statistical report
+and a generated script for the statistics, and every chapter has a ready
+workspace over the real data. But
 "has a step for" is not "gets the same answer as": Alakazam is new and lightly
 tested, and none of these steps has yet been validated against EEGLAB/ERPLAB. So
 this guide is best used **alongside** Luck's book and the tools it uses, as a way

@@ -28,6 +28,33 @@ function lines = yamlHeader(title)
 %   "TipNothing flagged". Restating the rule here costs six lines and makes
 %   the document carry its own fix rather than depend on the viewer.
 %
+%   THE FIGURE SETTINGS ARE FOR PRINT, not for the screen. Quarto's default
+%   is a 96 dpi PNG sized for a browser, which is soft the moment a reader
+%   drops it into a manuscript or projects it. 300 dpi is the ordinary
+%   print standard, and a 7 by 4.5 inch default is a single manuscript
+%   column at a readable aspect. Chunks that need a taller figure still
+%   override fig-height locally.
+%
+%   PNG RATHER THAN SVG, and the reason is not the obvious one. Measured on
+%   two real reports, SVG costs 12% more on the data-quality report (2.37
+%   against 2.12 MB) and 33% more on the heatmap-heavy coherence one (3.79
+%   against 2.86 MB), which is a modest penalty rather than the blow-up a
+%   vector heatmap suggests.
+%
+%   What settles it is that SVG buys less here than it appears to. The
+%   device outlines every glyph: the figures contain no <text> elements and
+%   reference no fonts, only <g id="glyph-..."> path definitions used by
+%   reference. So the usual argument for vector figures in a manuscript,
+%   that the text stays selectable and editable, does not apply, and what
+%   remains is scalability alone. 300 dpi over a 7 inch default is 2100
+%   pixels across, wider than a journal column needs at 600 dpi, so that
+%   scalability has little left to buy either.
+%
+%   Anyone who does want a true vector figure has the better route already:
+%   the report's own CSVs and R, which re-plot at any size in any format.
+%   Switching this line to svg is a one-line change if that trade ever
+%   looks different.
+%
 %   See also REPORTDOC.PACKAGEBOOTSTRAP, REPORTDOC.APAHELPERS.
     lines = { ...
         '---' ...
@@ -55,5 +82,9 @@ function lines = yamlHeader(title)
         '  echo: false' ...
         '  warning: false' ...
         '  message: false' ...
+        '  fig-format: png' ...
+        '  fig-dpi: 300' ...
+        '  fig-width: 7' ...
+        '  fig-height: 4.5' ...
         '---'};
 end
