@@ -55,7 +55,37 @@ function lines = yamlHeader(title)
 %   Switching this line to svg is a one-line change if that trade ever
 %   looks different.
 %
-%   See also REPORTDOC.PACKAGEBOOTSTRAP, REPORTDOC.APAHELPERS.
+%   THE FIGURE SIZING RULE HAS THE SAME CAUSE AS THE SCREEN-READER RULE
+%   above. Quarto delivers its theme as a percent-encoded data:text/css
+%   link rather than as an inline style block, and that is exactly what the
+%   app's embedded viewer does not apply. Bootstrap's .img-fluid, which is
+%   where max-width: 100% lives, is defined in that stylesheet and nowhere
+%   else, and the emitted <img> carries no width attribute of its own.
+%
+%   That went unnoticed while fig-dpi was Quarto's default 96, because a 7
+%   inch figure was then 672 pixels across and happened to fit the pane
+%   unaided. At 300 dpi it is 2100 across, so the same markup draws roughly
+%   four times too wide in the app while staying correct in a browser.
+%   Restating the rule inline sizes the figures in any viewer, and a
+%   browser is unaffected because the value is the one the theme sets.
+%
+%   BOTH OF THOSE RULES ARE NOW A FALLBACK RATHER THAN THE FIX, and the
+%   history is worth keeping because it shows what treating symptoms costs.
+%   Each was found separately, by a reader noticing something odd in the
+%   app, and each was patched separately. They had one cause. Quarto ships
+%   its whole theme as a data: URI stylesheet, and the app's viewer is not
+%   reading a local file at all: MATLAB serves it from its connector, whose
+%   Content-Security-Policy refuses data: styles and scripts while allowing
+%   data: images. So the app was rendering every report with no Bootstrap,
+%   and these two rules were the only two pieces of it anyone had missed.
+%
+%   renderQuartoReport now inlines those resources, so the theme applies
+%   and these rules only restate what it already says. They stay because
+%   they cost four lines, and because a document that has not been through
+%   that step still has to be readable.
+%
+%   See also REPORTDOC.PACKAGEBOOTSTRAP, REPORTDOC.APAHELPERS,
+%   INLINEDATAURIRESOURCES.
     lines = { ...
         '---' ...
         ['title: "' title '"'] ...
@@ -76,6 +106,10 @@ function lines = yamlHeader(title)
         '            padding: 0 !important; margin: -1px !important; overflow: hidden !important;' ...
         '            clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important;' ...
         '            border: 0 !important;' ...
+        '          }' ...
+        '          figure img, p img, img.figure-img, img.img-fluid,' ...
+        '          .cell-output-display img {' ...
+        '            max-width: 100% !important; height: auto !important;' ...
         '          }' ...
         '        </style>' ...
         'execute:' ...

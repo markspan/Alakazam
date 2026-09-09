@@ -15,14 +15,16 @@ function [htmlFile, errorMessage] = renderQuartoReport(qmdFile)
 %   it cannot locate an R install.
 %
 %   On success, HTMLFILE is the rendered .html path (quarto's own default:
-%   same folder and stem as QMDFILE) and ERRORMESSAGE is ''. On failure
+%   same folder and stem as QMDFILE) and ERRORMESSAGE is ''. The file is
+%   post-processed by inlineDataUriResources before it is returned, without
+%   which it renders unstyled in the app's own viewer. On failure
 %   (quarto/R missing, or quarto's own render error), HTMLFILE is '' and
 %   ERRORMESSAGE explains why -- never thrown, since the caller treats
 %   "could not render" as a soft fallback (fall back to the file being
 %   written but not shown), not a hard error.
 %
-%   See also GENERATEQUARTOREPORT, ALAKAZAM.ONEXPORTMEASUREMENTS,
-%   ALAKAZAM.PERSISTREPORTNODE.
+%   See also GENERATEQUARTOREPORT, INLINEDATAURIRESOURCES,
+%   ALAKAZAM.ONEXPORTMEASUREMENTS, ALAKAZAM.PERSISTREPORTNODE.
     htmlFile = '';
 
     [rscriptExe, quartoExe, missing] = locateQuartoTools();
@@ -47,6 +49,24 @@ function [htmlFile, errorMessage] = renderQuartoReport(qmdFile)
             errorMessage = sprintf('quarto render exited with status %d.', status);
         end
         return;
+    end
+
+    % Quarto's self-contained output carries its stylesheets and scripts as
+    % data: URIs, which the app's own viewer refuses (MATLAB serves the file
+    % from its connector, and that server's Content-Security-Policy allows
+    % data: images but not data: styles or scripts). Inlining them costs a
+    % second and makes the report render in the app the way it renders in a
+    % browser. See inlineDataUriResources for the measurements.
+    %
+    % A failure here is not a failed render. The report exists and opens in
+    % a browser, so it is reported and the file is still returned.
+    try
+        inlineDataUriResources(expectedHtml);
+    catch inlineErr
+        warning('Alakazam:renderQuartoReport:inlineFailed', ...
+            ['Could not inline the report''s linked resources (%s). It will ' ...
+             'still open in a browser, but may render unstyled in the app.'], ...
+            inlineErr.message);
     end
 
     htmlFile = expectedHtml;

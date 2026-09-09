@@ -450,9 +450,10 @@ workspace's Exports directory. Unlike an ordinary export, a rendered report
 is not a one-off file to go hunting for: it gets its own node in a third
 workspace tree (**Reports**, alongside **Data & Analyses** and **Grand
 Averages**), which survives closing and reopening the workspace, and an
-**Open in browser** button for viewing it with full styling (the app's own
-embedded viewer is a narrower, older browser than a real one, so long tables
-and a sticky table of contents render better outside it). Rendering
+**Open in browser** button (the embedded viewer runs a current browser
+engine and renders the report's own styling, but it is a narrow pane, so
+wide tables and a sticky table of contents have more room in a window, and
+printing and saving belong to a browser anyway). Rendering
 (`quarto render <name>.qmd`, self-contained HTML) produces a short,
 APA-styled results report, not just a table: tables in three-line APA
 format, violin plots showing the actual distribution rather than just a bar

@@ -60,6 +60,39 @@ classdef ReportDocTest < matlab.unittest.TestCase
             testCase.verifySubstring(joined, 'clip: rect(0, 0, 0, 0)');
         end
 
+        function theHeaderSizesItsOwnFiguresAtPrintDpi(testCase)
+        %THEHEADERSIZESITSOWNFIGURESATPRINTDPI  The same failure as the
+        %   screen-reader span above, found the same way: by a reader
+        %   opening a report in the app rather than in a browser.
+        %
+        %   Bootstrap's .img-fluid { max-width: 100% } is what keeps a
+        %   figure inside its column, and Quarto ships it in the theme
+        %   stylesheet, which it delivers as a percent-encoded data:text/css
+        %   link. The embedded viewer does not apply that link, and the
+        %   emitted <img> carries no width attribute of its own, so with the
+        %   theme missing a figure draws at its natural pixel size.
+        %
+        %   That was harmless while fig-dpi was Quarto's default 96, where a
+        %   7 inch figure is 672 pixels and fits a pane unaided. At 300 it
+        %   is 2100, about four times the pane. The two settings are
+        %   therefore checked together: raising the dpi without carrying the
+        %   sizing rule, or dropping the rule while the dpi is high, is the
+        %   combination that breaks, and either alone is fine.
+            joined = strjoin(ReportDoc.yamlHeader('T'), newline);
+
+            dpi = regexp(joined, 'fig-dpi:\s*(\d+)', 'tokens', 'once');
+            testCase.assertNotEmpty(dpi, 'The header no longer sets fig-dpi.');
+            if str2double(dpi{1}) <= 96
+                return;   % natural size fits; nothing to carry
+            end
+
+            % In the inline <style>, not anywhere the theme is responsible for.
+            inlineCss = extractBetween(joined, '<style>', '</style>');
+            testCase.assertNotEmpty(inlineCss, 'The header has no inline style block.');
+            testCase.verifySubstring(inlineCss{1}, 'img.img-fluid');
+            testCase.verifySubstring(inlineCss{1}, 'max-width: 100% !important');
+        end
+
         function theHeaderPinsLightMode(testCase)
         %THEHEADERPINSLIGHTMODE  Not cosmetic: the plots baked into these
         %   reports are ggplot output on a white canvas with black text, so

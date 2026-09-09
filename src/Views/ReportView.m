@@ -38,14 +38,26 @@ classdef ReportView < AlakazamView
         %   particular -- see generateQuartoReport's own preamble for the
         %   matching fix on the page's own CSS side).
         %
-        %   uihtml renders through MATLAB's own bundled embedded browser
-        %   (CEF), not the system one -- typically several versions behind,
-        %   and usually narrower than a real browser window, so Quarto's
-        %   theme (position: sticky TOC, responsive margins) does not
-        %   always render the same as it does in an actual up to date
-        %   browser. Rather than chase parity with an engine this code has
-        %   no visibility into, "Open in browser" hands the same file to
-        %   the user's own default browser with one click.
+        %   THE ENGINE IS NOT THE PROBLEM, which took a while to establish.
+        %   This comment used to say the embedded browser was an old CEF
+        %   several versions behind, and used that to explain why Quarto's
+        %   theme rendered differently here. A probe page loaded into a real
+        %   uihtml reported Chrome 141, so that was wrong.
+        %
+        %   What differs is how the page is served. uihtml does not open a
+        %   local file: MATLAB serves it from its own connector, over
+        %   https://127.0.0.1:<port>/static/..., and that server's
+        %   Content-Security-Policy refuses data: stylesheets and data:
+        %   scripts, which is exactly the form a self-contained Quarto
+        %   report ships its theme in. Every report was therefore rendering
+        %   here with no Bootstrap at all. renderQuartoReport now inlines
+        %   those resources (see inlineDataUriResources), and the theme
+        %   applies here as it does in a browser.
+        %
+        %   "Open in browser" stays, for the reasons that remain true: the
+        %   pane is narrower than a window, so a sticky table of contents
+        %   and responsive margins have less to work with, and printing and
+        %   saving belong to the browser anyway.
             this.Figure = fig;
             this.EEG    = eeg;
             fig.BackgroundColor = [1 1 1];
@@ -58,7 +70,7 @@ classdef ReportView < AlakazamView
                 "Padding", [4 4 4 4], "BackgroundColor", [1 1 1]);
             buttonRow.Layout.Row = 2;
             openBtn = uibutton(buttonRow, "Text", "Open in browser", ...
-                "Tooltip", "Open this report in your default web browser, where Quarto's styling renders fully", ...
+                "Tooltip", "Open this report in your default web browser, for a wider view, printing and saving", ...
                 "ButtonPushedFcn", @(~, ~) this.onOpenInBrowser());
             openBtn.Layout.Column = 2;
         end
