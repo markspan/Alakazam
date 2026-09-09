@@ -85,7 +85,29 @@ function onExportSpectral(this)
             spectraCsvName = '';
         end
 
-        qmdText = generateQuartoReport(entries, reportCsvName, '', '', '', spectraCsvName);
+        % The time-resolved coherence, when the workspace holds any
+        % CoherenceMap results. A separate collection from the spectral
+        % entries above: the map lives on its own nodes, and a workspace
+        % routinely has one without the other. Best effort, like the
+        % spectra: the figures are lost, the report is not.
+        coherenceCsvs = struct('Trace', '', 'Map', '');
+        try
+            coherenceEntries = this.collectEntriesWithField('coherence');
+            if ~isempty(coherenceEntries)
+                setBusy('Exporting the coherence maps...');
+                [traceFile, mapFile] = exportCoherenceCSVs(coherenceEntries, ...
+                    fullfile(reportsDir, [stem '_' stampTxt]));
+                [~, traceName, traceExt] = fileparts(traceFile);
+                [~, mapName, mapExt] = fileparts(mapFile);
+                coherenceCsvs = struct('Trace', [traceName traceExt], ...
+                    'Map', [mapName mapExt]);
+            end
+        catch
+            coherenceCsvs = struct('Trace', '', 'Map', '');
+        end
+
+        qmdText = generateQuartoReport(entries, reportCsvName, '', '', '', ...
+            spectraCsvName, coherenceCsvs);
         qmdFile = fullfile(reportsDir, [stem '_' stampTxt '.qmd']);
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportSpectral');
 

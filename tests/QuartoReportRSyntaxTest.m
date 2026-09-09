@@ -91,17 +91,17 @@ classdef QuartoReportRSyntaxTest < matlab.unittest.TestCase
             ids = ReportFixtures.censusIds();
             scriptFiles = cell(1, numel(ids));
             for k = 1:numel(ids)
-                % FOUR ARGUMENTS, so the waveform sections are generated and
-                % therefore parsed. Called with two, they are omitted entirely
-                % and this file would report every cell green while the R it
-                % never saw was broken -- which is exactly what happened when
-                % the sections were first written.
-                % FIVE arguments, so the waveform AND single-trial sections are
-                % generated and therefore parsed. Called with fewer, they are
-                % omitted entirely and this file would report every cell green
-                % while the R it never saw was broken.
+                % EVERY OPTIONAL ARGUMENT IS SUPPLIED, and that is the whole
+                % point of this call. Each companion export adds sections
+                % that are omitted entirely when its argument is missing, so
+                % a call with fewer arguments reports every cell green while
+                % the R it never saw is broken. That has happened twice: once
+                % when the waveform sections were first written and this test
+                % still passed two arguments, and again for the single-trial
+                % ones. Add an argument to generateQuartoReport, add it here.
                 qmdText = generateQuartoReport(ReportFixtures.censusEntries(ids{k}), 'x.csv', ...
-                    '', 'grandaverages.csv', 'trials.csv', 'spectra.csv');
+                    '', 'grandaverages.csv', 'trials.csv', 'spectra.csv', ...
+                    struct('Trace', 'coherence_trace.csv', 'Map', 'coherence_map.csv'));
                 scriptFiles{k} = fullfile(folder, [ids{k} '.R']);
                 writeText(scriptFiles{k}, ReportFixtures.rCode(qmdText));
             end

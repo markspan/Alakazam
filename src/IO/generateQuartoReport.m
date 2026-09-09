@@ -1,4 +1,4 @@
-﻿function qmdText = generateQuartoReport(entries, csvFileName, sourceEstimates, grandAverageCsv, trialCsv, spectraCsv)
+﻿function qmdText = generateQuartoReport(entries, csvFileName, sourceEstimates, grandAverageCsv, trialCsv, spectraCsv, coherenceCsvs)
 %GENERATEQUARTOREPORT  A design-aware Quarto (.qmd) report for an exported
 %   measurements CSV: rendering it (self-contained HTML) produces a short,
 %   APA-styled results report -- narrative prose with inline-computed
@@ -105,6 +105,12 @@
     end
     if nargin < 6
         spectraCsv = '';
+    end
+    % A struct with .Trace and .Map, or '' for neither. One argument rather
+    % than two because they are written together and are useless apart: a
+    % map with no trace has nothing to justify its window against.
+    if nargin < 7 || isempty(coherenceCsvs)
+        coherenceCsvs = struct('Trace', '', 'Map', '');
     end
     if isempty(entries)
         throw(MException('Alakazam:generateQuartoReport', ...
@@ -254,8 +260,16 @@
         end
     end
 
+    % ONCE FOR THE WHOLE DOCUMENT, not once per window. The time-resolved
+    % coherence describes the recording rather than any one measurement
+    % window, and every window in a tagging export reads the same map.
+    coherenceParts = {};
+    if hasCoherenceExport(coherenceCsvs)
+        coherenceParts = {ReportSections.coherenceSection()};
+    end
+
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, ...
-                          grandAverageCsv, trialCsv, spectraCsv)}, {readersGuideText()}, ...
+                          grandAverageCsv, trialCsv, spectraCsv, coherenceCsvs)}, {readersGuideText()}, ...
              sections, {closingText()}];
     parts = uniqueChunkLabels(parts);
 
@@ -273,7 +287,28 @@
         end
     end
 
+    % After the tested sections and before the source addendum's place: the
+    % coherence figures describe the recording the tests were run on, so
+    % they belong with the results rather than in an appendix, but they
+    % carry no test and must not interrupt the sections that do.
+    parts = [parts, coherenceParts];
+
     qmdText = char(strjoin(parts, [newline newline]));
+end
+
+function tf = hasCoherenceExport(coherenceCsvs)
+%HASCOHERENCEEXPORT  Whether either coherence file was written.
+    tf = false;
+    if ~isstruct(coherenceCsvs)
+        return;
+    end
+    for field = {'Trace', 'Map'}
+        if isfield(coherenceCsvs, field{1}) && ...
+                ~isempty(char(string(coherenceCsvs.(field{1}))))
+            tf = true;
+            return;
+        end
+    end
 end
 
 function blocks = erpBlocks(EEG)
@@ -401,6 +436,29 @@ function parts = uniqueChunkLabels(parts)
     end
 end
 
+function lines = coherenceReadLines(coherenceCsvs)
+%COHERENCEREADLINES  Read the trace and map exports, or set them to NULL.
+    lines = {};
+    for spec = {{'Trace', 'cohtrace'}, {'Map', 'cohmap'}}
+        field = spec{1}{1};
+        name = spec{1}{2};
+        file = '';
+        if isstruct(coherenceCsvs) && isfield(coherenceCsvs, field)
+            file = char(string(coherenceCsvs.(field)));
+        end
+        if isempty(file)
+            lines = [lines, {sprintf('%s <- NULL', name)}]; %#ok<AGROW>
+            continue;
+        end
+        lines = [lines, { ...
+            sprintf('%s_file <- "%s"', name, ReportSections.rLit(file)) ...
+            sprintf(['%s <- if (file.exists(%s_file)) read_csv(%s_file, ' ...
+                     'show_col_types = FALSE) else NULL'], name, name, name) ...
+            sprintf('if (!is.null(%s)) %s <- %s %%>%% mutate(bin = as.character(bin), channel = as.character(channel))', ...
+                name, name, name)}]; %#ok<AGROW>
+    end
+end
+
 function text = readersGuideText()
 %READERSGUIDETEXT  A short orientation, placed before the results.
 %
@@ -450,7 +508,7 @@ function text = readersGuideText()
     text = strjoin(lines, newline);
 end
 
-function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, grandAverageCsv, trialCsv, spectraCsv)
+function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, grandAverageCsv, trialCsv, spectraCsv, coherenceCsvs)
 %PREAMBLETEXT  The YAML header + setup chunk shared by every report kind.
 %   REPORTTITLE ("ERP" or "Spectral") names the report in its own title
 %   and intro comment. GROUPCOLUMN is the CSV column that plays "window"'s
@@ -525,6 +583,11 @@ function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, p
             '  mutate(bin = as.character(bin), channel = as.character(channel))' ...
             }];
     end
+
+    % The time-resolved coherence, when a CoherenceMap result was exported
+    % alongside. Same best-effort guard as the others: a missing file costs
+    % the figures and nothing else.
+    readLines = [readLines, coherenceReadLines(coherenceCsvs)];
 
     readLines = [readLines, { ...
         '' ...

@@ -1542,6 +1542,21 @@ response one bin away from where it was measured looks like a weak effect
 rather than a misplaced measurement, and an SNR computed against a neighbour
 band that is itself contaminated reads as an ordinary number.
 
+The **time-resolved** coherence now reaches the report as well, as two
+companion files rather than one. `..._coherence_trace.csv` holds coherence
+against time at the tagged frequency for **every** channel, and the report
+draws it per condition: rise, plateau and fall are visible on it directly, so
+a measurement window that starts inside the fade-in or ends after the
+response has decayed is apparent rather than taken on trust. The tagged
+frequency is read from the exported map itself, as the frequency carrying
+most coherence in each condition, so it cannot drift from a number typed
+elsewhere. `..._coherence_map.csv` holds the full time by frequency plane for
+the few channels with the strongest response, drawn as the faceted heatmap a
+tagging paper prints; that split exists because the whole plane for a
+64-channel montage runs to about 37 MB per recording, where the trace is
+about 1 MB. Neither carries a test: the inference in a tagging design is on
+the scalar coherence, which the sections above already handle.
+
 Like any transformation, a whole tagging pipeline can be replayed across a
 study with Apply to All Raw Files or a saved template. The full reference is the
 [`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)

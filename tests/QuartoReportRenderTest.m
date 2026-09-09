@@ -219,6 +219,82 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
             testCase.verifySubstring(text, '95% CI');
         end
 
+        function theCoherenceSectionComputesRatherThanParses(testCase)
+        %THECOHERENCESECTIONCOMPUTESRATHERTHANPARSES  The RIFT figures.
+        %
+        %   Until this section existed a CoherenceMap result could be seen
+        %   in the application and nowhere else, so the figure a tagging
+        %   paper is built on left Alakazam only as a screenshot. The R that
+        %   replaced that does two group_by/summarise passes, a faceted
+        %   raster and several sprintf calls, all of which parse cleanly
+        %   whatever they compute, and a per-section tryCatch would turn a
+        %   genuine failure into an italic note in a document that still
+        %   looks finished.
+        %
+        %   The fixture plants a 60 Hz response at Oz between 0 and 600 ms,
+        %   so the section has something real to find and the assertions
+        %   below are about content rather than the absence of an error.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+            folder = temporary.Folder;
+
+            entries = ReportFixtures.censusEntries('F-SPEC3CR');
+            [qmdFile, csvFile] = ReportFixtures.writeReport(entries, folder, 'coherence');
+            [~, csvName, csvExt] = fileparts(csvFile);
+
+            [traceFile, mapFile] = exportCoherenceCSVs( ...
+                testCase.coherenceEntries(), fullfile(folder, 'coherence'));
+            [~, traceName, traceExt] = fileparts(traceFile);
+            [~, mapName, mapExt] = fileparts(mapFile);
+
+            qmd = generateQuartoReport(entries, [csvName csvExt], '', '', '', '', ...
+                struct('Trace', [traceName traceExt], 'Map', [mapName mapExt]));
+            writeQmdFile(qmdFile, qmd, 'Alakazam:QuartoReportRenderTest');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+            testCase.assertEmpty(errorMessage, sprintf( ...
+                'quarto could not render the coherence report:\n%s', errorMessage));
+
+            text = plainTextOf(readWholeFile(html));
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, 'Coherence over time');
+            testCase.verifySubstring(text, 'Tagged frequency per condition');
+            testCase.verifySubstring(text, 'Channels shown');
+            testCase.verifyFalse(contains(text, 'No coherence export'), ...
+                'The exports were written, so the absent-file branch is wrong here.');
+        end
+
+    end
+
+    methods (Access = private)
+        function entries = coherenceEntries(~)
+        %COHERENCEENTRIES  Two recordings with a planted 60 Hz tag at Oz,
+        %   present between 0 and 600 ms and absent outside it, so the
+        %   section's own tag detection and channel choice have a known
+        %   answer to find.
+            entries = struct('subject', {}, 'datasetType', {}, 'group', {}, ...
+                'person', {}, 'session', {}, 'EEG', {});
+            freqs = 55:1:65;
+            times = linspace(-200, 800, 12);
+            labels = {'Fz', 'Cz', 'Pz', 'Oz', 'PO7', 'PO8'};
+            rng(7);
+            for s = 1:2
+                coh = 0.05 + 0.01 * rand(numel(labels), numel(freqs), numel(times));
+                fIdx = find(freqs == 60, 1);
+                inWindow = times > 0 & times < 600;
+                coh(4, fIdx, inWindow) = 0.8;
+                coh(6, fIdx, inWindow) = 0.6;
+                eeg = struct('cohFreqs', freqs, 'cohTimes', times, ...
+                    'chanlocs', struct('labels', labels), ...
+                    'bindesc', struct('label', {'A', 'B'}, 'index', {1, 2}));
+                eeg.coherence = cat(4, coh, coh * 0.5);
+                entries(s) = struct('subject', sprintf('sub%02d', s), ...
+                    'datasetType', 'subject', 'group', '', ...
+                    'person', sprintf('p%02d', s), 'session', '', 'EEG', eeg);
+            end
+        end
     end
 end
 
