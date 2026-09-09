@@ -17,10 +17,18 @@
 // link in the help viewer: the page is loaded from src/, so "LICENSE"
 // resolves next to it rather than at the repository root, and even where the
 // path did resolve, a .md or .m file is not something the component can
-// render. They are rewritten below to absolute GitHub URLs, with one
-// exception: the LICENSE itself is appended to the page in full. A GPL
-// program should be able to show its own licence without a network
-// connection, and it is the link an analyst is most likely to click.
+// render. They are rewritten below to absolute GitHub URLs, the LICENSE
+// among them.
+//
+// THE LICENCE IS LINKED, NOT QUOTED. This page used to append the whole of
+// GPL-3 verbatim, on the reasoning that a GPL program should be able to
+// show its own licence offline. The text is 674 lines of legal boilerplate
+// that nobody reads in a help viewer, and it dominated both the page and
+// its table of contents. Nothing is lost by removing it: the LICENSE file
+// itself ships in every release package (git archive takes the whole
+// tracked tree, see .github/workflows/release.yml), so the licence is
+// already beside the application, and the link below reaches the canonical
+// copy for anyone who wants to read it.
 import { marked } from 'marked'
 import fs from 'fs'
 import path from 'path'
@@ -35,12 +43,6 @@ const outDir = path.join(here, 'dist')
 // be opened long after it was cut, and a link into a branch that has since
 // moved or been deleted is worse than one pointing at the current default.
 const REPO_BLOB = 'https://github.com/markspan/Alakazam/blob/main/'
-
-// The in-page anchor the LICENSE link becomes. Must match the slug that
-// slugify() below produces for the appended heading, or the one link this
-// whole exercise started from is dead again.
-const LICENSE_ANCHOR = 'license-full-text'
-const LICENSE_HEADING = 'License (full text)'
 
 // git records the README as "README.MD", and everything in this repository
 // now names it that way. The directory is still listed rather than that
@@ -105,10 +107,6 @@ md = md.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (whole, alt, src) => {
 md = md.replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, (whole, text, href) => {
     if (/^(https?:|data:|mailto:|#)/.test(href)) return whole
     const [target, fragment] = splitFragment(href)
-    if (target === 'LICENSE') {
-        // Kept in the page rather than sent to GitHub: see the header note.
-        return `[${text}](#${LICENSE_ANCHOR})`
-    }
     return `[${text}](${REPO_BLOB}${target}${fragment})`
 })
 
@@ -150,22 +148,15 @@ renderer.link = function (token) {
     return `<a href="${token.href}"${title}>${text}</a>`
 }
 
-// The licence, appended verbatim. Fenced rather than rendered as Markdown:
-// the GPL is a fixed-layout legal text whose own line breaks and indentation
-// carry meaning, and letting a Markdown renderer reflow it (or read its
-// numbered clauses as list syntax) would alter the wording as displayed.
-const licenseText = fs.readFileSync(path.join(repoRoot, 'LICENSE'), 'utf8')
-md += `\n\n## ${LICENSE_HEADING}\n\n\`\`\`text\n${licenseText.replace(/```/g, "'''")}\n\`\`\`\n`
-
 const bodyHtml = marked.parse(md, { renderer })
 
-// The whole point of the LICENSE special case is that its link resolves, so
-// a slug drift between LICENSE_ANCHOR and the appended heading is a build
-// failure rather than something to discover by clicking.
-if (slugify(LICENSE_HEADING) !== LICENSE_ANCHOR) {
+// The page must not carry the licence text itself. Asserted rather than
+// assumed, because the append it replaces was easy to reinstate by accident
+// and its absence is not something a reader would report.
+if (/GNU GENERAL PUBLIC LICENSE/.test(bodyHtml)) {
     throw new Error(
-        `LICENSE_ANCHOR ("${LICENSE_ANCHOR}") does not match the slug of ` +
-        `LICENSE_HEADING ("${slugify(LICENSE_HEADING)}") -- the licence link would be dead.`)
+        'The help page contains the verbatim GPL text. It should link to the ' +
+        'LICENSE file, which ships alongside the application, and not quote it.')
 }
 
 const tocHtml = toc.map(t =>
