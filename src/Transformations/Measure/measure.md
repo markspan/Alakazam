@@ -509,7 +509,17 @@ m |>
 ## Save.../Load...
 
 The dialog's **Save...** button writes the current table to a portable
-`.alm` file (small JSON); **Load...** reads one back in. This is
+`.alm` file (small JSON); **Load...** **adds** one to the table. Loading does
+not clear what is already there, so a battery is assembled by loading several
+files in turn, and opening a preset to see what is in it costs nothing.
+Loading the same file twice therefore duplicates its rows; remove the extras
+with **Remove Selected**.
+
+Derived channels are merged by name rather than replaced. A definition
+already in the dialog is kept and the file's version of that name is not
+used, with a note saying which, since the windows just added may have been
+written against the other formula. A file with no `let` block leaves yours
+untouched. This is
 independent of any one dataset: use it to keep a lab-standard set of windows,
 reuse the same battery in a new workspace, or share it with a colleague. Save
 stores the table as-is (it does not require the rows to be valid first), so you
@@ -533,7 +543,17 @@ sensible default measure at its canonical site:
 - `p1`: Oz, 80–130 ms, Peak (positive, local peak).
 - `n170`: PO8, 130–200 ms, Peak (negative, local peak).
 - `p2`: Cz, 150–250 ms, mean amplitude (positive).
-- `mmn`: Fz, 150–250 ms, mean amplitude (negative).
+- `mmn`: Fz, 150–250 ms, mean amplitude (negative). Auditory; for the visual
+  analogue see `vmmn` below, which is a different site and a different window.
+- `vmmn`: pooled `{PO7 PO8}`, two windows (100–200 and 200–300 ms), mean
+  amplitude (negative). The visual mismatch negativity is posterior, not
+  fronto-central, and an early and a late component are routinely
+  distinguished, so both windows are given as candidates rather than as a pair
+  to report together. It measures vMMN only where the deviance is irrelevant to
+  the participant's task: in an oddball where the deviant IS the target, the
+  same window contains N2b and P3b instead. Score it on a deviant-minus-control
+  difference bin whose control is equiprobable or cross-block, so the same
+  physical stimulus is compared with itself.
 - `n2`: FCz, 200–350 ms, mean amplitude (negative).
 - `p300`: Pz, 300–600 ms, mean amplitude (positive).
 - `n400`: Cz, 300–500 ms, mean amplitude (negative).

@@ -1,4 +1,4 @@
-function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSourceForwardModel(labels, sourceSpace)
+function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSourceForwardModel(labels, sourceSpace, mode)
 %BUILDSOURCEFORWARDMODEL  The EEG forward model (leadfield) for
 %   Brain3DView's Source-estimate mode: FieldTrip's own template BEM head
 %   model, paired with its own template electrode positions (NOT
@@ -70,6 +70,26 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   on every call and rebuilt it, measured at 16.1 s per switch for a model
 %   computed seconds earlier.
 %
+%   MODE 'cachedonly' ASKS WITHOUT PAYING. The default, 'build', is the
+%   behaviour above: return the cached model or compute it. 'cachedonly'
+%   returns the cached model if it is there and five empties if it is not,
+%   building nothing and installing nothing.
+%
+%   It exists because some work is worth doing when the model is already in
+%   hand and is not worth minutes when it is not. The report's point-spread
+%   figure is the case it was written for: rendered straight after a source
+%   cluster test it is a matrix-vector product, and asked for cold it would
+%   silently turn a click into an 18 s leadfield build. A caller in that
+%   position asks with 'cachedonly' and quietly does without on a miss,
+%   rather than deciding on the analyst's behalf that the wait is fine.
+%
+%   The key is the sorted, lower-cased label list, so ask with the SAME
+%   labels the model was built from. Two label lists that resolve to the
+%   same electrodes (one carrying an EOG the template cannot place, say) are
+%   the same forward model but not the same key, and the second will miss;
+%   SourceClusterStats therefore records the montage it passed in
+%   provenance.montage so a later step can ask with it.
+%
 %   SESSION ONLY, no disk layer, and that is a deliberate reversal. One was
 %   written, then removed once source analyses came to require every subject
 %   in the study to be on the same montage (SourceClusterStats' own
@@ -102,11 +122,21 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
         cache = emptyCacheEntry();
     end
 
-    TransTools.ensureFieldTrip();
-
     if nargin < 2 || isempty(sourceSpace)
         sourceSpace = 20484;
     end
+    if nargin < 3 || isempty(mode)
+        mode = 'build';
+    end
+    mode = validateMode(mode);
+
+    % Guarded rather than moved: a 'build' call must still put FieldTrip on
+    % the path before anything reads a template, exactly as it always has,
+    % and a 'cachedonly' call must never be the thing that installs it.
+    if ~strcmp(mode, 'cachedonly')
+        TransTools.ensureFieldTrip();
+    end
+
     sourceSpace = validateSourceSpace(sourceSpace);
 
     labelsCell = cellstr(string(labels));
@@ -123,6 +153,14 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
         elec           = cache(hit).elec;
         headmodel      = cache(hit).headmodel;
         cache = promote(cache, hit);   % most recently used first
+        return;
+    end
+
+    if strcmp(mode, 'cachedonly')
+        % A MISS RETURNS NOTHING, AND NOTHING HAPPENS ON THE WAY OUT: no
+        % build, and no ensureFieldTrip either. See this file's own header
+        % for what 'cachedonly' is for.
+        [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = deal([]);
         return;
     end
 
@@ -224,6 +262,18 @@ function v = loadSoleVariable(matFile)
             'I expected to find exactly one variable in %s, but found %d instead.', matFile, numel(f)));
     end
     v = s.(f{1});
+end
+
+function m = validateMode(mode)
+%VALIDATEMODE  Only the two modes this understands, named rather than a
+%   bare flag: a call site reading BuildSourceForwardModel(labels, 5124,
+%   'cachedonly') says what it is asking for, where a trailing true would
+%   not.
+    m = lower(char(string(mode)));
+    if ~ismember(m, {'build', 'cachedonly'})
+        throw(MException('Alakazam:BuildSourceForwardModel:mode', ...
+            'Mode must be ''build'' or ''cachedonly'', not %s.', mat2str(mode)));
+    end
 end
 
 function n = validateSourceSpace(sourceSpace)

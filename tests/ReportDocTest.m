@@ -44,6 +44,22 @@ classdef ReportDocTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(strcmp(strtrim(lines), 'self-contained: true')));
         end
 
+        function theHeaderHidesQuartosScreenReaderLabels(testCase)
+        %THEHEADERHIDESQUARTOSSCREENREADERLABELS  Also not cosmetic. Quarto
+        %   writes a callout's type name into its title as
+        %   <span class="screen-reader-only">Tip</span>, to be announced and
+        %   never shown, and leaves hiding it to its own stylesheet. Where
+        %   that stylesheet does not fully apply, which includes the app's
+        %   embedded viewer, the span becomes visible and butts against the
+        %   title: a callout titled "Nothing flagged" reads "TipNothing
+        %   flagged". Carrying the rule in the document removes the
+        %   dependency on the viewer.
+            joined = strjoin(ReportDoc.yamlHeader('T'), newline);
+
+            testCase.verifySubstring(joined, '.screen-reader-only');
+            testCase.verifySubstring(joined, 'clip: rect(0, 0, 0, 0)');
+        end
+
         function theHeaderPinsLightMode(testCase)
         %THEHEADERPINSLIGHTMODE  Not cosmetic: the plots baked into these
         %   reports are ggplot output on a white canvas with black text, so

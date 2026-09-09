@@ -21,6 +21,27 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
 %   presented as the result is reliably over-read. Both, each doing its own
 %   job, rather than choosing.
 %
+%   .PointSpreadPath IS THE THIRD, AND IT IS A PICTURE OF A LIMITATION. The
+%   report already states the resolution limit in numbers: an N-electrode
+%   montage gives a leadfield of rank at most N-1, so a few thousand
+%   vertices carry a few dozen independent values, and the smoothness of
+%   every map above is interpolation rather than measurement. That is a
+%   sentence, and it is read as a sentence. What it describes is visible:
+%   feed the scalp pattern of ONE vertex through this analysis's own
+%   inverse and the estimate that comes back covers a large part of a lobe.
+%   .PointSpread carries that figure's own numbers (.PeakErrorMm,
+%   .DispersionMm and which vertex it was drawn for) so the report can
+%   quote them rather than describe the picture vaguely.
+%
+%   IT IS DRAWN ONLY WHEN THE FORWARD MODEL IS ALREADY IN HAND, and that is
+%   the whole cost decision. Called where it is called, straight after
+%   SourceClusterStats in the same session, the leadfield is cached and the
+%   figure costs a matrix-vector product. Asked for cold it would be an 18 s
+%   leadfield build, and a report figure must not turn a click into that
+%   silently. So it asks the cache with TransTools.BuildSourceForwardModel's
+%   'cachedonly' mode and simply does without on a miss, which is also what
+%   makes this safe to call from a test without a multi-minute build.
+%
 %   ASSETS is a struct array, one row per rendered cluster:
 %     .Index .Sign .PValue .Significant .TimeRangeMs .NVertices
 %     .SourceIndex     which summary.clusters row this was rendered from
@@ -47,14 +68,16 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
 %   inspecting a null result.
 %
 %   See also SOURCECLUSTERSTATS, GENERATESOURCECLUSTERSTATSREPORT,
-%   TRANSTOOLS.DESCRIBECLUSTER, TRANSTOOLS.DRAWSOURCEMAP.
+%   TRANSTOOLS.DESCRIBECLUSTER, TRANSTOOLS.POINTSPREADFUNCTION,
+%   TRANSTOOLS.DRAWSOURCEMAP.
     if nargin < 3 || isempty(opts); opts = struct(); end
     significantOnly = TransTools.FieldOr(opts, 'SignificantOnly', true);
     atlasName       = TransTools.FieldOr(opts, 'Atlas', 'aal');
     maxClusters     = TransTools.FieldOr(opts, 'MaxClusters', 8);
 
     assets = emptyAssets();
-    extras = struct('UnthresholdedMapPath', '', 'NullDistributionPath', '');
+    extras = struct('UnthresholdedMapPath', '', 'NullDistributionPath', '', ...
+        'PointSpreadPath', '', 'PointSpread', []);
 
     if ~exist(imagesDir, 'dir')
         mkdir(imagesDir);
@@ -73,6 +96,24 @@ function [assets, extras] = generateSourceClusterAssets(summary, imagesDir, opts
     nullFile = fullfile(imagesDir, 'permutation_null.png');
     if renderNullDistribution(summary, nullFile)
         extras.NullDistributionPath = sprintf('%s/%s', imagesFolderName, 'permutation_null.png');
+    end
+
+    % BEST EFFORT, AND ITS OWN try. Everything else here is drawn from the
+    % summary alone; this one figure reaches back to the forward model, so
+    % it has failure modes the others do not (a summary from an older run
+    % with no provenance, a sheet the cache does not hold). None of those is
+    % a reason to lose the cluster maps, which is what an uncaught error
+    % here would cost: the caller's own catch throws away every asset.
+    try
+        [extras.PointSpreadPath, extras.PointSpread] = ...
+            renderPointSpread(summary, imagesDir, imagesFolderName);
+    catch ME
+        % Said out loud rather than swallowed. Nothing downstream breaks
+        % (the report omits the section), but a figure that quietly stopped
+        % appearing is exactly how the unthresholded map went missing for
+        % as long as it did.
+        warning('Alakazam:generateSourceClusterAssets:pointSpread', ...
+            'The point-spread figure could not be drawn: %s', ME.message);
     end
 
     if isempty(summary.clusters)
@@ -340,6 +381,246 @@ function renderUnthresholdedMap(summary, pngPath)
     cb.Label.FontSize = 9;
 
     exportgraphics(layout, pngPath, 'Resolution', 150, 'BackgroundColor', 'white');
+end
+
+% ---- the point spread of one vertex -------------------------------------- %
+
+function [relPath, info] = renderPointSpread(summary, imagesDir, imagesFolderName)
+%RENDERPOINTSPREAD  What this analysis's own inverse does to a single active
+%   vertex, drawn on the same four views as everything else here.
+%
+%   THE FIGURE THAT MAKES THE RESOLUTION CAVEAT CHECKABLE. See this file's
+%   header for why it is here and why it is cache-gated. Returns an empty
+%   path, and draws nothing, whenever the forward model is not already
+%   built: that is a deliberate absence, not a failure.
+%
+%   THE VERTEX IS THE ANALYSIS'S OWN PEAK, not an arbitrary one, so the
+%   figure describes the resolution available exactly where the result is
+%   being read. Point spread varies over the cortex (a deep or medial vertex
+%   is worse than a lateral one), so a figure drawn at a fixed vertex could
+%   flatter or slander the result it sits next to.
+    relPath = '';
+    info = [];
+
+    if ~isfield(summary, 'opts') || ~isfield(summary.opts, 'Method') || ...
+            ~isfield(summary.opts, 'SourceSpace') || ~isfield(summary, 'stat') || ...
+            ~isfield(summary, 'sourcemodel') || ~isfield(summary.sourcemodel, 'tri')
+        return;
+    end
+
+    [leadfield, sourcemodel, elec, headmodel] = cachedForwardModel(summary);
+    if isempty(leadfield)
+        return;
+    end
+    % The leadfield indexes the CACHED sheet, and the statistic indexes the
+    % summary's own. They are the same sheet in every ordinary case; if they
+    % ever are not, a vertex index means two different places and the
+    % figure would be confidently wrong, so it is not drawn.
+    if size(sourcemodel.pos, 1) ~= size(summary.sourcemodel.pos, 1)
+        return;
+    end
+
+    vertex = pointSpreadVertex(summary);
+
+    % The analysis's OWN regularisation and orientation, so this is the
+    % inverse the report describes rather than a default-configured
+    % relative of it. Matching RegParam also means the spatial filter
+    % InverseSolution cached during the analysis is reused as it stands.
+    solveOpts = struct('RegParam', TransTools.FieldOr(summary.opts, 'RegParam', 0.05));
+    if strcmpi(TransTools.FieldOr(summary.opts, 'Orientation', 'magnitude'), 'normal')
+        solveOpts.Orientation = 'normal';
+    end
+
+    [psf, info] = TransTools.PointSpreadFunction(vertex, leadfield, sourcemodel, ...
+        elec, headmodel, summary.opts.Method, solveOpts);
+
+    pngPath = fullfile(imagesDir, 'point_spread.png');
+    drawPointSpread(sourcemodel, psf, vertex, info, pngPath);
+    relPath = sprintf('%s/%s', imagesFolderName, 'point_spread.png');
+end
+
+function [leadfield, sourcemodel, elec, headmodel] = cachedForwardModel(summary)
+%CACHEDFORWARDMODEL  The forward model this analysis used, but only if it is
+%   still in the cache. Never builds one: see this file's header.
+%
+%   TWO LABEL LISTS TRIED, IN ORDER. The cache is keyed on the labels it was
+%   ASKED for, which is the dataset's montage, and provenance records that
+%   as .montage. Older summaries have only .channels, the labels the
+%   template actually kept, which is the same key whenever every channel was
+%   placeable and a different one whenever the montage carried an EOG or a
+%   photodiode. Trying both costs two string comparisons and is the
+%   difference between the figure appearing and not.
+    [leadfield, sourcemodel, elec, headmodel] = deal([]);
+    if ~isfield(summary, 'provenance')
+        return;
+    end
+
+    for candidate = {'montage', 'channels'}
+        labels = provenanceLabels(summary.provenance, candidate{1});
+        if isempty(labels)
+            continue;
+        end
+        [lf, sm, ~, el, hm] = TransTools.BuildSourceForwardModel( ...
+            labels, summary.opts.SourceSpace, 'cachedonly');
+        if ~isempty(lf)
+            leadfield   = lf;
+            sourcemodel = sm;
+            elec        = el;
+            headmodel   = hm;
+            return;
+        end
+    end
+end
+
+function labels = provenanceLabels(provenance, field)
+%PROVENANCELABELS  One of provenance's cell-wrapped label lists, or empty.
+    labels = {};
+    if ~isfield(provenance, field)
+        return;
+    end
+    labels = provenance.(field);
+    if iscell(labels) && numel(labels) == 1 && iscell(labels{1})
+        labels = labels{1};
+    end
+    if ~iscell(labels)
+        labels = {};
+    end
+end
+
+function vertex = pointSpreadVertex(summary)
+%POINTSPREADVERTEX  The peak of the strongest cluster, or the peak of the
+%   whole map when there is no cluster to take one from.
+%
+%   THE FALLBACK IS NOT A DEGRADED CASE. A null result is exactly when a
+%   reader most needs to know how much detail the map could have carried,
+%   for the same reason the unthresholded map and the permutation null are
+%   both drawn whether or not anything was significant.
+    statMap = summary.stat.stat;
+
+    if isfield(summary, 'clusters') && ~isempty(summary.clusters)
+        cluster = summary.clusters(strongestCluster(summary.clusters));
+        [vertexMask, timeMask] = clusterMasks(summary, cluster);
+        if any(vertexMask) && any(timeMask)
+            masked = statMap;
+            masked(~vertexMask, :) = 0;
+            masked(:, ~timeMask) = 0;
+            [~, peakLinear] = max(abs(masked(:)));
+            [vertex, ~] = ind2sub(size(masked), peakLinear);
+            return;
+        end
+    end
+
+    [~, vertex] = max(abs(mean(statMap, 2)));
+end
+
+function idx = strongestCluster(clusters)
+%STRONGESTCLUSTER  The smallest p-value, preferring the significant ones.
+%   Preferring them matters when SignificantOnly is false: the figure
+%   belongs beside the cluster a reader is actually going to quote.
+    candidates = find([clusters.significant]);
+    if isempty(candidates)
+        candidates = 1:numel(clusters);
+    end
+    p = [clusters.pValue];
+    [~, best] = min(p(candidates));
+    idx = candidates(best);
+end
+
+function drawPointSpread(sourcemodel, psf, vertex, info, pngPath)
+%DRAWPOINTSPREAD  The point spread function on the four standard views, with
+%   the vertex it belongs to marked.
+%
+%   THE SAME FOUR PANELS AS EVERY OTHER MAP IN THIS REPORT, and drawn
+%   through this file's own drawHemisphere rather than
+%   TransTools.DrawSourceMap. DrawSourceMap draws the whole sheet into one
+%   axes at a fixed three-quarter view, which is right for a rotatable 3-D
+%   view and wrong here twice over: the far hemisphere would occlude the
+%   near one's medial wall in exactly the two panels that exist to show it,
+%   and its world-fixed lights leave half the panels looking at an unlit
+%   surface. See renderClusterMap's own note on the same choice.
+%
+%   THE CONTINUOUS SCALE, NOT THE MASKED ONE. A point spread function has no
+%   inside and outside: every vertex carries a value, and the whole point of
+%   the figure is how far from zero the distant ones are. That is the same
+%   argument renderUnthresholdedMap makes, so it uses the same colouring and
+%   the same colour bar.
+%
+%   THE MARKER IS DRAWN AT THE EDGE OF THE SHARED BOX, not at the vertex's
+%   own depth. The panels are orthographic and viewed straight down the x
+%   axis, so moving a marker along x does not move it on screen but does put
+%   it in front of the cortex; drawn at its true position it would be buried
+%   inside the surface in every sulcus, which is most of them.
+    values = psf(:);
+    values(~isfinite(values)) = 0;
+    limit = max(abs(values), [], 'omitnan');
+    if ~isfinite(limit) || limit == 0
+        limit = 1;
+    end
+    rgb = blueWhiteRedContinuous(values / limit);
+
+    pos = sourcemodel.pos;
+    tri = sourcemodel.tri;
+    half = size(pos, 1) / 2;
+    panels = { ...
+        'Left, lateral',  1:half,                 -90; ...
+        'Right, lateral', (half + 1):size(pos, 1),  90; ...
+        'Left, medial',   1:half,                  90; ...
+        'Right, medial',  (half + 1):size(pos, 1), -90};
+
+    box = [min(pos, [], 1); max(pos, [], 1)];
+    pad = 0.02 * (box(2, :) - box(1, :));
+    box = [box(1, :) - pad; box(2, :) + pad];
+
+    fig = figure('Visible', 'off', 'HandleVisibility', 'off', 'Color', 'white', ...
+        'Position', [100 100 900 700]);
+    closeFig = onCleanup(@() close(fig));
+    layout = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    for k = 1:size(panels, 1)
+        keep = panels{k, 2};
+        ax = nexttile(layout);
+        drawHemisphere(ax, pos, tri, rgb, keep, panels{k, 3}, box);
+        if ismember(vertex, keep)
+            markVertex(ax, pos(vertex, :), panels{k, 3}, box);
+        end
+        text(ax, 0.5, 0.02, panels{k, 1}, 'Units', 'normalized', ...
+            'HorizontalAlignment', 'center', 'FontSize', 10, 'Color', [0.25 0.25 0.25]);
+    end
+
+    ramp = linspace(-1, 1, 256)';
+    colormap(fig, blueWhiteRedContinuous(ramp));
+    ax4 = nexttile(layout, 4);
+    clim(ax4, [-limit limit]);
+    cb = colorbar(ax4);
+    cb.Layout.Tile = 'south';
+    cb.Label.String = sprintf('%s, for a unit source at the marked vertex', info.ScaleLabel);
+    cb.Label.FontSize = 9;
+
+    % The numbers on the figure itself, so it still says what it is when it
+    % is exported as a PDF and travels away from the report's caption.
+    title(layout, sprintf(['Estimate of a single active vertex: peak %.0f mm away, ' ...
+        'dispersion %.0f mm'], info.PeakErrorMm, info.DispersionMm), 'FontSize', 11);
+
+    exportgraphics(layout, pngPath, 'Resolution', 150, 'BackgroundColor', 'white');
+end
+
+function markVertex(ax, xyz, azimuth, box)
+%MARKVERTEX  Where the source actually was, in front of the cortex.
+    front = xyz;
+    if azimuth > 0
+        front(1) = box(2, 1);   % camera on the +x side
+    else
+        front(1) = box(1, 1);
+    end
+    hold(ax, 'on');
+    % A white ring under a black disc, so the marker is legible against the
+    % deep red and deep blue it will usually be sitting on and against the
+    % near-white the rest of the sheet goes.
+    plot3(ax, front(1), front(2), front(3), 'o', 'MarkerSize', 13, ...
+        'MarkerFaceColor', 'white', 'MarkerEdgeColor', 'white', 'LineWidth', 1);
+    plot3(ax, front(1), front(2), front(3), 'o', 'MarkerSize', 8, ...
+        'MarkerFaceColor', [0.05 0.05 0.05], 'MarkerEdgeColor', [0.05 0.05 0.05]);
+    hold(ax, 'off');
 end
 
 function rgb = blueWhiteRedContinuous(scaled)

@@ -705,6 +705,14 @@ function provenance = buildProvenance(opts, requestedLabels, resolvedLabels, ...
     provenance.limitingSubject = limitingSubjectName(subjects, sourceFiles);
     provenance.channels          = {resolvedLabels};
     provenance.nChannels         = numel(resolvedLabels);
+    % THE LABELS THE FORWARD MODEL WAS ASKED FOR, not the ones it kept, and
+    % the two differ whenever a montage carries an EOG or a photodiode the
+    % template cannot position. Recorded because the forward-model cache is
+    % keyed on what it was asked for: a later step wanting the same model
+    % without rebuilding it (the report's point-spread figure) has to ask
+    % with this list, and asking with .channels would miss on exactly the
+    % montages that need it most.
+    provenance.montage           = {requestedLabels};
     provenance.reference         = 'average (imposed by the leadfield)';
     provenance.headModel         = 'FieldTrip template BEM (standard_bem)';
     provenance.electrodes        = 'FieldTrip template 10-5 (standard_1005)';

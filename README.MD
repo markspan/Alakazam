@@ -964,6 +964,19 @@ themselves it records:
   comparable montage on this template gives, tens of millimetres at the peak
   even noise-free, which is what stops a peak vertex being quoted as a
   location.
+- **The same limit as a picture**, immediately after it as prose. The report
+  draws the **point spread function** of the vertex the strongest cluster
+  peaks at: the scalp pattern a single active vertex would produce, put back
+  through this analysis's own inverse, at its own regularisation and its own
+  orientation constraint. What comes back covers a large part of a lobe, on
+  the same four cortical views as every other map, with the vertex that was
+  active marked and with its peak displacement and spatial dispersion
+  printed on it. "The map carries about thirty independent numbers" and a
+  picture of one vertex spread across half a hemisphere are the same
+  statement, and only the second one stops a reader treating cluster extent
+  as a measurement. It is drawn only when the forward model is already in
+  memory, which it is whenever the figure is rendered straight after the
+  test, so the figure never adds a leadfield build to an analyst's click.
 - **Software versions**: MATLAB, FieldTrip and the Alakazam commit, marked
   when the working tree had uncommitted changes, since a report generated
   from a modified tree corresponds to no commit at all.
@@ -981,7 +994,7 @@ differences follow from that rather than from taste:
 | Adjacency | Electrode positions (`ft_prepare_neighbours`, triangulation) | Cortical mesh triangulation |
 | Document | Quarto with R chunks that plot from exported CSVs | Markdown only, no R |
 | Data export | Four CSVs (statistic, waveforms, cluster outlines, permutation null distribution) | None |
-| "Where" figure | Scalp topography per cluster | Four cortical views per cluster, plus an unthresholded appendix |
+| "Where" figure | Scalp topography per cluster | Four cortical views per cluster, plus an unthresholded appendix and the point spread of the peak vertex |
 | "When" figure | Cluster window shaded on each condition's grand average | Cluster window shaded on the statistic averaged over the cluster's vertices |
 | Overview figure | Heatmap of the whole channel-by-time grid with cluster outlines | Its equivalent is the unthresholded cortical map |
 | Location naming | Channel labels | Atlas region plus peak MNI coordinate |
@@ -1051,6 +1064,17 @@ error is further affected by the forward model: this pipeline uses template
 anatomy and template electrode positions rather than individual MRIs and
 digitised electrode locations, a known and substantial error source
 (Akalin Acar & Makeig, 2013).
+
+The source cluster report shows this rather than only describing it, by
+drawing the point spread function of the vertex its strongest cluster peaks
+at. Measured on the 29-channel montage and the 5124-vertex sheet, spatial
+dispersion runs from about 34 to 63 mm depending on where the vertex sits,
+and dSPM's peak is displaced by a median of roughly 41 mm, which independently
+reproduces the localisation error quoted above. eLORETA localises the same
+sources exactly, as its definition requires, and spreads just as widely: the
+displacement and the spread are separate limits and a method can avoid one
+without avoiding the other. `tests/PointSpreadTest.m` holds those numbers to
+account.
 
 A significant cluster therefore supports the statement that the conditions
 differ, and that the model attributes that difference to approximately this

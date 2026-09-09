@@ -46,6 +46,14 @@ classdef ForwardModelCacheTest < matlab.unittest.TestCase
             out = struct('leadfield', a, 'sourcemodel', b, ...
                 'resolvedLabels', {c}, 'elec', d, 'headmodel', e);
         end
+
+        function [out, seconds] = cachedOnly(testCase, labels, space) %#ok<INUSD>
+            t = tic;
+            [a, b, c, d, e] = TransTools.BuildSourceForwardModel(labels, space, 'cachedonly');
+            seconds = toc(t);
+            out = struct('leadfield', a, 'sourcemodel', b, ...
+                'resolvedLabels', {c}, 'elec', d, 'headmodel', e);
+        end
     end
 
     methods (Test)
@@ -104,5 +112,50 @@ classdef ForwardModelCacheTest < matlab.unittest.TestCase
                 'Nor must alternating evict the other one.');
         end
 
+        function askingWithoutBuildingReturnsNothingAndCostsNothing(testCase)
+        %ASKINGWITHOUTBUILDINGRETURNSNOTHINGANDCOSTSNOTHING  'cachedonly' is
+        %   the mode that lets a caller do optional work only when it is
+        %   cheap. The source cluster report's point-spread figure is worth
+        %   drawing when the model is in hand and is not worth 18 s of a
+        %   click that asked for something else, so it asks this way.
+        %
+        %   BOTH HALVES MATTER. Returning empty is what makes the caller skip
+        %   its work; returning empty QUICKLY is the entire reason the mode
+        %   exists, since a miss that quietly built the model anyway would
+        %   satisfy every other assertion here and reintroduce the cost.
+        %
+        %   A label subset used by no other test, so the miss is a real miss
+        %   however the classes are ordered: the cache is one persistent for
+        %   the whole MATLAB session, not one per test class.
+            labels = testCase.Labels(1:13);
+
+            t = tic;
+            [leadfield, sourcemodel, resolved, elec, headmodel] = ...
+                TransTools.BuildSourceForwardModel(labels, 5124, 'cachedonly');
+            miss = toc(t);
+
+            testCase.verifyEmpty(leadfield, 'A model came back that was never built.');
+            testCase.verifyEmpty(sourcemodel);
+            testCase.verifyEmpty(resolved);
+            testCase.verifyEmpty(elec);
+            testCase.verifyEmpty(headmodel);
+            testCase.verifyLessThan(miss, 1.0, sprintf( ...
+                ['A cache miss took %.1f s, so it built the model instead of ' ...
+                 'declining to. That is the cost this mode exists to avoid.'], miss));
+
+            built = testCase.build(labels, 5124);
+            [hit, warm] = testCase.cachedOnly(labels, 5124);
+
+            testCase.verifyEqual(hit.leadfield, built.leadfield, ...
+                'After a build, the same question must return the same model.');
+            testCase.verifyEqual(hit.resolvedLabels, built.resolvedLabels);
+            testCase.verifyLessThan(warm, 1.0);
+        end
+
+        function anUnknownModeIsRefusedByName(testCase)
+            testCase.verifyError(@() TransTools.BuildSourceForwardModel( ...
+                testCase.Labels, 5124, 'peek'), ...
+                'Alakazam:BuildSourceForwardModel:mode');
+        end
     end
 end

@@ -241,6 +241,47 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
             testCase.verifySubstring(src, 'generateSourceClusterStatsReport(summary, assets, extras)');
         end
 
+        function thePointSpreadFigureIsSkippedWithoutAForwardModel(testCase)
+        %THEPOINTSPREADFIGUREISSKIPPEDWITHOUTAFORWARDMODEL  The cost decision,
+        %   asserted rather than commented. The figure needs the leadfield,
+        %   which takes about 18 s to build, and the analyst clicked "run a
+        %   cluster test", not "spend a further 18 s on an appendix figure".
+        %   So it is drawn only when the model is already cached, and the
+        %   fixture's channel labels have no model behind them.
+        %
+        %   THE ABSENCE MUST BE SILENT IN THE DOCUMENT. A section explaining
+        %   that a figure is missing because of what was in memory would be
+        %   a fact about the session, not about the analysis, and belongs in
+        %   no report.
+            summary = testCase.summaryFixture();
+            [~, extras] = generateSourceClusterAssets(summary, testCase.tempImages());
+
+            testCase.verifyEmpty(extras.PointSpreadPath, ...
+                'A figure was drawn from a forward model that was never built.');
+            testCase.verifyEmpty(extras.PointSpread);
+
+            qmd = generateSourceClusterStatsReport(summary, ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+            testCase.verifyEmpty(strfind(qmd, '## What one vertex can resolve'));
+        end
+
+        function anOlderExtrasStructIsStillAcceptable(testCase)
+        %ANOLDEREXTRASSTRUCTISSTILLACCEPTABLE  A summary and an extras from
+        %   before the point-spread figure existed still have to render. The
+        %   report reads every extras field through isfield for exactly this
+        %   reason, and a missing field must produce a shorter document
+        %   rather than an "Unrecognized field name" that throws away a
+        %   completed analysis.
+            extras = struct('UnthresholdedMapPath', 'images/u.png', ...
+                'NullDistributionPath', '');
+
+            qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+
+            testCase.verifySubstring(qmd, 'Appendix: the unthresholded statistic');
+            testCase.verifyEmpty(strfind(qmd, '## What one vertex can resolve'));
+        end
+
         % ---- rendering decisions --------------------------------------------
         function onlySignificantClustersAreRenderedByDefault(testCase)
             summary = testCase.summaryFixture();
@@ -282,6 +323,66 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
     end
 
     methods (Test, TestTags = {'Slow'})
+        function thePointSpreadFigureReachesTheDocument(testCase)
+        %THEPOINTSPREADFIGUREREACHESTHEDOCUMENT  The same guard, and the same
+        %   defect, as theUnthresholdedAppendixReachesTheDocument: a figure
+        %   rendered into the images folder and then referenced by nothing is
+        %   the failure this whole extras path already had once.
+        %
+        %   Slow because it is the only test here that draws on the real
+        %   forward model. It builds it deliberately, which is also what
+        %   makes the cache warm: the assets step will not draw the figure
+        %   otherwise, and that gate is asserted separately in
+        %   thePointSpreadFigureIsSkippedWithoutAForwardModel.
+            FieldTripFixtures.require(testCase);
+            [summary, montage] = testCase.realSummaryFixture();
+
+            imagesDir = testCase.tempImages();
+            [~, extras] = FieldTripFixtures.quietly(@() ...
+                generateSourceClusterAssets(summary, imagesDir));
+
+            testCase.assertNotEmpty(extras.PointSpreadPath, sprintf( ...
+                ['Nothing was drawn although the forward model for %d channels ' ...
+                 'had just been built.'], numel(montage)));
+            testCase.verifyEqual(exist(fullfile(imagesDir, 'point_spread.png'), 'file'), 2, ...
+                'The report links to a PNG that is not on disk.');
+
+            % The figure's own numbers travel with it, so the report can
+            % quote them instead of describing the picture vaguely.
+            testCase.assertNotEmpty(extras.PointSpread);
+            testCase.verifyTrue(isfinite(extras.PointSpread.PeakErrorMm));
+            testCase.verifyTrue(isfinite(extras.PointSpread.DispersionMm));
+
+            qmd = generateSourceClusterStatsReport(summary, ...
+                generateSourceClusterAssetsFixtureEmpty(), extras);
+            testCase.verifySubstring(qmd, '## What one vertex can resolve');
+            testCase.verifySubstring(qmd, extras.PointSpreadPath);
+            testCase.verifySubstring(qmd, 'spatial dispersion');
+            testCase.verifySubstring(qmd, sprintf('%.0f mm', extras.PointSpread.DispersionMm));
+
+            % The claim the figure exists to support, stated beside it.
+            testCase.verifySubstring(qmd, 'not a result');
+            testCase.verifySubstring(qmd, 'folding of the cortex');
+        end
+
+        function thePointSpreadIsDrawnAtTheAnalysisOwnPeak(testCase)
+        %THEPOINTSPREADISDRAWNATTHEANALYSISOWNPEAK  Point spread varies over
+        %   the cortex, so a figure drawn at a fixed vertex could flatter or
+        %   slander the result standing next to it. It has to be the peak of
+        %   the cluster a reader is going to quote.
+            FieldTripFixtures.require(testCase);
+            [summary, ~, seed] = testCase.realSummaryFixture();
+
+            [~, extras] = FieldTripFixtures.quietly(@() ...
+                generateSourceClusterAssets(summary, testCase.tempImages()));
+
+            testCase.assertNotEmpty(extras.PointSpread);
+            testCase.verifyEqual(extras.PointSpread.Vertex, seed, ...
+                ['The figure was drawn for a different vertex than the one the ' ...
+                 'cluster peaks at, so it describes the resolution somewhere ' ...
+                 'other than where the result is being read.']);
+        end
+
         function descriptionsNameARegionAndACoordinate(testCase)
         %DESCRIPTIONSNAMEAREGIONANDACOORDINATE  Both, because a name is what
         %   makes a result readable and a coordinate is what makes its
@@ -388,6 +489,58 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
         function assets = assetFixture(testCase)
             assets = generateSourceClusterAssets(testCase.summaryFixture(), ...
                 testCase.tempImages());
+        end
+
+        function [summary, montage, seed] = realSummaryFixture(testCase)
+        %REALSUMMARYFIXTURE  A summary on the REAL cortical sheet, with a
+        %   real 10-5 montage and a forward model already built.
+        %
+        %   The montage deliberately carries two channels the template
+        %   cannot position (an EOG pair). That is the ordinary case, it is
+        %   why provenance records .montage as well as .channels, and it is
+        %   what a fixture using only placeable labels would fail to
+        %   exercise: the forward-model cache is keyed on what it was asked
+        %   for, so a lookup by .channels alone would miss here.
+            montage = [testCase.templateMontage(), {'HEOG', 'VEOG'}];
+            [~, sourcemodel, resolved] = FieldTripFixtures.quietly(@() ...
+                TransTools.BuildSourceForwardModel(montage, 5124));
+
+            n = size(sourcemodel.pos, 1);
+            nTime = 11;
+
+            % A statistic with one real spatial peak, so "the peak of the
+            % strongest cluster" is a definite vertex rather than whichever
+            % vertex noise happened to favour.
+            seed = 1700;
+            distance = vecnorm(sourcemodel.pos - sourcemodel.pos(seed, :), 2, 2);
+            inCluster = find(distance < 20);
+
+            summary = struct();
+            summary.sourcemodel  = sourcemodel;
+            summary.vertexLabels = TransTools.SourceVertexLabels(n);
+            summary.times        = linspace(200, 400, nTime);
+            summary.nSubjects    = 7;
+            summary.contrast     = struct('mode', 'paired', 'binA', 'Related', ...
+                'binB', 'Unrelated');
+            summary.opts = struct('Method', 'mne', 'Orientation', 'normal', ...
+                'correctm', 'tfce', 'numrandomization', 1000, 'alpha', 0.05, ...
+                'tail', 0, 'SourceSpace', 5124, 'RegParam', 0.05, 'Accelerate', true);
+            summary.stat = struct('stat', ...
+                (4 * exp(-(distance / 25) .^ 2)) * ones(1, nTime));
+            summary.clusters = struct('sign', {'positive'}, 'pValue', {0.004}, ...
+                'significant', {true}, 'channels', {summary.vertexLabels(inCluster)}, ...
+                'timeRangeMs', {[240 320]}, 'nPoints', {4 * numel(inCluster)}, ...
+                'clusterIndex', {1});
+            summary.provenance = struct('channels', {{resolved}}, ...
+                'montage', {{montage}}, 'nChannels', numel(resolved), ...
+                'software', struct('matlab', 'x', 'fieldtrip', 'y', 'alakazam', 'z'));
+        end
+
+        function labels = templateMontage(~)
+        %TEMPLATEMONTAGE  Labels FieldTrip's own 10-5 template can position.
+            labels = {'FP1','FP2','F7','F3','FZ','F4','F8','FC5','FC1','FC2', ...
+                      'FC6','T7','C3','CZ','C4','T8','CP5','CP1','CP2','CP6', ...
+                      'P7','P3','PZ','P4','P8','O1','OZ','O2','POZ'};
         end
 
         function dir = tempImages(testCase)

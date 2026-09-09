@@ -237,17 +237,63 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     end
 
     function onLoadMeasures()
+    %ONLOADMEASURES  Load ADDS to the table; it does not replace it.
+    %
+    %   Replacing was destructive with no way back: a table built up over
+    %   several minutes vanished the moment someone opened a preset to see
+    %   what was in it. Adding is also what the presets are for, since the
+    %   library ships one file per component and a battery is assembled by
+    %   loading several.
+    %
+    %   Loading the same file twice therefore duplicates its rows. That is
+    %   visible in the table and removable with Remove Selected, which is a
+    %   better failure than silently dropping a row somebody meant to have.
         [file, path] = uiextras.uigetfile2('*.alm', 'Load measurement windows');
         if isequal(file, 0); return; end
         try
             [loadedData, loadedDerivations] = readMeasuresFile(fullfile(path, file));
-            table.Data = loadedData;
-            derivArea.Value = linesFromText(loadedDerivations);
-            selectedRow = 0;
-            applyGreying();
         catch err
             uialert(fig, err.message, 'Load failed');
+            return;
         end
+
+        table.Data = [table.Data; loadedData];
+
+        % DERIVED CHANNELS ARE MERGED BY NAME, not appended blindly and not
+        % overwritten. Two reasons. Replacing wiped a let block the analyst
+        % had written whenever the loaded file had none, which every current
+        % preset does. And appending a second definition of the same name
+        % would not merely be untidy: measureDerivations appends each
+        % derived channel to the dataset as it evaluates, so the duplicate
+        % hits its "already exists in this dataset" error at OK time, in a
+        % message that names the channel and not the load that caused it.
+        [mergedDerivations, keptNames] = mergeLetDefinitions( ...
+            textFromLines(derivArea.Value), loadedDerivations);
+        derivArea.Value = linesFromText(mergedDerivations);
+
+        selectedRow = 0;
+        applyGreying();
+
+        % Said out loud, because the consequence is not visible in the
+        % table: the loaded rows may name a derived channel whose formula
+        % is now the analyst's rather than the file's, and only they can
+        % tell whether that is what they want.
+        if ~isempty(keptNames)
+            uialert(fig, sprintf(['The rows were added. %s already defined in this ' ...
+                'dialog, so the definition here was kept and the one in the file was ' ...
+                'not used. Check that the loaded windows mean what you expect on ' ...
+                'that channel.'], derivationPhrase(keptNames)), ...
+                'Derived channels kept as they were', 'Icon', 'info');
+        end
+    end
+end
+
+function phrase = derivationPhrase(names)
+%DERIVATIONPHRASE  "LRP was" or "LRP and ROI were", for the notice above.
+    if isscalar(names)
+        phrase = sprintf('%s was', names{1});
+    else
+        phrase = sprintf('%s were', strjoin(names, ', '));
     end
 end
 

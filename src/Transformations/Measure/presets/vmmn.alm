@@ -1,0 +1,35 @@
+{
+  "alakazamMeasures": true,
+  "version": 1,
+  "description": {
+    "morphology": "Posterior negativity over occipito-temporal cortex, pooled here over PO7 and PO8, isolated as the deviant-minus-control difference wave. Two windows are given because an early and a late vMMN are routinely distinguished; which one carries the effect depends on the deviated feature, so treat both as candidates and pre-specify the one you will report. Unlike the auditory MMN there is no diagnostic polarity inversion at the mastoids.",
+    "meaning": "A pre-attentive index of visual regularity violation, usually read as a prediction-error signal from automatic sensory memory. It does not require attention to the deviant dimension, and it is the attention-independence that distinguishes it from the N2b and P3b that an actively discriminated oddball elicits.",
+    "task": "Passive visual oddball, where the deviance is IRRELEVANT to the task the participant is performing (a demanding central task while the deviants appear peripherally, for instance). In a task where the deviant is the target, this window measures N2b and P3b instead, whatever it is labelled. The control condition should be an equiprobable or cross-block one, so the same physical stimulus is compared with itself: a plain deviant-minus-standard difference confounds mismatch with adaptation and with the physical stimulus difference."
+  },
+  "rows": [
+    {
+      "label": "vMMN_early",
+      "start": 100,
+      "stop": 200,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "{PO7 PO8}"
+    },
+    {
+      "label": "vMMN_late",
+      "start": 200,
+      "stop": 300,
+      "measure": "Mean Amplitude",
+      "polarity": "Negative",
+      "width": 100,
+      "localPoints": 0,
+      "fraction": 0.5,
+      "refChannel": "",
+      "channels": "{PO7 PO8}"
+    }
+  ]
+}
