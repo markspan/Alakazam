@@ -11,22 +11,56 @@ function offerReadmeInstead(this)
 %   -browser flag on a file:// URL), not in a uihtml: raw Markdown rendered
 %   as HTML would show every # and * as literal text, which reads worse
 %   than the plain file does in whatever the user already uses for it.
+%
+%   BUILDING IT IS OFFERED FIRST, AND IS THE DEFAULT. Telling somebody to
+%   open a terminal and run three npm commands in order to read the
+%   documentation is asking a lot of the audience this button exists for.
+%   The application can run the same build itself (buildHelpPage), so the
+%   instructions are kept only for the case where it cannot: no Node on the
+%   machine, or a build that failed.
     readmeFile = findReadme(this.RepoRoot);
+    prompt = ['The in-app help page has not been built in this copy yet. It is ' ...
+        'generated from README.MD and is not kept in version control, so a fresh ' ...
+        'clone does not have one.' newline newline ...
+        'Alakazam can build it now. It takes a few seconds and needs Node.js.'];
     buildHint = sprintf(['The in-app help page has not been built in this copy yet.\n\n' ...
-        'To build it (needs Node.js, once):\n' ...
+        'To build it by hand (needs Node.js, once):\n' ...
         '    cd "%s"\n    npm install\n    npm run build\n' ...
         '    copy dist\\AlakazamHelp.html ..\\\n\n' ...
         'The same content is in README.MD in the meantime.'], ...
         fullfile(this.RootDir, 'help'));
 
+    options = {'Build it now', 'Open README.MD', 'Close'};
     if isempty(readmeFile)
-        uialert(this.MainFigure, buildHint, 'Help page not built yet', 'Icon', 'info');
-        return;
+        options(2) = [];
+    end
+    selection = uiconfirm(this.MainFigure, prompt, 'Help page not built yet', ...
+        'Options', options, 'DefaultOption', 1, 'CancelOption', numel(options), ...
+        'Icon', 'info');
+
+    if strcmp(selection, 'Build it now')
+        [restoreBusy, ~] = beginBusy(this.MainFigure, ...
+            'Building the help page from README.MD...'); %#ok<ASGLU>
+        [built, message] = this.buildHelpPage();
+        clear restoreBusy;   % dismiss the overlay BEFORE any dialog below
+        if built
+            this.onHelp();   % the page is there now, so open it
+            return;
+        end
+        % Reported with the manual instructions attached rather than on its
+        % own: the analyst still wants the documentation, and the two ways
+        % left to get it are building it by hand or reading the README.
+        uialert(this.MainFigure, sprintf('%s\n\n%s', message, buildHint), ...
+            'Could not build the help page', 'Icon', 'warning');
+        if isempty(readmeFile)
+            return;
+        end
+        selection = uiconfirm(this.MainFigure, ...
+            'Open README.MD instead?', 'Help page not built yet', ...
+            'Options', {'Open README.MD', 'Close'}, ...
+            'DefaultOption', 1, 'CancelOption', 2, 'Icon', 'info');
     end
 
-    selection = uiconfirm(this.MainFigure, buildHint, 'Help page not built yet', ...
-        'Options', {'Open README.MD', 'Close'}, ...
-        'DefaultOption', 1, 'CancelOption', 2, 'Icon', 'info');
     if strcmp(selection, 'Open README.MD')
         try
             web(['file:///' strrep(readmeFile, '\', '/')], '-browser');

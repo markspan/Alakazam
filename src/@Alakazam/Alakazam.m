@@ -148,6 +148,7 @@ classdef Alakazam < handle
         onRibbonWidthMeasured(this, width)
         onHelp(this)
         offerReadmeInstead(this)
+        [ok, message] = buildHelpPage(this)
         onAbout(this)
         setPlotsViewMode(this, mode)
         refreshPlotsView(this)

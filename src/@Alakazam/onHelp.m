@@ -17,8 +17,9 @@ function onHelp(this)
 %   of embedded screenshots regenerated from README.MD, which would put a
 %   5 MB diff in history on every README edit. A fresh clone therefore does
 %   not have it until someone runs the build, so its absence is a normal
-%   state to be explained, not an install fault to warn about -- and the
-%   fallback below offers the README itself, which is the same content.
+%   state to be explained, not an install fault to warn about. The fallback
+%   below offers to run that build (buildHelpPage), and the README itself
+%   if it cannot, which is the same content either way.
     if ~isempty(this.HelpFigure) && isvalid(this.HelpFigure)
         figure(this.HelpFigure);
         return;
