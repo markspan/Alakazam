@@ -34,11 +34,16 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         function everyOnsetIsMarked(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
             types = string({preview.event.type});
 
-            testCase.verifyEqual(sum(types == "diode"), numel(onsets), ...
+            % A mark per onset, each named after the trigger it answers, so
+            % they are counted by their suffix rather than by one shared
+            % name (see diodeEventLabels).
+            testCase.verifyEqual(sum(endsWith(types, "PD")), numel(onsets), ...
                 'Every detected onset should appear as its own mark.');
+            testCase.verifyTrue(any(types == "S 1PD"), ...
+                'The mark should carry its own trigger''s name.');
         end
 
         function theTriggersAreKeptAsTheyWere(testCase)
@@ -47,7 +52,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   its duration would turn its own line into a band and lose it.
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
 
             for k = 1:numel(events)
                 match = find([preview.event.latency] == events(k).latency & ...
@@ -66,7 +71,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   the number in the summary underneath it.
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
             bands = preview.event([preview.event.duration] > 0);
 
             testCase.assertEqual(numel(bands), numel(pairs));
@@ -82,7 +87,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         function theBandIsLabelledWithItsOwnLag(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
             bands = preview.event([preview.event.duration] > 0);
 
             testCase.verifySubstring(bands(1).type, 'ms');
@@ -95,9 +100,9 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   the reader cannot see which mark the detector contributed.
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
 
-            testCase.verifyNotEmpty(styleFor('diode'));
+            testCase.verifyNotEmpty(styleFor('S 1PD'));
             testCase.verifyEmpty(styleFor('S 1'), ...
                 'A trigger should get no opinion, and fall through to the default.');
         end
@@ -117,8 +122,8 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   looking, which is the only way this kind of collision shows up.
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
-            diode = styleFor('diode');
+            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
+            diode = styleFor('S 1PD');
 
             testCase.assertTrue(isfield(diode, 'LabelVerticalAlignment'));
             testCase.verifyEqual(diode.LabelVerticalAlignment, 'middle', ...
@@ -128,7 +133,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         function eventsAreInTimeOrder(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
 
             testCase.verifyEqual([preview.event.latency], sort([preview.event.latency]));
         end
@@ -140,7 +145,11 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
 
             preview = photodiodePreview(signal, testCase.Srate, [100 200]);
 
+            % No trigger to borrow a name from, so each gets the suffix
+            % alone, which is what makes an unanswered screen change stand
+            % out rather than vanish.
             testCase.verifyEqual(numel(preview.event), 2);
+            testCase.verifyEqual(unique({preview.event.type}), {'PD'});
             testCase.verifyEqual(numel(preview.times), numel(signal));
         end
     end
@@ -154,7 +163,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   millisecond axis the application actually passes, every band was
         %   drawn a thousand times too narrow to see.
             [signal, onsets, events, pairs] = testCase.scenario();
-            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
 
             % In milliseconds, which is what an EEGLAB recording carries.
             inMs = preview;
@@ -175,7 +184,7 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         function signalViewColoursTheOnsetsDifferently(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
             [preview, styleFor] = photodiodePreview(signal, testCase.Srate, ...
-                onsets, events, pairs, 'diode');
+                onsets, events, pairs, 'PD');
 
             fig = uifigure('Visible', 'off', 'Position', [100 100 900 500]);
             testCase.addTeardown(@() delete(fig));
