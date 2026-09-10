@@ -81,14 +81,23 @@ classdef AlakazamPlotter < handle
             % uitab has no native close-button concept at all (checked its
             % full property list) -- the tab strip itself is rendered
             % entirely by MATLAB, so no uicomponent can be injected into it.
-            % A right-click "Close" menu is the closest fully-supported
+            % A right-click menu is the closest fully-supported
             % equivalent, and matches the workspace tree's own existing
-            % right-click idiom. Tiles get a real close-x button instead,
+            % right-click idiom. "Undock" lives here for the same reason,
+            % and only here: in a tiled mode the tab strip is hidden
+            % entirely, so there is no tab to right-click.
+            %
+            % The menu is parented to MainFigure, which stays correct while
+            % a plot is undocked because the TAB never moves, only its
+            % content does (see Alakazam.undockTab). A ContextMenu does not
+            % follow a reparent, so a menu on the content itself would
+            % quietly stop working the moment it left. Tiles get a real close-x button instead,
             % since those are a wrapper we fully control -- see
             % Alakazam.tileWrapperFor.
-            closeMenu = uicontextmenu(app.MainFigure);
-            uimenu(closeMenu, "Text", "Close", "MenuSelectedFcn", @(~, ~) app.closeTab(eeg.File));
-            newTab.ContextMenu = closeMenu;
+            tabMenu = uicontextmenu(app.MainFigure);
+            uimenu(tabMenu, "Text", "Undock", "MenuSelectedFcn", @(~, ~) app.undockTab(eeg.File));
+            uimenu(tabMenu, "Text", "Close", "MenuSelectedFcn", @(~, ~) app.closeTab(eeg.File));
+            newTab.ContextMenu = tabMenu;
 
             % Store the dataset on the tab for downstream access.
             setappdata(newTab, "EEG", eeg);

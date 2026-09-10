@@ -60,9 +60,12 @@ current publication standards, Keil et al. (2014) (see
   pyramid, so scrolling and zooming stay smooth on multi-hour,
   multi-channel data while every spike and artefact remains visible (see
   [Fast plotting](#fast-plotting)).
-- **Tabbed or tiled plot views.** Open datasets show one at a time as tabs,
-  or all at once arranged in a grid or stacked column, for side-by-side
-  comparison.
+- **Tabbed, tiled or undocked plot views.** Open datasets show one at a
+  time as tabs, or all at once arranged in a grid or stacked column, for
+  side-by-side comparison. Any one of them can also be given a window of
+  its own (right-click its tab, then **Undock**), which is what a second
+  monitor is for; its tab stays where it is and offers a **Dock** button,
+  and closing the window puts the plot back.
 - **A transformation library covering the standard EEG/ERP pipeline**:
   filtering, re-referencing, channel/data selection, event-to-bin
   assignment with a small purpose-built language, baseline correction,

@@ -11,7 +11,18 @@ function retile(this)
 %   incremental-placement bugs). "grid" arranges tiles in a near-
 %   square rows/cols layout; "stack" is a single column, one tile
 %   per row.
+    % An undocked plot is not in its tab to be tiled (see undockTab), and
+    % its tab holds only a placeholder. Wrapping that would produce a tile
+    % showing "this plot is open in its own window", which is worse than
+    % simply having one tile fewer.
     tabs = this.PlotsTabGroup.Children;
+    if ~isempty(tabs)
+        tabs = tabs(arrayfun(@(t) isempty(undockedFigureOf(t)), tabs));
+    end
+    if isempty(tabs)
+        this.TileOrder = string.empty;
+        return;
+    end
     tabTags = arrayfun(@(t) string(t.Tag), tabs);
 
     this.TileOrder = this.TileOrder(ismember(this.TileOrder, tabTags));

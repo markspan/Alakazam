@@ -16,6 +16,12 @@ function closeTab(this, tag)
     end
     tab = findobj(this.PlotsTabGroup.Children, 'flat', 'Tag', tag);
     if ~isempty(tab)
+        % If it is undocked, its window holds the content and is not a
+        % child of anything being deleted here (see undockTab).
+        undocked = undockedFigureOf(tab(1));
+        if ~isempty(undocked)
+            delete(undocked);
+        end
         delete(tab);
     end
 end

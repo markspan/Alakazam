@@ -8,7 +8,6 @@ classdef cursor
         MotionCallback
         UpCallback
         PAxes
-        PFigure
         ID
     end
 
@@ -18,7 +17,6 @@ classdef cursor
             obj.MotionCallback = mcallback;
             obj.UpCallback     = ucallback;
             obj.PAxes   = hAxes;
-            obj.PFigure = get(get(hAxes, 'Parent'), 'Parent');
             for v = 1:length(varargin)
                 if strcmp(varargin{v}, "ID")
                     obj.ID = varargin{v+1};
@@ -41,7 +39,22 @@ classdef cursor
         end
 
         function buttondn(obj, h, events)
-            set(obj.PFigure,...
+        %   THE FIGURE IS RESOLVED HERE, NOT CACHED, and not by walking a
+        %   fixed number of levels. This used to be
+        %   get(get(hAxes, 'Parent'), 'Parent') taken in the constructor,
+        %   which assumed the axes sat one container below the figure. In
+        %   this app it sits in a uigridlayout inside a uitab, so that
+        %   expression returned the uitab, and setting a Window*Fcn on a
+        %   uitab errors: "Unrecognized property WindowButtonMotionFcn for
+        %   class Tab". Nothing had noticed because every caller passes no
+        %   motion or release callback, so this method is never wired up
+        %   (see SignalView.drawPointEvents and drawAreaEvents).
+        %
+        %   Caching would be wrong even at the right depth now that a plot
+        %   can be moved into a window of its own (see undockTab): the
+        %   figure an axes belongs to is not fixed for the life of the
+        %   object, so it is asked for at the moment of the drag.
+            set(ancestor(obj.PAxes, 'figure'),...
                 'WindowButtonMotionFcn',@obj.buttonmotion,...
                 'WindowButtonUpFcn',@obj.buttonup);
         end

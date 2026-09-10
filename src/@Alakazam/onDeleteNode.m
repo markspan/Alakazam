@@ -27,7 +27,9 @@ function onDeleteNode(this)
     % (see AlakazamPlotter.plotCurrent). If tiled, the tab's content
     % has been reparented into TileGrid (see retile) and tagged the
     % same way -- that copy must be deleted too, or it becomes an
-    % orphaned tile that outlives its own tree node.
+    % orphaned tile that outlives its own tree node. An undocked plot is
+    % the third place a tab's content can be (see undockTab), and its
+    % window outlives the tab in exactly the same way.
     descendantFiles = {file};
     if exist(childDir, "dir")
         found = dir(fullfile(childDir, '**', '*.mat'));
@@ -45,6 +47,10 @@ function onDeleteNode(this)
         end
         tab = findobj(this.PlotsTabGroup.Children, 'flat', 'Tag', descendantFiles{k});
         if ~isempty(tab)
+            undocked = undockedFigureOf(tab(1));
+            if ~isempty(undocked)
+                delete(undocked);
+            end
             delete(tab);
         end
     end

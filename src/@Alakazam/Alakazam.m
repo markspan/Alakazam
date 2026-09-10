@@ -94,7 +94,7 @@ classdef Alakazam < handle
         entries = collectDataQualityEntries(this)
         restoreDir = enterRepoRoot(this)
         loadAndPlotNode(this, eventData, sourceTree, action)
-        dispatchToActiveView(this, eventData, viewNames, methodName)
+        dispatchToActiveView(this, eventData, viewNames, methodName, tab)
         saveGrandAverage(this, spec, existingNode)
         retile(this)
         wrapper = tileWrapperFor(this, tab)
@@ -116,6 +116,8 @@ classdef Alakazam < handle
         onRenameNode(this)
         onDeleteNode(this)
         closeTab(this, tag)
+        undockTab(this, tag)
+        dockTab(this, tag)
         onDefineGrandAverage(this)
         hint = unrootedAveragesHint(this)
         onClusterStats(this)
@@ -157,8 +159,8 @@ classdef Alakazam < handle
         onPlotTabSelected(this, eventData)
         syncActiveDataset(this, file)
         tag = activeTileTag(this)
-        dispatchWheel(this, eventData)
-        dispatchKey(this, eventData)
+        dispatchWheel(this, eventData, tab)
+        dispatchKey(this, eventData, tab)
         beginTreeResize(this)
         dragTreeResize(this)
         endTreeResize(this)
@@ -246,6 +248,20 @@ classdef Alakazam < handle
         %   Deleting MainFigure cascades to every child (toolbar, tree,
         %   plots tabgroup and all its tabs) automatically -- no explicit
         %   per-tab cleanup loop needed.
+        %
+        %   AN UNDOCKED PLOT IS THE ONE EXCEPTION, because its window is
+        %   not a child of MainFigure at all (see undockTab). Left alone it
+        %   would outlive the app, showing a plot of data whose workspace
+        %   has gone, with a Dock button leading back to a deleted tab.
+            if ~isempty(this.PlotsTabGroup) && isvalid(this.PlotsTabGroup)
+                tabs = this.PlotsTabGroup.Children;
+                for k = 1:numel(tabs)
+                    undocked = undockedFigureOf(tabs(k));
+                    if ~isempty(undocked)
+                        delete(undocked);
+                    end
+                end
+            end
             if ~isempty(this.MainFigure) && isvalid(this.MainFigure)
                 delete(this.MainFigure);
             end
