@@ -1,4 +1,4 @@
-function [preview, styleFor] = photodiodePreview(signal, srate, onsets, events, pairs, diodeType)
+function [preview, styleFor] = photodiodePreview(signal, srate, onsets, events, pairs, suffix)
 %PHOTODIODEPREVIEW  The diode channel, its triggers and its measured lags,
 %   packaged as an EEG-shaped struct that SignalView can draw.
 %
@@ -42,7 +42,7 @@ function [preview, styleFor] = photodiodePreview(signal, srate, onsets, events, 
         onsets double = []
         events struct = struct('type', {}, 'latency', {})
         pairs struct = struct('onset', {}, 'event', {}, 'lagMs', {})
-        diodeType (1, :) char = 'diode'
+        suffix (1, :) char = 'PD'
     end
 
     signal = double(signal(:))';
@@ -57,15 +57,15 @@ function [preview, styleFor] = photodiodePreview(signal, srate, onsets, events, 
     preview.times   = (0:nSamples - 1) / srate;   % seconds, see above
     preview.xmin    = 0;
     preview.xmax    = max(0, (nSamples - 1) / srate);
-    preview.event   = buildEvents(onsets, events, pairs, diodeType, nSamples);
+    preview.event   = buildEvents(onsets, events, pairs, suffix, nSamples);
     preview.chanlocs = struct('labels', {'Photodiode'});
     preview.DataType = 'TIMEDOMAIN';
 
-    styleFor = @(label) styleOf(label, diodeType);
+    styleFor = @(label) styleOf(label, suffix);
 end
 
 % ======================================================================= %
-function events = buildEvents(onsets, sourceEvents, pairs, diodeType, nSamples)
+function events = buildEvents(onsets, sourceEvents, pairs, suffix, nSamples)
 %BUILDEVENTS  Triggers, onsets and lag bands, in one event array.
 %   Each is a separate entry rather than a mutated trigger: SignalView
 %   treats an event with a duration as a band and one without as a line
@@ -82,8 +82,12 @@ function events = buildEvents(onsets, sourceEvents, pairs, diodeType, nSamples)
             'latency', latency, 'duration', 0); %#ok<AGROW>
     end
 
+    % Named exactly as they will be if the analyst chooses to add them,
+    % so the preview shows the event table they are about to get rather
+    % than a placeholder.
+    onsetLabels = diodeEventLabels(onsets, sourceEvents, pairs, suffix);
     for k = 1:numel(onsets)
-        events(end + 1) = struct('type', diodeType, ...
+        events(end + 1) = struct('type', onsetLabels{k}, ...
             'latency', double(onsets(k)), 'duration', 0); %#ok<AGROW>
     end
 
@@ -112,8 +116,12 @@ function events = buildEvents(onsets, sourceEvents, pairs, diodeType, nSamples)
 end
 
 % ======================================================================= %
-function style = styleOf(label, diodeType)
+function style = styleOf(label, suffix)
 %STYLEOF  Red for what the detector found, and its label lifted clear.
+%
+%   MATCHED BY SUFFIX, not by equality: every diode mark now carries its own
+%   trigger's name ("s70PD", "s71PD", ...), so there is no one string to
+%   compare against.
 %
 %   THREE MARKS, THREE HEIGHTS, and none of them is decoration. A diode
 %   onset sits a display lag after its trigger, which is tens of
@@ -128,7 +136,7 @@ function style = styleOf(label, diodeType)
 %   Returning empty leaves SignalView on its own defaults, which is what
 %   the recording's own triggers get.
     style = [];
-    if strcmp(char(label), diodeType)
+    if endsWith(char(label), suffix)
         style = struct('Color', [0.75 0.25 0.24 0.75], ...
             'LabelVerticalAlignment', 'middle');
     end

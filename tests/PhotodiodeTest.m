@@ -252,13 +252,87 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
         %EVENTSMODEADDSTHEMINLATENCYORDER  EEGLAB assumes EEG.event is
         %   sorted by latency; appending at the end would break that.
             EEG = testCase.eegWithPatches();
-            opts = struct('Channel', 'PhotoDiode', 'Mode', 'events', 'EventType', 'diode');
+            opts = struct('Channel', 'PhotoDiode', 'Mode', 'events');
 
             out = Photodiode(EEG, opts);
 
             testCase.verifyGreaterThan(numel(out.event), numel(EEG.event));
             testCase.verifyEqual([out.event.latency], sort([out.event.latency]));
-            testCase.verifyTrue(any(strcmp({out.event.type}, 'diode')));
+        end
+
+        function anAddedEventIsNamedAfterItsOwnTrigger(testCase)
+        %ANADDEDEVENTISNAMEDAFTERITSOWNTRIGGER  One name for every diode
+        %   onset would say only that the screen changed, leaving every step
+        %   downstream to work out which change it was. Carrying the
+        %   trigger's own name means these can be binned and epoched exactly
+        %   like the triggers they stand in for.
+            EEG = testCase.eegWithPatches();   % every trigger is "S1"
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events'));
+
+            added = setdiff({out.event.type}, {EEG.event.type});
+            testCase.verifyEqual(sort(added), {'S1PD'}, ...
+                'A diode onset answering "S1" should be added as "S1PD".');
+        end
+
+        function theSuffixKeepsTheTwoInstantsApart(testCase)
+        %THESUFFIXKEEPSTHETWOINSTANTSAPART  The diode event and its trigger
+        %   are tens of milliseconds apart. Naming them identically would
+        %   leave nobody able to tell which timing they had epoched to.
+            EEG = testCase.eegWithPatches();
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events'));
+
+            triggers = strcmp({out.event.type}, 'S1');
+            diodes = strcmp({out.event.type}, 'S1PD');
+            testCase.assertGreaterThan(sum(diodes), 0);
+            testCase.verifyEqual(sum(triggers), numel(EEG.event), ...
+                'The original triggers should still be there, under their own name.');
+
+            % And the diode events really are the later of the two.
+            testCase.verifyGreaterThan(min([out.event(diodes).latency]), ...
+                min([out.event(triggers).latency]));
+        end
+
+        function theSuffixCanBeChanged(testCase)
+            EEG = testCase.eegWithPatches();
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events', ...
+                'EventSuffix', '_screen'));
+
+            testCase.verifyTrue(any(strcmp({out.event.type}, 'S1_screen')));
+        end
+
+        function anUnpairedOnsetGetsTheSuffixAlone(testCase)
+        %ANUNPAIREDONSETGETSTHESUFFIXALONE  A screen change nobody asked
+        %   for, or one whose trigger was lost. There is no name to borrow,
+        %   and it should stand out in the event table rather than be
+        %   dropped or given a name it has not earned.
+            EEG = testCase.eegWithPatches();
+            EEG.event = EEG.event(1);          % leave all but one onset unpaired
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events'));
+
+            testCase.verifyTrue(any(strcmp({out.event.type}, 'PD')), ...
+                'An onset with no trigger before it should be added as "PD".');
+            testCase.verifyTrue(any(strcmp({out.event.type}, 'S1PD')), ...
+                'The one that does have a trigger should still be named after it.');
+        end
+
+        function theLabelUsesTheSamePairingAsTheReport(testCase)
+        %THELABELUSESTHESAMEPAIRINGASTHEREPORT  Max lag is the analyst's to
+        %   set, and it decides which onsets count as answered. If the
+        %   labelling recomputed the pairing with its own defaults, the
+        %   event table and the measured lag would be describing different
+        %   sets of trials.
+            EEG = testCase.eegWithPatches();   % triggers sit 50 ms before
+
+            tight = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events', ...
+                'MaxLagMs', 10));              % too tight to pair anything
+
+            testCase.verifyFalse(any(strcmp({tight.event.type}, 'S1PD')), ...
+                'A max lag that pairs nothing should leave every onset unpaired.');
+            testCase.verifyTrue(any(strcmp({tight.event.type}, 'PD')));
         end
 
         function theChannelIsResolvedByLabel(testCase)

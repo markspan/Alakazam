@@ -72,7 +72,12 @@ end
 
 switch lower(mode)
     case 'events'
-        EEG.event = appendOnsets(input.event, onsets, options);
+        % The same pairing the measurement uses, so the names in the
+        % event table and the lag in the report cannot come from two
+        % different readings of the data (see diodeEventLabels).
+        pairing = diodeTriggerDelay(onsets, TransTools.FieldOr(input, 'event', []), ...
+            input.srate, options);
+        EEG.event = appendOnsets(input.event, onsets, options, pairing.pairs);
         EEG.DiodeReport = struct([]);
     otherwise
         EEG.DiodeReport = diodeTriggerDelay(onsets, TransTools.FieldOr(input, 'event', []), input.srate, options);
@@ -124,19 +129,23 @@ function chan = resolveChannel(EEG, wanted)
 end
 
 
-function events = appendOnsets(events, onsets, options)
+function events = appendOnsets(events, onsets, options, pairs)
 %APPENDONSETS  Add the diode onsets to the event table, then re-sort it:
 %   EEGLAB assumes EEG.event is ordered by latency, and inserting at the end
 %   would break that for everything downstream.
-    label = 'diode';
-    if isfield(options, 'EventType') && ~isempty(options.EventType)
-        label = char(string(options.EventType));
+%
+%   Each onset is named after the trigger it answers, with a suffix, so an
+%   onset paired with "s70" is added as "s70PD" (see diodeEventLabels).
+    suffix = 'PD';
+    if isfield(options, 'EventSuffix') && ~isempty(options.EventSuffix)
+        suffix = char(string(options.EventSuffix));
     end
     if isempty(onsets)
         return;
     end
 
-    added = struct('type', label, 'latency', num2cell(double(onsets)));
+    labels = diodeEventLabels(onsets, events, pairs, suffix);
+    added = struct('type', labels, 'latency', num2cell(double(onsets)));
     if isempty(events)
         events = added;
     else
