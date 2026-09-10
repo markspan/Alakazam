@@ -65,7 +65,10 @@ current publication standards, Keil et al. (2014) (see
   side-by-side comparison. Any one of them can also be given a window of
   its own (right-click its tab, then **Undock**), which is what a second
   monitor is for; its tab stays where it is and offers a **Dock** button,
-  and closing the window puts the plot back.
+  and closing the window puts the plot back. The same right-click menu
+  closes a plot, or every plot but that one (**Close others**). Closing a
+  plot discards nothing: the dataset and its tree node stay, so selecting
+  the node again reopens it.
 - **A transformation library covering the standard EEG/ERP pipeline**:
   filtering, re-referencing, channel/data selection, event-to-bin
   assignment with a small purpose-built language, baseline correction,

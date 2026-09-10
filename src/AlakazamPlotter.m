@@ -97,6 +97,17 @@ classdef AlakazamPlotter < handle
             tabMenu = uicontextmenu(app.MainFigure);
             uimenu(tabMenu, "Text", "Undock", "MenuSelectedFcn", @(~, ~) app.undockTab(eeg.File));
             uimenu(tabMenu, "Text", "Close", "MenuSelectedFcn", @(~, ~) app.closeTab(eeg.File));
+            closeOthers = uimenu(tabMenu, "Text", "Close others", ...
+                "MenuSelectedFcn", @(~, ~) app.closeOtherTabs(eeg.File));
+
+            % "Close others" is greyed out when this is the only plot open,
+            % rather than offered and doing nothing. The count is read when
+            % the menu opens, not now: tabs come and go for the whole life
+            % of this one, so anything decided here would be wrong within
+            % a click or two.
+            tabMenu.ContextMenuOpeningFcn = @(~, ~) set(closeOthers, "Enable", ...
+                matlab.lang.OnOffSwitchState(numel(app.PlotsTabGroup.Children) > 1));
+
             newTab.ContextMenu = tabMenu;
 
             % Store the dataset on the tab for downstream access.

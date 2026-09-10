@@ -116,6 +116,7 @@ classdef Alakazam < handle
         onRenameNode(this)
         onDeleteNode(this)
         closeTab(this, tag)
+        closeOtherTabs(this, tag)
         undockTab(this, tag)
         dockTab(this, tag)
         onDefineGrandAverage(this)
