@@ -1,4 +1,4 @@
-classdef SourceClusterReportTest < matlab.unittest.TestCase
+classdef (TestTags = {'Slow'}) SourceClusterReportTest < matlab.unittest.TestCase
 %SOURCECLUSTERREPORTTEST  The source cluster report: its figures, its
 %   descriptions, and the claims it is careful not to make.
 %
@@ -13,6 +13,11 @@ classdef SourceClusterReportTest < matlab.unittest.TestCase
 %   tell you where the effect is" is not decoration, it is the correct
 %   interpretation of the statistic, and a report that dropped it would be
 %   misleading rather than merely terser.
+%
+%   TAGGED SLOW WHOLE, at 126 seconds the heaviest class in the suite by
+%   a factor of three. It already tagged one block of cases; measuring
+%   showed the rest cost as much again, since nearly every case here
+%   renders a report. Run it with runAlakazamTests("slow").
 %
 %   Run with: runtests('tests/SourceClusterReportTest.m').
 

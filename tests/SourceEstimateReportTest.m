@@ -1,4 +1,4 @@
-classdef SourceEstimateReportTest < matlab.unittest.TestCase
+classdef (TestTags = {'Slow'}) SourceEstimateReportTest < matlab.unittest.TestCase
 %SOURCEESTIMATEREPORTTEST  The "Source Estimate (Exploratory)" report
 %   section: ReportSections.sourceEstimateSection's own pure-markdown
 %   text, generateQuartoReport's new optional third argument, and
@@ -18,6 +18,9 @@ classdef SourceEstimateReportTest < matlab.unittest.TestCase
 %   the way SourceInverseTest's forwardFixture is for InverseSolution
 %   alone, since the point of this one test is to exercise the real
 %   template end to end at least once.
+%
+%   TAGGED SLOW WHOLE, 36 seconds, almost all of it one case that renders
+%   the real pipeline end to end. Run it with runAlakazamTests("slow").
 %
 %   Run with: runtests('tests/SourceEstimateReportTest.m').
 

@@ -1,4 +1,4 @@
-classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.TestCase
+classdef (TestTags = {'KnownGap', 'Slow'}) QuartoReportKnownGapTest < matlab.unittest.TestCase
 %QUARTOREPORTKNOWNGAPTEST  The expected-red file: a defect register that
 %   cannot go stale, because it runs against the code.
 %
@@ -120,6 +120,10 @@ classdef (TestTags = {'KnownGap'}) QuartoReportKnownGapTest < matlab.unittest.Te
 %   Every fixture comes from tests/ReportFixtures.m -- deliberately, so a
 %   fix can be checked against the very same fixtures the green dispatch,
 %   text-contract, CSV-contract, syntax and render files use.
+%
+%   ALSO TAGGED SLOW, 23 seconds: every case here renders. KnownGap says
+%   what these tests are for, Slow says what they cost, and the two are
+%   independent. Run it with runAlakazamTests("slow").
 %
 %   Run with: runtests('tests/QuartoReportKnownGapTest.m').
 

@@ -1,4 +1,4 @@
-classdef ForwardModelCacheTest < matlab.unittest.TestCase
+classdef (TestTags = {'Slow'}) ForwardModelCacheTest < matlab.unittest.TestCase
 %FORWARDMODELCACHETEST  The forward-model cache must be fast AND be the
 %   same model.
 %
@@ -13,6 +13,11 @@ classdef ForwardModelCacheTest < matlab.unittest.TestCase
 %   order of magnitude faster, not some particular number of milliseconds),
 %   because a timing test that pins an absolute figure fails on a slower
 %   machine for no reason and teaches everyone to ignore it.
+%
+%   TAGGED SLOW WHOLE, 22 seconds: proving a cache is faster than the
+%   thing it caches means computing that thing at least once, and here
+%   that is a FieldTrip leadfield over thousands of dipoles. Run it with
+%   runAlakazamTests("slow").
 %
 %   Run with: runtests('tests/ForwardModelCacheTest.m').
 %

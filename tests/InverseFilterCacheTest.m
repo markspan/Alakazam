@@ -1,4 +1,4 @@
-classdef InverseFilterCacheTest < matlab.unittest.TestCase
+classdef (TestTags = {'Slow'}) InverseFilterCacheTest < matlab.unittest.TestCase
 %INVERSEFILTERCACHETEST  The spatial-filter memo in TransTools.InverseSolution.
 %
 %   THE PREMISE, WHICH IS NOT OBVIOUS AND WAS MEASURED. All three
@@ -13,6 +13,10 @@ classdef InverseFilterCacheTest < matlab.unittest.TestCase
 %   differ. A wrong filter does not make an analysis slow, it inverts one
 %   montage's data through another's forward model and reports plausible
 %   numbers, so each dimension of the key gets its own test.
+%
+%   TAGGED SLOW WHOLE, 13 seconds, for the same reason as
+%   ForwardModelCacheTest: a memo is only shown to help by paying the
+%   unmemoised cost once. Run it with runAlakazamTests("slow").
 %
 %   Run with: runtests('tests/InverseFilterCacheTest.m').
 %
