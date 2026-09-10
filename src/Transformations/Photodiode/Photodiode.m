@@ -78,7 +78,14 @@ switch lower(mode)
         pairing = diodeTriggerDelay(onsets, TransTools.FieldOr(input, 'event', []), ...
             input.srate, options);
         EEG.event = appendOnsets(input.event, onsets, options, pairing.pairs);
-        EEG.DiodeReport = struct([]);
+
+        % KEPT, NOT DISCARDED. This used to be emptied on the grounds that
+        % events mode produces events and measure mode produces a number,
+        % but the pairing is computed here either way and throwing it away
+        % makes the result unexaminable: asked later why a dataset has 30
+        % diode events for 31 triggers, the node itself could not say, and
+        % the lags had to be reconstructed from the event table.
+        EEG.DiodeReport = pairing;
     otherwise
         EEG.DiodeReport = diodeTriggerDelay(onsets, TransTools.FieldOr(input, 'event', []), input.srate, options);
         % Said out loud rather than left in a field: the measurement IS the

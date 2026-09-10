@@ -79,20 +79,65 @@ function options = PhotodiodeDialog(EEG)
     triggersField.Layout.Column = [2 8];
 
     % ---- plot + verdict ----------------------------------------------------
-    mid = uigridlayout(outer, [2 1], 'RowHeight', {'1x', 'fit'}, ...
-        'Padding', [0 0 0 0], 'RowSpacing', 6);
+    mid = uigridlayout(outer, [3 2], 'RowHeight', {'1x', 26, 'fit'}, ...
+        'ColumnWidth', {'1x', 330}, 'Padding', [0 0 0 0], ...
+        'RowSpacing', 6, 'ColumnSpacing', 8);
     mid.Layout.Row = 2;
     % A holder rather than the axes itself: the view inside it is rebuilt
     % when the channel changes, and rebuilding a child of a two-row grid
     % would land it in the wrong row.
     plotHolder = uigridlayout(mid, [1 1], 'Padding', [0 0 0 0]);
     plotHolder.Layout.Row = 1;
+    plotHolder.Layout.Column = 1;
+
+    % ONE ROW PER TRIGGER CODE, because they do not all measure the same
+    % thing. On a real recording s50 and s51 sat 21.5 ms after the screen
+    % change while s102 to s111 sat at 2.0 ms: two families of marker sent
+    % at different points in the flip cycle, pooled into one median that
+    % described neither. The spread within a type matters as much as its
+    % offset, so the IQR and the range are here beside it: a type whose
+    % onsets all land within a millisecond is timed reliably whatever its
+    % offset, and one spread over a frame is not.
+    byTypeTable = uitable(mid, ...
+        'ColumnName', {'Trigger', 'n', 'median', 'IQR', 'min', 'max'}, ...
+        'ColumnWidth', {70, 40, 55, 50, 50, 50}, ...
+        'ColumnFormat', {'char', 'numeric', 'bank', 'bank', 'bank', 'bank'}, ...
+        'RowName', {}, 'Data', cell(0, 6));
+    byTypeTable.Layout.Row = [1 3];
+    byTypeTable.Layout.Column = 2;
     view = [];
     viewChannel = -1;
     thresholdLine = [];
+    ranking = [];        % pair indices, most deviant first
+    rankIndex = 0;
+    lastReport = [];
+    lastEvents = struct('type', {}, 'latency', {});
+
+    % WORST FIRST, THEN STEP DOWN. A display lag is only interesting when
+    % it is not what the others are: the median is the number you correct
+    % by, and the trials worth looking at are the ones furthest from it.
+    % Ranking by distance from the median and starting at the top puts the
+    % dropped frame, or the trigger that fired at the wrong moment, on
+    % screen first rather than leaving it to be found by scrolling through
+    % twelve hundred of them.
+    navRow = uigridlayout(mid, [1 4], 'ColumnWidth', {96, 32, 32, '1x'}, ...
+        'Padding', [0 0 0 0], 'ColumnSpacing', 4);
+    navRow.Layout.Row = 2;
+    navRow.Layout.Column = 1;
+    worstBtn = uibutton(navRow, 'Text', 'Worst lag', ...
+        'Tooltip', 'Go to the trigger whose display lag is furthest from the median', ...
+        'ButtonPushedFcn', @(~,~) gotoRank(1));
+    prevBtn = uibutton(navRow, 'Text', '-', ...
+        'Tooltip', 'Back towards the worst', ...
+        'ButtonPushedFcn', @(~,~) stepRank(-1));
+    nextBtn = uibutton(navRow, 'Text', '+', ...
+        'Tooltip', 'On to the next most deviant', ...
+        'ButtonPushedFcn', @(~,~) stepRank(+1));
+    navLabel = uilabel(navRow, 'Text', '', 'FontSize', 12);
 
     verdict = uilabel(mid, 'Text', '', 'WordWrap', 'on', 'FontSize', 13);
-    verdict.Layout.Row = 2;
+    verdict.Layout.Row = 3;
+    verdict.Layout.Column = 1;
 
     % ---- buttons ------------------------------------------------------------
     buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, ...
@@ -128,9 +173,15 @@ function options = PhotodiodeDialog(EEG)
             sourceEvents, report.pairs, typeField.Value);
         showPreview(preview, styleFor, chan, info);
 
+        lastReport = report;
+        lastEvents = sourceEvents;
+        rankPairs(report);
+        fillByType(report);
+
         if isempty(onsets)
             verdict.Text = info.reason;
             verdict.FontColor = [0.69 0.24 0.22];
+            byTypeTable.Data = cell(0, 6);
             return;
         end
         verdict.FontColor = [0.18 0.42 0.28];
@@ -179,6 +230,86 @@ function options = PhotodiodeDialog(EEG)
             thresholdLine = yline(view.Axes, info.threshold, '--', ...
                 'Color', [0.29 0.44 0.71], 'LineWidth', 1);
         end
+    end
+
+    function fillByType(report)
+    %FILLBYTYPE  The per-trigger breakdown, worst jitter first.
+    %   Sorted by IQR rather than by count, because the row worth reading is
+    %   the one whose onsets do not agree with each other: an offset can be
+    %   corrected, scatter cannot.
+        if isempty(report.byType)
+            byTypeTable.Data = cell(0, 6);
+            return;
+        end
+        rows = report.byType;
+        [~, order] = sort([rows.iqrMs], 'descend', 'MissingPlacement', 'last');
+        rows = rows(order);
+
+        data = cell(numel(rows), 6);
+        for i = 1:numel(rows)
+            data(i, :) = {rows(i).type, rows(i).n, rows(i).medianMs, ...
+                rows(i).iqrMs, rows(i).minMs, rows(i).maxMs};
+        end
+        byTypeTable.Data = data;
+    end
+
+    function rankPairs(report)
+    %RANKPAIRS  Order the pairs by how far each lag is from the median.
+    %   Recomputed on every refresh, because changing a setting changes
+    %   which onsets exist and therefore which of them is the odd one.
+        ranking = [];
+        rankIndex = 0;
+        navLabel.Text = '';
+        enable = 'off';
+        if ~isempty(report.pairs) && isfinite(report.medianMs)
+            deviation = abs([report.pairs.lagMs] - report.medianMs);
+            [~, ranking] = sort(deviation, 'descend');
+            enable = 'on';
+        end
+        worstBtn.Enable = enable;
+        prevBtn.Enable = enable;
+        nextBtn.Enable = enable;
+    end
+
+    function stepRank(delta)
+        if isempty(ranking)
+            return;
+        end
+        if rankIndex == 0
+            gotoRank(1);
+            return;
+        end
+        gotoRank(rankIndex + delta);
+    end
+
+    function gotoRank(k)
+    %GOTORANK  Show the K-th most deviant pair, and say which it is.
+        if isempty(ranking)
+            return;
+        end
+        k = min(numel(ranking), max(1, k));
+        rankIndex = k;
+        pair = lastReport.pairs(ranking(k));
+
+        triggerName = 'unknown';
+        if pair.event >= 1 && pair.event <= numel(lastEvents)
+            triggerName = char(string(lastEvents(pair.event).type));
+        end
+        seconds = (pair.onset - 1) / EEG.srate;
+
+        % Two seconds is a CEILING, not a zoom setting: wide enough to see
+        % the trigger, the edge and the baseline before it, and applied only
+        % when the window is currently wider than that. Anyone stepping
+        % through markers has usually just set the magnification they want
+        % to compare them at, and resetting it on every step would change
+        % the size of the thing they are comparing.
+        if ~isempty(view) && isvalid(view)
+            view.centreOnTime(seconds, 2);
+        end
+
+        navLabel.Text = sprintf('%d of %d: %s at %.1f s, lag %.1f ms (median %.1f, off by %+.1f)', ...
+            k, numel(ranking), triggerName, seconds, pair.lagMs, ...
+            lastReport.medianMs, pair.lagMs - lastReport.medianMs);
     end
 
     function note = pairedTypesNote(report, sourceEvents)

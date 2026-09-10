@@ -343,6 +343,171 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
                 'The marker should no longer be able to take one.');
         end
 
+        function aTriggerSentAtTheFlipStillOwnsItsOnset(testCase)
+        %ATRIGGERSENTATTHEFLIPSTILLOWNSITSONSET  From a real recording. One
+        %   lab's stimulus markers are sent AT the flip rather than before
+        %   it: median lag 2.0 ms, minimum 0.0. At that distance a single
+        %   sample of movement in where the edge is called puts the onset in
+        %   front of its own trigger, and a strict "trigger must come first"
+        %   rule then drops the pair. The symptom is a count one short, 30
+        %   diode events for 31 triggers, that comes and goes as smoothing
+        %   or threshold changes.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+
+            % Every trigger one sample AFTER the screen change.
+            events = struct('type', repmat({'s106'}, 1, numel(truth)), ...
+                'latency', num2cell(double(truth) + 1));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            testCase.verifyEqual(report.n, numel(truth), ...
+                'A trigger a sample late should still own the onset it caused.');
+            testCase.verifyLessThan(report.medianMs, 0, ...
+                'And the lag it reports should be the small negative one it is.');
+        end
+
+        function aTriggerWellAfterAnOnsetDoesNotOwnIt(testCase)
+        %ATRIGGERWELLAFTERANONSETDOESNOTOWNIT  The tolerance is for jitter,
+        %   not for pairing an onset with whatever comes next. A trigger
+        %   fifty milliseconds after a screen change did not cause it.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+            events = struct('type', repmat({'s106'}, 1, numel(truth)), ...
+                'latency', num2cell(double(truth) + 50));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            testCase.verifyEqual(report.n, 0, ...
+                'A trigger 50 ms after the screen change should own nothing.');
+        end
+
+        function aRealLagStillPairsTheOldWay(testCase)
+        %AREALLAGSTILLPAIRSTHEOLDWAY  The strict rule is tried first and
+        %   wins wherever it applies, so a genuine display lag is unchanged
+        %   by the tolerance existing.
+            EEG = testCase.eegWithPatches();   % triggers 50 ms before
+
+            out = testCase.verifyWarning(@() Photodiode(EEG, ...
+                struct('Channel', 'PhotoDiode', 'Mode', 'measure')), ...
+                'Alakazam:Photodiode:delay');
+
+            testCase.verifyEqual(out.DiodeReport.medianMs, 50, 'AbsTol', 2);
+        end
+
+        function eventsModeKeepsItsReport(testCase)
+        %EVENTSMODEKEEPSITSREPORT  It used to be emptied, which made the
+        %   result unexaminable: asked later why a dataset has 30 diode
+        %   events for 31 triggers, the node could not say, and the lags had
+        %   to be reconstructed from the event table by hand.
+            EEG = testCase.eegWithPatches();
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events'));
+
+            testCase.assertTrue(isfield(out, 'DiodeReport'));
+            testCase.verifyNotEmpty(out.DiodeReport, ...
+                'Events mode computes the pairing; it should keep it.');
+            testCase.verifyGreaterThan(out.DiodeReport.n, 0);
+            testCase.verifyNotEmpty(out.DiodeReport.pairs, ...
+                'The pairs are what "which trigger lost its onset" is answered from.');
+        end
+
+        function theReportBreaksTheLagDownByTriggerType(testCase)
+        %THEREPORTBREAKSTHELAGDOWNBYTRIGGERTYPE  One row per code, because
+        %   they do not all measure the same thing.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+
+            % Alternate codes, both sent 50 ms before their patch.
+            codes = repmat({'s50', 's51'}, 1, ceil(numel(truth)/2));
+            events = struct('type', codes(1:numel(truth)), ...
+                'latency', num2cell(double(truth) - 50));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            testCase.assertNumElements(report.byType, 2);
+            testCase.verifyEqual(sort({report.byType.type}), {'s50', 's51'});
+            testCase.verifyEqual(sum([report.byType.n]), report.n, ...
+                'Every pair should be counted under exactly one type.');
+            for k = 1:numel(report.byType)
+                testCase.verifyEqual(report.byType(k).medianMs, 50, 'AbsTol', 3);
+            end
+        end
+
+        function oneShiftIsAdvisedOnlyWhenTheTriggersAgree(testCase)
+        %ONESHIFTISADVISEDONLYWHENTHETRIGGERSAGREE  The advice used to be
+        %   unconditional: shift these triggers by the median. On a real
+        %   recording two families of marker sat 21.5 ms and 2.0 ms from the
+        %   screen change, and following that advice would have applied a
+        %   twenty millisecond monitor correction to markers that never had
+        %   one. Here they agree, so the single shift is still offered.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+            codes = repmat({'s50', 's51'}, 1, ceil(numel(truth)/2));
+            events = struct('type', codes(1:numel(truth)), ...
+                'latency', num2cell(double(truth) - 50));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            testCase.verifySubstring(report.summary, 'shift these triggers');
+            testCase.verifyEmpty(strfind(report.summary, 'do NOT share one lag')); %#ok<STREMP>
+        end
+
+        function twoFamiliesOfTriggerAreCalledOut(testCase)
+        %TWOFAMILIESOFTRIGGERARECALLEDOUT  The case that prompted this. One
+        %   type sent 50 ms before its patch, another sent AT it, in the
+        %   same recording. Pooling them gives a median that describes
+        %   neither, and the summary has to say so rather than offer it.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+
+            early = true(1, numel(truth));
+            early(2:2:end) = false;
+            codes = cell(1, numel(truth));
+            lats = zeros(1, numel(truth));
+            for k = 1:numel(truth)
+                if early(k)
+                    codes{k} = 's50';  lats(k) = truth(k) - 50;   % a real display lag
+                else
+                    codes{k} = 's106'; lats(k) = truth(k);        % sent at the flip
+                end
+            end
+            events = struct('type', codes, 'latency', num2cell(double(lats)));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            testCase.verifySubstring(report.summary, 'do NOT share one lag');
+            testCase.verifySubstring(report.summary, 's50');
+            testCase.verifySubstring(report.summary, 's106');
+            testCase.verifyEmpty(strfind(report.summary, 'shift these triggers'), ...
+                'It must not offer one shift for triggers that disagree.'); %#ok<STREMP>
+        end
+
+        function theSpreadWithinATypeIsReportedToo(testCase)
+        %THESPREADWITHINATYPEISREPORTEDTOO  An offset can be corrected;
+        %   scatter cannot. A type whose onsets disagree with each other is
+        %   the row worth reading, so its IQR and range are carried.
+            srate = testCase.Srate;
+            [signal, truth] = testCase.withPatches(30, 20000, 100);
+            events = struct('type', repmat({'s50'}, 1, numel(truth)), ...
+                'latency', num2cell(double(truth) - 50));
+
+            onsets = detectDiodeOnsets(signal, srate);
+            report = diodeTriggerDelay(onsets, events, srate, struct());
+
+            row = report.byType(1);
+            for f = {'iqrMs', 'minMs', 'maxMs'}
+                testCase.verifyTrue(isfield(row, f{1}));
+                testCase.verifyTrue(isfinite(row.(f{1})));
+            end
+            testCase.verifyGreaterThanOrEqual(row.maxMs, row.minMs);
+        end
+
         function anUnpairedOnsetGetsTheSuffixAlone(testCase)
         %ANUNPAIREDONSETGETSTHESUFFIXALONE  A screen change nobody asked
         %   for, or one whose trigger was lost. There is no name to borrow,

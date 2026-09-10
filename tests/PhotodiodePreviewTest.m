@@ -181,6 +181,123 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
                 'The band should be as wide as the lag, in the axis''s own unit.');
         end
 
+        function jumpingToAMarkerKeepsTheZoom(testCase)
+        %JUMPINGTOAMARKERKEEPSTHEZOOM  Reported from use: stepping between
+        %   markers reset the magnification every time, so the thing being
+        %   compared changed size underneath the reader. The span passed to
+        %   centreOnTime is a ceiling, applied only when the window is wider
+        %   than it, not a zoom setting applied on every jump.
+            view = testCase.viewOnWholeRecording();
+
+            % Zoom in past the ceiling, the way a reader would.
+            view.ZoomSlider.Value = 0.8;
+            view.redraw();
+            before = view.ZoomSlider.Value;
+
+            view.centreOnTime(4, 2);
+            view.centreOnTime(6, 2);
+
+            testCase.verifyEqual(view.ZoomSlider.Value, before, ...
+                'Stepping between markers must not change the zoom.');
+        end
+
+        function theFirstJumpNarrowsAViewShowingEverything(testCase)
+        %THEFIRSTJUMPNARROWSAVIEWSHOWINGEVERYTHING  The other half. Landing
+        %   on one instant of a long recording at full zoom shows a vertical
+        %   line among a forest of them, so the ceiling does apply when the
+        %   window is wider than it.
+            view = testCase.viewOnWholeRecording();
+            before = view.ZoomSlider.Value;
+
+            view.centreOnTime(4, 2);
+
+            testCase.verifyGreaterThan(view.ZoomSlider.Value, before, ...
+                'A view showing the whole recording should be narrowed to find the marker.');
+        end
+
+        function jumpingPutsTheMarkerInView(testCase)
+            view = testCase.viewOnWholeRecording();
+
+            view.centreOnTime(6, 2);
+            drawnow;
+
+            limits = view.Axes.XLim;
+            testCase.verifyGreaterThanOrEqual(6, limits(1));
+            testCase.verifyLessThanOrEqual(6, limits(2));
+        end
+
+        function steppingMovesThreeQuartersOfAWindow(testCase)
+        %STEPPINGMOVESTHREEQUARTERSOFAWINDOW  The step is a fraction of what
+        %   is on screen, not a fixed number of seconds, so the same button
+        %   pages through a recording when zoomed out and nudges by
+        %   milliseconds when zoomed in.
+            view = testCase.viewOnWholeRecording();
+            view.ZoomSlider.Value = 0.6;    % some way in
+            view.redraw();
+            drawnow;
+
+            before = view.Axes.XLim;
+            view.stepTime(+0.75);
+            drawnow;
+            after = view.Axes.XLim;
+
+            width = before(2) - before(1);
+            moved = after(1) - before(1);
+
+            testCase.verifyGreaterThan(moved, 0, 'Forward should move forward.');
+            testCase.verifyEqual(moved, 0.75 * width, 'RelTol', 0.1, ...
+                'The step should be three quarters of the visible window.');
+        end
+
+        function aQuarterOfTheViewSurvivesAStep(testCase)
+        %AQUARTEROFTHEVIEWSURVIVESASTEP  Why three quarters and not a whole
+        %   one: stepping by a full window leaves nothing in common between
+        %   one view and the next, which is how a reader loses their place
+        %   in a signal that looks alike everywhere.
+            view = testCase.viewOnWholeRecording();
+            view.ZoomSlider.Value = 0.6;
+            view.redraw();
+            drawnow;
+
+            before = view.Axes.XLim;
+            view.stepTime(+0.75);
+            drawnow;
+            after = view.Axes.XLim;
+
+            overlap = min(before(2), after(2)) - max(before(1), after(1));
+            testCase.verifyGreaterThan(overlap, 0, ...
+                'Consecutive views should still share some signal.');
+        end
+
+        function steppingStopsAtTheEnds(testCase)
+        %STEPPINGSTOPSATTHEENDS  Pressing at the start does nothing, rather
+        %   than wrapping round to the far end of the recording.
+            view = testCase.viewOnWholeRecording();
+            view.ZoomSlider.Value = 0.6;
+            view.redraw();
+            view.ScrollSlider.Value = 0;
+            view.redraw();
+
+            view.stepTime(-0.75);
+
+            testCase.verifyEqual(view.ScrollSlider.Value, 0);
+
+            view.ScrollSlider.Value = 1;
+            view.redraw();
+            view.stepTime(+0.75);
+            testCase.verifyEqual(view.ScrollSlider.Value, 1);
+        end
+
+        function steppingDoesNotChangeTheZoom(testCase)
+            view = testCase.viewOnWholeRecording();
+            view.ZoomSlider.Value = 0.6;
+            view.redraw();
+
+            view.stepTime(+0.75);
+
+            testCase.verifyEqual(view.ZoomSlider.Value, 0.6);
+        end
+
         function signalViewColoursTheOnsetsDifferently(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
             [preview, styleFor] = photodiodePreview(signal, testCase.Srate, ...
@@ -207,6 +324,17 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function view = viewOnWholeRecording(testCase)
+        %VIEWONWHOLERECORDING  A ten second preview opened at full zoom,
+        %   which is how the Photodiode dialog starts.
+            [signal, onsets, events, pairs] = testCase.scenario();
+            preview = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'PD');
+
+            fig = uifigure('Visible', 'off', 'Position', [100 100 900 500]);
+            testCase.addTeardown(@() delete(fig));
+            view = SignalView(fig, preview.times, preview, 'FitWholeRecording', true);
+        end
+
         function [signal, onsets, events, pairs] = scenario(testCase)
         %SCENARIO  Four trials, each a trigger followed 20 ms later by a
         %   patch, which is the shape the whole transformation is about.

@@ -72,6 +72,7 @@ classdef SignalView < AlakazamView
         MaxVisibleChannels = 40 % above this many channels a vertical scrollbar
                                 % pages through them, showing this many at a time
         ChannelSliderPx = 18    % width of that scrollbar's column, pixels
+        StepButtonPx = 16       % width of the pan step buttons, pixels
     end
 
     methods
@@ -132,6 +133,65 @@ classdef SignalView < AlakazamView
             % width is seen) is deferred to this second pass, after drawnow
             % lets layout settle.
             drawnow;
+            this.redraw();
+        end
+
+        function stepTime(this, fraction)
+        %STEPTIME  Move the window along by FRACTION of its own width.
+        %   Negative goes back. Clamped at both ends, so pressing at the
+        %   start of the recording does nothing rather than wrapping.
+        %
+        %   The arithmetic is the inverse of the window calculation in
+        %   redraw: the scroll value runs 0 to 1 across (N - numPoints)
+        %   samples, so moving by fraction*numPoints samples is that many
+        %   over the same denominator.
+            numPoints = max(2, round(this.NumSamples * exp(this.ZoomDecay * this.ZoomSlider.Value)));
+            denominator = max(1, this.NumSamples - numPoints);
+
+            wanted = this.ScrollSlider.Value + fraction * numPoints / denominator;
+            this.ScrollSlider.Value = min(1, max(0, wanted));
+
+            this.redraw();
+        end
+
+        function centreOnTime(this, t, maxSpanSeconds)
+        %CENTREONTIME  Scroll so T sits in the middle, keeping the zoom.
+        %   T is in the same unit as the time vector the view was given.
+        %
+        %   THE ZOOM IS THE READER'S, and jumping somewhere is not a reason
+        %   to take it. Someone stepping through markers has usually just
+        %   set the magnification they want to compare them at, and having
+        %   it reset on every step makes the comparison impossible: the
+        %   thing they were looking at changes size underneath them.
+        %
+        %   MAXSPANSECONDS, when given, is a ceiling and not a setting. It
+        %   narrows the window only if it is currently WIDER than that,
+        %   which is what makes the first jump useful: landing on one
+        %   instant of an hour-long recording at full zoom shows a vertical
+        %   line in a forest of them. Once the window is inside the ceiling
+        %   this does nothing, so every later step keeps whatever the reader
+        %   chose.
+            if nargin >= 3 && isfinite(maxSpanSeconds) && maxSpanSeconds > 0
+                current = max(2, round(this.NumSamples * exp(this.ZoomDecay * this.ZoomSlider.Value)));
+                if current * this.Period > maxSpanSeconds
+                    wanted = max(2, round(maxSpanSeconds / this.Period));
+                    zoomValue = log(wanted / this.NumSamples) / this.ZoomDecay;
+                    this.ZoomSlider.Value = min(1, max(0, zoomValue));
+                    this.MmPerSecDone = true;   % do not let the initial zoom undo this
+                end
+            end
+
+            numPoints = max(2, round(this.NumSamples * exp(this.ZoomDecay * this.ZoomSlider.Value)));
+
+            % The time vector is uniform, so the index is arithmetic rather
+            % than a search over a million samples.
+            target = round((t - this.Time(1)) / this.Period) + 1;
+            target = min(this.NumSamples, max(1, target));
+
+            startIndex = target - floor(numPoints / 2);
+            denominator = max(1, this.NumSamples - numPoints);
+            this.ScrollSlider.Value = min(1, max(0, (startIndex - 1) / denominator));
+
             this.redraw();
         end
 
@@ -304,7 +364,7 @@ classdef SignalView < AlakazamView
             this.Axes.YAxis.Exponent = 0;
 
             [this.ZoomLabel, this.ZoomSlider]   = this.makeSliderRow(2, 0, 1, 0.5, "Zoom the time axis");
-            [this.PanLabel, this.ScrollSlider]  = this.makeSliderRow(3, 0, 1, 0,   "Pan the signal in time");
+            [this.PanLabel, this.ScrollSlider]  = this.makePanRow(3);
             [this.MagLabel, this.ScaleSlider]   = this.makeSliderRow(4, 0.001, 100, 1, "Magnify the y-axis");
             this.ZoomLabel.Text = "zoom";
             this.PanLabel.Text  = "pan";
@@ -313,11 +373,64 @@ classdef SignalView < AlakazamView
             this.applyAxisLabels(eeg);
         end
 
+        function [lbl, s] = makePanRow(this, row)
+        %MAKEPANROW  The pan slider, with a step button either side.
+        %
+        %   A SLIDER ALONE CANNOT BE AIMED. Its whole travel is the whole
+        %   recording, so on an hour of data one pixel of slider is several
+        %   seconds and there is no way to nudge it: you overshoot, come
+        %   back, overshoot again. The buttons give it the one thing it
+        %   lacks, a repeatable step.
+        %
+        %   THE STEP IS A FRACTION OF THE VISIBLE WINDOW, not a fixed
+        %   number of seconds, and that is what makes one pair of buttons
+        %   enough for both jobs. Zoomed out they page through the
+        %   recording; zoomed into a couple of hundred milliseconds the same
+        %   press moves a couple of hundred milliseconds. Precision comes
+        %   from the zoom the reader has already set, so there is no need
+        %   for a coarse pair and a fine pair.
+        %
+        %   THREE QUARTERS RATHER THAN A WHOLE ONE, so a quarter of what was
+        %   on screen is still there afterwards. Stepping by a full window
+        %   leaves nothing in common between one view and the next, which is
+        %   how you lose your place in a signal that looks alike everywhere.
+            row2 = uigridlayout(this.Grid, [1 4], ...
+                "ColumnWidth", {this.LabelWidthPx, this.StepButtonPx, '1x', this.StepButtonPx}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 2);
+            row2.Layout.Row = row;
+            row2.Layout.Column = [1, 2];
+
+            lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);
+            lbl.Layout.Column = 1;
+
+            back = uibutton(row2, "Text", "<", "FontSize", 8, ...
+                "Tooltip", "Back three quarters of a window", ...
+                "ButtonPushedFcn", @(~, ~) this.stepTime(-0.75));
+            back.Layout.Column = 2;
+
+            s = uislider(row2, "Limits", [0, 1], "Value", 0, ...
+                "MajorTicks", [], "MinorTicks", [], ...
+                "Tooltip", "Pan the signal in time", ...
+                "ValueChangingFcn", @(src, e) this.onSliderChanging(src, e), ...
+                "ValueChangedFcn", @(~, ~) this.redraw());
+            s.Layout.Column = 3;
+
+            forward = uibutton(row2, "Text", ">", "FontSize", 8, ...
+                "Tooltip", "On three quarters of a window", ...
+                "ButtonPushedFcn", @(~, ~) this.stepTime(+0.75));
+            forward.Layout.Column = 4;
+        end
+
         function [lbl, s] = makeSliderRow(this, row, lo, hi, val, tip)
         %MAKESLIDERROW  One grid row: a label plus a slider that redraws
         %   while dragging (ValueChangingFcn) and on release (ValueChangedFcn).
-            row2 = uigridlayout(this.Grid, [1 2], ...
-                "ColumnWidth", {this.LabelWidthPx, '1x'}, "Padding", [0 0 0 0]);
+            % The same four columns the pan row uses, with the two button
+            % cells left empty: the three slider tracks then start and end
+            % at the same x, which they did not once one row had buttons in
+            % it and the others did not.
+            row2 = uigridlayout(this.Grid, [1 4], ...
+                "ColumnWidth", {this.LabelWidthPx, this.StepButtonPx, '1x', this.StepButtonPx}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 2);
             row2.Layout.Row = row;
             row2.Layout.Column = [1, 2]; % full width, under both the axes and the channel scrollbar
             lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);
@@ -326,7 +439,7 @@ classdef SignalView < AlakazamView
                 "MajorTicks", [], "MinorTicks", [], "Tooltip", tip, ...
                 "ValueChangingFcn", @(src, e) this.onSliderChanging(src, e), ...
                 "ValueChangedFcn", @(~, ~) this.redraw());
-            s.Layout.Column = 2;
+            s.Layout.Column = 3;
         end
 
         function onSliderChanging(this, src, event)
