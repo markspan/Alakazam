@@ -459,7 +459,15 @@ Averages**), which survives closing and reopening the workspace, and an
 **Open in browser** button (the embedded viewer runs a current browser
 engine and renders the report's own styling, but it is a narrow pane, so
 wide tables and a sticky table of contents have more room in a window, and
-printing and saving belong to a browser anyway). Rendering
+printing and saving belong to a browser anyway). Beside it, **Open in
+Word** writes a `.docx` next to the report and opens it, for pasting
+results into a manuscript: it converts the rendered HTML with pandoc
+rather than re-rendering the document, which takes about a second, needs
+no R, and works on reports rendered before the button existed. Note that
+asking Quarto itself for Word output (`quarto render <name>.qmd --to
+docx`) does *not* work on these reports: the results tables come out as
+runs of text rather than tables, because they are emitted as raw HTML
+from inside `results: asis` chunks. Rendering
 (`quarto render <name>.qmd`, self-contained HTML) produces a short,
 APA-styled results report, not just a table: tables in three-line APA
 format, violin plots showing the actual distribution rather than just a bar

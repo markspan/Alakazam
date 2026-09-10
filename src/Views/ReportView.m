@@ -66,17 +66,55 @@ classdef ReportView < AlakazamView
             this.Component = uihtml(this.Grid, "HTMLSource", eeg.ReportHtmlFile);
             this.Component.Layout.Row = 1;
 
-            buttonRow = uigridlayout(this.Grid, [1 2], "ColumnWidth", {'1x', 140}, ...
+            buttonRow = uigridlayout(this.Grid, [1 3], "ColumnWidth", {'1x', 140, 140}, ...
                 "Padding", [4 4 4 4], "BackgroundColor", [1 1 1]);
             buttonRow.Layout.Row = 2;
+            wordBtn = uibutton(buttonRow, "Text", "Open in Word", ...
+                "Tooltip", "Save a Word copy of this report beside it and open it", ...
+                "ButtonPushedFcn", @(~, ~) this.onOpenInWord());
+            wordBtn.Layout.Column = 2;
             openBtn = uibutton(buttonRow, "Text", "Open in browser", ...
                 "Tooltip", "Open this report in your default web browser, for a wider view, printing and saving", ...
                 "ButtonPushedFcn", @(~, ~) this.onOpenInBrowser());
-            openBtn.Layout.Column = 2;
+            openBtn.Layout.Column = 3;
         end
     end
 
     methods (Access = private)
+        function onOpenInWord(this)
+        %ONOPENINWORD  "Open in Word" button: convert the report beside
+        %   itself and hand the .docx to whatever opens Word documents.
+        %
+        %   THE DIALOG IS OWNED BY THE ANCESTOR FIGURE, not by this.Figure,
+        %   which despite its name is the uitab this view was built into
+        %   (see the constructor, which sets its BackgroundColor). uialert
+        %   and uiprogressdlg both want a figure. Resolving it each time
+        %   also means this keeps working when the plot has been moved into
+        %   a window of its own (see Alakazam.undockTab).
+            fig = ancestor(this.Grid, "figure");
+
+            progress = uiprogressdlg(fig, "Title", "Word copy", ...
+                "Message", "Converting the report for Word...", "Indeterminate", "on");
+            [docxFile, errorMessage] = reportToWord(this.EEG.ReportHtmlFile);
+            close(progress);
+
+            if isempty(docxFile)
+                uialert(fig, errorMessage, "No Word copy was made");
+                return;
+            end
+
+            % winopen hands the file to whatever the desktop associates
+            % with .docx, which is Word where it is installed and something
+            % else where it is not. That is the user's choice to have made,
+            % not this button's to second-guess.
+            if ispc
+                winopen(docxFile);
+            else
+                uialert(fig, sprintf('The Word copy is at %s.', docxFile), ...
+                    "Word copy saved", "Icon", "success");
+            end
+        end
+
         function onOpenInBrowser(this)
         %ONOPENINBROWSER  "Open in browser" button: hand EEG.ReportHtmlFile
         %   to the user's own default web browser (see this class's own
