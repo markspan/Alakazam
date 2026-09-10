@@ -62,10 +62,14 @@ function options = PhotodiodeDialog(EEG)
     mid = uigridlayout(outer, [2 1], 'RowHeight', {'1x', 'fit'}, ...
         'Padding', [0 0 0 0], 'RowSpacing', 6);
     mid.Layout.Row = 2;
-    ax = uiaxes(mid);
-    ax.Layout.Row = 1;
-    xlabel(ax, 'Time (s)');
-    ylabel(ax, 'Photodiode');
+    % A holder rather than the axes itself: the view inside it is rebuilt
+    % when the channel changes, and rebuilding a child of a two-row grid
+    % would land it in the wrong row.
+    plotHolder = uigridlayout(mid, [1 1], 'Padding', [0 0 0 0]);
+    plotHolder.Layout.Row = 1;
+    view = [];
+    viewChannel = -1;
+    thresholdLine = [];
 
     verdict = uilabel(mid, 'Text', '', 'WordWrap', 'on', 'FontSize', 13);
     verdict.Layout.Row = 2;
@@ -90,7 +94,19 @@ function options = PhotodiodeDialog(EEG)
         signal = double(EEG.data(chan, :));
         [onsets, info] = detectDiodeOnsets(signal, EEG.srate, o);
 
-        draw(ax, signal, onsets, info, EEG.srate);
+        % The pairing is worked out whichever mode is selected, because the
+        % bands it produces are the clearest evidence that the detection is
+        % right: one band per trial, all much the same width. In events mode
+        % it is drawn but not reported.
+        sourceEvents = TransTools.FieldOr(EEG, 'event', []);
+        if ~isstruct(sourceEvents) || isempty(fieldnames(sourceEvents))
+            sourceEvents = struct('type', {}, 'latency', {});
+        end
+        report = diodeTriggerDelay(onsets, sourceEvents, EEG.srate, o);
+
+        [preview, colourFor] = photodiodePreview(signal, EEG.srate, onsets, ...
+            sourceEvents, report.pairs, typeField.Value);
+        showPreview(preview, colourFor, chan, info);
 
         if isempty(onsets)
             verdict.Text = info.reason;
@@ -103,9 +119,42 @@ function options = PhotodiodeDialog(EEG)
                 'added as events of type "%s".'], numel(onsets), info.separation, ...
                 typeField.Value);
         else
-            rep = diodeTriggerDelay(onsets, TransTools.FieldOr(EEG, 'event', []), EEG.srate, o);
             verdict.Text = sprintf('%d onsets found (separability %.1f).  %s', ...
-                numel(onsets), info.separation, rep.summary);
+                numel(onsets), info.separation, report.summary);
+        end
+    end
+
+    function showPreview(preview, colourFor, chan, info)
+    %SHOWPREVIEW  Draw, or redraw, the channel and its marks.
+    %   The view is rebuilt only when the channel changes. Every other
+    %   control here changes the marks and not the signal, and rebuilding
+    %   would rebuild the decimation pyramid over the whole recording and
+    %   throw away the analyst's scroll position mid-comparison.
+        if isempty(view) || ~isvalid(view) || chan ~= viewChannel
+            delete(plotHolder.Children);
+            view = SignalView(plotHolder, preview.times, preview, ...
+                'LineSpec', 'k-', ...
+                'ShowAxisTicks', true, ...
+                'YLimMode', 'fixed', ...
+                'FitWholeRecording', true, ...
+                'MaxEvents', 400, ...
+                'MaxAreas', 400, ...
+                'EventColorFcn', colourFor);
+            viewChannel = chan;
+            thresholdLine = [];
+        else
+            view.setOverlays(preview);
+        end
+
+        % The threshold is the one number the detector acts on, so it is
+        % drawn where it can be compared against the trace it is cutting.
+        if ~isempty(thresholdLine) && isvalid(thresholdLine)
+            delete(thresholdLine);
+        end
+        thresholdLine = [];
+        if isfinite(info.threshold)
+            thresholdLine = yline(view.Axes, info.threshold, '--', ...
+                'Color', [0.29 0.44 0.71], 'LineWidth', 1);
         end
     end
 
@@ -137,34 +186,6 @@ function options = PhotodiodeDialog(EEG)
         uiresume(fig);
         delete(fig);
     end
-end
-
-% ======================================================================= %
-function draw(ax, signal, onsets, info, srate)
-%DRAW  The channel with the detected onsets on it.
-%   Decimated for display. A recording is often ten minutes at 1 kHz, and
-%   plotting 600,000 points to a 900-pixel axis costs seconds and shows
-%   nothing a decimated trace does not; the onsets are drawn from the FULL
-%   resolution result, so nothing is lost where it matters.
-    cla(ax);
-    n = numel(signal);
-    step = max(1, floor(n / 6000));
-    idx = 1:step:n;
-    t = (idx - 1) / srate;
-
-    plot(ax, t, signal(idx), 'Color', [0.42 0.47 0.53]);
-    hold(ax, 'on');
-    if isfinite(info.threshold)
-        yline(ax, info.threshold, '--', 'Color', [0.29 0.44 0.71], 'LineWidth', 1);
-    end
-    if ~isempty(onsets)
-        y = double(max(signal));
-        plot(ax, (onsets - 1) / srate, repmat(y, 1, numel(onsets)), 'v', ...
-            'MarkerFaceColor', [0.75 0.25 0.24], 'MarkerEdgeColor', 'none', ...
-            'MarkerSize', 5);
-    end
-    hold(ax, 'off');
-    xlim(ax, [0, max(t)]);
 end
 
 function labels = channelLabels(EEG)

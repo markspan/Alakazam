@@ -88,6 +88,8 @@ classdef SignalView < AlakazamView
                 opts.AutoStackSignals string = string.empty
                 opts.MaxEvents (1,1) double = 100
                 opts.MaxAreas (1,1) double = 20
+                opts.EventColorFcn = function_handle.empty
+                opts.FitWholeRecording (1,1) logical = false
             end
             this.Parent  = parent;
             this.Options = opts;
@@ -109,6 +111,19 @@ classdef SignalView < AlakazamView
             this.Overlay = this.parseOverlays(eeg);
 
             this.buildGraphics(opts.LineSpec, eeg);
+
+            % OPEN ON THE WHOLE RECORDING when asked. The zoom slider starts
+            % at 0.5 and MmPerSec then sets a reading scale from it, which is
+            % right for looking at an EEG and wrong for a preview whose job
+            % is "is this detection sensible", where the first question is
+            % always whether the marks are spread over the whole session or
+            % bunched into one corner. MmPerSecDone is set alongside so the
+            % deferred mmPerSec pass does not immediately zoom back in.
+            if opts.FitWholeRecording
+                this.ZoomSlider.Value = 0;
+                this.MmPerSecDone = true;
+            end
+
             this.computeStacking();
             this.redraw();
             % A first redraw happens before the grid has laid out the axes
@@ -117,6 +132,18 @@ classdef SignalView < AlakazamView
             % width is seen) is deferred to this second pass, after drawnow
             % lets layout settle.
             drawnow;
+            this.redraw();
+        end
+
+        function setOverlays(this, eeg)
+        %SETOVERLAYS  Replace the event and area markers, keeping the view.
+        %   The Photodiode dialog re-runs its detector on every keystroke,
+        %   and only the marks change: the channel underneath is the same.
+        %   Rebuilding the whole view each time would rebuild the min/max
+        %   pyramid over the entire recording, and would throw away the
+        %   analyst's scroll position and zoom in the middle of the very
+        %   comparison they are making.
+            this.Overlay = this.parseOverlays(eeg);
             this.redraw();
         end
 
@@ -478,10 +505,24 @@ classdef SignalView < AlakazamView
                 overlay.EventLabel = types(isPoint);
                 overlay.EventTime  = eeg.times(max(1, round(latency(isPoint))));
 
+                % A DURATION IS IN SAMPLES AND HAS TO BE CONVERTED INTO THE
+                % UNIT OF THE TIME VECTOR, which is not necessarily seconds.
+                % AreaTime is read straight out of eeg.times, so it carries
+                % whatever unit that is: milliseconds for an EEGLAB
+                % recording, which is what the application passes. Dividing
+                % by the sampling rate gives seconds, and a band a thousand
+                % times too narrow to see against a millisecond axis. Scaling
+                % by the time step instead is right in either unit, since
+                % that step IS one sample expressed in the axis's own terms.
+                perSample = median(diff(eeg.times), "omitnan");
+                if ~isfinite(perSample) || perSample <= 0
+                    perSample = 1 / eeg.srate;
+                end
+
                 isArea = dur > 0;
                 overlay.AreaLabel = types(isArea);
                 overlay.AreaTime  = eeg.times(max(1, floor(latency(isArea))));
-                overlay.AreaDur   = dur(isArea) / eeg.srate;
+                overlay.AreaDur   = dur(isArea) * perSample;
             catch
                 % Leave overlays empty if the event structure is malformed.
             end
@@ -507,13 +548,36 @@ classdef SignalView < AlakazamView
             end
             for r = 1:numel(times)
                 cursor(this.Axes, times(r), [], [], ...
-                    'Color', [.1 .3 .8 .5], 'LineStyle', ':', ...
+                    'Color', this.colourForEvent(labels(r)), 'LineStyle', ':', ...
                     'Label', labels(r), ...
                     'Interpreter', 'none', ... % event codes are literal text, not TeX markup (a code with an underscore, e.g. "S_112", would otherwise render as a subscript, or vanish entirely for other TeX-special characters)
                     'LabelVerticalAlignment', 'bottom', ...
                     'LabelHorizontalAlignment', 'center', ...
                     'LabelOrientation', 'horizontal', 'FontSize', 8, ...
                     'Tag', 'event', 'UserData', r);
+            end
+        end
+
+        function colour = colourForEvent(this, label)
+        %COLOURFOREVENT  The colour for one point event.
+        %   EventColorFcn lets a caller distinguish kinds of event that all
+        %   arrive through eeg.event and would otherwise be one indivisible
+        %   blue: the Photodiode preview draws the recording's triggers and
+        %   the onsets its detector found on the same axes, and the whole
+        %   point is telling them apart (see photodiodePreview).
+        %
+        %   A function rather than a table, because the caller knows how to
+        %   decide and this does not: type names are arbitrary strings, and
+        %   any mapping kept here would have to be told about them anyway.
+        %   Returning empty from it means "no opinion", and falls through to
+        %   the default.
+            colour = [.1 .3 .8 .5];
+            if isempty(this.Options.EventColorFcn)
+                return;
+            end
+            given = this.Options.EventColorFcn(label);
+            if ~isempty(given)
+                colour = given;
             end
         end
 
