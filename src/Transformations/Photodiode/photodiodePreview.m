@@ -115,18 +115,21 @@ end
 function style = styleOf(label, diodeType)
 %STYLEOF  Red for what the detector found, and its label lifted clear.
 %
-%   THE LABEL GOES TO THE TOP, and that is not decoration. A diode onset
-%   sits a display lag after its trigger, which is tens of milliseconds:
-%   close enough that two labels at the bottom of the axes overlap, and the
-%   one drawn second covers the first. The trigger code is precisely what
-%   the analyst is reading, so the diode's own label moves out of its way
-%   rather than the other way round.
+%   THREE MARKS, THREE HEIGHTS, and none of them is decoration. A diode
+%   onset sits a display lag after its trigger, which is tens of
+%   milliseconds: close enough that labels sharing a height overlap, and
+%   the one drawn second covers the first. The trigger code is precisely
+%   what the analyst is reading, so it keeps the bottom. The lag band draws
+%   its own label at the top of the axes (see @label), which is where the
+%   diode label went first and where it was promptly covered. The middle is
+%   the one height left, and it is checked by looking at a render rather
+%   than by reasoning about it.
 %
 %   Returning empty leaves SignalView on its own defaults, which is what
 %   the recording's own triggers get.
     style = [];
     if strcmp(char(label), diodeType)
         style = struct('Color', [0.75 0.25 0.24 0.75], ...
-            'LabelVerticalAlignment', 'top');
+            'LabelVerticalAlignment', 'middle');
     end
 end

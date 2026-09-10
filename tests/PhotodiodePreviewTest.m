@@ -108,14 +108,21 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
         %   With both labels at the bottom of the axes the later one covers
         %   the earlier, and the one it covers is the trigger code, which is
         %   the value being checked.
+        %
+        %   The middle rather than the top, and the exact value is pinned
+        %   because it is constrained rather than arbitrary: the trigger has
+        %   the bottom and the lag band draws its own label at the top of
+        %   the axes (see @label), so the top was tried first and the two
+        %   labels overlapped there instead. Confirmed by rendering it and
+        %   looking, which is the only way this kind of collision shows up.
             [signal, onsets, events, pairs] = testCase.scenario();
 
             [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
             diode = styleFor('diode');
 
             testCase.assertTrue(isfield(diode, 'LabelVerticalAlignment'));
-            testCase.verifyEqual(diode.LabelVerticalAlignment, 'top', ...
-                'The diode label should sit clear of the trigger label.');
+            testCase.verifyEqual(diode.LabelVerticalAlignment, 'middle', ...
+                'The diode label should sit clear of both the trigger and the band.');
         end
 
         function eventsAreInTimeOrder(testCase)
