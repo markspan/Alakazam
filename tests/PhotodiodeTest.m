@@ -303,6 +303,46 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(strcmp({out.event.type}, 'S1_screen')));
         end
 
+        function anInterveningMarkerStealsThePairing(testCase)
+        %ANINTERVENINGMARKERSTEALSTHEPAIRING  Reported from real data: 31
+        %   s106 triggers but only 30 s106PD, and one s52 that had somehow
+        %   acquired an s52PD despite never putting anything on screen.
+        %
+        %   Those are one event, not two faults. An onset is paired with the
+        %   nearest event BEFORE it, and with no restriction on type that
+        %   means any event at all, so a marker landing between a stimulus
+        %   trigger and its screen change takes the onset from the trigger
+        %   that caused it. The stimulus type comes up one short and the
+        %   interloper gains one, which is exactly the arithmetic reported.
+            [EEG, nTrials] = testCase.eegWithAnInterveningMarker();
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events'));
+            types = {out.event.type};
+
+            testCase.verifyEqual(sum(strcmp(types, 's106')), nTrials);
+            testCase.verifyEqual(sum(strcmp(types, 's106PD')), nTrials - 1, ...
+                'The stimulus type should be one short, which is the symptom.');
+            testCase.verifyEqual(sum(strcmp(types, 's52PD')), 1, ...
+                'And the intervening marker should be the one that took it.');
+        end
+
+        function namingTheTriggersStopsTheTheft(testCase)
+        %NAMINGTHETRIGGERSSTOPSTHETHEFT  The cure for the case above, and
+        %   the reason Types is worth exposing: restrict which event types
+        %   may own an onset and the marker is no longer a candidate, so
+        %   every onset goes back to the trigger that caused it.
+            [EEG, nTrials] = testCase.eegWithAnInterveningMarker();
+
+            out = Photodiode(EEG, struct('Channel', 'PhotoDiode', 'Mode', 'events', ...
+                'Types', {{'s106'}}));
+            types = {out.event.type};
+
+            testCase.verifyEqual(sum(strcmp(types, 's106PD')), nTrials, ...
+                'Every onset should now belong to the trigger that caused it.');
+            testCase.verifyEqual(sum(strcmp(types, 's52PD')), 0, ...
+                'The marker should no longer be able to take one.');
+        end
+
         function anUnpairedOnsetGetsTheSuffixAlone(testCase)
         %ANUNPAIREDONSETGETSTHESUFFIXALONE  A screen change nobody asked
         %   for, or one whose trigger was lost. There is no name to borrow,
@@ -362,6 +402,44 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function [EEG, nTrials] = eegWithAnInterveningMarker(testCase)
+        %EEGWITHANINTERVENINGMARKER  The reported situation: a stimulus
+        %   trigger on every trial, a screen change 50 ms later, and on ONE
+        %   trial another marker 20 ms after the trigger, in between the
+        %   two.
+            srate = testCase.Srate;
+            nTrials = 31;
+            spacing = 2000;
+            lag = 50;
+            n = (nTrials + 2) * spacing;
+
+            rng(7);
+            t = (0:n-1) / srate;
+            diode = testCase.Baseline ...
+                + testCase.Flicker * sin(2*pi*testCase.FlickerHz*t) ...
+                + randn(1, n) * 90;
+
+            types = {};
+            lats = [];
+            for k = 1:nTrials
+                trigger = 1000 + (k - 1) * spacing;
+                types{end+1} = 's106'; %#ok<AGROW>
+                lats(end+1) = trigger; %#ok<AGROW>
+                if k == 17
+                    types{end+1} = 's52'; %#ok<AGROW>
+                    lats(end+1) = trigger + 20; %#ok<AGROW>
+                end
+                patch = trigger + lag;
+                diode(patch:patch + 99) = diode(patch:patch + 99) + 20000;
+            end
+
+            EEG = struct('srate', srate, 'pnts', n, 'nbchan', 2, ...
+                'data', [randn(1, n) * 10; diode], ...
+                'chanlocs', struct('labels', {'Cz', 'PhotoDiode'}), ...
+                'event', struct('type', types, 'latency', num2cell(double(lats))), ...
+                'DataType', 'TIMEDOMAIN');
+        end
+
         function [signal, truth] = withRampedPatches(testCase, seconds, amp, durMs, rampMs)
         %WITHRAMPEDPATCHES  withPatches, but each patch ramps up over RAMPMS
         %   instead of stepping, which is what a panel actually does. TRUTH

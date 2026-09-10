@@ -26,7 +26,7 @@ function options = PhotodiodeDialog(EEG)
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
     % ---- settings ---------------------------------------------------------
-    top = uigridlayout(outer, [2 8], ...
+    top = uigridlayout(outer, [3 8], ...
         'ColumnWidth', {58, '1x', 62, 70, 74, 70, 78, 70}, ...
         'RowHeight', {'fit', 'fit'}, 'Padding', [0 0 0 0], ...
         'ColumnSpacing', 6, 'RowSpacing', 6);
@@ -59,6 +59,24 @@ function options = PhotodiodeDialog(EEG)
         'Tooltip', ['Appended to the trigger''s own name when adding onsets as ' ...
             'events, so an onset answering "s70" is added as "s70PD"'], ...
         'ValueChangedFcn', @(~,~) refresh());
+
+    % WHICH TRIGGERS MAY OWN AN ONSET, and this is not a nicety. An onset is
+    % paired with the nearest event BEFORE it, and with this left empty that
+    % means the nearest event of any type at all. Any marker that happens to
+    % land between a stimulus trigger and the screen change, a response code
+    % or a port reset twenty milliseconds later, will take the onset from
+    % the trigger that actually caused it: the stimulus type then comes up
+    % one short and the interloper acquires a diode event it cannot have
+    % earned. Naming the stimulus types here is what prevents it.
+    uilabel(top, 'Text', 'Triggers');
+    triggersField = uieditfield(top, 'text', 'Value', '', ...
+        'Tooltip', ['Only these event types may be paired with an onset, separated ' ...
+            'by spaces or commas (e.g. "s106 s107"). Empty means any event, which ' ...
+            'lets a marker falling between a trigger and the screen change steal ' ...
+            'the pairing.'], ...
+        'ValueChangedFcn', @(~,~) refresh());
+    triggersField.Layout.Row = 3;
+    triggersField.Layout.Column = [2 8];
 
     % ---- plot + verdict ----------------------------------------------------
     mid = uigridlayout(outer, [2 1], 'RowHeight', {'1x', 'fit'}, ...
@@ -119,11 +137,13 @@ function options = PhotodiodeDialog(EEG)
         if strcmp(modeDrop.Value, 'events')
             names = diodeEventLabels(onsets, sourceEvents, report.pairs, typeField.Value);
             verdict.Text = sprintf(['%d onsets found (separability %.1f). They will be ' ...
-                'added as events named after their own trigger, e.g. "%s".'], ...
-                numel(onsets), info.separation, names{1});
+                'added as events named after their own trigger, e.g. "%s".%s'], ...
+                numel(onsets), info.separation, names{1}, ...
+                pairedTypesNote(report, sourceEvents));
         else
-            verdict.Text = sprintf('%d onsets found (separability %.1f).  %s', ...
-                numel(onsets), info.separation, report.summary);
+            verdict.Text = sprintf('%d onsets found (separability %.1f).  %s%s', ...
+                numel(onsets), info.separation, report.summary, ...
+                pairedTypesNote(report, sourceEvents));
         end
     end
 
@@ -161,6 +181,47 @@ function options = PhotodiodeDialog(EEG)
         end
     end
 
+    function note = pairedTypesNote(report, sourceEvents)
+    %PAIREDTYPESNOTE  Which trigger types took an onset, and how many each.
+    %   Shown because it is where a stolen pairing becomes visible: a
+    %   stimulus type one short, and beside it some other code with a single
+    %   onset it should not have. Counting them is the difference between
+    %   noticing that on screen and discovering it in the event table weeks
+    %   later.
+        note = '';
+        if isempty(report.pairs)
+            return;
+        end
+        owners = arrayfun(@(pr) string(sourceEvents(pr.event).type), report.pairs);
+        [kinds, ~, which] = unique(owners);
+        counts = accumarray(which(:), 1);
+        [counts, order] = sort(counts, 'descend');
+
+        parts = strings(1, numel(order));
+        for i = 1:numel(order)
+            parts(i) = sprintf('%s (%d)', kinds(order(i)), counts(i));
+        end
+        note = sprintf('\nPaired against: %s.', strjoin(parts, ', '));
+
+        if numel(kinds) > 1
+            note = sprintf(['%s A type with only one or two is usually a marker that ' ...
+                'fell between a trigger and the screen change; name the stimulus ' ...
+                'types under Triggers to stop it taking them.'], note);
+        end
+    end
+
+    function types = parseTypes(text)
+    %PARSETYPES  "s106, s107" or "s106 s107" into a cellstr. Empty means any.
+        text = strtrim(char(text));
+        if isempty(text)
+            types = {};
+            return;
+        end
+        parts = strsplit(text, {',', ' ', ';'});
+        parts = parts(~cellfun(@isempty, strtrim(parts)));
+        types = cellfun(@strtrim, parts, 'UniformOutput', false);
+    end
+
     function o = currentOptions()
         o = struct();
         o.Channel = chanDrop.Value;        % by LABEL: see Photodiode/resolveChannel
@@ -170,6 +231,7 @@ function options = PhotodiodeDialog(EEG)
         o.MaxLagMs = lagField.Value;
         o.Mode = modeDrop.Value;
         o.EventSuffix = typeField.Value;
+        o.Types = parseTypes(triggersField.Value);
         t = str2double(threshField.Value);
         if isnan(t)
             o.Threshold = NaN;             % 'auto', or anything unreadable
