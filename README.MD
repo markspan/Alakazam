@@ -127,7 +127,7 @@ current publication standards, Keil et al. (2014) (see
 A single `uifigure` hosts the whole application: a control-strip ribbon
 along the top (Home/Tools/Grand Average tabs, discovering transformations
 automatically), the two dataset trees on the left, and the plots area on
-the right (tabbed or tiled, see above). The Home tab's **Help** button opens
+the right (tabbed or tiled, see above). The Alakazam tab's **Help** button opens
 this document as an in-app page, with screenshots and searchable with Ctrl+F.
 The page is generated from this file and is not kept in version control; if it
 has not been built, the button explains how and offers to open `README.MD`
@@ -164,7 +164,7 @@ exactly, the decimated envelope never hides a spike or a brief artefact.
 The view provides pan, zoom, and y-axis magnify controls, mouse-wheel
 scrolling, channel stacking, and overlays for events and marked artefacts.
 
-## Getting started
+## Installation
 
 Requirements: MATLAB (with `uifigure`/App Designer support: the UI is built
 entirely on that component family, not the classic figure/uicontrol one), the
@@ -198,6 +198,247 @@ first run, EEGLAB is initialised if it is not already on the path (the global
 MATLAB path is left unchanged). At startup, `EEGLabEnvironment` also checks for
 the Signal Processing and Statistics and Machine Learning toolboxes and warns
 (without blocking startup) if either is missing.
+
+## Getting started
+
+This chapter is a guided first session. It assumes you know what an ERP is,
+what a filter does to one, and why anybody would want to average four hundred
+trials together; it assumes nothing at all about Alakazam. By the end of it you
+will have loaded a recording, filtered it, cut it into epochs, averaged it,
+done the same to everybody else in your sample, and produced a report. That is
+a whole study's analysis, in outline, and it takes about twenty minutes the
+first time.
+
+If you would rather see the finished pipeline for a specific paradigm, the
+[How-to walkthroughs](#how-to-walkthroughs) give exact settings for P300, LRP
+and MMN designs, and a start-to-finish worked example on the ERP CORE N400
+data. Come back here for the ideas those walkthroughs assume.
+
+### First, give your recordings a room of their own
+
+Before you launch anything, make a folder that contains your raw recordings
+**and nothing else**.
+
+This is the single most common source of a confusing first hour, and it is
+worth one minute of tidying. Alakazam treats every file sitting directly in
+that folder as one recording, and gives each one a root node in its tree. Point
+it at a folder that also holds your stimulus scripts, a spreadsheet of
+demographics and three versions of a poster, and it will earnestly try to make
+sense of all of them. Point it at a clean folder of twenty `.set` files and you
+get twenty subjects, in order, and nothing to explain.
+
+It reads `.set` (EEGLAB), `.vhdr` with its `.eeg` and `.vmrk` companions
+(BrainVision), `.erp` (an ERPLAB erpset, which arrives already averaged), and
+`.mat` (a session Alakazam saved earlier).
+
+A workspace is really three folders, and it is worth knowing what each is for
+before you are asked to choose them:
+
+| Folder | What lives there | Who writes to it |
+|---|---|---|
+| **Raw** | your recordings, as they came off the amplifier | you, once |
+| **Intermediate** | every result Alakazam computes, cached | Alakazam |
+| **Exports** | CSV files, reports, scripts you asked for | Alakazam, when you ask |
+
+The separation is deliberate, and it is the reason you can be relaxed about
+experimenting. Results never land in your raw folder. Every transformation
+writes into the Intermediate directory instead, in a subfolder named after the
+recording it came from, which is also what lets Alakazam rebuild your entire
+analysis tree next week without recomputing any of it.
+
+A layout that works well:
+
+```
+MyExperiment/
+    raw/          <- point Alakazam here
+    cache/        <- Intermediate; safe to delete, costs only recomputation
+    exports/      <- CSVs and reports end up here
+```
+
+### Launching, and the one question you will be asked
+
+From the repository root:
+
+```matlab
+startAlakazam
+```
+
+On a machine that has never run Alakazam, there is no workspace yet. Rather
+than opening onto an empty tree and leaving you to wonder what you did wrong, a
+**Welcome** dialog appears and asks for your raw data folder. The field starts
+blank on purpose, and **OK** stays refused until you have actually chosen one,
+because a plausible-looking placeholder path is a worse start than an obvious
+empty box.
+
+That dialog is not a special first-run wizard you will never see again. It is
+the same **Edit WorkSpace** control from the **Alakazam** tab, so when you move
+to a different study you already know where to change it.
+
+### What you are looking at
+
+The window has three regions, and they map onto three questions.
+
+**Across the top, the ribbon: what can I do?** Four tabs.
+
+- **Alakazam** holds the workspace itself: opening, saving and editing it,
+  telling Alakazam about your experimental design, settings, the view mode,
+  help.
+- **Tools** holds the analysis steps, grouped the way an analysis actually
+  proceeds: *Preprocessing*, *Artifact Rejection / Reduction*, *Segments*,
+  *Frequency and Component Analysis*, and *Plots*. This tab is assembled from
+  whatever transformations are installed, so it grows if you add one.
+- **Grand Average** combines subjects.
+- **Export/Report** turns results into files: CSVs, statistical reports,
+  cluster tests, a data quality report, and your whole analysis as runnable
+  code.
+
+**Down the left, three trees: what do I have?** Not one tree, three, and the
+reason is worth a sentence. A **Data & Analyses** node belongs to exactly one
+recording. A **Grand Average** does not: it is made from many subjects at once,
+and nesting it under any one of them would be a small lie. A **Report** is not
+produced by one recording either, since a single report can summarise your
+whole sample. So each gets its own tree, and the divider between them can be
+dragged when one of them needs the room.
+
+**On the right, the plots: what does it look like?** One tab per open
+recording. The **View** group offers **Tabs** (one at a time), **Grid** and
+**Stack** (all of them at once, for comparing). Right-click any plot tab to
+**Undock** it into a window of its own, which is what a second monitor is for,
+or to **Close others** when the strip has filled up.
+
+### Opening a recording
+
+Click a root node in the **Data & Analyses** tree. That is all: a single click
+loads and draws it. (Double-clicking reloads it, which is occasionally useful
+and never harmful.)
+
+Continuous data opens in a scrolling view with the events marked on it. Before
+doing anything clever, it is worth spending a minute here just looking: at
+whether the events are where you expect, whether a channel is flat, whether
+there is a drift you will want to filter. Alakazam is quite happy to compute a
+beautiful grand average out of nonsense, and the cheapest moment to catch
+nonsense is now.
+
+### Your first transformation
+
+With the recording selected, go to **Tools**, find **1. Preprocessing**, and
+choose **Filter**. Set what you want and confirm.
+
+Two things happen, and both matter more than the filter does.
+
+First, a **new node appears underneath the recording** in the tree. Your
+original file has not been touched, and it will not be. What you are building
+is a history: the raw recording at the root, and each thing you did to it
+hanging below.
+
+Second, the result is written to your Intermediate folder. That is not just
+housekeeping. It means that when you close Alakazam and open it again next
+Tuesday, that filtered dataset is still there, and clicking it is instant.
+
+### The tree branches, and that is the whole point
+
+Select the filtered node and run another transformation, and it lands beneath
+that one. Now select the **raw** node again and run something else. A second
+branch appears from the root.
+
+This is the feature to understand early, because it changes how you work. You
+are never choosing between two preprocessing routes and losing one. Filter at
+0.1 Hz on one branch and 0.5 Hz on the other, run both to an average, and put
+the two side by side with **Grid** view. The comparison costs you a few
+minutes, and either you learn that your effect is robust to the choice, which
+is reassuring, or you learn that it is not, which is considerably more
+important.
+
+### Doing it again for everybody else
+
+Twenty subjects, six steps each, is a hundred and twenty dialogs, and nobody
+should spend an afternoon that way. There are three ways out, in increasing
+order of ambition.
+
+**Drag one node onto another recording.** Pick up a node, drop it on another
+subject's root, and Alakazam replays that step *and every step below it* onto
+the new recording, including branches where the analysis forked. One drag can
+reproduce an entire pipeline.
+
+There is a nice special case here: drop one averaged dataset onto another
+matching averaged dataset and, instead of transforming anything, it overlays
+the two plots. It is the fastest way to put two conditions, or two subjects, on
+the same axes.
+
+**Right-click a node and choose Apply to All Raw Files.** The same replay, to
+every recording in the workspace at once.
+
+**Right-click and Save Template**, then **Apply Template** later. This writes
+the pipeline to a file, which is what you want when the next batch of subjects
+arrives in three months, or when a colleague asks what exactly you did.
+
+### From continuous data to an ERP
+
+The path from a recording to an ERP runs through **3. Segments**, where
+**DefineBins** turns event codes into conditions and cuts epochs around them,
+and then **Average** in the preprocessing group. Along the way you will
+generally want a **Baseline** correction and some artefact handling, either the
+threshold-based **ArtefactDetect** or one of the automatic routines.
+
+The order matters, and it is a genuinely contested question in places rather
+than a matter of taste, so this chapter will not pretend otherwise: the
+[How-to walkthroughs](#how-to-walkthroughs) give a defensible order for each
+common paradigm, with the reasoning attached.
+
+### Combining subjects, and getting numbers out
+
+Once several subjects have an average, the **Grand Average** tab combines them,
+and the result appears in its own tree.
+
+To get from pictures to numbers, run **ERP Measure** (in *4. Frequency and
+Component Analysis*) to say which windows, channels and measures you care
+about, then use the **Export/Report** tab. **ERP & Report** writes a CSV and,
+alongside it, a Quarto report that runs the statistical test appropriate to
+your design rather than a generic one, with the numbers written out in prose.
+
+A rendered report gets a node in the **Reports** tree, and opens inside the
+application. It also carries a private copy of the CSV it was built from, so it
+stays reproducible even if you later overwrite the export. From the report view
+you can **Open in browser**, or **Open in Word** for a `.docx` next to it that
+you can paste into a manuscript.
+
+### Saving, and what "saved" means here
+
+Nothing about your workspace is written to disk automatically. **Save
+WorkSpace** on the **Alakazam** tab is the moment it happens, and it records
+your three directories, the most recent settings of every transformation you
+have run, and any group and subject assignments.
+
+Your *results* are a separate matter, and they look after themselves: they are
+in the Intermediate cache as soon as they are computed. Deleting that cache
+costs you computation time and nothing else, which is precisely why **Clear
+WorkSpace** exists and why it is safe to use when an analysis has become a
+tangle.
+
+### If something looks wrong
+
+It probably is. A few places to look first.
+
+- **Nothing appeared in the tree.** Either the raw folder is empty, or it holds
+  formats Alakazam does not read. Check **Edit WorkSpace** first.
+- **The numbers are odd.** Run the **Data Quality Report** from the
+  **Export/Report** tab. It reports rejection rates per subject and per
+  condition, flags subjects against conventional thresholds, and estimates how
+  dependable your measurements actually are.
+- **You want to know exactly what was done.** **Export as Code** writes your
+  whole analysis as a runnable script, which is both a reproducibility artefact
+  and an unusually honest answer to a reviewer.
+- **You want the manual.** The **Help** button on the **Alakazam** tab opens
+  this documentation inside the application.
+
+### Where to go next
+
+- [Transformations](#transformations) for what each step actually does.
+- [How-to walkthroughs](#how-to-walkthroughs) for complete recipes.
+- [Using your own data](#using-your-own-data) for the workspace, the
+  experimental design editor and the display settings, in detail.
+- [Statistical analysis](#statistical-analysis) for what the reports contain
+  and which test is chosen when.
 
 ## Transformations
 
@@ -606,7 +847,7 @@ the crossing. There is no switch to turn this on. If the recordings do not
 support it, the report fits the simpler model and prints why, rather than
 fitting an interaction it cannot estimate. See
 [the design table](#what-gets-tested-and-what-question-it-answers) for the
-models this produces, and **Show Design** (Home tab, Design group) for what
+models this produces, and **Show Design** (Alakazam tab, Design group) for what
 Alakazam believes your design to be before you run anything.
 
 **In study** is the third. It is ticked by default, and unticking it takes
@@ -1246,7 +1487,7 @@ took 257 s and the 5124-vertex accelerated one 28 s.
 1. **Average** each subject. The test lists the same Averaged ERP datasets
    Grand Average lists, so anything not averaged does not appear.
 2. If the contrast is between groups, assign them first with **Grouping...**
-   (Home tab, Design group). The between-groups option stays hidden until at
+   (Alakazam tab, Design group). The between-groups option stays hidden until at
    least two distinct groups exist.
 3. **Export/Report** tab, **Cluster Statistics** group, **Source Cluster
    Test...**.
@@ -1695,7 +1936,7 @@ prefilled with a placeholder path, and **OK** is refused until a folder has
 been chosen. **Cancel** leaves the tree empty.
 
 Thereafter the repository's `DefaultWorkSpace.wksp` is loaded automatically by
-`startAlakazam` (see [Getting started](#getting-started)). To analyse
+`startAlakazam` (see [Installation](#installation)). To analyse
 user-supplied recordings, this file may be edited directly: it is a JSON
 object with `RawDirectory`, `CacheDirectory`, and `ExportsDirectory` fields,
 in which the `~` character resolves to the user's home directory: or the three
@@ -1705,7 +1946,7 @@ tree reconstructed as soon as the directories are changed.
 
 ### Editing the workspace
 
-The Home tab's **Workspace** group provides the following operations.
+The Alakazam tab's **Workspace** group provides the following operations.
 
 - **Open WorkSpace...**: loads a specified `.wksp` file, including its
   directories, previously recorded transformation parameters, and
@@ -1738,7 +1979,7 @@ condition is assumed to have been measured for every subject. Specification
 of an alternative design, a between-subjects comparison, or the
 association of multiple recordings (e.g., session 1/2, pre/post) with a
 single individual, is performed through a single dialog, **Grouping...**,
-located in the Home tab's **Design** group. The procedure and its
+located in the Alakazam tab's **Design** group. The procedure and its
 statistical consequences are described in full in
 [Groups: setting up a between-subjects or mixed design](#groups-setting-up-a-between-subjects-or-mixed-design).
 As with the workspace's directories, group and subject assignments are
@@ -1747,7 +1988,7 @@ written to disk via **Save WorkSpace**.
 
 ### Settings
 
-**Global...**, located in the Home tab's **Settings** group, opens the
+**Global...**, located in the Alakazam tab's **Settings** group, opens the
 application's preference dialog. These settings govern display behaviour
 uniformly, independent of the active workspace.
 
@@ -1837,7 +2078,7 @@ stimuli. Stimulus-locked.
    companion statistical report (the **Export/Report** ribbon tab's **ERP &
    Report** button, see [Statistical analysis](#statistical-analysis)). If
    subjects belong to different groups (e.g. patients vs. controls), assign
-   them first with **Grouping...** (Home tab, Design group) to get a
+   them first with **Grouping...** (Alakazam tab, Design group) to get a
    between-subjects/mixed comparison instead of a within-subjects one.
 
 </details>
@@ -1986,7 +2227,7 @@ windowed-sinc design, with the filter order and transition band picked
 automatically from the requested frequency and stopband attenuation rather
 than left for the analyst to guess, follows the practical guidance in
 Widmann, Schröger & Maess (2015). Built fresh from an imported raw recording,
-Home tab, each step's own options dialog would ask for:
+each step's own options dialog on the **Tools** tab would ask for:
 
 1. **AutoGEDAI** (denoise). Its dialog has three groups of options:
    *Denoising*: **Strength** (`auto`/`auto+`/`auto-`, this template leaves
