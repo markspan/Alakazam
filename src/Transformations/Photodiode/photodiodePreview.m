@@ -1,13 +1,13 @@
-function [preview, colourFor] = photodiodePreview(signal, srate, onsets, events, pairs, diodeType)
+function [preview, styleFor] = photodiodePreview(signal, srate, onsets, events, pairs, diodeType)
 %PHOTODIODEPREVIEW  The diode channel, its triggers and its measured lags,
 %   packaged as an EEG-shaped struct that SignalView can draw.
 %
-%   [PREVIEW, COLOURFOR] = photodiodePreview(SIGNAL, SRATE, ONSETS, EVENTS,
+%   [PREVIEW, STYLEFOR] = photodiodePreview(SIGNAL, SRATE, ONSETS, EVENTS,
 %   PAIRS, DIODETYPE). ONSETS are sample indices from detectDiodeOnsets,
 %   EVENTS the recording's own events, and PAIRS the pairing that
 %   diodeTriggerDelay worked out (its report.pairs, with onset, event and
-%   lagMs). COLOURFOR maps an event label to the colour it should be drawn
-%   in, for SignalView's EventColorFcn.
+%   lagMs). STYLEFOR maps an event label to how it should be drawn, for
+%   SignalView's EventStyleFcn.
 %
 %   WHY THIS IS A FUNCTION AND NOT PART OF THE DIALOG. What goes on the
 %   picture is the whole argument the dialog is making, and it can be
@@ -61,7 +61,7 @@ function [preview, colourFor] = photodiodePreview(signal, srate, onsets, events,
     preview.chanlocs = struct('labels', {'Photodiode'});
     preview.DataType = 'TIMEDOMAIN';
 
-    colourFor = @(label) colourOf(label, diodeType);
+    styleFor = @(label) styleOf(label, diodeType);
 end
 
 % ======================================================================= %
@@ -112,11 +112,21 @@ function events = buildEvents(onsets, sourceEvents, pairs, diodeType, nSamples)
 end
 
 % ======================================================================= %
-function colour = colourOf(label, diodeType)
-%COLOUROF  Blue for the recording's triggers, red for what the detector
-%   found. Returning empty leaves SignalView on its own default.
-    colour = [];
+function style = styleOf(label, diodeType)
+%STYLEOF  Red for what the detector found, and its label lifted clear.
+%
+%   THE LABEL GOES TO THE TOP, and that is not decoration. A diode onset
+%   sits a display lag after its trigger, which is tens of milliseconds:
+%   close enough that two labels at the bottom of the axes overlap, and the
+%   one drawn second covers the first. The trigger code is precisely what
+%   the analyst is reading, so the diode's own label moves out of its way
+%   rather than the other way round.
+%
+%   Returning empty leaves SignalView on its own defaults, which is what
+%   the recording's own triggers get.
+    style = [];
     if strcmp(char(label), diodeType)
-        colour = [0.75 0.25 0.24 0.75];
+        style = struct('Color', [0.75 0.25 0.24 0.75], ...
+            'LabelVerticalAlignment', 'top');
     end
 end

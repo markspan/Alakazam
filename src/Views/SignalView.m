@@ -88,7 +88,7 @@ classdef SignalView < AlakazamView
                 opts.AutoStackSignals string = string.empty
                 opts.MaxEvents (1,1) double = 100
                 opts.MaxAreas (1,1) double = 20
-                opts.EventColorFcn = function_handle.empty
+                opts.EventStyleFcn = function_handle.empty
                 opts.FitWholeRecording (1,1) logical = false
             end
             this.Parent  = parent;
@@ -547,37 +547,58 @@ classdef SignalView < AlakazamView
                 return;
             end
             for r = 1:numel(times)
+                style = this.styleForEvent(labels(r));
                 cursor(this.Axes, times(r), [], [], ...
-                    'Color', this.colourForEvent(labels(r)), 'LineStyle', ':', ...
+                    'Color', style.Color, 'LineStyle', ':', ...
                     'Label', labels(r), ...
                     'Interpreter', 'none', ... % event codes are literal text, not TeX markup (a code with an underscore, e.g. "S_112", would otherwise render as a subscript, or vanish entirely for other TeX-special characters)
-                    'LabelVerticalAlignment', 'bottom', ...
+                    'LabelVerticalAlignment', style.LabelVerticalAlignment, ...
                     'LabelHorizontalAlignment', 'center', ...
                     'LabelOrientation', 'horizontal', 'FontSize', 8, ...
                     'Tag', 'event', 'UserData', r);
             end
         end
 
-        function colour = colourForEvent(this, label)
-        %COLOURFOREVENT  The colour for one point event.
-        %   EventColorFcn lets a caller distinguish kinds of event that all
-        %   arrive through eeg.event and would otherwise be one indivisible
-        %   blue: the Photodiode preview draws the recording's triggers and
-        %   the onsets its detector found on the same axes, and the whole
-        %   point is telling them apart (see photodiodePreview).
+        function style = styleForEvent(this, label)
+        %STYLEFOREVENT  How one point event should be drawn.
+        %   Returns a struct with Color and LabelVerticalAlignment, filled
+        %   from EventStyleFcn where it has an opinion and defaulted where
+        %   it does not.
+        %
+        %   WHY A CALLER GETS A SAY AT ALL. Kinds of event that mean quite
+        %   different things all arrive through the one eeg.event array and
+        %   would otherwise be drawn identically. The Photodiode preview
+        %   puts the recording's triggers and the onsets its own detector
+        %   found on the same axes, and telling them apart is the entire
+        %   point of looking at it (see photodiodePreview).
+        %
+        %   WHY ALIGNMENT AND NOT JUST COLOUR. Two events a few milliseconds
+        %   apart put their labels in the same place, and the later one wins:
+        %   a diode onset 20 ms after its trigger sits close enough to hide
+        %   the trigger code, which is the value the analyst is checking. So
+        %   a caller can lift one kind of label to the top of the axes and
+        %   leave the other at the bottom, and both stay readable however
+        %   close together the lines are.
         %
         %   A function rather than a table, because the caller knows how to
         %   decide and this does not: type names are arbitrary strings, and
         %   any mapping kept here would have to be told about them anyway.
-        %   Returning empty from it means "no opinion", and falls through to
-        %   the default.
-            colour = [.1 .3 .8 .5];
-            if isempty(this.Options.EventColorFcn)
+        %   Returning empty, or a struct missing a field, means "no opinion"
+        %   and falls through to the default.
+            style = struct('Color', [.1 .3 .8 .5], 'LabelVerticalAlignment', 'bottom');
+            if isempty(this.Options.EventStyleFcn)
                 return;
             end
-            given = this.Options.EventColorFcn(label);
-            if ~isempty(given)
-                colour = given;
+
+            given = this.Options.EventStyleFcn(label);
+            if isempty(given) || ~isstruct(given)
+                return;
+            end
+            if isfield(given, 'Color') && ~isempty(given.Color)
+                style.Color = given.Color;
+            end
+            if isfield(given, 'LabelVerticalAlignment') && ~isempty(given.LabelVerticalAlignment)
+                style.LabelVerticalAlignment = char(given.LabelVerticalAlignment);
             end
         end
 

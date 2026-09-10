@@ -91,15 +91,31 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
 
         function theOnsetsAreDistinguishableFromTheTriggers(testCase)
         %THEONSETSAREDISTINGUISHABLEFROMTHETRIGGERS  Both are point events,
-        %   so without a colour rule they arrive as one indivisible blue and
+        %   so without a style rule they arrive as one indivisible blue and
         %   the reader cannot see which mark the detector contributed.
             [signal, onsets, events, pairs] = testCase.scenario();
 
-            [~, colourFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
 
-            testCase.verifyNotEmpty(colourFor('diode'));
-            testCase.verifyEmpty(colourFor('S 1'), ...
+            testCase.verifyNotEmpty(styleFor('diode'));
+            testCase.verifyEmpty(styleFor('S 1'), ...
                 'A trigger should get no opinion, and fall through to the default.');
+        end
+
+        function theDiodeLabelIsLiftedClearOfTheTrigger(testCase)
+        %THEDIODELABELISLIFTEDCLEAROFTHETRIGGER  A diode onset sits one
+        %   display lag after its trigger, which is tens of milliseconds.
+        %   With both labels at the bottom of the axes the later one covers
+        %   the earlier, and the one it covers is the trigger code, which is
+        %   the value being checked.
+            [signal, onsets, events, pairs] = testCase.scenario();
+
+            [~, styleFor] = photodiodePreview(signal, testCase.Srate, onsets, events, pairs, 'diode');
+            diode = styleFor('diode');
+
+            testCase.assertTrue(isfield(diode, 'LabelVerticalAlignment'));
+            testCase.verifyEqual(diode.LabelVerticalAlignment, 'top', ...
+                'The diode label should sit clear of the trigger label.');
         end
 
         function eventsAreInTimeOrder(testCase)
@@ -151,13 +167,13 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
 
         function signalViewColoursTheOnsetsDifferently(testCase)
             [signal, onsets, events, pairs] = testCase.scenario();
-            [preview, colourFor] = photodiodePreview(signal, testCase.Srate, ...
+            [preview, styleFor] = photodiodePreview(signal, testCase.Srate, ...
                 onsets, events, pairs, 'diode');
 
             fig = uifigure('Visible', 'off', 'Position', [100 100 900 500]);
             testCase.addTeardown(@() delete(fig));
             view = SignalView(fig, preview.times, preview, ...
-                'FitWholeRecording', true, 'EventColorFcn', colourFor);
+                'FitWholeRecording', true, 'EventStyleFcn', styleFor);
 
             lines = findobj(view.Axes, 'Type', 'ConstantLine');
             testCase.assertNotEmpty(lines, 'No event lines were drawn.');
@@ -165,6 +181,12 @@ classdef PhotodiodePreviewTest < matlab.unittest.TestCase
             colours = unique(round(vertcat(lines.Color) * 1000) / 1000, 'rows');
             testCase.verifyGreaterThan(size(colours, 1), 1, ...
                 'Triggers and diode onsets were drawn in the same colour.');
+
+            % And the labels are not all in one place, which is what makes a
+            % trigger readable next to the onset that answered it.
+            alignments = unique(string({lines.LabelVerticalAlignment}));
+            testCase.verifyGreaterThan(numel(alignments), 1, ...
+                'Every label was drawn at the same height, so they overlap.');
         end
     end
 

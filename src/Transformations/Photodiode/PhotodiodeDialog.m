@@ -104,9 +104,9 @@ function options = PhotodiodeDialog(EEG)
         end
         report = diodeTriggerDelay(onsets, sourceEvents, EEG.srate, o);
 
-        [preview, colourFor] = photodiodePreview(signal, EEG.srate, onsets, ...
+        [preview, styleFor] = photodiodePreview(signal, EEG.srate, onsets, ...
             sourceEvents, report.pairs, typeField.Value);
-        showPreview(preview, colourFor, chan, info);
+        showPreview(preview, styleFor, chan, info);
 
         if isempty(onsets)
             verdict.Text = info.reason;
@@ -124,7 +124,7 @@ function options = PhotodiodeDialog(EEG)
         end
     end
 
-    function showPreview(preview, colourFor, chan, info)
+    function showPreview(preview, styleFor, chan, info)
     %SHOWPREVIEW  Draw, or redraw, the channel and its marks.
     %   The view is rebuilt only when the channel changes. Every other
     %   control here changes the marks and not the signal, and rebuilding
@@ -139,7 +139,7 @@ function options = PhotodiodeDialog(EEG)
                 'FitWholeRecording', true, ...
                 'MaxEvents', 400, ...
                 'MaxAreas', 400, ...
-                'EventColorFcn', colourFor);
+                'EventStyleFcn', styleFor);
             viewChannel = chan;
             thresholdLine = [];
         else
