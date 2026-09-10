@@ -102,6 +102,62 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
             testCase.verifyLessThanOrEqual(max(abs(err)), 3);
         end
 
+        function anOnsetIsTimedToTheFootOfTheRamp(testCase)
+        %ANONSETISTIMEDTOTHEFOOTOFTHERAMP  A real display does not step, it
+        %   ramps: the panel takes a few milliseconds to reach full
+        %   brightness. The moment being measured is when it STARTED, since
+        %   the climb after that is the monitor's own pixel response, not
+        %   anything the presentation software did.
+        %
+        %   The tolerance is not zero, and the reason is in refineOnsets: on
+        %   a channel carrying this much flicker, the foot cannot be called
+        %   until the ramp has climbed clear of the noise, which on a 10 ms
+        %   ramp is a millisecond or so. Late by a known millisecond beats
+        %   late by half the panel's rise time.
+            rampMs = 10;
+            [signal, truth] = testCase.withRampedPatches(60, 20000, 100, rampMs);
+
+            onsets = detectDiodeOnsets(signal, testCase.Srate);
+
+            testCase.assertEqual(numel(onsets), numel(truth), ...
+                sprintf('Found %d of %d patches.', numel(onsets), numel(truth)));
+            err = onsets(:)' - truth(:)';
+            testCase.verifyLessThanOrEqual(median(err), 3, ...
+                sprintf(['Onsets sit %+.1f ms after the foot of the ramp; half height ' ...
+                    'would be %+.1f.'], median(err), rampMs / 2));
+            testCase.verifyGreaterThanOrEqual(median(err), -1, ...
+                'Onsets sit before the ramp even began.');
+        end
+
+        function aSlowPanelIsNotChargedToTheTimingChain(testCase)
+        %ASLOWPANELISNOTCHARGEDTOTHETIMINGCHAIN  The point of timing to the
+        %   foot. Two recordings identical but for the panel's rise time, 4
+        %   ms against 16 ms, must report nearly the same onset: that
+        %   difference belongs to the monitor.
+        %
+        %   Timing to half height would separate them by exactly half the
+        %   difference in rise time, 6 ms, and that is the number this case
+        %   is really testing against. It does not demand zero, because the
+        %   noise floor makes the callable foot a little later on the slower
+        %   ramp, but it does demand a large improvement on 6.
+            [fast, truth] = testCase.withRampedPatches(60, 20000, 100, 4);
+            slow = testCase.withRampedPatches(60, 20000, 100, 16);
+
+            fastOnsets = detectDiodeOnsets(fast, testCase.Srate);
+            slowOnsets = detectDiodeOnsets(slow, testCase.Srate);
+
+            testCase.assertEqual(numel(fastOnsets), numel(truth));
+            testCase.assertEqual(numel(slowOnsets), numel(truth));
+
+            drift = median(slowOnsets(:)' - truth(:)') - median(fastOnsets(:)' - truth(:)');
+            atHalfHeight = (16 - 4) / 2;
+
+            testCase.verifyLessThan(abs(drift), atHalfHeight / 2, ...
+                sprintf(['A panel three times slower moved the reported onset by %.1f ms. ' ...
+                    'Timing to half height would move it %.1f, so the rise time is still ' ...
+                    'largely being measured.'], drift, atHalfHeight));
+        end
+
         function aPatchSmallerThanTheFlickerIsRefused(testCase)
         %APATCHSMALLERTHANTHEFLICKERISREFUSED  Where the detector gives up
         %   is worth pinning: a step well under the flicker amplitude cannot
@@ -232,6 +288,19 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function [signal, truth] = withRampedPatches(testCase, seconds, amp, durMs, rampMs)
+        %WITHRAMPEDPATCHES  withPatches, but each patch ramps up over RAMPMS
+        %   instead of stepping, which is what a panel actually does. TRUTH
+        %   is where each ramp BEGINS, which is the instant being measured.
+            signal = testCase.flickerOnly(seconds);
+            truth = 1000 : 2000 : (numel(signal) - durMs - 10);
+            ramp = linspace(0, amp, rampMs);
+            for t = truth
+                signal(t:t + rampMs - 1) = signal(t:t + rampMs - 1) + ramp;
+                signal(t + rampMs:t + durMs - 1) = signal(t + rampMs:t + durMs - 1) + amp;
+            end
+        end
+
         function signal = flickerOnly(testCase, seconds)
         %FLICKERONLY  The real thing: mains flicker on a steady baseline,
         %   with a little drift and noise, and no patch anywhere.

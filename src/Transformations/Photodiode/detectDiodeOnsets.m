@@ -58,15 +58,41 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
     info.low = lo;
     info.high = hi;
 
+    % A QUARTER OF THE WAY UP, NOT HALF. The level's job is to say where the
+    % high state begins, and the high state begins at the foot of the edge,
+    % not at its middle: a display ramps, and the midpoint of the range sits
+    % part way up that ramp by construction.
+    %
+    % It can be this low safely because it is applied to the SMOOTHED
+    % channel, where the mains flicker that dominates a raw diode trace has
+    % already gone. On the raw signal a quarter of the range would sit
+    % inside the flicker on this lab's rig; on the smoothed one the baseline
+    % is a line rather than a band.
+    %
+    % A quarter and not a tenth because "low" is the 5th percentile of a
+    % channel that still drifts, so the bottom of the range is itself only
+    % approximate, and a level too close to it starts tracking that drift.
     if isnan(o.Threshold)
-        level = (lo + hi) / 2;
+        level = lo + 0.25 * (hi - lo);
     else
         level = o.Threshold;
     end
     info.threshold = level;
 
+    % BIMODALITY IS JUDGED AT THE MIDPOINT, wherever the detection level
+    % sits. The midpoint is the valley between the two states, and the
+    % separability metric only means what it says when the split is there:
+    % splitting a quarter of the way up puts baseline samples into the high
+    % group and dilutes the very separation being measured. Measured, on a
+    % clean recording of 30 patches, moving the split from the midpoint to a
+    % quarter took the separability from 3.43 to 2.88 and the detector then
+    % refused its own patches as "not two states".
+    %
+    % So the two levels do two jobs and are computed separately: this one
+    % decides WHETHER there is a patch signal at all, and the lower one
+    % above decides WHERE each patch starts.
     below = smoothed < level;
-    info.separation = separability(smoothed, below);
+    info.separation = separability(smoothed, smoothed < (lo + hi) / 2);
 
     % A chosen threshold is the analyst overriding this judgement, so the
     % separability test only gates the automatic case.
@@ -96,6 +122,11 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
     % for: an instrument for measuring display delay must not have a delay
     % of its own. So each onset is re-timed against the unsmoothed channel,
     % using levels taken from just before and just after it.
+    %
+    % AND IT IS TIMED TO THE FOOT OF THE EDGE, not its half-height: the
+    % display began to change when the trace left its baseline, and the climb
+    % from there to half height is the panel's own pixel response. See
+    % refineOnsets, which says what that costs in repeatability.
     onsets = refineOnsets(onsets, signal, ...
         round(o.SmoothMs * srate / 1000), strcmpi(o.Edge, 'trailing'));
 
@@ -185,17 +216,44 @@ end
 
 
 function idx = refineOnsets(idx, raw, w, trailing)
-%REFINEONSETS  Re-time each onset against the unsmoothed channel.
-%   The coarse onset is within about half a smoothing window of the truth,
-%   so the true edge is looked for in a window of that size around it. The
-%   level to cross is the midpoint between the signal just BEFORE the edge
-%   and the signal just AFTER it, both taken locally: a diode's baseline
-%   drifts over a recording, and a level derived from the whole channel
-%   would be wrong at both ends of a long session.
+%REFINEONSETS  Re-time each onset to the FOOT of the edge, against the
+%   unsmoothed channel.
 %
-%   Medians, not means, for those two levels. The "before" window still
-%   contains mains flicker, and the tail of a bright patch can overshoot;
-%   a median ignores both.
+%   The coarse onset is within about half a smoothing window of the truth,
+%   so the edge is looked for in a window of that size around it. Two steps:
+%   find the edge by its half-height, then walk back to where it began.
+%
+%   HALF-HEIGHT FINDS THE EDGE. The level is the midpoint between the signal
+%   just BEFORE it and just AFTER it, both taken locally: a diode's baseline
+%   drifts over a recording, and a level from the whole channel would be
+%   wrong at both ends of a long session. Medians, not means: the "before"
+%   window still contains mains flicker and the tail of a bright patch can
+%   overshoot, and a median ignores both.
+%
+%   THEN THE FOOT IS WHAT IS REPORTED, which is a deliberate choice of
+%   measurement convention and worth being explicit about. Half-height is
+%   the commoner convention in the literature and is the more repeatable
+%   number, because it sits on the steepest part of the edge where a little
+%   noise moves it least. But the quantity a photodiode is here to measure
+%   is WHEN THE DISPLAY BEGAN TO CHANGE, and the display began to change at
+%   the foot: everything between the foot and the half-height is the pixel
+%   response of the panel, which is a property of the monitor and not of the
+%   presentation software. Reporting the half-height therefore charges the
+%   timing chain for the panel's rise time.
+%
+%   THE FOOT IS FOUND BY WALKING BACK to the last sample still at baseline,
+%   not by taking a fixed fraction of the step. Baseline is not a point but
+%   a band: this channel carries mains flicker, and on this lab's rig that
+%   is thousands of units peak to peak. So "departed" means further from the
+%   local median than the local scatter allows, using a robust spread, and
+%   the noisier the channel the later the foot honestly is. A fixed 5% or
+%   10% of the step would sit inside the flicker on a bad channel and pick a
+%   flicker peak instead of the edge.
+%
+%   The floor keeps that from failing the other way. On a clean synthetic
+%   signal the scatter is zero, every sample counts as departed, and the
+%   walk would run to the start of the window; requiring the departure to be
+%   at least a small fraction of the step stops it.
     if isempty(idx) || w <= 1
         return;
     end
@@ -210,7 +268,8 @@ function idx = refineOnsets(idx, raw, w, trailing)
         if isempty(before) || isempty(after)
             continue;
         end
-        level = (median(before) + median(after)) / 2;
+        base = median(before);
+        level = (base + median(after)) / 2;
 
         % The first sample in the window on the correct side of that level,
         % searching forward from the start of the window.
@@ -220,9 +279,26 @@ function idx = refineOnsets(idx, raw, w, trailing)
         else
             crossed = find(seg > level, 1, 'first');
         end
-        if ~isempty(crossed)
-            idx(k) = lo + crossed - 1;
+        if isempty(crossed)
+            continue;
         end
+
+        idx(k) = lo + footOf(seg, crossed, base, median(after)) - 1;
     end
     idx = unique(idx);
+end
+
+% ======================================================================= %
+function j = footOf(seg, crossed, base, top)
+%FOOTOF  The first sample of the run of departure that reaches CROSSED.
+%   Walks back from the half-height crossing while the sample before is
+%   still away from baseline, and stops at the first one that is not.
+    scatter = 1.4826 * median(abs(seg(1:max(1, crossed - 1)) - base));
+    step = abs(top - base);
+    departure = max(3 * scatter, 0.05 * step);
+
+    j = crossed;
+    while j > 1 && abs(seg(j - 1) - base) > departure
+        j = j - 1;
+    end
 end
