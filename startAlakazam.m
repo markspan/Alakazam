@@ -17,7 +17,7 @@ function app = startAlakazam(workspaceFile)
 %   Run this from anywhere as long as this file is on the path (for example
 %   from the repository root). If you prefer to launch with the bare command
 %   'Alakazam', add the src/ folder to your MATLAB path once (pathtool or a
-%   startup.m) and call the class directly.
+%   startup.m) and call the class directly...
 %
 %   See PROJECT_STRUCTURE.md for the authored/vendored layout.
 
