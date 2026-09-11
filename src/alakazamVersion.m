@@ -36,7 +36,7 @@ function info = alakazamVersion()
 
     % Bumped in the commit that gets tagged. Only reached when neither the
     % packaged VERSION file nor a git checkout is available.
-    VERSION_FALLBACK = 'V0.4.3.8';
+    VERSION_FALLBACK = 'V0.4.3.9';
 
     % RESOLVED ON EVERY CALL, not cached. An earlier version held it in a
     % persistent, on the grounds that resolving it shells out to git and
