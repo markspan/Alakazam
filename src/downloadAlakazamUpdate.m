@@ -1,45 +1,55 @@
-function newRoot = downloadAlakazamUpdate(info, currentRoot)
+function pendingPath = downloadAlakazamUpdate(info, currentRoot)
 %DOWNLOADALAKAZAMUPDATE  Fetch and stage a newer Alakazam release.
-%   NEWROOT = downloadAlakazamUpdate(INFO, CURRENTROOT), where INFO is a
+%   PENDINGPATH = downloadAlakazamUpdate(INFO, CURRENTROOT), where INFO is a
 %   struct from CHECKFORALAKAZAMUPDATE and CURRENTROOT is the running app's
 %   own repository root (Alakazam.RepoRoot: the folder holding
 %   startAlakazam.m, src/, Data/, ...), downloads INFO.DownloadUrl and
-%   unpacks it into a SIBLING folder of CURRENTROOT named after the new
-%   release (e.g. "...\Alakazam-V0.5.0"), then copies this install's Data/
-%   folder and any *.wksp workspace files at its root into it -- neither is
-%   part of the packaged zip (see .github/workflows/release.yml's own
-%   exclusion check), so the new install would otherwise come up with no
-%   data and no saved workspace to open.
+%   unpacks it into "AlakazamUpdatePending", a FIXED-NAME sibling folder of
+%   CURRENTROOT -- replacing anything already staged there from an earlier,
+%   unapplied download.
 %
-%   WHY A SIBLING FOLDER, NOT IN PLACE. CURRENTROOT is on this MATLAB
-%   process's path right now, with its classdefs already loaded -- Alakazam
-%   itself is a live instance of one of them. Deleting or overwriting those
-%   files under a running session risks leaving MATLAB in a confused state
-%   until `clear classes`, which this call cannot safely do to itself.
-%   Staging beside the current install and asking the analyst to relaunch
-%   startAlakazam from there costs one extra step but never touches a file
-%   this process has open. CURRENTROOT itself is never modified, so nothing
-%   here can lose an analyst's existing install or data even if the update
-%   is abandoned partway through.
+%   NOT APPLIED YET. This only stages the download; CURRENTROOT itself is
+%   untouched, so this running session keeps working exactly as before no
+%   matter how the download goes. The swap into CURRENTROOT happens the next
+%   time startAlakazam runs (see APPLYPENDINGALAKAZAMUPDATE), which is also
+%   where Data/ and any *.wksp workspace files get carried across -- not
+%   here, so a download taken today and applied next week carries next
+%   week's copy of those, not today's.
+%
+%   WHY NOT APPLY IT NOW. CURRENTROOT is on this MATLAB process's path right
+%   now, with its classdefs already loaded -- Alakazam itself is a live
+%   instance of one of them. Overwriting those files under a running session
+%   risks leaving MATLAB in a confused state until `clear classes`, which
+%   this call cannot safely do to itself. Staging now and swapping in on the
+%   next ordinary restart costs nothing an analyst was not already doing
+%   (quitting and reopening MATLAB) and never touches a file this process
+%   has open.
+%
+%   A FIXED PENDING-FOLDER NAME, NOT ONE PER VERSION: at most one staged
+%   download exists at a time, so clicking Update again before restarting
+%   just replaces what was staged, rather than accumulating a new sibling
+%   folder per release.
 %
 %   Throws (rather than returning an error struct) on any failure: the
 %   caller, Alakazam.onUpdate, is a single button-press handler that already
 %   wraps this in try/catch to show ME.message in a uialert.
 %
-%   See also CHECKFORALAKAZAMUPDATE, ALAKAZAM/ONUPDATE.
+%   See also CHECKFORALAKAZAMUPDATE, APPLYPENDINGALAKAZAMUPDATE,
+%   ALAKAZAM/ONUPDATE.
 
     if ~info.CheckSucceeded || isempty(info.DownloadUrl)
         error('downloadAlakazamUpdate:NoDownloadUrl', ...
             'No download URL for this release -- run checkForAlakazamUpdate first.');
     end
 
-    parentDir  = fileparts(currentRoot);
-    targetName = ['Alakazam-' info.LatestVersion];
-    newRoot    = fullfile(parentDir, targetName);
-    if exist(newRoot, 'dir')
-        error('downloadAlakazamUpdate:AlreadyStaged', ...
-            ['"%s" already exists. Delete it (if it is a leftover from a previous ' ...
-             'download) or launch startAlakazam from there.'], newRoot);
+    % Fixed name: must match the sibling applyPendingAlakazamUpdate (at the
+    % repository root, not here) looks for. Kept as a literal in both rather
+    % than a shared function, because that one runs before src/ -- where
+    % this function lives -- is even on the path; AlakazamPendingUpdatePath
+    % TestConsistency (tests/) pins the two literals to match.
+    pendingPath = fullfile(fileparts(currentRoot), 'AlakazamUpdatePending');
+    if isfolder(pendingPath)
+        rmdir(pendingPath, 's');   % a stale, unapplied download from earlier
     end
 
     zipPath = [tempname() '.zip'];
@@ -59,17 +69,7 @@ function newRoot = downloadAlakazamUpdate(info, currentRoot)
         error('downloadAlakazamUpdate:UnexpectedLayout', ...
             'The downloaded package does not look like an Alakazam release.');
     end
-    movefile(fullfile(stagingDir, entries(1).name), newRoot);
-
-    dataDir = fullfile(currentRoot, 'Data');
-    if exist(dataDir, 'dir')
-        copyfile(dataDir, fullfile(newRoot, 'Data'));
-    end
-    workspaceFiles = dir(fullfile(currentRoot, '*.wksp'));
-    for k = 1:numel(workspaceFiles)
-        copyfile(fullfile(currentRoot, workspaceFiles(k).name), ...
-            fullfile(newRoot, workspaceFiles(k).name));
-    end
+    movefile(fullfile(stagingDir, entries(1).name), pendingPath);
 end
 
 % ======================================================================= %

@@ -9,19 +9,24 @@ function onUpdate(this)
 %   group themselves.
 %
 %   Downloading does not touch this running install: downloadAlakazamUpdate
-%   stages the new release in a sibling folder and this only ever reports
-%   where it landed. See that function's own header for why it does not
-%   overwrite CURRENTROOT or relaunch the app.
+%   only stages the new release in a fixed sibling folder. Applying it is
+%   applyPendingAlakazamUpdate's job, run from startAlakazam on the next
+%   ordinary restart -- see that function's own header for why it happens
+%   there and not here. All this callback tells the analyst is to restart
+%   when they are ready; there is nothing to go find or launch by hand.
 %
 %   PATH SHADOWING. alakazamVersion, like everything else this app calls, is
 %   a plain function resolved by the MATLAB path -- not by which install's
-%   window asked. Launching a second copy of Alakazam in the same MATLAB
-%   session, rather than quitting MATLAB and reopening it from the new
-%   install, can leave two folders' alakazamVersion.m on the path at once;
-%   whichever one MATLAB finds first answers, regardless of which window
-%   this callback is running for. shadowNote below detects exactly that (the
-%   answer did not come from THIS instance's own RootDir) and appends a
-%   warning rather than silently showing an unreliable comparison.
+%   window asked. This is a much narrower risk now that an update applies
+%   itself on the next ordinary restart rather than asking the analyst to
+%   launch a second, differently-named install folder by hand -- but running
+%   two copies in the same MATLAB session at all (say, a developer comparing
+%   installs deliberately) can still leave two folders' alakazamVersion.m on
+%   the path at once; whichever one MATLAB finds first answers, regardless
+%   of which window this callback is running for. shadowNote below detects
+%   exactly that (the answer did not come from THIS instance's own RootDir)
+%   and appends a warning rather than silently showing an unreliable
+%   comparison.
 %
 %   See also CHECKFORALAKAZAMUPDATE, DOWNLOADALAKAZAMUPDATE, ALAKAZAM/ONABOUT.
 
@@ -59,7 +64,7 @@ function onUpdate(this)
     [restoreBusy, ~] = beginBusy(this.MainFigure, ...
         sprintf('Downloading %s...', info.LatestVersion)); %#ok<ASGLU>
     try
-        newRoot = downloadAlakazamUpdate(info, this.RepoRoot);
+        downloadAlakazamUpdate(info, this.RepoRoot);
     catch ME
         clear restoreBusy;
         uialert(this.MainFigure, ME.message, 'Could not download the update', 'Icon', 'warning');
@@ -67,11 +72,16 @@ function onUpdate(this)
     end
     clear restoreBusy;
 
+    % Applying it is startAlakazam's job, next launch (see
+    % applyPendingAlakazamUpdate), not this call's: this running copy is on
+    % the MATLAB path with its classdefs already loaded, and overwriting
+    % those files under a live session is what the sibling staging folder
+    % exists to avoid. So the only thing left to tell the analyst is to
+    % restart the ordinary way -- there is no folder to go find and launch
+    % from any more.
     uialert(this.MainFigure, ...
-        sprintf(['Downloaded %s to:\n%s\n\n' ...
-                 'This running copy is untouched. Close Alakazam and run startAlakazam ' ...
-                 'from that folder when you are ready to switch to it.'], ...
-            info.LatestVersion, newRoot), ...
+        sprintf(['Downloaded %s. Quit Alakazam and run startAlakazam again ' ...
+                 '(the usual way) to finish installing it.'], info.LatestVersion), ...
         'Update downloaded', 'Icon', 'success');
 end
 

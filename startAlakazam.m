@@ -19,9 +19,18 @@ function app = startAlakazam(workspaceFile)
 %   'Alakazam', add the src/ folder to your MATLAB path once (pathtool or a
 %   startup.m) and call the class directly...
 %
+%   IF AN UPDATE WAS DOWNLOADED (the Update button in Alakazam's About
+%   group) but not yet applied, this swaps it in first -- see
+%   applyPendingAlakazamUpdate for why that has to happen here, before src/
+%   is even on the path, rather than from inside the running app that
+%   downloaded it. An analyst who used Update sees nothing different: they
+%   quit Alakazam and run startAlakazam again the way they always would, and
+%   the new version is just what starts.
+%
 %   See PROJECT_STRUCTURE.md for the authored/vendored layout.
 
     here = fileparts(mfilename('fullpath'));
+    applyPendingAlakazamUpdate(here);
     addpath(fullfile(here, 'src'));
     if nargin >= 1
         app = Alakazam(workspaceFile);
