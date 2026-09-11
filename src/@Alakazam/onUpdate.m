@@ -15,6 +15,14 @@ function onUpdate(this)
 %   there and not here. All this callback tells the analyst is to restart
 %   when they are ready; there is nothing to go find or launch by hand.
 %
+%   A GIT CHECKOUT IS NEVER OFFERED THE DOWNLOAD, only told a newer release
+%   exists. applyPendingAlakazamUpdate's swap moves THIS.ROOTDIR's parent
+%   aside and replaces it wholesale -- exactly right for an unpacked release
+%   package, and exactly wrong for a developer's working tree: it would
+%   relocate .git and any uncommitted edits into AlakazamPreUpdateBackup and
+%   leave a plain, un-versioned release folder in their place. A checkout is
+%   updated with git, not this button.
+%
 %   PATH SHADOWING. alakazamVersion, like everything else this app calls, is
 %   a plain function resolved by the MATLAB path -- not by which install's
 %   window asked. This is a much narrower risk now that an update applies
@@ -47,6 +55,16 @@ function onUpdate(this)
         uialert(this.MainFigure, ...
             withNote(sprintf('You are up to date (%s).', info.CurrentVersion), note), ...
             'Update Alakazam', 'Icon', 'success');
+        return;
+    end
+
+    if strcmp(alakazamVersion().VersionSource, 'git checkout')
+        uialert(this.MainFigure, withNote(sprintf(['%s is available (you have %s), but this ' ...
+            'is a git checkout, not an installed release. Applying an update here would ' ...
+            'replace this working copy -- including any uncommitted changes -- with an ' ...
+            'unpacked release package.\n\nUse git pull (or fetch and check out the tag) ' ...
+            'instead.'], info.LatestVersion, info.CurrentVersion), note), ...
+            'Update Alakazam', 'Icon', 'warning');
         return;
     end
 
