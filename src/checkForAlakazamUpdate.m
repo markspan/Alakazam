@@ -29,7 +29,7 @@ function info = checkForAlakazamUpdate(fetchLatestRelease)
 %   something that happens to them while they are trying to work.
 %
 %   See also ALAKAZAMVERSION, ISALAKAZAMVERSIONNEWER, ALAKAZAM/ONUPDATE,
-%   DOWNLOADALAKAZAMUPDATE.
+%   DOWNLOADALAKAZAMUPDATE..
 
     if nargin < 1
         fetchLatestRelease = @() webread( ...
