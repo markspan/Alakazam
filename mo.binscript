@@ -1,0 +1,17 @@
+% epoch_start_ms: -200
+% epoch_stop_ms: 800
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+let setwinner = {"s40" "s42"}
+let faceleft = {"s40" "s41"}
+let setloser = {"s41" "s43"}
+let faceright = {"s42" "s43"}
+
+
+bin 1 "winner" setwinner 
+bin 2 "loser" setloser
+bin 3 "winning" = bin 1 - bin 2
+bin 4 "left" faceleft
+bin 5 "right" faceright
+bin 6 "direction" = bin 4 - bin 5
