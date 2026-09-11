@@ -84,6 +84,34 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
                 sprintf('Found %d of %d patches.', numel(onsets), numel(truth)));
         end
 
+        function fallingEdgesAreFoundWhenAskedFor(testCase)
+        %FALLINGEDGESAREFOUNDWHENASKEDFOR  Edge='trailing': the onset is
+        %   where each patch ENDS (the diode returning to baseline), not
+        %   where it begins. This is the option PhotodiodeDialog exposes as
+        %   "Falling", for a rig wired so the patch going dark is what marks
+        %   the flip.
+        %
+        %   Also guards against the boundary bug this option shipped with
+        %   the first time round: risingEdges' "already high at sample 1"
+        %   rule means baseline (the diode's ordinary resting state, and what
+        %   this recording, like almost every real one, starts in) under
+        %   Edge='trailing', so left unguarded it invented a spurious onset
+        %   at sample 1 on every run. Asserting the exact count here (not
+        %   just that the real edges are found) is what catches that if it
+        %   comes back.
+            [signal, riseTruth] = testCase.withPatches(60, 20000, 100);
+            fallTruth = riseTruth + 100;        % each patch's own 100 ms duration
+
+            onsets = detectDiodeOnsets(signal, testCase.Srate, struct('Edge', 'trailing'));
+
+            testCase.assertEqual(numel(onsets), numel(fallTruth), ...
+                sprintf('Found %d falling edges, expected %d (no boundary artefact).', ...
+                    numel(onsets), numel(fallTruth)));
+            err = onsets(:)' - fallTruth(:)';
+            testCase.verifyEqual(median(err), 0, 'AbsTol', 1, ...
+                sprintf('Systematic timing bias of %+.1f ms.', median(err)));
+        end
+
         function onsetTimingIsUnbiased(testCase)
         %ONSETTIMINGISUNBIASED  The property that matters most, and the one
         %   that was wrong first. Smoothing turns a step into a ramp, and

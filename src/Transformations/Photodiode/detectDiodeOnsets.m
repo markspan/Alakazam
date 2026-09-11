@@ -105,11 +105,23 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
     end
 
     high = ~below;
-    if strcmpi(o.Edge, 'trailing')
+    trailing = strcmpi(o.Edge, 'trailing');
+    if trailing
         high = below;                       % falling edges are rising edges of the inverse
     end
 
-    onsets = risingEdges(high);
+    % THE "ALREADY HIGH AT SAMPLE 1" RULE IS LEADING-ONLY. risingEdges below
+    % flags an onset at sample 1 when HIGH is already true there, meaning "the
+    % display had already changed before this recording started" -- a fact
+    % worth reporting for the state Edge='leading' looks for (the patch is
+    % lit). Under Edge='trailing', HIGH means baseline: the diode's ordinary
+    % resting state, which is what essentially every real recording starts
+    % in. Left enabled, that turns into a spurious onset at sample 1 on
+    % almost every trailing-edge run -- not "a falling edge happened here",
+    % just "recording began before any patch was shown", which is not a
+    % falling edge at all. Suppressed here rather than in risingEdges itself,
+    % which stays a plain, direction-agnostic edge finder.
+    onsets = risingEdges(high, ~trailing);
     onsets = holdFor(onsets, high, round(o.MinDurationMs * srate / 1000));
     onsets = separated(onsets, round(o.MinGapMs * srate / 1000));
 
@@ -176,9 +188,17 @@ function s = separability(smoothed, below)
     s = abs(mean(b) - mean(a)) / spread;
 end
 
-function idx = risingEdges(high)
+function idx = risingEdges(high, includeBoundary)
+%RISINGEDGES  Sample indices where HIGH goes from false to true.
+%   INCLUDEBOUNDARY (default true) additionally reports sample 1 as an onset
+%   when HIGH is already true there -- meaningful when HIGH means "the state
+%   this call is looking for the start of" (Edge='leading'), not when it
+%   means the opposite state's baseline (Edge='trailing'); see the caller.
+    if nargin < 2
+        includeBoundary = true;
+    end
     idx = find(high(2:end) & ~high(1:end-1)) + 1;
-    if ~isempty(high) && high(1)
+    if includeBoundary && ~isempty(high) && high(1)
         idx = [1, idx];                     % already high at the first sample
     end
 end

@@ -26,7 +26,7 @@ function options = PhotodiodeDialog(EEG)
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
     % ---- settings ---------------------------------------------------------
-    top = uigridlayout(outer, [3 8], ...
+    top = uigridlayout(outer, [4 8], ...
         'ColumnWidth', {58, '1x', 62, 70, 74, 70, 78, 70}, ...
         'RowHeight', {'fit', 'fit'}, 'Padding', [0 0 0 0], ...
         'ColumnSpacing', 6, 'RowSpacing', 6);
@@ -77,6 +77,26 @@ function options = PhotodiodeDialog(EEG)
         'ValueChangedFcn', @(~,~) refresh());
     triggersField.Layout.Row = 3;
     triggersField.Layout.Column = [2 8];
+
+    % WHICH TRANSITION COUNTS AS AN ONSET. detectDiodeOnsets calls this
+    % 'leading'/'trailing' (the edge of the HIGH state); shown here as
+    % Rising/Falling, the terms an analyst actually thinks in when looking at
+    % the trace. There was no control for this at all before -- Edge silently
+    % defaulted to 'leading' (rising) in detectDiodeOnsets, which is right
+    % for a patch that goes bright and wrong for a rig wired so the patch
+    % going dark is the one that marks the flip. Given its own row (rather
+    % than folded into the already-full rows above) and explicit Layout, so
+    % it cannot be disturbed by the auto-flow placement those rows rely on.
+    edgeLabel = uilabel(top, 'Text', 'Edge');
+    edgeLabel.Layout.Row = 4;
+    edgeLabel.Layout.Column = 1;
+    edgeDrop = uidropdown(top, 'Items', {'Rising', 'Falling'}, ...
+        'ItemsData', {'leading', 'trailing'}, 'Value', 'leading', ...
+        'Tooltip', ['Which transition of the diode signal is the onset: Rising if the ' ...
+            'patch going bright marks the flip, Falling if going dark does.'], ...
+        'ValueChangedFcn', @(~,~) refresh());
+    edgeDrop.Layout.Row = 4;
+    edgeDrop.Layout.Column = 2;
 
     % ---- plot + verdict ----------------------------------------------------
     mid = uigridlayout(outer, [3 2], 'RowHeight', {'1x', 26, 'fit'}, ...
@@ -342,7 +362,9 @@ function options = PhotodiodeDialog(EEG)
     end
 
     function types = parseTypes(text)
-    %PARSETYPES  "s106, s107" or "s106 s107" into a cellstr. Empty means any.
+    %PARSETYPES  "s106, s107" or "s106 s107" into a cellstr; a token shaped
+    %   like MATLAB range notation ("40:43", or "40:2:48" with a step)
+    %   expands to the individual codes it names. Empty means any.
         text = strtrim(char(text));
         if isempty(text)
             types = {};
@@ -350,7 +372,8 @@ function options = PhotodiodeDialog(EEG)
         end
         parts = strsplit(text, {',', ' ', ';'});
         parts = parts(~cellfun(@isempty, strtrim(parts)));
-        types = cellfun(@strtrim, parts, 'UniformOutput', false);
+        parts = cellfun(@strtrim, parts, 'UniformOutput', false);
+        types = expandTriggerRanges(parts);
     end
 
     function o = currentOptions()
@@ -361,6 +384,7 @@ function options = PhotodiodeDialog(EEG)
         o.MinDurationMs = durField.Value;
         o.MaxLagMs = lagField.Value;
         o.Mode = modeDrop.Value;
+        o.Edge = edgeDrop.Value;
         o.EventSuffix = typeField.Value;
         o.Types = parseTypes(triggersField.Value);
         t = str2double(threshField.Value);
