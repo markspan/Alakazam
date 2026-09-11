@@ -98,6 +98,26 @@ function options = PhotodiodeDialog(EEG)
     edgeDrop.Layout.Row = 4;
     edgeDrop.Layout.Column = 2;
 
+    % WHERE ON THE EDGE THE ONSET IS TIMED. Foot (default, unchanged from
+    % before this control existed) is when the trace first leaves baseline --
+    % the true display-change moment, which is what this transformation
+    % exists to measure, and what its own timing-bias tests are pinned to.
+    % Half-height sits on the steepest part of the ramp instead: less exact
+    % (it includes part of the panel's own rise time) but more repeatable,
+    % because a little noise moves it least there. See refineOnsets in
+    % detectDiodeOnsets for the full argument either way.
+    onsetLabel = uilabel(top, 'Text', 'Onset');
+    onsetLabel.Layout.Row = 4;
+    onsetLabel.Layout.Column = 3;
+    onsetDrop = uidropdown(top, 'Items', {'Foot', 'Half-height'}, ...
+        'ItemsData', {'foot', 'half'}, 'Value', 'foot', ...
+        'Tooltip', ['Where on the edge to time the onset: Foot is when the trace first ' ...
+            'leaves baseline (the true display change); Half-height is more repeatable ' ...
+            'but includes part of the panel''s own rise time.'], ...
+        'ValueChangedFcn', @(~,~) refresh());
+    onsetDrop.Layout.Row = 4;
+    onsetDrop.Layout.Column = 4;
+
     % ---- plot + verdict ----------------------------------------------------
     mid = uigridlayout(outer, [3 2], 'RowHeight', {'1x', 26, 'fit'}, ...
         'ColumnWidth', {'1x', 330}, 'Padding', [0 0 0 0], ...
@@ -385,6 +405,7 @@ function options = PhotodiodeDialog(EEG)
         o.MaxLagMs = lagField.Value;
         o.Mode = modeDrop.Value;
         o.Edge = edgeDrop.Value;
+        o.OnsetPoint = onsetDrop.Value;
         o.EventSuffix = typeField.Value;
         o.Types = parseTypes(triggersField.Value);
         t = str2double(threshField.Value);

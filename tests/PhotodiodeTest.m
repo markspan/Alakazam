@@ -157,6 +157,29 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
                 'Onsets sit before the ramp even began.');
         end
 
+        function onsetPointHalfTimesLaterThanFoot(testCase)
+        %ONSETPOINTHALFTIMESLATERTHANFOOT  OnsetPoint='half' is the other
+        %   convention detectDiodeOnsets supports (PhotodiodeDialog's
+        %   "Onset" control): steeper part of the ramp, less exact but more
+        %   repeatable. On a known ramp its onsets must sit later than
+        %   'foot' by something close to half the ramp, not at the foot.
+            rampMs = 10;
+            [signal, truth] = testCase.withRampedPatches(60, 20000, 100, rampMs);
+
+            onsetsFoot = detectDiodeOnsets(signal, testCase.Srate, struct('OnsetPoint', 'foot'));
+            onsetsHalf = detectDiodeOnsets(signal, testCase.Srate, struct('OnsetPoint', 'half'));
+
+            testCase.assertEqual(numel(onsetsHalf), numel(truth));
+            errFoot = median(onsetsFoot(:)' - truth(:)');
+            errHalf = median(onsetsHalf(:)' - truth(:)');
+            testCase.verifyGreaterThan(errHalf, errFoot, ...
+                sprintf('Half-height (%+.1f ms) is not later than foot (%+.1f ms).', ...
+                    errHalf, errFoot));
+            testCase.verifyEqual(errHalf, rampMs / 2, 'AbsTol', 2, ...
+                sprintf('Half-height onsets sit %+.1f ms from the foot; expected close to %.1f.', ...
+                    errHalf, rampMs / 2));
+        end
+
         function aSlowPanelIsNotChargedToTheTimingChain(testCase)
         %ASLOWPANELISNOTCHARGEDTOTHETIMINGCHAIN  The point of timing to the
         %   foot. Two recordings identical but for the panel's rise time, 4

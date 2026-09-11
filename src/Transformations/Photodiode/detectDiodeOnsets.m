@@ -12,6 +12,7 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
 %     MinGapMs      minimum spacing between onsets      (default 100)
 %     MinSeparation how bimodal the signal must be      (default 3)
 %     Edge          'leading' | 'trailing'              (default 'leading')
+%     OnsetPoint    'foot' | 'half'                     (default 'foot')
 %
 %   THE HARD PART IS NOT FINDING A STEP, IT IS NOT FIRING ON FLICKER.
 %   Measured from real recordings on this lab's rig, a photodiode channel
@@ -135,12 +136,13 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
     % of its own. So each onset is re-timed against the unsmoothed channel,
     % using levels taken from just before and just after it.
     %
-    % AND IT IS TIMED TO THE FOOT OF THE EDGE, not its half-height: the
-    % display began to change when the trace left its baseline, and the climb
-    % from there to half height is the panel's own pixel response. See
-    % refineOnsets, which says what that costs in repeatability.
+    % AND BY DEFAULT IT IS TIMED TO THE FOOT OF THE EDGE, not its
+    % half-height: the display began to change when the trace left its
+    % baseline, and the climb from there to half height is the panel's own
+    % pixel response. OnsetPoint='half' asks for the half-height crossing
+    % instead. See refineOnsets, which says what each costs and is for.
     onsets = refineOnsets(onsets, signal, ...
-        round(o.SmoothMs * srate / 1000), strcmpi(o.Edge, 'trailing'));
+        round(o.SmoothMs * srate / 1000), strcmpi(o.Edge, 'trailing'), o.OnsetPoint);
 
     if isempty(onsets) && isempty(info.reason)
         info.reason = ['The two states are separable, but no transition lasted long ' ...
@@ -151,7 +153,7 @@ end
 % ======================================================================= %
 function o = defaults(opts)
     o = struct('SmoothMs', 25, 'Threshold', NaN, 'MinDurationMs', 20, ...
-        'MinGapMs', 100, 'MinSeparation', 3, 'Edge', 'leading');
+        'MinGapMs', 100, 'MinSeparation', 3, 'Edge', 'leading', 'OnsetPoint', 'foot');
     for f = fieldnames(o)'
         if isfield(opts, f{1}) && ~isempty(opts.(f{1}))
             o.(f{1}) = opts.(f{1});
@@ -235,34 +237,40 @@ function idx = separated(idx, n)
 end
 
 
-function idx = refineOnsets(idx, raw, w, trailing)
-%REFINEONSETS  Re-time each onset to the FOOT of the edge, against the
-%   unsmoothed channel.
+function idx = refineOnsets(idx, raw, w, trailing, onsetPoint)
+%REFINEONSETS  Re-time each onset against the unsmoothed channel, to the
+%   FOOT of the edge by default, or its half-height when ONSETPOINT='half'.
 %
 %   The coarse onset is within about half a smoothing window of the truth,
 %   so the edge is looked for in a window of that size around it. Two steps:
-%   find the edge by its half-height, then walk back to where it began.
+%   find the edge by its half-height, then, for the default 'foot', walk
+%   back from there to where it began.
 %
-%   HALF-HEIGHT FINDS THE EDGE. The level is the midpoint between the signal
-%   just BEFORE it and just AFTER it, both taken locally: a diode's baseline
-%   drifts over a recording, and a level from the whole channel would be
-%   wrong at both ends of a long session. Medians, not means: the "before"
-%   window still contains mains flicker and the tail of a bright patch can
-%   overshoot, and a median ignores both.
+%   HALF-HEIGHT FINDS THE EDGE, always, even when it is not what gets
+%   reported. The level is the midpoint between the signal just BEFORE it
+%   and just AFTER it, both taken locally: a diode's baseline drifts over a
+%   recording, and a level from the whole channel would be wrong at both
+%   ends of a long session. Medians, not means: the "before" window still
+%   contains mains flicker and the tail of a bright patch can overshoot, and
+%   a median ignores both.
 %
-%   THEN THE FOOT IS WHAT IS REPORTED, which is a deliberate choice of
-%   measurement convention and worth being explicit about. Half-height is
-%   the commoner convention in the literature and is the more repeatable
-%   number, because it sits on the steepest part of the edge where a little
-%   noise moves it least. But the quantity a photodiode is here to measure
-%   is WHEN THE DISPLAY BEGAN TO CHANGE, and the display began to change at
-%   the foot: everything between the foot and the half-height is the pixel
-%   response of the panel, which is a property of the monitor and not of the
-%   presentation software. Reporting the half-height therefore charges the
-%   timing chain for the panel's rise time.
+%   WHICH OF THE TWO TO REPORT IS A DELIBERATE CHOICE OF MEASUREMENT
+%   CONVENTION, and worth being explicit about since ONSETPOINT picks
+%   between two real, differently-wrong answers rather than a right one and
+%   a lazy one. Half-height is the commoner convention in the literature and
+%   is the more repeatable number, because it sits on the steepest part of
+%   the edge where a little noise moves it least. But the quantity a
+%   photodiode exists to measure is WHEN THE DISPLAY BEGAN TO CHANGE, and
+%   the display began to change at the foot: everything between the foot and
+%   the half-height is the pixel response of the panel, which is a property
+%   of the monitor and not of the presentation software. Reporting the
+%   half-height therefore charges the timing chain for the panel's rise
+%   time -- acceptable, even preferable, when repeatability matters more
+%   than that bias, which is why this is a choice and not just a docstring.
 %
-%   THE FOOT IS FOUND BY WALKING BACK to the last sample still at baseline,
-%   not by taking a fixed fraction of the step. Baseline is not a point but
+%   THE FOOT, WHEN THAT IS WHAT'S ASKED FOR, IS FOUND BY WALKING BACK to the
+%   last sample still at baseline, not by taking a fixed fraction of the
+%   step. Baseline is not a point but
 %   a band: this channel carries mains flicker, and on this lab's rig that
 %   is thousands of units peak to peak. So "departed" means further from the
 %   local median than the local scatter allows, using a robust spread, and
@@ -274,6 +282,11 @@ function idx = refineOnsets(idx, raw, w, trailing)
 %   signal the scatter is zero, every sample counts as departed, and the
 %   walk would run to the start of the window; requiring the departure to be
 %   at least a small fraction of the step stops it.
+    if nargin < 5 || isempty(onsetPoint)
+        onsetPoint = 'foot';
+    end
+    half = strcmpi(onsetPoint, 'half');
+
     if isempty(idx) || w <= 1
         return;
     end
@@ -303,7 +316,11 @@ function idx = refineOnsets(idx, raw, w, trailing)
             continue;
         end
 
-        idx(k) = lo + footOf(seg, crossed, base, median(after)) - 1;
+        if half
+            idx(k) = lo + crossed - 1;
+        else
+            idx(k) = lo + footOf(seg, crossed, base, median(after)) - 1;
+        end
     end
     idx = unique(idx);
 end
