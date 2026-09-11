@@ -436,27 +436,35 @@ classdef AlakazamRibbon < handle
         end
 
         function items = aboutItems(this, iconsDir)
-        %ABOUTITEMS  The About box launcher (see Alakazam.onAbout): version,
-        %   author, licence and where to report a problem.
+        %ABOUTITEMS  The About box launcher (see Alakazam.onAbout) and the
+        %   update checker (see Alakazam.onUpdate): version, author, licence,
+        %   where to report a problem, and whether a newer release exists.
         %
         %   Its own group rather than sharing Help's. The two are both
         %   "information about the application" in the abstract, but Help
         %   is a working reference the analyst opens mid-analysis and comes
-        %   back to, while About is looked at once and answers a different
-        %   question entirely -- which version am I running, and who do I
-        %   tell. A group of its own also lets the application's mark sit
-        %   under its own name at the end of the tab.
+        %   back to, while About/Update are looked at occasionally and
+        %   answer a different question entirely -- which version am I
+        %   running, who do I tell, is there a newer one. A group of its own
+        %   also lets the application's mark sit under its own name at the
+        %   end of the tab.
         %
-        %   The icon is the application's own artwork (src/Icons/Alakazam.svg),
-        %   the same file the About box itself uses at 96px. SVG rather than
-        %   a bitmap because one file has to serve both sizes, and because
-        %   MATLAB's own image components read SVG but not WebP (uiimage:
-        %   "Valid file formats are one of the following: png, jpg, jpeg,
-        %   gif, svg").
-            icon = this.encodeSvgFile(fullfile(iconsDir, 'Alakazam.svg'));
-            items = {struct('id', 'about', 'label', 'About', ...
-                'tooltip', 'Version, author, licence and where to report a problem', ...
-                'icon', icon)};
+        %   The About icon is the application's own artwork
+        %   (src/Icons/Alakazam.svg), the same file the About box itself
+        %   uses at 96px. SVG rather than a bitmap because one file has to
+        %   serve both sizes, and because MATLAB's own image components read
+        %   SVG but not WebP (uiimage: "Valid file formats are one of the
+        %   following: png, jpg, jpeg, gif, svg").
+        %
+        %   Update is a plain click -- no startup or timer-driven check
+        %   anywhere else in the app, see Alakazam.onUpdate's own header.
+            items = { ...
+                struct('id', 'about', 'label', 'About', ...
+                    'tooltip', 'Version, author, licence and where to report a problem', ...
+                    'icon', this.encodeSvgFile(fullfile(iconsDir, 'Alakazam.svg'))), ...
+                struct('id', 'update', 'label', 'Update', ...
+                    'tooltip', 'Check GitHub for a newer release', ...
+                    'icon', this.encodeSvgFile(fullfile(iconsDir, 'Update.svg')))};
         end
 
         function items = viewItems(this, iconsDir)

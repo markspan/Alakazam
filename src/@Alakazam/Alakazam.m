@@ -153,6 +153,7 @@ classdef Alakazam < handle
         offerReadmeInstead(this)
         [ok, message] = buildHelpPage(this)
         onAbout(this)
+        onUpdate(this)
         setPlotsViewMode(this, mode)
         refreshPlotsView(this)
         onCloseRequest(this)

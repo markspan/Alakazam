@@ -24,6 +24,8 @@ function onRibbonAction(this, id)
             this.onHelp();
         case 'about'
             this.onAbout();
+        case 'update'
+            this.onUpdate();
         case 'grandAveragePerCell'
             this.onGrandAveragePerCell();
         case 'defineGrandAverage'
