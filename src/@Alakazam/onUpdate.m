@@ -13,11 +13,23 @@ function onUpdate(this)
 %   where it landed. See that function's own header for why it does not
 %   overwrite CURRENTROOT or relaunch the app.
 %
+%   PATH SHADOWING. alakazamVersion, like everything else this app calls, is
+%   a plain function resolved by the MATLAB path -- not by which install's
+%   window asked. Launching a second copy of Alakazam in the same MATLAB
+%   session, rather than quitting MATLAB and reopening it from the new
+%   install, can leave two folders' alakazamVersion.m on the path at once;
+%   whichever one MATLAB finds first answers, regardless of which window
+%   this callback is running for. shadowNote below detects exactly that (the
+%   answer did not come from THIS instance's own RootDir) and appends a
+%   warning rather than silently showing an unreliable comparison.
+%
 %   See also CHECKFORALAKAZAMUPDATE, DOWNLOADALAKAZAMUPDATE, ALAKAZAM/ONABOUT.
 
     [restoreBusy, ~] = beginBusy(this.MainFigure, 'Checking for updates...'); %#ok<ASGLU>
     info = checkForAlakazamUpdate();
     clear restoreBusy;   % dismiss the overlay BEFORE any dialog below
+
+    note = shadowNote(this);
 
     if ~info.CheckSucceeded
         uialert(this.MainFigure, ...
@@ -28,7 +40,7 @@ function onUpdate(this)
 
     if ~info.UpdateAvailable
         uialert(this.MainFigure, ...
-            sprintf('You are up to date (%s).', info.CurrentVersion), ...
+            withNote(sprintf('You are up to date (%s).', info.CurrentVersion), note), ...
             'Update Alakazam', 'Icon', 'success');
         return;
     end
@@ -37,7 +49,7 @@ function onUpdate(this)
     if ~isempty(strtrim(info.Notes))
         prompt = sprintf('%s\n\n%s', prompt, info.Notes);
     end
-    selection = uiconfirm(this.MainFigure, prompt, 'Update Alakazam', ...
+    selection = uiconfirm(this.MainFigure, withNote(prompt, note), 'Update Alakazam', ...
         'Options', {'Download', 'Not now'}, 'DefaultOption', 1, 'CancelOption', 2, ...
         'Icon', 'info');
     if ~strcmp(selection, 'Download')
@@ -61,4 +73,27 @@ function onUpdate(this)
                  'from that folder when you are ready to switch to it.'], ...
             info.LatestVersion, newRoot), ...
         'Update downloaded', 'Icon', 'success');
+end
+
+% ======================================================================= %
+function note = shadowNote(this)
+%SHADOWNOTE  '' normally; a warning when alakazamVersion (as MATLAB will
+%   actually resolve it) does not live under THIS.ROOTDIR -- see this file's
+%   own header for why that can happen and what it means for the check that
+%   just ran.
+    matches = which('alakazamVersion', '-all');
+    if numel(matches) <= 1 || strcmpi(fileparts(matches{1}), this.RootDir)
+        note = '';
+        return;
+    end
+    note = ['Note: another copy of Alakazam is also on the MATLAB path in this ' ...
+        'session, so this answer may be about that copy rather than this one. ' ...
+        'Quit MATLAB and reopen it from this install to be sure.'];
+end
+
+% ======================================================================= %
+function message = withNote(message, note)
+    if ~isempty(note)
+        message = sprintf('%s\n\n%s', message, note);
+    end
 end
