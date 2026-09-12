@@ -186,16 +186,33 @@ classdef EEGLabEnvironment
             if isempty(home)
                 home = char(java.lang.System.getProperty('user.home'));
             end
-            root = fullfile(home, 'Documents', 'MATLAB', 'eeglab');
-            if ~exist(root, 'dir')
-                return;
-            end
 
-            found = dir(fullfile(root, '**', 'eeglab.m'));
-            if isempty(found)
-                return;
+            % Two places worth looking. The first is where installFromZip
+            % puts EEGLAB. The second is beside Alakazam itself: EEGLAB's
+            % eeglab_update unzips into whatever folder its dialog is
+            % pointing at, which defaults to the current working directory,
+            % so running it with Alakazam as the current folder installs
+            % EEGLAB as a sibling of src/. That is a perfectly workable
+            % layout, and Alakazam should find it rather than offer to
+            % download a second copy.
+            roots = { fullfile(home, 'Documents', 'MATLAB', 'eeglab'), ...
+                      fileparts(fileparts(mfilename('fullpath'))) };
+
+            candidates = {};
+            for k = 1:numel(roots)
+                if ~exist(roots{k}, 'dir')
+                    continue;
+                end
+                % One level down, not a '**' recursive walk: an install is
+                % always <root>/eeglab<version>/eeglab.m, and recursing
+                % would scan every one of EEGLAB's own 4500-odd files.
+                found = dir(fullfile(roots{k}, '*', 'eeglab.m'));
+                candidates = [candidates, {found.folder}];   %#ok<AGROW>
+                if exist(fullfile(roots{k}, 'eeglab.m'), 'file') == 2
+                    candidates{end+1} = roots{k};            %#ok<AGROW>
+                end
             end
-            folder = EEGLabEnvironment.pickNewestEEGLab({found.folder});
+            folder = EEGLabEnvironment.pickNewestEEGLab(candidates);
         end
 
         function key = versionKey(folderPath)
