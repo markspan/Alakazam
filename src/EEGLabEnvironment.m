@@ -57,6 +57,33 @@ classdef EEGLabEnvironment
             EEGLabEnvironment.ensureToolboxes();
         end
 
+        function folder = pickNewestEEGLab(candidates)
+        %PICKNEWESTEEGLAB  Choose the EEGLAB install to use from CANDIDATES
+        %   (a cellstr of folders that each contain an eeglab.m). Returns ''
+        %   when there is nothing usable. Pure: no disk access, so the
+        %   choice can be tested without an EEGLAB install.
+        %
+        %   '_old' folders are skipped deliberately. EEGLAB's own
+        %   eeglab_update renames the superseded install with that suffix
+        %   and leaves it complete and working, so a plain search finds it
+        %   and may well prefer it (dir returns 'eeglab2026.0.0_old' before
+        %   'eeglab2026.1.0' in ASCII order) -- which would quietly pin
+        %   Alakazam to the copy the user had just replaced.
+            folder = '';
+            if isempty(candidates)
+                return;
+            end
+            names = candidates(~endsWith(candidates, '_old', 'IgnoreCase', true));
+            if isempty(names)
+                return;   % only superseded installs: treat as not found
+            end
+            % Sort by name first so the result never depends on dir's order,
+            % then take the highest version, ties going to the last name.
+            names = sort(names);
+            keys  = cellfun(@EEGLabEnvironment.versionKey, names);
+            folder = names{find(keys == max(keys), 1, 'last')};
+        end
+
         function folder = findInstalled(targetName, probeFile)
         %FINDINSTALLED  Locate a previous installFromZip install on disk.
         %   FOLDER = FINDINSTALLED(TARGETNAME, PROBEFILE) looks for PROBEFILE
@@ -137,6 +164,64 @@ classdef EEGLabEnvironment
     end
 
     methods (Static, Access = private)
+        function folder = newestEEGLabFolder()
+        %NEWESTEEGLABFOLDER  The newest EEGLAB install under
+        %   <home>/Documents/MATLAB/eeglab, or '' if there is none.
+        %
+        %   This used to be a hardcoded 'eeglab2026.0.0', which stopped
+        %   resolving the moment EEGLAB updated itself: EEGLAB's own
+        %   eeglab_update unzips the new release into a folder named after
+        %   the NEW version and renames the previous one with an '_old'
+        %   suffix, so the hardcoded name pointed at a folder that no longer
+        %   existed. Any version-specific path here is wrong by
+        %   construction; the version has to be discovered.
+        %
+        %   '_old' folders are skipped deliberately. They are complete,
+        %   working installs, so a plain search finds them and may well
+        %   prefer one (dir returns '..._old' before a higher version
+        %   number in ASCII order) -- which would quietly pin Alakazam to
+        %   the superseded copy the user just replaced.
+            folder = '';
+            home = getenv('USERPROFILE');
+            if isempty(home)
+                home = char(java.lang.System.getProperty('user.home'));
+            end
+            root = fullfile(home, 'Documents', 'MATLAB', 'eeglab');
+            if ~exist(root, 'dir')
+                return;
+            end
+
+            found = dir(fullfile(root, '**', 'eeglab.m'));
+            if isempty(found)
+                return;
+            end
+            folder = EEGLabEnvironment.pickNewestEEGLab({found.folder});
+        end
+
+        function key = versionKey(folderPath)
+        %VERSIONKEY  A sortable number for an EEGLAB folder's version, so
+        %   'eeglab2026.1.0' outranks 'eeglab2026.0.0'. A name carrying no
+        %   version sorts lowest rather than erroring.
+        %
+        %   The last path segment is taken by hand, not with fileparts:
+        %   fileparts('.../eeglab2026.1.0') reads the trailing '.0' as a
+        %   file extension and hands back 'eeglab2026.1', losing the patch
+        %   number.
+            segments = regexp(folderPath, '[\\/]', 'split');
+            segments = segments(~cellfun(@isempty, segments));
+            if isempty(segments)
+                key = 0;
+                return;
+            end
+            nums = regexp(segments{end}, '\d+', 'match');
+            n = min(3, numel(nums));
+            key = 0;
+            for k = 1:n
+                key = key * 1000 + str2double(nums{k});
+            end
+            key = key * 1000^(3 - n);   % pad so 2026 < 2026.0.1
+        end
+
         function ensureEEGLab()
         %ENSUREEEGLAB  Put EEGLAB on the path, offering to install it if missing.
         %   EEGLAB is expected to be installed and already on the path. If it is
@@ -144,12 +229,8 @@ classdef EEGLabEnvironment
         %   the latest version, which is then added to the path and launched.
 
             if isempty(which('eeglab'))
-                home = getenv('USERPROFILE');
-                if isempty(home)
-                    home = char(java.lang.System.getProperty('user.home'));
-                end
-                target = fullfile(home, 'Documents', 'MATLAB', 'eeglab', 'eeglab2026.0.0');
-                if exist(target, 'dir')
+                target = EEGLabEnvironment.newestEEGLabFolder();
+                if ~isempty(target)
                     addpath(target);
                     eeglab('nogui')
                 end

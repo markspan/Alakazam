@@ -51,3 +51,7 @@ src/webtree/dist/
 src/help/node_modules/
 src/help/dist/
 src/AlakazamHelp.html
+
+# Commit-message scratch files (never part of a commit).
+_commit_msg.txt
+_m.txt
