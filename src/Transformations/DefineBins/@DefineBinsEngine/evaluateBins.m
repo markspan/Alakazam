@@ -6,23 +6,43 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
 %   compute). CENTERLAT is the sample each event's own epoch should be
 %   centred on: its own latency, unless some bin's 'timelock' clause
 %   overrides it with a matched neighbour's latency instead.
+%
+%   THE TIME-LOCKING SAMPLE IS CHOSEN WITH FLOOR, MATCHING EEGLAB AND
+%   ERPLAB. Event latencies are fractional once a recording has been
+%   resampled (a 1024->256 Hz file carries latencies ending .00, .25, .50
+%   and .75), so which sample is labelled t=0 has to be decided, and the two
+%   defensible answers disagree:
+%
+%     floor  -- truncate, as EEGLAB does (epoch.m: pos0 =
+%               floor(events(index)*srate)) and as ERPLAB's pop_epochbin
+%               does. The sample labelled t=0 then sits up to a full sample
+%               BEFORE the event, so every latency measure carries a
+%               systematic half-sample bias, about 2 ms at 256 Hz.
+%     round  -- take the nearest sample. No mean bias and half the
+%               worst-case error, so it is the more accurate labelling.
+%
+%   Alakazam uses floor, and the reason is reproducibility rather than
+%   accuracy. Validated against Luck's own published output (see
+%   Docs/luck.md): with floor, Alakazam's epochs are bit-identical to
+%   pop_epochbin's on all 267 trials of the chapter 8 N2pc file, and the
+%   whole DefineBins + Baseline + ArtefactDetect + Average chain reproduces
+%   the published chapter 3 erpset to 0.0004 uV with exactly ERPLAB's
+%   accepted and rejected trial counts. With round it did not: one trial
+%   crossed the rejection threshold and the averaged ERP moved by 15 to 30%
+%   relative RMS on that broadband data. Half a sample of uniform bias
+%   shifts every condition equally and so cancels in difference waves and
+%   condition contrasts, which is what ERP work actually measures; being
+%   unable to reproduce a published ERPLAB result does not cancel.
+%
+%   So this is a deliberate choice to match the field's reference
+%   implementations, not an oversight, and changing it to round would
+%   silently break bit-agreement with every EEGLAB/ERPLAB analysis.
 %#ok<*AGROW>
     [ctx, order] = DefineBinsEngine.buildContext(EEG);
     nEv = numel(order);
     membership = cell(1, nEv);
-    % ROUND, not floor -- a deliberate divergence from EEGLAB/ERPLAB, and the
-    % only reason Alakazam's epochs are not bit-identical to pop_epochbin's.
-    % Event latencies are fractional after resampling (a 1024->256 Hz file
-    % carries .00/.25/.50/.75), so the time-locking sample has to be chosen.
-    % EEGLAB truncates (epoch.m: pos0 = floor(events(index)*srate)) and so
-    % does ERPLAB; that puts the sample labelled t=0 up to a full sample
-    % BEFORE the event, biasing every latency measure half a sample late
-    % (~2 ms at 256 Hz). Rounding picks the nearest sample instead: zero mean
-    % bias and half the worst-case error. Validated against Luck's ch8
-    % pop_epochbin output -- identical on trials whose latency is integral or
-    % rounds down, one sample apart on the rest, which is this choice and
-    % nothing else. See Docs/luck.md.
-    centerLat  = round([EEG.event.latency]);
+    % floor, matching EEGLAB/ERPLAB -- see the note in the header above.
+    centerLat  = floor([EEG.event.latency]);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
                      'combo', {}, 'events', {}, 'rt', {}, 'n', {});
 
@@ -56,7 +76,12 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
             if ~isempty(bins(b).timelock)
                 [okTL, tlLat] = DefineBinsEngine.evalRel(bins(b).timelock, p, ctx);
                 if ~okTL; continue; end          % nothing to lock to -> drop
-                centerLat(order(p)) = round(tlLat);
+                % floor, for the same reason as centerLat above: a
+                % neighbour's latency is just as fractional as the anchor's,
+                % and an epoch time-locked to a response has to be cut on
+                % the same convention as one time-locked to a stimulus or
+                % the two are a sample apart for no stated reason.
+                centerLat(order(p)) = floor(tlLat);
             end
 
             matchedOrig(end+1)   = order(p);

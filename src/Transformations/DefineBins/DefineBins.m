@@ -99,6 +99,28 @@ function [EEG, options] = DefineBins(input, varargin)
 % channels x time x trials, sets DataFormat = 'EPOCHED', fills EEG.times and
 % EEG.epoch (one entry per trial, tagged with its bins).
 %
+%% WHICH SAMPLE IS t = 0
+%
+% Event latencies are fractional once a recording has been resampled (a
+% 1024->256 Hz file carries latencies ending .00, .25, .50 and .75), so the
+% sample labelled t = 0 in each epoch has to be chosen. DefineBins TRUNCATES
+% the latency (floor), which is what EEGLAB does (epoch.m: pos0 =
+% floor(events(index)*srate)) and what ERPLAB's pop_epochbin does.
+%
+% This matters when comparing Alakazam against those tools, so it is worth
+% being explicit that it is a choice and not an accident. Truncating puts the
+% t = 0 sample up to a full sample BEFORE the event, giving every latency
+% measure a systematic half-sample bias (about 2 ms at 256 Hz); rounding to
+% the nearest sample would remove that bias and halve the worst-case error.
+% Alakazam truncates anyway, because a uniform half-sample bias shifts every
+% condition equally and so cancels in difference waves and condition
+% contrasts, whereas being unable to reproduce a published ERPLAB result does
+% not cancel. Validated against Luck's own published output: with floor,
+% Alakazam's epochs are bit-identical to pop_epochbin's, and the full
+% DefineBins + Baseline + ArtefactDetect + Average chain reproduces a
+% published erpset to 0.0004 uV with exactly ERPLAB's trial counts
+% (Docs/luck.md has the figures, and what rounding cost instead).
+%
 % See also: Epoch, Segmentation, Average, DEFINEBINSENGINE, DEFINEBINSDIALOG.
 
     %% Guard input
