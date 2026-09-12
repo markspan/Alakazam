@@ -138,6 +138,100 @@ classdef MeasureTest < matlab.unittest.TestCase
             testCase.verifyEqual(result.latency, 8, 'AbsTol', 1e-10);
         end
 
+        function fractionalAreaLatencyHonoursAreaMode(testCase)
+        %FRACTIONALAREALATENCYHONOURSAREAMODE  areaMode used to be accepted
+        %   and discarded here: every mode silently got the SIGNED answer.
+        %   The four modes are ERPLAB's fninteglat / fareatlat / fareaplat /
+        %   fareanlat, and on a waveform that changes sign they must differ.
+        %
+        %   Fixture: [10 10 0 -10 -10] at t = 0 4 8 12 16. Trapezoidal
+        %   segment areas, and the 50% crossing, worked through per mode:
+        %     positive  y=[10 10 0 0 0], cum=[0 40 60 60 60], target 30,
+        %               inside the first segment -> t = 0 + 30/40*4 = 3
+        %     negative  y=[0 0 0 -10 -10], cum=[0 0 0 -20 -60], target -30,
+        %               inside the last segment -> t = 12 + 10/40*4 = 13
+        %     rectified y=|wave|, cum=[0 40 60 80 120], target 60, reached
+        %               exactly at the sample -> t = 8
+        %     signed    cum=[0 40 60 40 0], total 0 -> undefined -> NaN
+            times = [0 4 8 12 16];
+            EEG = measureFixture({'Ch1'}, [10 10 0 -10 -10], times);
+            win = defaultWindow();
+            win.start = times(1); win.stop = times(end);
+            win.measure = 'Fractional Area Latency'; win.fraction = 0.5;
+
+            expected = struct('positive', 3, 'negative', 13, 'rectified', 8);
+            for mode = {'positive', 'negative', 'rectified'}
+                win.areaMode = mode{1};
+                result = runMeasure(EEG, win);
+                testCase.verifyEqual(result.latency, expected.(mode{1}), ...
+                    'AbsTol', 1e-9, sprintf( ...
+                    'areaMode "%s" must integrate its own quantity, not the signed one.', ...
+                    mode{1}));
+            end
+
+            win.areaMode = 'signed';
+            testCase.verifyTrue(isnan(runMeasure(EEG, win).latency), ...
+                ['This fixture''s positive and negative areas cancel exactly, so ' ...
+                 'the signed fraction is undefined and must be NaN, not a number.']);
+        end
+
+        function theFourAreaModesDoNotAllGiveTheSameAnswer(testCase)
+        %THEFOURAREAMODESDONOTALLGIVETHESAMEANSWER  The regression guard for
+        %   the bug itself: whatever the values are, a sign-changing window
+        %   must not return one number for every mode.
+            times = 0:4:40;
+            wave  = [0 6 9 4 -2 -7 -9 -5 -1 2 3];
+            EEG = measureFixture({'Ch1'}, wave, times);
+            win = defaultWindow();
+            win.start = times(1); win.stop = times(end);
+            win.measure = 'Fractional Area Latency'; win.fraction = 0.5;
+
+            answers = [];
+            for mode = {'signed', 'rectified', 'positive', 'negative'}
+                win.areaMode = mode{1};
+                answers(end + 1) = runMeasure(EEG, win).latency; %#ok<AGROW>
+            end
+
+            testCase.verifyEqual(numel(unique(answers(~isnan(answers)))), ...
+                numel(answers(~isnan(answers))), ...
+                'Each area mode should produce its own latency on this waveform.');
+        end
+
+        function fractionalAreaLatencyReportsTheEarliestCrossing(testCase)
+        %FRACTIONALAREALATENCYREPORTSTHEEARLIESTCROSSING  A signed
+        %   cumulative area can reach its own fraction more than once. The
+        %   answer is the FIRST such latency, which is what "when did this
+        %   get halfway" means; searching forward instead lands on a later
+        %   crossing or runs off the end of the window, which is exactly the
+        %   ERPLAB behaviour Docs/luck.md records.
+        %
+        %   Fixture: a positive lobe, a negative dip, then a positive lobe.
+        %   The running area passes 50% of the total early, falls back
+        %   below, then rises past it again.
+            times = 0:10:60;
+            wave  = [0 10 10 -10 0 10 10];
+            EEG = measureFixture({'Ch1'}, wave, times);
+            win = defaultWindow();
+            win.start = times(1); win.stop = times(end);
+            win.measure = 'Fractional Area Latency'; win.fraction = 0.5;
+            win.areaMode = 'signed';
+
+            latency = runMeasure(EEG, win).latency;
+
+            % Work out the crossings independently, the way the validation
+            % harness does, and require the earliest one.
+            seg = (wave(1:end-1) + wave(2:end)) / 2 .* diff(times);
+            cum = [0 cumsum(seg)];
+            target = 0.5 * cum(end);
+            ks = find((cum(1:end-1) - target) .* (cum(2:end) - target) <= 0);
+            testCase.assertGreaterThan(numel(ks), 1, ...
+                'This fixture is only meaningful if the area crosses 50% more than once.');
+            first = times(ks(1)) + (target - cum(ks(1))) / ...
+                (cum(ks(1)+1) - cum(ks(1))) * (times(ks(1)+1) - times(ks(1)));
+
+            testCase.verifyEqual(latency, first, 'AbsTol', 1e-9);
+        end
+
         function referenceChannelSharesItsPeakSampleWithOtherChannels(testCase)
         %REFERENCECHANNELSHARESITSPEAKSAMPLEWITHOTHERCHANNELS  ChA (the
         %   reference) peaks at t=4; with refChannel='ChA', ChB's reported

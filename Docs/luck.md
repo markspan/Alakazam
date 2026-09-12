@@ -971,12 +971,11 @@ they are the exact files the book's figures and exercises are built on. Each
 comparison below loads the earlier stage, runs the corresponding Alakazam step,
 and reports the worst-case difference against Luck's published later stage.
 
-Two caveats on scope. **ERPLAB is not installed** in the environment these
-numbers come from (EEGLAB 2026.0.0 is); everything here is measured against
-Luck's stored outputs rather than a local ERPLAB run, so ERPLAB's parameters
-could not be varied to explore edge cases. And a comparison is only meaningful
-where exactly one step separates two files, so the table is shorter than the
-chapter list.
+One caveat on scope: a comparison is only meaningful where exactly one step
+separates two files, so the table is shorter than the chapter list. Everything
+below is measured against Luck's stored outputs rather than a local ERPLAB
+run, which is the stronger reference anyway. Figures were produced under
+EEGLAB 2026.1.0 with ERPLAB 13.10 available.
 
 ### What agrees, and to what precision
 
@@ -1033,31 +1032,194 @@ app, died on `Unrecognized field name "DataType"`. It now reads them through
 `TransTools.FieldOr` like every other transformation, falling back to the data
 shape for `DataFormat` rather than assuming continuous.
 
-### One open difference: which sample is t = 0
-
-This is the only reason Alakazam's epochs are not bit-identical to
-`pop_epochbin`'s, and it is a deliberate choice rather than an oversight.
+### Which sample is t = 0, and why it is floor
 
 Event latencies are fractional once a recording has been resampled (Luck's
 1024 to 256 Hz files carry latencies ending .00, .25, .50 and .75), so the
-time-locking sample has to be chosen. **EEGLAB and ERPLAB both truncate**
-(`epoch.m`: `pos0 = floor(events(index)*srate)`), which puts the sample
-labelled `t = 0` up to a full sample *before* the event and biases every
-latency measure half a sample late, about 2 ms at 256 Hz. **Alakazam rounds**
-to the nearest sample instead: no mean bias, and half the worst-case error.
+sample labelled `t = 0` in each epoch has to be chosen, and the two defensible
+answers disagree. **EEGLAB and ERPLAB both truncate** (`epoch.m`:
+`pos0 = floor(events(index)*srate)`), which puts the `t = 0` sample up to a
+full sample *before* the event and gives every latency measure a systematic
+half-sample bias, about 2 ms at 256 Hz. Rounding to the nearest sample would
+remove that bias and halve the worst-case error.
 
-The cost is reproducibility. On the chapter 3 N400 chain the convention alone
-moves one trial across the +/-100 uV rejection threshold (`round` gives 48
-accepted in bin 1, `floor` gives ERPLAB's 47), and it changes the averaged ERP
-by **15 to 30% relative RMS** (correlation 0.96 to 0.98). That sounds larger
-than a one-sample shift should be, and it is real: this data carries only a
-0.1 Hz high-pass and no low-pass, so it is broadband to 100 Hz and adjacent
-samples genuinely differ. Switch the convention to `floor` and every number in
-the chapter 3 row above becomes exact.
+**Alakazam truncates, matching EEGLAB and ERPLAB.** This validation is what
+settled it. Alakazam originally rounded, and on the chapter 3 N400 chain that
+choice alone moved one trial across the +/-100 uV rejection threshold (48
+accepted in bin 1 against ERPLAB's 47) and shifted the averaged ERP by **15 to
+30% relative RMS** (correlation 0.96 to 0.98). That is larger than a
+one-sample shift sounds, and it is real: this data carries only a 0.1 Hz
+high-pass and no low-pass, so it is broadband to 100 Hz and adjacent samples
+genuinely differ.
 
-So: `round` is the more accurate labelling, `floor` is what the field's
-reference implementations do. The choice is recorded at
-`@DefineBinsEngine/evaluateBins.m`, where the rounding happens.
+The reasoning for preferring reproducibility over the smaller error: a uniform
+half-sample bias shifts every condition equally, so it cancels in difference
+waves and in condition contrasts, which is what ERP work actually measures.
+Being unable to reproduce a published ERPLAB result does not cancel. With
+`floor` every figure in the table above is exact: 267 of 267 chapter 8 trials
+bit-identical to `pop_epochbin`, and chapter 3's four bins matching ERPLAB's
+accepted and rejected counts exactly at `[47 44 37 34]` and `[13 16 20 19]`.
+
+The choice is documented where it is made
+(`@DefineBinsEngine/evaluateBins.m`) and in the transformation's own help
+(`DefineBins.m`), in both cases spelling out that it is a choice, what the
+alternative would buy, and what it would cost.
+
+### Measurement and data quality, against ERPLAB directly
+
+The comparisons above use Luck's stored files. Measurement needs something
+else, because no scored output ships with the data: ERPLAB 13.10 is installed
+as an EEGLAB plugin, so `geterpvalues` can be run as the reference on the very
+same erpsets. Both sides were driven from one specification (the same 300 to
+500 ms N400 window, bins 3 and 4, five channels, a -200 to 0 ms baseline,
+negative peak polarity, 0.5 fraction), over all ten published N400 erpsets,
+which is 100 measurement cells per measure.
+
+| Measure | ERPLAB reference | Cells | Worst difference |
+|---|---|---|---|
+| Mean Amplitude | `meanbl` | 100 | **relative 6.2e-09** |
+| Peak amplitude | `peakampbl` | 100 | **relative 7.4e-09** |
+| Peak latency | `peaklatbl` | 100 | **0.000 ms, exact** |
+| Area, signed | `ninteg` | 100 | **relative 3.9e-08** |
+| Area, positive | `areap` | 100 | **relative 3.9e-08** |
+| Area, negative | `arean` | 100 | same magnitude; sign convention differs, below |
+| Fractional peak latency, 50% | `fpeaklat` | 36 | 4.93 ms worst, 2.34 ms median (under one sample) |
+| Fractional area latency, rectified | `fareatlat` | 100 | **100 of 100 within one sample** |
+| Fractional area latency, positive | `fareaplat` | 94 | **94 of 94 within one sample** |
+| Fractional area latency, negative | `fareanlat` | 49 | **49 of 49 within one sample** |
+| Fractional area latency, signed | `fninteglat` | 100 | 77 within one sample; 23 where ERPLAB is wrong, below |
+| **aSME** | `ERP.dataquality`, computed by `pop_averager` | **1080** | **1.25e-05 uV** (range 0.23 to 4.18 uV), correlation 1.0000000000 |
+| Baseline Measure - SD | `ERP.dataquality` | 120 | **1.78e-05 uV**, correlation 1.0000000000 |
+
+The **aSME** row is the one worth dwelling on. ERPLAB computed those 1080
+values inside `pop_averager` from the very trials that produced
+`1_N400.erp`, and this comparison is only possible because the chain that
+rebuilds those trials is already exact: 47, 44, 37 and 34 accepted trials per
+bin, matching ERPLAB's own counts. So Alakazam's analytic standardized
+measurement error agrees with ERPLAB's to single precision across every
+channel, every one of the nine 100 ms windows, and every bin. The
+Alakazam/ERPLAB ratio has a median of exactly 1.00000000, which also rules out
+the obvious suspect: this is not an N versus N-1 normalisation that happens to
+be close, the two formulas are the same formula.
+
+`Baseline Measure - SD` has no Alakazam counterpart (it is the SD across the
+baseline samples of the averaged waveform, not a measurement error), but it is
+a fresh function of the average, so reproducing it to 1.8e-05 uV re-confirms
+the averaging from an angle the earlier waveform comparison did not use.
+
+#### Three differences, and what each one is
+
+**Area is in uV.ms here and uV.s in ERPLAB.** Alakazam integrates over a time
+axis in milliseconds and says so in `Measure`'s own help; ERPLAB's `areaerp`
+uses `Ts*trapz(...)` with `Ts = 1/fs` in seconds. Both use the same
+trapezoidal rule, so the values agree to 3.9e-08 relative once the factor of
+1000 is applied. Nothing to fix, but anyone cross-checking an area against
+ERPLAB needs to know which unit they are holding.
+
+**Negative area is signed in Alakazam and a magnitude in ERPLAB.** The ratio
+is exactly -1000: same number, opposite sign convention, on top of the unit
+factor. Alakazam's `'negative'` mode integrates `min(y, 0)` and so reports a
+negative area; ERPLAB's `arean` reports how much area there is below zero, as a
+positive quantity.
+
+**Fractional latencies: Alakazam interpolates, ERPLAB does not.** Where both
+report a fractional peak latency the worst disagreement over all ten subjects
+is 4.93 ms with a 2.34 ms median, and the sample period is 5 ms: every
+difference is smaller than one sample, because ERPLAB's default `intfactor` of
+1 pins its answer to a sample boundary while Alakazam interpolates between
+samples. Three of the four fractional-area measures behave the same way, and
+every one of their 243 cells agrees within a sample.
+
+#### Where Alakazam returns NaN and ERPLAB returns a number
+
+Alakazam returned NaN in 64 of 100 fractional-peak-latency cells, and in 51 of
+those ERPLAB returned a number instead. What decides it is whether the
+threshold is reachable at all, and that predicts the behaviour exactly:
+
+| | Alakazam answered | Alakazam NaN |
+|---|---|---|
+| a downward crossing of `frac x peak` exists before the peak | **36** | 0 |
+| no such crossing exists | 0 | **64** |
+
+So Alakazam answers precisely when the measure is defined and declines
+precisely when it is not. In **51 of 51** of the cells where ERPLAB answered
+instead, its "fractional peak latency" is exactly its own peak latency: as
+`localpeak.m` shows, ERPLAB walks back from the peak looking for the first
+sample at or beyond `frac x peak` and tests the peak sample itself first, so
+when that test passes immediately the walk stops and reports the peak's own
+latency under a different name.
+
+**Why the threshold can be unreachable, which is subtler than a sign test.**
+It is tempting to say these are cells where the located peak "had the wrong
+sign", and 51 of the 64 do have a positive-valued peak. But a negative peak is
+a local *minimum*, and a minimum can legitimately sit at a positive voltage: a
+waveform dipping from +10 to +5 and back is a real negative-going deflection
+whose amplitude happens to be positive. **37 of the 64 NaN cells are exactly
+that**, true interior local minima (36 of them positive-valued), not artefacts;
+the remaining 27 are minima sitting on a window edge, where the waveform never
+turned around inside the window at all.
+
+What makes the measure inapplicable is not the peak, it is the
+*baseline-relative* threshold both tools use. `frac x peak` is a fraction of
+the distance from baseline to the peak, so for a minimum at +5 uV the threshold
+is +2.5 uV; the signal reached that minimum from *above*, and +5 is the
+smallest value in the window, so it never descends through +2.5. The threshold
+lies on the far side of the peak from the approach. A fraction-of-peak
+threshold is only reachable when the deflection actually moves away from
+baseline in the polarity requested, and peak sign is merely a good proxy for
+that: 13 cells with a properly negative peak are also NaN, because their
+minimum is the window's first sample and there is nothing before it to cross
+from.
+
+This is a real limitation of fractional peak latency as defined, not of
+Alakazam's peak detection: a negative deflection riding on a positive offset
+has no baseline-relative half-amplitude point. NaN is the honest answer, and
+silently substituting the peak latency is not.
+
+#### The signed fractional area latency, where ERPLAB is wrong
+
+`fninteglat` is the one measure where the two disagree by more than a sample:
+23 of 100 cells, up to 196 ms apart. Every one of those was checked against a
+hand computation of the crossings, independent of both tools:
+
+- In **23 of 23**, ERPLAB's answer is at or after the earliest crossing of
+  `frac * total`, often the window edge itself (500 ms of a 300 to 500 ms
+  window).
+- Alakazam's answer is the earliest crossing in every case.
+
+The 23 are sign-mixed windows. Measuring how single-signed each window is as
+`|total area| / sum of |segment areas|` (1 means the waveform never changes
+sign, 0 means perfect cancellation), the 77 agreeing cells have a median of
+exactly **1.000** while the 23 disagreeing ones have a median of **0.598**,
+with 10 of them below 0.5. On such a window the signed cumulative area is not
+monotonic: it passes its own 50% point, falls back, and may pass it again.
+ERPLAB searches forward and lands on a later crossing or runs off the end.
+
+Two honest qualifications. First, Alakazam reporting the earliest crossing is
+the correct reading of "when did this component get halfway", and it is now
+pinned by a test. Second, on a window whose positive and negative areas nearly
+cancel the measure is **ill-conditioned whatever either tool reports**: two of
+the 23 have signed totals of only -7.5 and 0.3 uV.ms, where 50% of the total is
+near zero and the latency is arbitrary. That is precisely why ERPLAB offers the
+three single-signed variants, whose cumulative area is monotonic and whose
+crossing is unique, and why the fix below matters.
+
+#### areaMode is now honoured for fractional area latency
+
+This exercise turned up a real defect on Alakazam's side. A measurement
+window's `areaMode` was accepted and then discarded for Fractional Area
+Latency, which always integrated the signed area: asking for the rectified,
+positive or negative variant silently returned the signed answer. `Measure`'s
+help did say "signed", so it was documented rather than wrong, but three of
+ERPLAB's four measures had no Alakazam equivalent and a stored template could
+ask for one and be quietly given another.
+
+`areaMode` is now applied exactly as `Area` itself applies it, giving all four
+of ERPLAB's measures, and the agreement above (100 of 100, 94 of 94 and 49 of
+49 within one sample) is what that fix buys. Two unit tests cover it: one
+pinning each mode's hand-computed latency on a sign-changing fixture, and one
+guarding the defect itself, that the four modes must not all return the same
+number.
 
 ### Not validated, and why
 
@@ -1071,11 +1233,6 @@ reference implementations do. The choice is recorded at
 - **ICA correction (Ch 9), and Ch 6's `*_P3_corrected.set`.** The data ships
   only corrected outputs, with no matching uncorrected file, so there is no
   single-step pair to compare.
-- **Measure (Ch 10).** ERPLAB's `pop_geterpvalues` is not installed and no
-  measure output ships with the data.
-- **Data quality / aSME (Ch 6).** The `.erp` files do carry a `dataquality`
-  struct; it has not been compared yet. This is the most promising remaining
-  target, because the reference values are already sitting in the files.
 - **Inferential statistics (Ch 10).**
 
 The harness that produced these numbers is not checked in: it depends on the
@@ -1101,12 +1258,12 @@ alternative to check against it.
 | Channel / coordinate editor (Ch 5) | implemented | no reference pair | ChannelEditor: labels, types, X/Y/Z, 10-5 lookup, montage load |
 | Resampling (Ch 5) | implemented | wraps `pop_resample` | Resample (`pop_resample`), continuous |
 | Bins + averaging + baseline (Ch 6) | implemented | **yes**: bins exact, averages to 0.0004 uV | bin language + BDF import + difference bins |
-| Data quality / aSME (Ch 6) | implemented | not yet (reference values are in the `.erp` files) | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
+| Data quality / aSME (Ch 6) | implemented | **yes**: all 1080 aSME values match ERPLAB to 1.3e-05 uV | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
 | EEG inspection (Ch 7) | implemented | n/a, a view | SignalView / EpochView |
 | Bad-channel interpolation (Ch 7) | implemented | **yes, bit-identical** | Interpolate (`pop_interp`): spline / invdist / spacetime |
 | Artifact detection (Ch 8) | implemented | **yes**, after fixing a tail blind spot; now catches one artefact ERPLAB misses | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
 | ICA artifact correction (Ch 9) | implemented | no reference pair (only corrected files ship) | automatic (AutoEyeICA) + manual component removal (ICA), both ICLabel |
-| Amplitude / latency scoring (Ch 10) | implemented | not yet (no ERPLAB, no stored measures) | ERP Measure, incl. fractional-area latency |
+| Amplitude / latency scoring (Ch 10) | implemented | **yes**: mean/peak amplitude, peak latency and area exact; fractional latencies within one sample, and where they differ Alakazam is the correct one | ERP Measure, incl. fractional-area latency |
 | Inferential statistics (Ch 10) | implemented | not yet | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
 | Reproducible pipeline (Ch 11) | implemented | n/a | templates + Recalculate |
 | MATLAB scripting (Ch 11) | implemented | n/a | exported MATLAB script naming EEGLAB's own functions where faithful (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`), plus templates and Recalculate |
@@ -1125,11 +1282,14 @@ attempt to tell the two apart. Where Luck's data contains a single-step
 reference, the answer is now encouraging: referencing and interpolation are
 bit-identical, bin assignment matches BINLISTER on every one of 642 events, and
 the whole bin-to-average chain reproduces a published `.erp` to 0.0004 uV. That
-exercise also found two real bugs in Alakazam, one of them a detector blind spot
-over the last 90 ms of every epoch, which is the argument for doing more of it.
-Filtering, ICA correction, scoring and the statistics remain unvalidated, and
-one epoching convention deliberately differs from EEGLAB's. So this guide is
-still best used **alongside** Luck's book and the tools it uses. The credit for the science, the teaching, and the data is
+Measurement and data quality now check out against ERPLAB itself: mean and
+peak amplitude, peak latency and area are exact, and all 1080 of a subject's
+aSME values match to 1.3e-05 uV. That exercise also found two real bugs in
+Alakazam, one of them a detector blind spot over the last 90 ms of every
+epoch, settled the epoch time-locking convention in favour of matching EEGLAB
+and ERPLAB, and turned up one case where Alakazam is right and ERPLAB is not.
+Filtering, ICA correction and the statistics remain unvalidated, so this guide
+is still best used **alongside** Luck's book and the tools it uses. The credit for the science, the teaching, and the data is
 entirely Steven Luck's; the responsibility for any way Alakazam gets it wrong is
 ours. We are grateful for his book, and for making it and the ERP CORE data openly
 available.

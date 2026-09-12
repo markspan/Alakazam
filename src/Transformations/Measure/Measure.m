@@ -27,8 +27,14 @@ function [EEG, options] = Measure(input, varargin)
 %       through .fraction x its peak amplitude on the onset side (ERPLAB's
 %       fractional peak latency), interpolated between samples.
 %     * Fractional Area Latency -- the latency dividing the window's
-%       cumulative signed area at .fraction (e.g. 0.5 = 50% area latency,
-%       the robust onset measure), interpolated between samples.
+%       cumulative area at .fraction (e.g. 0.5 = 50% area latency, the
+%       robust onset measure), interpolated between samples. .areaMode
+%       selects WHICH area is accumulated, the same four choices Area
+%       itself offers: 'signed', 'rectified', 'positive' or 'negative'
+%       (ERPLAB's fninteglat, fareatlat, fareaplat and fareanlat). Prefer a
+%       single-signed mode for a window spanning both polarities: only the
+%       signed cumulative area can reach its own fraction more than once,
+%       and this reports the first (earliest) crossing.
 %
 %   The peak-locating measures (Peak, peak-band Area, Fractional Peak
 %   Latency) honour .localPoints: 0 = the absolute extreme; >=1 = the most
@@ -394,7 +400,8 @@ function m = computeWindow(EEG, win, allLabels, nBins)
         case 'fractional area latency'
             for c = 1:nCh
                 for b = 1:nBins
-                    latency(c, b) = fractionalAreaLatency(V(c, loIdx:hiIdx, b), winTimes, fraction);
+                    latency(c, b) = fractionalAreaLatency( ...
+                        V(c, loIdx:hiIdx, b), winTimes, fraction, areaMode);
                 end
             end
 
@@ -681,13 +688,36 @@ function latMs = fractionalPeakLatency(windowData, winTimes, polarity, peakLocal
     end
 end
 
-function latMs = fractionalAreaLatency(windowData, winTimes, fraction)
+function latMs = fractionalAreaLatency(windowData, winTimes, fraction, mode)
 %FRACTIONALAREALATENCY  The (interpolated) latency that divides the
-%   window's cumulative signed area at FRACTION (e.g. 0.5 = 50% area
-%   latency, the robust onset/timing measure). NaN if fewer than two real
-%   samples or the total area is zero (a single-signed component window is
-%   the intended case; a window whose positive and negative areas cancel
-%   makes the fraction ill-defined). NaN samples are dropped first.
+%   window's cumulative area at FRACTION (e.g. 0.5 = 50% area latency, the
+%   robust onset/timing measure). NaN if fewer than two real samples or the
+%   total area is zero. NaN samples are dropped first.
+%
+%   MODE is the window's own .areaMode, applied to the waveform before
+%   integrating exactly as areaOf does it: 'signed' (as-is, negatives
+%   subtract), 'rectified' (|y|), 'positive' (max(y,0)) or 'negative'
+%   (min(y,0)). These are ERPLAB's four fractional-area measures --
+%   fninteglat, fareatlat, fareaplat and fareanlat respectively -- and
+%   Alakazam used to ignore MODE here and always integrate the signed area,
+%   which silently gave the 'signed' answer to a window asking for any of
+%   the other three.
+%
+%   WHICH MODE TO ASK FOR IS NOT COSMETIC. Only the signed cumulative area
+%   can be non-monotonic, and when it is, the fraction is genuinely
+%   ambiguous: a window whose positive and negative areas are comparable
+%   crosses its own 50% point more than once. This returns the FIRST
+%   crossing, which is the earliest latency at which the fraction is
+%   reached and the only one that answers "when did this component get
+%   halfway". (ERPLAB's fninteglat searches forward instead and reports the
+%   window edge in that situation, which is how the disagreement in
+%   Docs/luck.md was found.) The other three modes integrate a
+%   single-signed quantity, so their cumulative area is monotonic and the
+%   crossing is unique -- which is the reason to prefer one of them when a
+%   window genuinely spans components of both polarities.
+    if nargin < 4 || isempty(mode)
+        mode = 'signed';
+    end
     y = reshape(windowData, 1, []);
     t = reshape(winTimes, 1, []);
     valid = ~isnan(y);
@@ -697,6 +727,16 @@ function latMs = fractionalAreaLatency(windowData, winTimes, fraction)
     end
     y = y(valid);
     t = t(valid);
+    switch mode
+        case 'rectified'
+            y = abs(y);
+        case 'positive'
+            y = max(y, 0);
+        case 'negative'
+            y = min(y, 0);
+        otherwise
+            % 'signed' -- leave y as-is.
+    end
 
     segArea = (y(1:end - 1) + y(2:end)) / 2 .* diff(t);   % per-interval trapezoid
     cum = [0, cumsum(segArea)];                            % cumulative area at each sample
