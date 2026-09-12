@@ -97,10 +97,75 @@ function onUpdate(this)
     % exists to avoid. So the only thing left to tell the analyst is to
     % restart the ordinary way -- there is no folder to go find and launch
     % from any more.
+    % EEGLAB rides along with an Alakazam update, and only with one -- see
+    % offerEEGLabUpdate below, and checkForEEGLabUpdate's header for why
+    % EEGLAB is never updated on its own.
+    eeglabLine = offerEEGLabUpdate(this);
+
     uialert(this.MainFigure, ...
         sprintf(['Downloaded %s. Quit Alakazam and run startAlakazam again ' ...
-                 '(the usual way) to finish installing it.'], info.LatestVersion), ...
+                 '(the usual way) to finish installing it.%s'], ...
+                 info.LatestVersion, eeglabLine), ...
         'Update downloaded', 'Icon', 'success');
+end
+
+% ======================================================================= %
+function line = offerEEGLabUpdate(this)
+%OFFEREEGLABUPDATE  Having just staged an Alakazam update, offer the EEGLAB
+%   one too. Returns a sentence to append to the "restart to finish" dialog,
+%   or '' when there was nothing to say.
+%
+%   ONLY REACHED WHEN AN ALAKAZAM UPDATE WAS ACTUALLY DOWNLOADED. That is the
+%   whole design: Alakazam is validated against a particular EEGLAB
+%   (Docs/luck.md), so the two move together or not at all. An EEGLAB that
+%   updates itself underneath a fixed Alakazam is how a working install
+%   quietly stops matching what was tested -- last time it did, 37 test cases
+%   silently began skipping instead of running, and the epoching validation
+%   had to be redone.
+%
+%   Failure is never fatal here. The Alakazam update is already staged and
+%   the analyst has been told to restart; an EEGLAB check that cannot reach
+%   the network must not turn that into an error dialog.
+    line = '';
+    eeg = checkForEEGLabUpdate();
+    if ~eeg.CheckSucceeded || ~eeg.UpdateAvailable
+        return;
+    end
+
+    prompt = sprintf(['Alakazam also bundles EEGLAB, and %s is available ' ...
+        '(you have %s).\n\nUpdating it installs alongside the copy you are ' ...
+        'running, so this session is unaffected; the new one is picked up on ' ...
+        'the same restart that finishes the Alakazam update.'], ...
+        eeg.LatestVersion, eeg.CurrentVersion);
+    if eeg.Critical
+        prompt = sprintf('%s\n\nSCCN have flagged this release as a critical fix.', prompt);
+    end
+    if ~isempty(strtrim(eeg.Notes))
+        prompt = sprintf('%s\n\n%s', prompt, eeg.Notes);
+    end
+
+    selection = uiconfirm(this.MainFigure, prompt, 'Update EEGLAB too?', ...
+        'Options', {'Update EEGLAB', 'Keep the current one'}, ...
+        'DefaultOption', 1, 'CancelOption', 2, 'Icon', 'info');
+    if ~strcmp(selection, 'Update EEGLAB')
+        return;
+    end
+
+    [restoreBusy, ~] = beginBusy(this.MainFigure, ...
+        sprintf('Downloading EEGLAB %s (about 150 MB)...', eeg.LatestVersion)); %#ok<ASGLU>
+    try
+        % installFromZip, not EEGLAB's own eeglab_update: the install goes
+        % under Documents/MATLAB/eeglab where EEGLabEnvironment looks for it,
+        % rather than into whatever folder EEGLAB's dialog was pointing at.
+        EEGLabEnvironment.installEEGLabRelease(eeg.DownloadUrl);
+    catch ME
+        clear restoreBusy;
+        uialert(this.MainFigure, ME.message, 'Could not update EEGLAB', 'Icon', 'warning');
+        return;
+    end
+    clear restoreBusy;
+    line = sprintf(' EEGLAB %s was installed too, and takes effect on the same restart.', ...
+        eeg.LatestVersion);
 end
 
 % ======================================================================= %

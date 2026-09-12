@@ -57,6 +57,79 @@ classdef EEGLabEnvironment
             EEGLabEnvironment.ensureToolboxes();
         end
 
+        function folder = installEEGLabRelease(url)
+        %INSTALLEEGLABRELEASE  Download an EEGLAB release and unzip it
+        %   alongside the running one, WITHOUT changing this session's path.
+        %   Returns the installed folder.
+        %
+        %   Not installFromZip: that one returns early when the probe file is
+        %   already on disk (right for "install this if missing", wrong for
+        %   "install a newer one"), and it addpaths what it unpacked. Here the
+        %   running session must keep the EEGLAB it already has -- its
+        %   classdefs and 50-odd subfolders are loaded and in use -- so the
+        %   new release is left on disk and picked up by preferNewestInstall
+        %   on the next start, the same restart that finishes applying the
+        %   Alakazam update it came with.
+        %
+        %   Only called from Alakazam.onUpdate, after an Alakazam update has
+        %   been staged and the analyst has said yes to this as well. See
+        %   checkForEEGLabUpdate for why EEGLAB is never updated on its own.
+            home = getenv('USERPROFILE');
+            if isempty(home)
+                home = char(java.lang.System.getProperty('user.home'));
+            end
+            root = fullfile(home, 'Documents', 'MATLAB', 'eeglab');
+            if ~exist(root, 'dir')
+                mkdir(root);
+            end
+
+            before = EEGLabEnvironment.installedEEGLabFolders(root);
+
+            zipPath = fullfile(tempdir, 'eeglab_update.zip');
+            % Deletes the 150 MB archive however this function exits,
+            % including on a failed unzip.
+            cleanup = onCleanup(@() EEGLabEnvironment.deleteIfPresent(zipPath)); %#ok<NASGU>
+            fprintf('Downloading EEGLAB from %s ...\n', url);
+            websave(zipPath, url, weboptions('Timeout', 900));
+
+            % EEGLAB's archive carries its own eeglab<version>/ top-level
+            % folder, so unzipping into the root produces exactly the
+            % <root>/eeglab<version>/eeglab.m layout the search expects.
+            fprintf('Unzipping EEGLAB into %s ...\n', root);
+            unzip(zipPath, root);
+
+            after = EEGLabEnvironment.installedEEGLabFolders(root);
+            fresh = setdiff(after, before);
+            if isempty(fresh)
+                throw(MException('Alakazam:EEGLabEnvironment:installFailed', ...
+                    ['I downloaded and unpacked EEGLAB, but I cannot find an ' ...
+                     'eeglab.m in %s afterwards, so I am not confident the ' ...
+                     'install worked. Would you check that folder?'], root));
+            end
+            folder = EEGLabEnvironment.pickNewestEEGLab(fresh);
+            fprintf('EEGLAB installed to %s\n', folder);
+            fprintf('It is used from the next MATLAB restart, not this session.\n');
+        end
+
+        function folders = installedEEGLabFolders(root)
+        %INSTALLEDEEGLABFOLDERS  Every <root>/*/eeglab.m folder, as a cellstr.
+            folders = {};
+            if ~exist(root, 'dir')
+                return;
+            end
+            found = dir(fullfile(root, '*', 'eeglab.m'));
+            if ~isempty(found)
+                folders = {found.folder};
+            end
+        end
+
+        function deleteIfPresent(file)
+        %DELETEIFPRESENT  delete(FILE) without complaining if it is not there.
+            if exist(file, 'file') == 2
+                try, delete(file); catch, end %#ok<NOCOM,CTCH>
+            end
+        end
+
         function folder = pickNewestEEGLab(candidates)
         %PICKNEWESTEEGLAB  Choose the EEGLAB install to use from CANDIDATES
         %   (a cellstr of folders that each contain an eeglab.m). Returns ''
@@ -164,6 +237,51 @@ classdef EEGLabEnvironment
     end
 
     methods (Static, Access = private)
+        function preferNewestInstall()
+        %PREFERNEWESTINSTALL  Switch the path to a newer EEGLAB install when
+        %   one is sitting on disk next to the one currently being resolved.
+        %
+        %   Without this, installEEGLabRelease would be a no-op in practice.
+        %   Having eeglab.m on the saved MATLAB path is what decides which
+        %   EEGLAB answers, so a newly downloaded release in a
+        %   differently-named folder is simply never reached: ensureEEGLab
+        %   sees a perfectly good eeglab on the path and returns. The update
+        %   would download 150 MB and change nothing, which is worse than not
+        %   offering it.
+        %
+        %   Conservative on purpose. It moves only when the newest install on
+        %   disk is STRICTLY newer than the one on the path, it says so out
+        %   loud, and it only ever touches path entries under the EEGLAB
+        %   folder it is replacing. EEGLAB's own updater does the same thing
+        %   (eeglab_update's 'updatepath' step rewrites the path from the old
+        %   install to the new), so this is the ecosystem's convention rather
+        %   than Alakazam inventing one.
+        %
+        %   Runs at startup, before Alakazam initialises EEGLAB, so nothing
+        %   has been loaded out of the old install yet.
+            current = fileparts(which('eeglab'));
+            if isempty(current)
+                return;   % nothing on the path: the plain search handles it
+            end
+            newest = EEGLabEnvironment.newestEEGLabFolder();
+            if isempty(newest) || strcmpi(newest, current)
+                return;
+            end
+            if EEGLabEnvironment.versionKey(newest) <= EEGLabEnvironment.versionKey(current)
+                return;   % same or older: leave a deliberately pinned copy alone
+            end
+
+            % Drop every path entry inside the old install, then add the new
+            % root. EEGLAB fills in its own subfolders when it next runs.
+            for entry = strsplit(path, pathsep)
+                if startsWith(lower(entry{1}), lower(current))
+                    try, rmpath(entry{1}); catch, end %#ok<NOCOM,CTCH>
+                end
+            end
+            addpath(newest);
+            fprintf('Alakazam: switching to the newer EEGLAB in %s\n', newest);
+        end
+
         function folder = newestEEGLabFolder()
         %NEWESTEEGLABFOLDER  The newest EEGLAB install under
         %   <home>/Documents/MATLAB/eeglab, or '' if there is none.
@@ -244,6 +362,8 @@ classdef EEGLabEnvironment
         %   EEGLAB is expected to be installed and already on the path. If it is
         %   not found, the user is asked for permission to download and install
         %   the latest version, which is then added to the path and launched.
+
+            EEGLabEnvironment.preferNewestInstall();
 
             if isempty(which('eeglab'))
                 target = EEGLabEnvironment.newestEEGLabFolder();
