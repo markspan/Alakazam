@@ -962,30 +962,154 @@ the topography.
 
 ---
 
+## Validation against Luck's own stage outputs
+
+The `Data/Luck` tree does not just hold raw recordings: for several chapters it
+ships Luck's **own output at each stage**, and his ten published `.erp` files.
+Those are a better reference than re-running EEGLAB locally would be, because
+they are the exact files the book's figures and exercises are built on. Each
+comparison below loads the earlier stage, runs the corresponding Alakazam step,
+and reports the worst-case difference against Luck's published later stage.
+
+Two caveats on scope. **ERPLAB is not installed** in the environment these
+numbers come from (EEGLAB 2026.0.0 is); everything here is measured against
+Luck's stored outputs rather than a local ERPLAB run, so ERPLAB's parameters
+could not be varied to explore edge cases. And a comparison is only meaningful
+where exactly one step separates two files, so the table is shorter than the
+chapter list.
+
+### What agrees, and to what precision
+
+| Chapter | Step | Reference | Worst-case difference |
+|---|---|---|---|
+| 5 | ReRef to Cz, and to the left mastoid | `6_N400_unreferenced` to `6_N400_CzRef` / `6_N400_LmRef` | **0 uV**, bit-identical, 32 channels x 79 400 samples, both cases |
+| 7 to 8 | Interpolate C5, spherical spline | `1_MMN_preprocessed` to `1_MMN_preprocessed_interp` (ERPLAB `pop_erplabInterpolateElectrodes`) | **0 uV**, bit-identical, all 33 channels x 155 648 samples |
+| 8 | DefineBins, from Luck's own `BDF_N2pc.txt` via `erplabBdfToBinScript` | ERPLAB BINLISTER's stored `EVENTLIST` | **642 of 642 events** assigned to the same bins; trials per bin `[125 142]`, matching `trialsperbin` exactly |
+| 8 | Epoch window and time axis | `pop_epochbin(EEG,[-200 800],'pre')` | identical to the sample: 256 points, -199.22 to 796.88 ms |
+| 8 | Baseline correction | the same file | identical; see the note on `t = 0` below |
+| 3, 1 | DefineBins + Baseline + ArtefactDetect + Average, end to end | `ch3/premade erp/1_N400.erp` | bins available `[60 60 57 53]` exactly; accepted `[47 44 37 34]` and rejected `[13 16 20 19]` exactly; waveforms to **0.0004 uV** worst case (relative RMS error 5e-6, correlation 1.0000000000) on all four bins |
+| 10 | ArtefactDetect, absolute threshold +/-200 uV | ERPLAB `pop_artextval` flags in `1_LRP_preprocessed` | **346 of 346 trials** identical (the same 8 flagged) |
+| 10 | ArtefactDetect, moving-window peak-to-peak | ERPLAB `pop_artmwppth` flags in the same file | 345 of 346; the one difference is Alakazam catching an artefact ERPLAB misses, below |
+| 10 | Both detectors together | ERPLAB's `reject.rejmanual` | 9 rejected trials, matching exactly |
+| 3, 4 | erpset bridge, all ten published N400 erpsets | `erpsetToAveraged` / `averagedToErpset` | **0 uV** both ways, bit-identical |
+| 3, 4 | GrandAverage, equal-weight and trial-count-weighted | independently computed means of the ten erpsets | **3.6e-15 uV** (floating-point exact); the two weightings differ from each other by 1.67 uV, so the test is not vacuous |
+
+Three of these deserve a note, because passing them easily would have been
+suspicious. The interpolated C5 differs from the original bad channel by 230%
+of its own RMS, so "bit-identical" there is a real reconstruction being
+reproduced, not a near-no-op. The bipolar EOG channels carry no coordinates, so
+Alakazam excludes them from the spline automatically and ERPLAB's explicit
+`ignoreChannels [32 33]` turns out to be redundant. And ERPLAB's `'pre'`
+baseline **includes the sample at t = 0** (52 samples at 256 Hz, not 51);
+Alakazam's `Baseline(-200, 0)` already does the same, which is why the epochs
+match rather than sitting a fraction of a microvolt apart.
+
+### Two bugs this found, both fixed
+
+**The moving-window detectors never examined the end of the epoch.**
+`movingWindow` in `ArtefactDetect.m` stepped from sample 1 and stopped at the
+last window that *fits*, leaving up to `window + step - 2` samples at the tail
+that no window ever covered. At 256 Hz over -200 to 800 ms with ERPLAB's usual
+200 ms window and 100 ms step, the windows stopped at sample 233 of 256: the
+last **90 ms went unchecked**, which is inside the P3 and LRP measurement
+windows. ERPLAB's `artmwppth` flagged a 311 uV swing there (trial 222, FC4,
+602 to 797 ms) that Alakazam's detector walked past. The last window start is
+now forced flush with the end of the signal. This affected the step-function
+detector too, which shares the same helper.
+
+Fixing it also revealed that **ERPLAB has the same blind spot**: trial 202
+carries a 457 uV peak-to-peak swing on PO8 at 602 to 797 ms, far over the
+300 uV threshold under every window geometry, and ERPLAB does not flag it. That
+is the single "disagreement" left in the peak-to-peak row above, and it is
+Alakazam being right. Reproducing ERPLAB's stored flags exactly requires both
+its blind spot and its `floor`-based step length (`step 25, no flush` gives
+346 of 346).
+
+**`Interpolate` required Alakazam's own two fields to already exist.** It read
+`input.DataType` and `input.DataFormat` bare to restore them after `pop_interp`
+(which rebuilds the struct through `eeg_checkset` and drops them). A dataset
+that never had them, such as one loaded straight with `pop_loadset` outside the
+app, died on `Unrecognized field name "DataType"`. It now reads them through
+`TransTools.FieldOr` like every other transformation, falling back to the data
+shape for `DataFormat` rather than assuming continuous.
+
+### One open difference: which sample is t = 0
+
+This is the only reason Alakazam's epochs are not bit-identical to
+`pop_epochbin`'s, and it is a deliberate choice rather than an oversight.
+
+Event latencies are fractional once a recording has been resampled (Luck's
+1024 to 256 Hz files carry latencies ending .00, .25, .50 and .75), so the
+time-locking sample has to be chosen. **EEGLAB and ERPLAB both truncate**
+(`epoch.m`: `pos0 = floor(events(index)*srate)`), which puts the sample
+labelled `t = 0` up to a full sample *before* the event and biases every
+latency measure half a sample late, about 2 ms at 256 Hz. **Alakazam rounds**
+to the nearest sample instead: no mean bias, and half the worst-case error.
+
+The cost is reproducibility. On the chapter 3 N400 chain the convention alone
+moves one trial across the +/-100 uV rejection threshold (`round` gives 48
+accepted in bin 1, `floor` gives ERPLAB's 47), and it changes the averaged ERP
+by **15 to 30% relative RMS** (correlation 0.96 to 0.98). That sounds larger
+than a one-sample shift should be, and it is real: this data carries only a
+0.1 Hz high-pass and no low-pass, so it is broadband to 100 Hz and adjacent
+samples genuinely differ. Switch the convention to `floor` and every number in
+the chapter 3 row above becomes exact.
+
+So: `round` is the more accurate labelling, `floor` is what the field's
+reference implementations do. The choice is recorded at
+`@DefineBinsEngine/evaluateBins.m`, where the rounding happens.
+
+### Not validated, and why
+
+- **Filter (Ch 4).** Luck uses a second-order Butterworth IIR
+  (`pop_basicfilter`); Alakazam uses a Kaiser-windowed-sinc zero-phase FIR,
+  which is EEGLAB's and Luck's own stated best practice for ERP work. These are
+  deliberately different designs and cannot agree numerically, so there is no
+  meaningful bit comparison to make. Validating Alakazam's filter means
+  checking its realised magnitude response against its design specification,
+  not against `pop_basicfilter`.
+- **ICA correction (Ch 9), and Ch 6's `*_P3_corrected.set`.** The data ships
+  only corrected outputs, with no matching uncorrected file, so there is no
+  single-step pair to compare.
+- **Measure (Ch 10).** ERPLAB's `pop_geterpvalues` is not installed and no
+  measure output ships with the data.
+- **Data quality / aSME (Ch 6).** The `.erp` files do carry a `dataquality`
+  struct; it has not been compared yet. This is the most promising remaining
+  target, because the reference values are already sitting in the files.
+- **Inferential statistics (Ch 10).**
+
+The harness that produced these numbers is not checked in: it depends on the
+2.4 GB `Data/Luck` tree, which is gitignored. The two bugs it found are covered
+by ordinary unit tests instead (`ArtefactDetectTest`,
+`InterpolateTest`), written to fail against the pre-fix code.
+
+---
+
 ## Coverage of the book, chapter by chapter
 
 "Implemented" below means Alakazam has a step **intended** to do what the book's
-step does. It does **not** mean the two have been shown to agree: that comparison
-is exactly the validation work still to be done. Until it is, use the EEGLAB/ERPLAB
-workflow Luck teaches as the reference and this as an experimental alternative to
-check against it.
+step does. The "Validated" column says whether that step has been shown to agree
+with Luck's own published output for it; see the section above for the exact
+figures and for what could not be checked. Where a step is not yet validated,
+use the EEGLAB/ERPLAB workflow Luck teaches as the reference and this as an
+alternative to check against it.
 
-| Book step | Alakazam (implemented, not yet validated) | How |
-|---|---|---|
-| Filtering (Ch 4) | implemented | Filter: FIR windowed-sinc / Kaiser, freq + dB |
-| Referencing (Ch 5) | implemented | ReRef: average / specific, exclude, keep-ref |
-| Channel / coordinate editor (Ch 5) | implemented | ChannelEditor: labels, types, X/Y/Z, 10-5 lookup, montage load |
-| Resampling (Ch 5) | implemented | Resample (`pop_resample`), continuous |
-| Bins + averaging + baseline (Ch 6) | implemented | bin language + BDF import + difference bins |
-| Data quality / aSME (Ch 6) | implemented | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
-| EEG inspection (Ch 7) | implemented | SignalView / EpochView |
-| Bad-channel interpolation (Ch 7) | implemented | Interpolate (`pop_interp`): spline / invdist / spacetime |
-| Artifact detection (Ch 8) | implemented | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
-| ICA artifact correction (Ch 9) | implemented | automatic (AutoEyeICA) + manual component removal (ICA), both ICLabel |
-| Amplitude / latency scoring (Ch 10) | implemented | ERP Measure, incl. fractional-area latency |
-| Inferential statistics (Ch 10) | implemented | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
-| Reproducible pipeline (Ch 11) | implemented | templates + Recalculate |
-| MATLAB scripting (Ch 11) | implemented | exported MATLAB script naming EEGLAB's own functions where faithful (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`), plus templates and Recalculate |
+| Book step | Alakazam | Validated | How |
+|---|---|---|---|
+| Filtering (Ch 4) | implemented | not comparable (FIR vs Luck's IIR by design) | Filter: FIR windowed-sinc / Kaiser, freq + dB |
+| Referencing (Ch 5) | implemented | **yes, bit-identical** | ReRef: average / specific, exclude, keep-ref |
+| Channel / coordinate editor (Ch 5) | implemented | no reference pair | ChannelEditor: labels, types, X/Y/Z, 10-5 lookup, montage load |
+| Resampling (Ch 5) | implemented | wraps `pop_resample` | Resample (`pop_resample`), continuous |
+| Bins + averaging + baseline (Ch 6) | implemented | **yes**: bins exact, averages to 0.0004 uV | bin language + BDF import + difference bins |
+| Data quality / aSME (Ch 6) | implemented | not yet (reference values are in the `.erp` files) | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
+| EEG inspection (Ch 7) | implemented | n/a, a view | SignalView / EpochView |
+| Bad-channel interpolation (Ch 7) | implemented | **yes, bit-identical** | Interpolate (`pop_interp`): spline / invdist / spacetime |
+| Artifact detection (Ch 8) | implemented | **yes**, after fixing a tail blind spot; now catches one artefact ERPLAB misses | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
+| ICA artifact correction (Ch 9) | implemented | no reference pair (only corrected files ship) | automatic (AutoEyeICA) + manual component removal (ICA), both ICLabel |
+| Amplitude / latency scoring (Ch 10) | implemented | not yet (no ERPLAB, no stored measures) | ERP Measure, incl. fractional-area latency |
+| Inferential statistics (Ch 10) | implemented | not yet | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
+| Reproducible pipeline (Ch 11) | implemented | n/a | templates + Recalculate |
+| MATLAB scripting (Ch 11) | implemented | n/a | exported MATLAB script naming EEGLAB's own functions where faithful (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`), plus templates and Recalculate |
 
 **The short version.** For the ERP CORE components the book teaches
 (N400, P3b, MMN, N2pc, LRP, N170), Alakazam has a step for every stage of the
@@ -994,12 +1118,18 @@ bad-channel interpolation, bin definition, artifact detection, ICA correction
 (automatic and manual), epoching, averaging, grand-averaging, data quality (aSME),
 amplitude/latency scoring, and export, with a design-aware statistical report
 and a generated script for the statistics, and every chapter has a ready
-workspace over the real data. But
-"has a step for" is not "gets the same answer as": Alakazam is new and lightly
-tested, and none of these steps has yet been validated against EEGLAB/ERPLAB. So
-this guide is best used **alongside** Luck's book and the tools it uses, as a way
-to learn the pipeline and to try an alternative, not as a replacement for a
-validated workflow. The credit for the science, the teaching, and the data is
+workspace over the real data.
+
+"Has a step for" is not "gets the same answer as", and the section above is the
+attempt to tell the two apart. Where Luck's data contains a single-step
+reference, the answer is now encouraging: referencing and interpolation are
+bit-identical, bin assignment matches BINLISTER on every one of 642 events, and
+the whole bin-to-average chain reproduces a published `.erp` to 0.0004 uV. That
+exercise also found two real bugs in Alakazam, one of them a detector blind spot
+over the last 90 ms of every epoch, which is the argument for doing more of it.
+Filtering, ICA correction, scoring and the statistics remain unvalidated, and
+one epoching convention deliberately differs from EEGLAB's. So this guide is
+still best used **alongside** Luck's book and the tools it uses. The credit for the science, the teaching, and the data is
 entirely Steven Luck's; the responsibility for any way Alakazam gets it wrong is
 ours. We are grateful for his book, and for making it and the ERP CORE data openly
 available.

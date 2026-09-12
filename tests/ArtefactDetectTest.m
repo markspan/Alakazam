@@ -303,5 +303,78 @@ classdef ArtefactDetectTest < matlab.unittest.TestCase
             expected(1, 2) = true;
             testCase.verifyEqual(result.etc.alz.interpolated, expected);
         end
+
+        function aMovingWindowSeesAnArtefactInTheLastSamples(testCase)
+        %AMOVINGWINDOWSEESANARTEFACTINTHELASTSAMPLES  Stepping by Step from
+        %   sample 1 stops at the last window that FITS, so without a final
+        %   window flush with the end of the epoch the tail is never
+        %   examined and an artefact sitting there is silently averaged in.
+        %
+        %   Real case, from validating against Luck's ch10 LRP data: at
+        %   256 Hz over -200..800 ms with ERPLAB's usual 200 ms window and
+        %   100 ms step, the windows stop at sample 233 of 256, leaving the
+        %   last 90 ms unchecked -- inside the LRP/P3 measurement window.
+        %   ERPLAB's artmwppth flagged a 311 uV swing there that this
+        %   detector missed.
+            EEG = makeTestEEG('nbchan', 1, 'trials', 2, 'srate', 256, ...
+                'epochMs', [-200, 796]);
+            EEG.data(:) = 0;
+            geometry = testCase.windowGeometry(EEG.srate, 200, 100, EEG.pnts);
+            testCase.assertLessThan(geometry.lastCovered, EEG.pnts, ...
+                ['This test is only meaningful while stepping leaves a tail: ' ...
+                 'with these settings the stepped windows must not reach the end.']);
+
+            % A big swing placed entirely inside that untested tail, trial 2 only.
+            tail = geometry.lastCovered + 1 : EEG.pnts;
+            EEG.data(1, tail, 2) = linspace(0, 500, numel(tail));
+
+            opts = struct('Method', {{'Moving-window peak-to-peak'}}, ...
+                'Threshold', 300, 'Window', 200, 'Step', 100, ...
+                'Scope', 'Whole epoch');
+            result = ArtefactDetect(EEG, opts);
+
+            testCase.verifyFalse(any(isnan(result.data(:, :, 1)), 'all'), ...
+                'The clean trial must survive.');
+            testCase.verifyTrue(all(isnan(result.data(1, :, 2))), ...
+                sprintf(['A 500 uV swing in samples %d..%d (the stretch no ' ...
+                         'stepped window covers) must still be detected.'], ...
+                        tail(1), tail(end)));
+        end
+
+        function theStepDetectorAlsoSeesTheLastSamples(testCase)
+        %THESTEPDETECTORALSOSEESTHELASTSAMPLES  The step-function detector
+        %   shares movingWindow, so it shared the blind spot.
+            EEG = makeTestEEG('nbchan', 1, 'trials', 2, 'srate', 256, ...
+                'epochMs', [-200, 796]);
+            EEG.data(:) = 0;
+            geometry = testCase.windowGeometry(EEG.srate, 200, 100, EEG.pnts);
+            tail = geometry.lastCovered + 1 : EEG.pnts;
+            % A clean step, trial 2 only: the window's second half sits
+            % 400 uV above its first half once the window reaches the end.
+            EEG.data(1, tail, 2) = 400;
+
+            opts = struct('Method', {{'Step function'}}, 'Threshold', 100, ...
+                'Window', 200, 'Step', 100, 'Scope', 'Whole epoch');
+            result = ArtefactDetect(EEG, opts);
+
+            testCase.verifyFalse(any(isnan(result.data(:, :, 1)), 'all'), ...
+                'The clean trial must survive.');
+            testCase.verifyTrue(all(isnan(result.data(1, :, 2))), ...
+                'A step confined to the epoch tail must still be detected.');
+        end
+    end
+
+    methods (Access = private)
+        function g = windowGeometry(~, srate, windowMs, stepMs, nPts)
+        %WINDOWGEOMETRY  Where ArtefactDetect's stepped windows land, by the
+        %   same arithmetic it uses, so a test can place an artefact in the
+        %   stretch that stepping alone would leave out. LASTCOVERED is the
+        %   final sample any stepped window reaches; everything after it is
+        %   the blind spot the flush-to-end window exists to close.
+            g.winN  = max(2, round(windowMs / 1000 * srate));
+            g.stepN = max(1, round(stepMs   / 1000 * srate));
+            g.lastStart   = 1 + g.stepN * floor((nPts - g.winN) / g.stepN);
+            g.lastCovered = g.lastStart + g.winN - 1;
+        end
     end
 end

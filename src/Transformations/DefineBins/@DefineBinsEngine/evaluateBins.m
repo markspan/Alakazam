@@ -10,6 +10,18 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     [ctx, order] = DefineBinsEngine.buildContext(EEG);
     nEv = numel(order);
     membership = cell(1, nEv);
+    % ROUND, not floor -- a deliberate divergence from EEGLAB/ERPLAB, and the
+    % only reason Alakazam's epochs are not bit-identical to pop_epochbin's.
+    % Event latencies are fractional after resampling (a 1024->256 Hz file
+    % carries .00/.25/.50/.75), so the time-locking sample has to be chosen.
+    % EEGLAB truncates (epoch.m: pos0 = floor(events(index)*srate)) and so
+    % does ERPLAB; that puts the sample labelled t=0 up to a full sample
+    % BEFORE the event, biasing every latency measure half a sample late
+    % (~2 ms at 256 Hz). Rounding picks the nearest sample instead: zero mean
+    % bias and half the worst-case error. Validated against Luck's ch8
+    % pop_epochbin output -- identical on trials whose latency is integral or
+    % rounds down, one sample apart on the rest, which is this choice and
+    % nothing else. See Docs/luck.md.
     centerLat  = round([EEG.event.latency]);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
                      'combo', {}, 'events', {}, 'rt', {}, 'n', {});

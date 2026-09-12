@@ -254,7 +254,15 @@ function m = movingWindow(sig, winN, stepN, fcn)
     n = numel(sig);
     m = 0;
     if n < winN; return; end
-    for i = 1:stepN:(n - winN + 1)
+    % The last start is forced flush with the end of the signal. Stepping by
+    % stepN alone stops at the last whole window that fits, leaving up to
+    % winN + stepN - 2 samples at the tail that no window ever covers -- for a
+    % -200..800 ms epoch at 256 Hz with ERPLAB's usual 200 ms / 100 ms
+    % settings that is the last 90 ms, i.e. an artefact sitting on the P3 or
+    % the LRP goes unseen. Found by validating against Luck's ch10 LRP data:
+    % ERPLAB's artmwppth flagged trial 222 (FC4, 311 uV peak-to-peak at
+    % 602..797 ms) and this detector did not. See Docs/luck.md.
+    for i = unique([1:stepN:(n - winN + 1), n - winN + 1])
         v = fcn(sig(i:i + winN - 1));
         if v > m; m = v; end
     end

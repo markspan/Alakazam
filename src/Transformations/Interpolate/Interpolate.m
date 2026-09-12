@@ -44,8 +44,24 @@ if isfield(options, 'method') && ~isempty(options.method)
 end
 
 EEG = pop_interp(input, badIdx, method);
-EEG.DataType   = input.DataType;
-EEG.DataFormat = input.DataFormat;
+% pop_interp rebuilds the struct through eeg_checkset, which does not carry
+% Alakazam's own two fields across, so restore them. TransTools.FieldOr, not
+% a bare input.DataType: interpolating does not change what kind of data this
+% is, so a dataset that never had the fields set (one handed straight to the
+% transform outside the app, say) should come back unchanged rather than error.
+EEG.DataType   = TransTools.FieldOr(input, 'DataType', 'TIMEDOMAIN');
+EEG.DataFormat = TransTools.FieldOr(input, 'DataFormat', shapeFormat(input));
+end
+
+% ======================================================================= %
+function fmt = shapeFormat(input)
+%SHAPEFORMAT  The DataFormat the data shape implies, for a dataset that
+%   arrived without the field set. Same fallback SelectData uses.
+    if size(input.data, 3) > 1
+        fmt = 'EPOCHED';
+    else
+        fmt = 'CONTINUOUS';
+    end
 end
 
 % ======================================================================= %
