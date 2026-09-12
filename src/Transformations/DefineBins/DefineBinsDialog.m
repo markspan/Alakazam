@@ -12,8 +12,12 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
     % padding and gaps need 646px before the flexible spacer gets anything,
     % so adding "Syntax..." pushed the last button off the edge. This leaves
     % the spacer real room rather than only just fitting.
-    fig = uifigure('Name', 'DefineBins', 'Position', fitOnScreen([100 100 780 520]));
-    outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 44});
+    [accentColor, bgColor] = dialogChromeColors();
+    fig = uifigure('Name', 'DefineBins', 'Position', fitOnScreen([100 100 780 520]), 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Define bins', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44});
 
     % Row 1: epoch start/stop fields, side by side.
     epochRow = uigridlayout(outer, [1 4], ...
@@ -45,7 +49,8 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
     syntaxBtn.Layout.Column = 4;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
     cancelBtn.Layout.Column = 6;
-    okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
+    okBtn = uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, 'FontColor', [1 1 1], ...
+        'ButtonPushedFcn', @(~,~) onOK());
     okBtn.Layout.Column = 7;
     fig.CloseRequestFcn = @(~,~) onCancel();
 

@@ -26,8 +26,12 @@ function ops = EventEditorDialog(EEG)
     pnts  = doubleFieldOr(EEG, 'pnts', NaN);
     original = EEG.event;
 
-    fig = uifigure('Name', 'Event editor', 'Position', centredOn([], 1040, 660));
-    outer = uigridlayout(fig, [2 1], 'RowHeight', {'1x', 46}, ...
+    [accentColor, bgColor] = dialogChromeColors();
+    fig = uifigure('Name', 'Event editor', 'Position', centredOn([], 1040, 660), 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Event editor', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [2 1], 'RowHeight', {'1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
     body = uigridlayout(outer, [1 2], 'ColumnWidth', {'1.35x', '1x'}, ...
@@ -116,7 +120,8 @@ function ops = EventEditorDialog(EEG)
     uibutton(buttons, 'Text', 'Export table...', 'ButtonPushedFcn', @(~,~) onExport());
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
     cancelBtn.Layout.Column = 3;
-    okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
+    okBtn = uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, 'FontColor', [1 1 1], ...
+        'ButtonPushedFcn', @(~,~) onOK());
     okBtn.Layout.Column = 4;
     fig.CloseRequestFcn = @(~,~) onCancel();
 

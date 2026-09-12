@@ -151,6 +151,30 @@ classdef ArtefactDetectChannelScopeTest < matlab.unittest.TestCase
             testCase.verifyEqual(nInterpolated, 0, ...
                 'Nothing was reconstructable here, so nothing should be claimed.');
         end
+
+        function everyChannelFlaggedInATrialIsLeftFlaggedRatherThanCrashing(testCase)
+        %EVERYCHANNELFLAGGEDINATRIALISLEFTFLAGGEDRATHERTHANCRASHING  The bug
+        %   itself. With no good channel left in a trial, eeg_interp's own
+        %   spherical-spline maths hands MATLAB's legendre() an empty
+        %   electrode-coordinate array; max() of that is [], not a scalar,
+        %   so legendre's own `... || max(abs(x(:))) > 1` throws "Operands
+        %   to the short-circuit AND/OR... must be convertible to logical
+        %   scalars" instead of failing cleanly. Reproduced directly here
+        %   (all 5 channels flagged in trial 1) before the guard existed.
+            EEG = testCase.eegWithBlinkingEog();
+            flags = false(5, size(EEG.data, 3));
+            flags(:, 1) = true;    % every channel of trial 1
+            flags(2, 2) = true;    % an ordinary, reconstructable cell elsewhere
+
+            [out, nInterpolated] = TransTools.InterpolateFlaggedCells(EEG, flags);
+
+            testCase.verifyEqual(nInterpolated, 1, ...
+                'Only the reconstructable cell in trial 2 should count.');
+            testCase.verifyTrue(all(isnan(out.data(:, :, 1)), 'all'), ...
+                'A trial with nothing left to reconstruct from should be left flagged.');
+            testCase.verifyFalse(any(isnan(out.data(2, :, 2))), ...
+                'The ordinary cell in trial 2 should still have been interpolated.');
+        end
     end
 
     methods (Access = private)

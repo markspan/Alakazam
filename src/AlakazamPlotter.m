@@ -277,6 +277,18 @@ classdef AlakazamPlotter < handle
                 view = CoherenceTopographyView(tab, eeg);
                 view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
                 setappdata(tab, "CoherenceTopographyView", view);
+            elseif strcmpi(eeg.id, "CrossCorrelation") || (isfield(eeg, "xcorr") && ~isempty(eeg.xcorr))
+                % Passes the data through but carries EEG.xcorr: r against
+                % lag per channel per bin, drawn as a line with an SE band.
+                view = CrossCorrelationView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "CrossCorrelationView", view);
+            elseif strcmpi(eeg.id, "Covariance") || (isfield(eeg, "covariance") && ~isempty(eeg.covariance))
+                % Passes the data through but carries EEG.covariance: a
+                % channel x channel matrix per bin, drawn as a heatmap.
+                view = CovarianceView(tab, eeg);
+                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+                setappdata(tab, "CovarianceView", view);
             elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
                 if eeg.nbchan > 1 && isfield(eeg, "trials")
                     if eeg.trials > 1

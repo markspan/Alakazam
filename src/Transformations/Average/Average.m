@@ -64,7 +64,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     stErr = nan(nchan, npnts, nbin);
     aSME  = nan(nchan, nbin);   % analytic standardized measurement error, per channel/bin
     for b = 1:nbin
-        idx = binTrials(input, b);
+        idx = TransTools.BinTrials(input, b);
         EEG.bindesc(b).n = numel(idx);
         if isempty(idx)
             continue;
@@ -166,17 +166,4 @@ function sme = windowedSME(trials)
     end
     perTrialMean = squeeze(mean(trials, 2, 'omitnan'));   % channels x trials
     sme = std(perTrialMean, 0, 2, 'omitnan') / sqrt(n);
-end
-
-function idx = binTrials(EEG, b)
-%BINTRIALS  Trial indices (into the epoch stack) belonging to bin b.
-%   Prefers the explicit trial list DefineBins stores on each bin; falls back
-%   to scanning the per-epoch .bini membership tags.
-    idx = [];
-    if isfield(EEG.bindesc, 'trials') && ~isempty(EEG.bindesc(b).trials)
-        idx = EEG.bindesc(b).trials;
-    elseif isfield(EEG, 'epoch') && ~isempty(EEG.epoch) && isfield(EEG.epoch, 'bini')
-        binIndex = EEG.bindesc(b).index;
-        idx = find(arrayfun(@(e) any(e.bini == binIndex), EEG.epoch));
-    end
 end

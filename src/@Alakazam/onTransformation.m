@@ -19,6 +19,21 @@ function onTransformation(this, entry)
     entryName   = char(entry);
     transformId = entryName(1:find(entryName == '.', 1, "last") - 1);
 
+    % A CLEAR MESSAGE, NOT A CRASH, WHEN NOTHING IS SELECTED. Without this,
+    % TransTools.invoke below runs the transformation in full -- its options
+    % dialog, then the whole computation -- against whatever this.Workspace.EEG
+    % happens to hold, and only fails afterwards trying to persist the result
+    % under a node that does not exist: SelectedNodes.Name throws "dot
+    % indexing is not supported for variables of type double" (SelectedNodes
+    % is [] when nothing is selected -- see WorkSpaceTree's own documented
+    % contract), a MATLAB internal error that says nothing about what
+    % actually went wrong, after work that need never have run at all.
+    if isempty(this.Workspace.ActiveTree.SelectedNodes)
+        uialert(this.MainFigure, 'Please select a dataset in the tree first.', ...
+            'Nothing selected', 'Icon', 'warning');
+        return;
+    end
+
     try
         restoreDir = this.enterRepoRoot();
 

@@ -80,10 +80,31 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
         return;
     end
 
+    % A TRIAL WITH NO POSITIONED GOOD CHANNEL LEFT has nothing for a
+    % spherical-spline scalp pattern to be built from, and eeg_interp does
+    % not fail cleanly when handed one: computeg's electrode-coordinate
+    % array comes out empty, and MATLAB's own legendre() then throws
+    % "Operands to the short-circuit AND/OR... must be convertible to
+    % logical scalars" -- max() of an empty array is [], not a scalar, so
+    % the >1 comparison inside legendre.m produces [] rather than
+    % true/false. Reproduced directly, two ways: every channel of a trial
+    % flagged, and every UNFLAGGED channel of a trial being unpositioned (an
+    % EOG channel left as the only "good" neighbour is just as useless to
+    % the spline as no neighbour at all) -- both raise exactly this, with
+    % exactly this stack (legendre <- computeg <- spheric_spline <-
+    % eeg_interp). Checked against POSITIONED, so a trial is only skipped
+    % when it truly has nothing to reconstruct from -- and left flagged
+    % here, the same as a channel with no scalp position, rather than
+    % letting either case reach eeg_interp at all.
     nTrials = size(EEG.data, 3);
+    noGoodNeighbour = false(size(flags));
     for t = 1:nTrials
         badIdx = find(flags(:, t));
         if isempty(badIdx)
+            continue;
+        end
+        if ~any(positioned(:) & ~flags(:, t))
+            noGoodNeighbour(:, t) = flags(:, t);   % only the cells actually flagged here
             continue;
         end
         oneTrial = EEG;
@@ -91,6 +112,16 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
         oneTrial.trials = 1;
         oneTrial = eeg_interp(oneTrial, badIdx, 'spherical');
         EEG.data(badIdx, :, t) = oneTrial.data(badIdx, :);
+    end
+
+    if any(noGoodNeighbour(:))
+        for k = 1:nTrials
+            EEG.data(noGoodNeighbour(:, k), :, k) = NaN;
+        end
+        fprintf(['InterpolateFlaggedCells: every channel was flagged in %d trial(s), leaving no ' ...
+            'clean neighbour to reconstruct any of them from; %d channel-epoch(s) were left ' ...
+            'flagged instead of interpolated.\n'], nnz(any(noGoodNeighbour, 1)), nnz(noGoodNeighbour));
+        flags = flags & ~noGoodNeighbour;
     end
 
     nInterpolated = nnz(flags);

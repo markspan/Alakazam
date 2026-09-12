@@ -170,17 +170,17 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
     coh1 = 2 / sum(tapers(:, 1));
 
     for b = 1:nBins
-        trials = binTrials(EEG, b);
+        trials = TransTools.BinTrials(EEG, b);
         if isempty(trials)
             continue;   % combination bins have no trials of their own
         end
         if ~isempty(refIdx)
             Vref = squeeze(EEG.data(refIdx, :, trials));   % nsamp x nT
-            Xref = tdft(Vref, fUse, t, tapers);            % K x nT (raw)
+            Xref = TransTools.Tdft(Vref, fUse, t, tapers);            % K x nT (raw)
         end
         for c = 1:nCh
             Vc = poolWave(EEG, specs(c).members, trials);  % nsamp x nT
-            X = tdft(Vc, fUse, t, tapers);                 % K x nT (raw)
+            X = TransTools.Tdft(Vc, fUse, t, tapers);                 % K x nT (raw)
 
             % ArtefactDetect rejects a trial by blanking its data to NaN in
             % place, not by removing it from bindesc(b).trials -- so a
@@ -198,7 +198,7 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
                 Pf = mean(abs(Ek).^2);                     % raw evoked power (ratio use)
                 np = zeros(1, numel(neigh));
                 for q = 1:numel(neigh)
-                    np(q) = mean(abs(mean(tdft(Vc, neigh(q), t, tapers), 2, 'omitnan')).^2);
+                    np(q) = mean(abs(mean(TransTools.Tdft(Vc, neigh(q), t, tapers), 2, 'omitnan')).^2);
                 end
                 snr(c, b) = Pf / mean(np);
             end
@@ -221,17 +221,6 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
         'itc', itc, 'phase', phase, 'coherence', coherence, 'phaselag', phaselag);
 end
 
-function X = tdft(V, f, t, tapers)
-%TDFT  Raw tapered single-frequency DFT of V (nsamp x nT) at frequency F, one
-%   row per taper: X(k, :) = sum_t V .* taper_k .* exp(-i2*pi*f*t). Left
-%   unnormalised on purpose -- the caller applies taper 0's coherent gain for
-%   the calibrated amplitude, while SNR / ITC / coherence use magnitudes or
-%   ratios in which the taper scale cancels (so the zero-sum higher DPSS
-%   tapers are safe).
-    e = exp(-1i * 2 * pi * f * t(:));    % nsamp x 1
-    X = (tapers .* e).' * V;             % K x nT
-end
-
 function V = poolWave(EEG, members, trials)
 %POOLWAVE  nsamp x nTrials waveform for a channel spec: the electrode itself
 %   or the NaN-tolerant mean of a pool's members.
@@ -242,17 +231,6 @@ function V = poolWave(EEG, members, trials)
     end
     if size(V, 1) == 1   % single trial -> keep nsamp x 1
         V = V(:);
-    end
-end
-
-function idx = binTrials(EEG, b)
-%BINTRIALS  Trial indices for bin b (mirrors Average.binTrials).
-    idx = [];
-    if isfield(EEG.bindesc, 'trials') && ~isempty(EEG.bindesc(b).trials)
-        idx = EEG.bindesc(b).trials;
-    elseif isfield(EEG, 'epoch') && ~isempty(EEG.epoch) && isfield(EEG.epoch, 'bini')
-        binIndex = EEG.bindesc(b).index;
-        idx = find(arrayfun(@(e) any(e.bini == binIndex), EEG.epoch));
     end
 end
 
@@ -283,7 +261,7 @@ function [spectrum, freqs] = evokedSpectrum(EEG, taper, df)
     w = taper(:)';
     g = sum(w);
     for b = 1:nBins
-        trials = binTrials(EEG, b);
+        trials = TransTools.BinTrials(EEG, b);
         if isempty(trials); continue; end
         % 'omitnan': see the matching comment in computeRow -- rejected
         % trials are NaN-blanked in place, not removed from this list.

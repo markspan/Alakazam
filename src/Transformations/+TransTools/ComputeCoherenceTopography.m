@@ -63,7 +63,7 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
         else
             amp = zeros(numel(ampFreqs), 1);
             for k = 1:numel(ampFreqs)
-                Xr = tdft(Vref, ampFreqs(k), t, taper);   % 1 x nTr
+                Xr = TransTools.Tdft(Vref, ampFreqs(k), t, taper);   % 1 x nTr
                 amp(k) = abs(mean(Xr));                    % evoked (phase-locked) magnitude
             end
             refAmp(:, b) = amp;
@@ -72,12 +72,12 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
         end
         detFreq(b) = fUse;
 
-        Xref = tdft(Vref, fUse, t, taper);          % 1 x nTr
+        Xref = TransTools.Tdft(Vref, fUse, t, taper);          % 1 x nTr
         refAuto = sum(abs(Xref).^2);
         if refAuto == 0; continue; end
         for c = 1:nChan
             if c == refIdx; continue; end            % self-coherence is trivially 1
-            Xc = tdft(reshape(V(c, :, :), nwin, []), fUse, t, taper);
+            Xc = TransTools.Tdft(reshape(V(c, :, :), nwin, []), fUse, t, taper);
             den = sum(abs(Xc).^2) * refAuto;
             if den > 0
                 coh(c, b) = abs(sum(Xc .* conj(Xref)))^2 / den;
@@ -87,15 +87,6 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
 end
 
 % ======================================================================= %
-function X = tdft(V, f, t, taper)
-%TDFT  Hann-tapered single-frequency DFT of V (nwin x nTr) at F (Hz): one
-%   complex value per trial, X(n) = sum_t V(:,n) .* taper .* exp(-i2*pi*f*t).
-%   The same tapered single-frequency DFT SpectralMeasure.m uses; magnitude-
-%   squared coherence is a ratio, so the taper's absolute scale cancels.
-    kern = taper(:) .* exp(-1i * 2 * pi * f * t(:));   % nwin x 1
-    X = sum(V .* kern, 1);                             % 1 x nTr
-end
-
 function [lo, hi] = windowRange(input, startMs, stopMs, nSamp)
 %WINDOWRANGE  Sample range for a [startMs, stopMs] window; the whole epoch when
 %   the window is unset or degenerate.

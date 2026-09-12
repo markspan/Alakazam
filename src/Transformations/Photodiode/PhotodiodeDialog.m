@@ -21,8 +21,12 @@ function options = PhotodiodeDialog(EEG)
     labels = channelLabels(EEG);
     guess = guessDiode(labels);
 
-    fig = uifigure('Name', 'Photodiode', 'Position', centredOn([], 1080, 680));
-    outer = uigridlayout(fig, [3 1], 'RowHeight', {'fit', '1x', 46}, ...
+    [accentColor, bgColor] = dialogChromeColors();
+    fig = uifigure('Name', 'Photodiode', 'Position', centredOn([], 1080, 680), 'Color', bgColor);
+    root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
+    uilabel(root, 'Text', '  Photodiode', 'FontSize', 14, 'FontWeight', 'bold', ...
+        'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 
     % ---- settings ---------------------------------------------------------
@@ -185,7 +189,8 @@ function options = PhotodiodeDialog(EEG)
     buttons.Layout.Row = 3;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
     cancelBtn.Layout.Column = 2;
-    okBtn = uibutton(buttons, 'Text', 'OK', 'ButtonPushedFcn', @(~,~) onOK());
+    okBtn = uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, 'FontColor', [1 1 1], ...
+        'ButtonPushedFcn', @(~,~) onOK());
     okBtn.Layout.Column = 3;
     fig.CloseRequestFcn = @(~,~) onCancel();
 
