@@ -51,7 +51,11 @@ given, and Luck's should be treated as correct.
 - **A workspace per chapter:** `Chapter1.wksp` ... `Chapter11.wksp` in the
   repository root. Each points its *Raw* folder at the matching `Data/Luck/chN`
   and preloads bin, baseline, ICA and time-frequency settings.
-- **A ready pipeline:** [`N400.alztemplate`](../N400.alztemplate), the full N400
+- **Two ready pipelines:**
+  [`N400-complete.alztemplate`](../N400-complete.alztemplate), chapters 2 and 3
+  end to end from the files `ch3` ships (filter through measurement and
+  topography, see [Appendix 3](#the-fullest-chain-ready-to-run)), and
+  [`N400.alztemplate`](../N400.alztemplate), the full N400
   recipe as a re-appliable template.
 - ERPLAB source files sit next to the data (`BDF_*.txt` bin descriptor files,
   `*.binscript` saved bin scripts, `BinOps_*.txt` bin-operation files), so you
@@ -990,6 +994,49 @@ or add the manual `ICA`
 step to prune a specific component; add a `Filter` (0.1 Hz high-pass) at the
 front to match the book's exact recipe, and add a `Scalp` leaf under Average for
 the topography.
+
+### The fullest chain, ready to run
+
+`N400-complete.alztemplate` in the repository root is the whole of chapters 2
+and 3 as one template, starting from the unfiltered `.set` files `ch3` actually
+ships and ending at the numbers the statistics read:
+
+```
+raw import (…_N400_preprocessed.set, ch3)
+  -> Filter           (0.1 Hz high-pass, 40 dB)
+  -> DefineBins       (the book's four BDF bins + "N400" = bin 4 - bin 3;
+                       epoch -200..800)
+  -> Baseline         (-200..0, the book's whole prestimulus interval)
+  -> ArtefactDetect   (Absolute threshold +/- 100 uV, tested -200..795)
+  -> Average
+       -> ERP Measure (N400 amplitude: mean amplitude 300..500 ms at CPz;
+                       N400 onset: 50% NEGATIVE-area latency, same window)
+       -> Scalp       (the topography)
+```
+
+Apply it to one subject, then **Apply to All Raw Files** for the other nine,
+then **Grand Average** and export from **Measurements** for the report. Four
+notes on it:
+
+- It **branches** under Average (a measurement leaf and a topography leaf), so
+  it is a version-2 template. Version 1's flat `steps` list cannot express that.
+- The measurement electrode is **CPz**, where the book measures the N400, not
+  the `Cz` that `N400.alztemplate` uses.
+- The onset window asks for the **negative** area rather than the signed area.
+  That is deliberate and comes out of the validation work: on a window spanning
+  both polarities the signed cumulative area can pass its own 50% point more
+  than once, which makes the latency ambiguous, while a single-signed area is
+  monotonic and its crossing unique.
+- Grand averaging and the statistics report are **not** template steps; they
+  are actions on the Grand Average and Measurements tabs, applied once the
+  per-subject branches exist. A template stops at the last per-subject node.
+
+Replayed on `ch3/1_N400_preprocessed.set`, all seven nodes run, the Average
+carries the five bins, and the N400 difference bin measures **-5.9 uV** at CPz
+with a 50%-area onset near 391 ms. Expect its artifact count to differ slightly
+from the book's (70 of 230 epochs here against 67 with the book's own
+Butterworth high-pass), because Alakazam's Filter is a Kaiser FIR by design;
+see [Not validated](#not-validated-and-why).
 
 ---
 
