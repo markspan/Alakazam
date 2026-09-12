@@ -55,3 +55,11 @@ src/AlakazamHelp.html
 # Commit-message scratch files (never part of a commit).
 _commit_msg.txt
 _m.txt
+
+# EEGLAB, when it is installed beside Alakazam rather than under
+# Documents/MATLAB/eeglab. EEGLAB's own eeglab_update unzips the new release
+# into the folder its dialog happens to be pointing at, which defaults to the
+# working directory, so running it with Alakazam as the current folder lands
+# ~157 MB and 4500+ files right here. Ignored by pattern, not by exact
+# version, because the folder is renamed on every update.
+eeglab20*/
