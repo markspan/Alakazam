@@ -12,16 +12,22 @@ teaches.
 
 > **Please read this before relying on anything below.**
 >
-> **Alakazam is young and has had very little testing**, especially next to EEGLAB
-> and ERPLAB, which are mature, widely used and validated across many years and
-> thousands of published studies. Alakazam's transformations wrap or
-> re-implement the same algorithms, but they have been only lightly tested and
-> have **not** been validated against reference results. Treat every value
-> Alakazam produces as **provisional** until you have checked it against
-> EEGLAB/ERPLAB on the same data. For any analysis that matters, Luck's
-> EEGLAB/ERPLAB workflow, not this one, is the reference. Where a chapter says a
-> step is "covered" or "done", read it as *implemented and intended to behave the
-> same way*, not *verified to match*.
+> **Alakazam is young**, especially next to EEGLAB and ERPLAB, which are mature,
+> widely used and validated across many years and thousands of published
+> studies. Alakazam's transformations wrap or re-implement the same algorithms.
+>
+> Several of them have now been **validated against Luck's own published output
+> and against ERPLAB directly**, and where that has been done the agreement is
+> exact or near-exact: see [Validation](#validation-against-lucks-own-stage-outputs) for the measurements,
+> and the **Validated** column of the [coverage table](#coverage-of-the-book-chapter-by-chapter) for
+> which steps they are. Filtering, ICA correction and the statistics have
+> **not** been validated, and for those treat every value as **provisional**
+> until you have checked it against EEGLAB/ERPLAB on the same data.
+>
+> For any analysis that matters, Luck's EEGLAB/ERPLAB workflow remains the
+> reference. Where a chapter says a step is "covered" or "done", read it as
+> *implemented*; whether it is also *verified to match* is what the coverage
+> table answers, step by step.
 >
 > This document and Alakazam stand entirely on Steven Luck's work: the pedagogy,
 > the ERP CORE data, and the analysis recipes are his. Any mistakes in translating
@@ -38,9 +44,10 @@ given, and Luck's should be treated as correct.
 
 ## What is already in the repository
 
-- **Data:** [`Data/Luck/`](../Data/Luck) with one folder per chapter
-  (`ch1` ... `ch11`), the ERP CORE recordings the book uses, one component per
-  chapter (N400, P3b, MMN, N2pc, LRP, N170).
+- **Data:** [`Data/Luck/`](../Data/Luck), one folder per chapter that has its
+  own recordings (`ch1`-`ch3`, `ch5`-`ch11`; chapter 4 is about filtering and
+  reuses the N400 data, so there is no `ch4`), the ERP CORE recordings the book
+  uses, one component per chapter (N400, P3b, MMN, N2pc, LRP, N170).
 - **A workspace per chapter:** `Chapter1.wksp` ... `Chapter11.wksp` in the
   repository root. Each points its *Raw* folder at the matching `Data/Luck/chN`
   and preloads bin, baseline, ICA and time-frequency settings.
@@ -80,19 +87,24 @@ common montage of scalp electrodes plus horizontal and vertical EOG. The book
 
 - A **workspace is three folders**: *Raw* (recordings), *Cache*
   (`Data/Cache/`, where results and the tree live) and *Exports*
-  (`Data/Exports/`). Ctrl+S saves them into `~/workspace.json`.
+  (`Data/Exports/`). Saving a workspace writes them to a `.wksp` file you
+  choose (plain JSON); the chapter workspaces in the repository root are
+  exactly such files.
 - You process by **building a tree**, not by running a script. A raw import is a
   root node; each ribbon transformation adds a child; a subject's whole analysis
   is a branch.
 - The ribbon groups transformations like the book's pipeline:
   *1. Preprocessing* (SelectData, ReRef, Resample, Filter, Baseline, Interpolate,
-  ChannelEditor, Average),
-  *2. Artifact Rejection / Reduction* (ArtefactDetect, AutoEyeICA, ICA,
-  AutoGEDAI), *3. Segment Analysis* (DefineBins),
-  *4. Frequency and Component Analysis* (Fourier, Spectral Measure, ERP Measure),
-  *5. Plots* (Scalp, TimeFrequency, Coherence Map, Coherence Topography). A
-  **Grand Average** tab builds
-  group results; a **Measurements** tab scores and exports.
+  ChannelEditor, Average, Rectify, DC-Detrend, EventEditor, Photodiode),
+  *2. Artifact Rejection / Reduction* (ArtefactDetect, AutoICA, ICA,
+  ManualReject, AutoGEDAI), *3. Segments* (DefineBins),
+  *4. Frequency and Component Analysis* (Fourier, Welch PSD, Spectral Measure,
+  ERP Measure, Covariance, Cross Correlation, Source Estimate),
+  *5. Plots* (Scalp, TimeFrequency, Coherence Map, CohTopo, Brain (3D)). A
+  **Grand Average** tab builds group results; a **Measurements** tab scores and
+  exports. The eye-correction step is labelled **AutoICA** on the ribbon, while
+  its function and its stored settings key are both `AutoEyeICA`, which is the
+  name a template or a `.wksp` file shows.
 - **Reproducibility is templates**, not `.m` files: any branch saves as a
   template and re-applies to other subjects, and any step's parameters can be
   edited and recomputed down the branch ("Recalculate", written back to disk so
@@ -209,7 +221,10 @@ target words.
 
 **The data.** `Chapter1.wksp` -> `Data/Luck/ch1`: one participant, two ways.
 `1_N400_preprocessed.set` is the continuous, already-preprocessed EEG;
-`1_N400_erp.erp` is the finished ERPLAB erpset (the four averaged bins).
+`1_N400_erp.erp` is a finished ERPLAB erpset holding **two** collapsed bins
+("All Unrelated, Correct" and "All Related, Correct"). The four-bin erpsets,
+one per prime/target x related/unrelated cell, are the `premade erp` files in
+`ch3`.
 
 **In Alakazam.**
 
@@ -221,7 +236,7 @@ target words.
    only, so a big EOG channel does not squash the trace).
 3. Right-click -> **List events** to see the eight stimulus codes and the one
    response code (listed in Chapter 2).
-4. Click `1_N400_erp` to see its four averaged bins immediately, no processing.
+4. Click `1_N400_erp` to see its two averaged bins immediately, no processing.
 
 **Difference.** Nothing to install and nothing to keep in sync: a persistent
 on-disk tree replaces EEGLAB's one-dataset-per-window model.
@@ -284,7 +299,7 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
    recording is already low-passed). Tick High-pass, enter `0.1` Hz and a dB
    attenuation (e.g. 40). See Chapter 4.
 
-2. **DefineBins** (Segment Analysis) does EventList + BINLISTER + epoching in one
+2. **DefineBins** (Segments) does EventList + BINLISTER + epoching in one
    step. `Chapter2.wksp` preloads this script (the alias/wildcard form) with
    **Epoch start -200** and **stop 800**:
 
@@ -301,9 +316,11 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
 
    The wildcards read the code scheme directly: `"?1?"` matches any code whose
    middle digit is 1 (related), so `target and related` resolves to `211`/`212`.
-   You can instead reproduce ERPLAB's file verbatim with **Import BDF...** on
+   You can instead reproduce ERPLAB's file with **Import BDF...** on
    `BDF_N400.txt`; Alakazam translates the timing flag `t<200-1500>` into
-   `within [200,1500] ms`, giving the shipped `BDF_N400.binscript`:
+   `within [200,1500] ms`. The shipped `BDF_N400.binscript` is that import plus
+   two hand edits, a braced code set rewritten as `111|112` and the difference
+   bin added, since the BDF itself defines only four bins:
 
    ```
    bin 1 "Prime word, related to subsequent target word" : 111|112
@@ -323,13 +340,17 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
    moving-window and sample-to-sample detectors, and lets you tick several at
    once, see Chapter 8.)
 
-4. **Average** (Preprocessing) produces the four per-bin ERPs (plus the bin 5
+4. **Baseline** (Preprocessing), **before** averaging. The book corrects on the
+   whole prestimulus interval (**-200 to 0 ms**, ERPLAB "Pre"); `Chapter2.wksp`
+   preloads a tighter **-100 to -10 ms**. Set Start/Stop to your preference.
+   Baseline needs segmented data, so it belongs between DefineBins and Average;
+   run it on an Average node and it will tell you it needs epochs.
+   (`N400.alztemplate` and Appendix 3 use this order, and in the book the
+   baseline is subtracted as the epochs are cut.)
+
+5. **Average** (Preprocessing) produces the four per-bin ERPs (plus the bin 5
    difference wave), each with a standard error, an accepted trial count, and its
    **aSME** data-quality value (Chapter 6).
-
-5. **Baseline** (Preprocessing). The book corrects on the whole prestimulus
-   interval (**-200 to 0 ms**, ERPLAB "Pre"); `Chapter2.wksp` preloads a tighter
-   **-100 to -10 ms**. Set Start/Stop to your preference.
 
 Plot the **Average** node for the waveforms with standard-error bands
 (AverageView), and add a **Scalp** plot for the N400 topography.
@@ -389,7 +410,9 @@ only as aggressive as the noise demands. Filtering the **continuous** record
 well outside any epoch, rather than at the edges of every epoch.
 
 **In Alakazam.** The **Filter** transformation is an EEGLAB-grade FIR
-windowed-sinc filter (`pop_firws`/Kaiser), a **linear-phase** design, so it delays
+windowed-sinc filter: it designs a Kaiser-windowed kernel with the firfilt
+plugin's own helpers (`firwsord`, `kaiserbeta`, `firws`) and applies it
+zero-phase with `firfilt`. That is a **linear-phase** design, so it delays
 every frequency equally and does not smear component *shapes* the way a
 minimum-phase IIR filter can. You give each filter a **frequency** and a **dB**
 stopband attenuation; the filter order and transition bandwidth needed to reach
@@ -481,9 +504,10 @@ rare-minus-frequent difference wave.
   anchors and relations, and a **difference bin** for the effect, e.g.
   `bin 3 "P3b" = bin 1 - bin 2` (rare minus frequent). **Import BDF...** reads a
   P3b bin descriptor file. Epoch the P3b at, say, `-200` to `800`.
+- **Baseline** does the prestimulus subtraction, on the segmented data, before
+  averaging.
 - **Average** gives each bin's ERP with a standard error and trial counts and
   evaluates the difference bins.
-- **Baseline** does the prestimulus subtraction.
 
 **Why data quality is its own step.** A grand-average waveform can look clean and
 still rest on a handful of noisy trials. Two subjects, or two conditions, can
@@ -549,8 +573,11 @@ across your own conditions, subjects and labs, rather than as a hard cutoff. Two
 cautions before comparing to a published number: match the **measurement window and
 measure** (Alakazam reports the aSME of the mean amplitude over the analysis window;
 a benchmark computed on a different window, or on a peak measure, is not comparable),
-and remember Alakazam's aSME is itself unvalidated here, so check it against ERPLAB
-on one dataset before reading anything into the comparison.
+and note which part of the aSME has been checked: the analytic aSME of the mean
+amplitude matches ERPLAB on every cell of a subject's erpset (see
+[Validation](#validation-against-lucks-own-stage-outputs)), while its propagation through difference bins and
+its pooling across subjects on the Grand Average have not been compared to
+anything.
 
 ---
 
@@ -631,10 +658,13 @@ in the far prestimulus period does not needlessly cost you a trial), and the
 just the offending channel). Rejection always costs trials, which is why the book
 pairs it with correction (Chapter 9): correct the blinks, reject the rest.
 
-**In Alakazam.** **ArtefactDetect** aims to reproduce (and extend) ERPLAB's
-detector set; the thresholds and windows are named the same, but the exact
-trial-by-trial flags have not been checked against ERPLAB, so cross-check on a
-recording you know. Tick **one or more** of:
+**In Alakazam.** **ArtefactDetect** reproduces (and extends) ERPLAB's detector
+set, with the thresholds and windows named the same. The trial-by-trial flags
+have been checked against ERPLAB's own on Luck's chapter 10 data: the absolute
+threshold agrees on all 346 trials, and the two detectors together reproduce
+ERPLAB's rejection list exactly (see [Validation](#validation-against-lucks-own-stage-outputs), which also
+records the one artefact Alakazam catches and ERPLAB misses). Tick **one or
+more** of:
 
 - **Absolute threshold** -- any sample outside [Minimum, Maximum] uV (default
   **+/- 100 uV**).
@@ -703,7 +733,7 @@ the decomposition and plots as a component sitting outside the head.
 
 **In Alakazam.** Two routes, side by side in the ribbon.
 
-- **AutoEyeICA** does eye correction end to end and automatically: it runs ICA
+- **AutoICA** does eye correction end to end and automatically: it runs ICA
   (FastICA if installed, else runica), classifies components with **ICLabel**, and
   prunes every component whose "Eye" probability exceeds a threshold.
   `Chapter9.wksp` preloads **EyeThreshold = 0.6**.
@@ -749,7 +779,7 @@ run it, Alakazam asks permission and downloads it; declining leaves it uninstall
 
 ### ICA vs GEDAI, in one table
 
-| | ICA (AutoEyeICA / manual ICA) | GEDAI (AutoGEDAI) |
+| | ICA (AutoICA / manual ICA) | GEDAI (AutoGEDAI) |
 |---|---|---|
 | **Principle** | unmix into maximally **independent** sources | contrast data covariance against a **leadfield** reference (a biophysical prior) |
 | **What it removes** | specific components you identify (esp. the eye component) | a broadband **artifact subspace**, whatever is least brain-like |
@@ -760,7 +790,7 @@ run it, Alakazam asks permission and downloads it; declining leaves it uninstall
 | **Availability** | built in (runica / FastICA + ICLabel) | optional plugin, noncommercial licence, consent download |
 
 **Which to use.** For the classic ERP problem, blinks and eye movements, reach for
-**AutoEyeICA** (automatic, ICLabel-guided) or the **manual ICA** step when you want
+**AutoICA** (automatic, ICLabel-guided) or the **manual ICA** step when you want
 to eye a specific component before removing it: ICA excels when the artifact is a
 small number of well-defined, physiologically interpretable components. Reach for
 **GEDAI** when the contamination is diffuse or broadband and does not resolve into
@@ -955,7 +985,8 @@ raw import (…_N400_preprocessed.set)
        -> ERP Measure (N400: mean amplitude 300..500 ms, Negative, Cz)
 ```
 
-Swap `AutoGEDAI` for `AutoEyeICA` (EyeThreshold 0.6), or add the manual `ICA`
+Swap `AutoGEDAI` for `AutoEyeICA` (the ribbon's **AutoICA**; EyeThreshold 0.6),
+or add the manual `ICA`
 step to prune a specific component; add a `Filter` (0.1 Hz high-pass) at the
 front to match the book's exact recipe, and add a `Scalp` leaf under Average for
 the topography.
@@ -1262,7 +1293,7 @@ alternative to check against it.
 | EEG inspection (Ch 7) | implemented | n/a, a view | SignalView / EpochView |
 | Bad-channel interpolation (Ch 7) | implemented | **yes, bit-identical** | Interpolate (`pop_interp`): spline / invdist / spacetime |
 | Artifact detection (Ch 8) | implemented | **yes**, after fixing a tail blind spot; now catches one artefact ERPLAB misses | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
-| ICA artifact correction (Ch 9) | implemented | no reference pair (only corrected files ship) | automatic (AutoEyeICA) + manual component removal (ICA), both ICLabel |
+| ICA artifact correction (Ch 9) | implemented | no reference pair (only corrected files ship) | automatic (AutoICA) + manual component removal (ICA), both ICLabel |
 | Amplitude / latency scoring (Ch 10) | implemented | **yes**: mean/peak amplitude, peak latency and area exact; fractional latencies within one sample, and where they differ Alakazam is the correct one | ERP Measure, incl. fractional-area latency |
 | Inferential statistics (Ch 10) | implemented | not yet | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
 | Reproducible pipeline (Ch 11) | implemented | n/a | templates + Recalculate |

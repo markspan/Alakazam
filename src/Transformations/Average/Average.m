@@ -39,11 +39,17 @@ if ~isfield(input, 'data')
         'Problem in Average: I''m afraid this dataset has no data at all, so there is nothing to average.'));
 end
 
-if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
-    throw(MException('Alakazam:Average', ...
-        ['Problem in Average: this needs segmented (epoched) data, but the selected ' ...
-         'dataset is still continuous. Please segment it first (e.g. with DefineBins), then ' ...
-         'run Average on the segmented result.']));
+% TransTools.FieldOr, not a bare input.DataFormat: this condition is true when
+% the field is ABSENT as well as when it is wrong, and reading it directly then
+% throws a raw "Unrecognized field name" from inside the very message meant to
+% explain the problem. The format is named rather than assumed to be
+% continuous, since an already-averaged dataset lands here too.
+dataFormat = char(string(TransTools.FieldOr(input, 'DataFormat', 'not set')));
+if (length(size(input.data)) < 3 || ~strcmpi(dataFormat, 'EPOCHED'))
+    throw(MException('Alakazam:Average', sprintf([ ...
+        'Problem in Average: this needs segmented (epoched) data, and this dataset ' ...
+        'is not (DataFormat = "%s"). Please segment it first (e.g. with DefineBins), ' ...
+        'then run Average on the segmented result.'], dataFormat)));
 end
 
 if ~isfield(input, 'trials')

@@ -18,11 +18,19 @@ if ~isfield(input, 'data')
         'Problem in Baseline: I''m afraid this dataset has no data at all, so there is nothing to baseline-correct.'));
 end
 
-if (length(size(input.data)) < 3 || ~strcmpi(input.DataFormat, 'EPOCHED'))
-    throw(MException('Alakazam:Baseline', ...
-        ['Problem in Baseline: this needs segmented (epoched) data, but the selected ' ...
-         'dataset is still continuous. Please segment it first (e.g. with DefineBins), then ' ...
-         'run Baseline on the segmented result.']));
+% TransTools.FieldOr, not a bare input.DataFormat: this condition is true when
+% the field is ABSENT as well as when it is wrong, and reading it directly then
+% throws a raw "Unrecognized field name" from inside the very message meant to
+% explain the problem. The format is named rather than assumed to be
+% continuous, since the commonest way to reach this is running Baseline on an
+% Average node, which is averaged, not continuous.
+dataFormat = char(string(TransTools.FieldOr(input, 'DataFormat', 'not set')));
+if (length(size(input.data)) < 3 || ~strcmpi(dataFormat, 'EPOCHED'))
+    throw(MException('Alakazam:Baseline', sprintf([ ...
+        'Problem in Baseline: this needs segmented (epoched) data, and this dataset ' ...
+        'is not (DataFormat = "%s"). Please segment it first (e.g. with DefineBins), ' ...
+        'then run Baseline on the segmented result -- baseline correction belongs ' ...
+        'before Average, not after it.'], dataFormat)));
 end
 
 if ~isfield(input, 'trials')

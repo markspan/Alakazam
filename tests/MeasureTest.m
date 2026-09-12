@@ -173,6 +173,15 @@ classdef MeasureTest < matlab.unittest.TestCase
             testCase.verifyTrue(isnan(runMeasure(EEG, win).latency), ...
                 ['This fixture''s positive and negative areas cancel exactly, so ' ...
                  'the signed fraction is undefined and must be NaN, not a number.']);
+
+            % MeasureDialog stores the mode capitalised ('Signed', 'Positive',
+            % ...) and so do saved templates -- N400.alztemplate carries
+            % "areaMode": "Signed". winAreaMode lowercases it on the way in, and
+            % a case-sensitive comparison downstream would silently fall back to
+            % signed for every window a real template asks for.
+            win.areaMode = 'Positive';
+            testCase.verifyEqual(runMeasure(EEG, win).latency, 3, 'AbsTol', 1e-9, ...
+                'A capitalised areaMode, as a template stores it, must work too.');
         end
 
         function theFourAreaModesDoNotAllGiveTheSameAnswer(testCase)
