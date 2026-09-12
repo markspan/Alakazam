@@ -92,11 +92,21 @@ classdef AlakazamRibbon < handle
         % AlakazamRibbonPopup.html. Approximate by design (real row heights
         % depend on label wrapping); tune here first if the popup looks off
         % once seen live, before touching the HTML/CSS.
-        PopupCols        = 4    % items per row in the popup (vs. ALZ_PER_ROW=6 in the main ribbon: narrower, taller)
+        PopupCols        = 4    % MINIMUM items per row: sets the popup's floor width, not its row count (see showPopup)
         PopupItemRowPx   = 58   % px per row of items (item box + gaps)
         PopupTitleBarPx  = 24   % px for the popup's own title bar
         PopupPaddingPx   = 14   % px total (top+bottom) panel padding
-        PopupColWidthPx  = 68   % px per column, for popup width
+        PopupColWidthPx  = 68   % px per column, for the floor width above
+
+        % HOW MANY ITEMS ACTUALLY FIT PER ROW, which is what the row count
+        % has to follow. These two mirror AlakazamRibbonPopup.html's own
+        % .pop-item width and .pop-items gap/padding, and they are the
+        % numbers to change if that CSS changes -- the row count is derived
+        % from them rather than assumed, because assuming it is what left a
+        % 12-item popup three rows tall with two rows of content.
+        PopupItemWidthPx = 62   % .pop-item width
+        PopupItemGapPx   = 2    % .pop-items gap
+        PopupItemsPadPx  = 6    % .pop-items padding, both sides (3 + 3)
     end
 
     methods
@@ -235,10 +245,18 @@ classdef AlakazamRibbon < handle
             anchorY = ribbonRect(2) + (ribbonRect(4) - groupTopFromPageTop);
             anchorX = ribbonRect(1) + double(d.left);
 
+            % PopupCols sets the MINIMUM width (never narrower than this many
+            % columns); it does not decide the row count. The popup is at
+            % least as wide as the group it drops from, and the group is now
+            % wide enough for six items, so AlakazamRibbonPopup.html's own
+            % flex-wrap puts six on a row whatever PopupCols says. Deriving
+            % the rows from PopupCols instead left a 12-item group sized for
+            % ceil(12/4) = 3 rows while the content wrapped into 2, i.e. an
+            % empty row of dead space. So the width is settled FIRST
+            % (including the on-screen clamp below, which can narrow it), and
+            % the rows follow from the width that actually applies.
             nCols = min(this.PopupCols, max(1, numel(items)));
-            nRows = ceil(numel(items) / this.PopupCols);
-            popupWidth  = max(double(d.width), nCols * this.PopupColWidthPx);
-            popupHeight = this.PopupTitleBarPx + nRows * this.PopupItemRowPx + this.PopupPaddingPx;
+            popupWidth = max(double(d.width), nCols * this.PopupColWidthPx);
 
             % Keep the popup on-screen if the group sits near the figure's
             % right/bottom edge (it opens downward from the group, so only
@@ -248,6 +266,9 @@ classdef AlakazamRibbon < handle
             popupWidth = min(popupWidth, fig.Position(3) - 4);
             anchorX = min(anchorX, fig.Position(3) - popupWidth - 2);
             anchorX = max(anchorX, 2);
+
+            nRows = ceil(numel(items) / this.popupColsAtWidth(popupWidth));
+            popupHeight = this.PopupTitleBarPx + nRows * this.PopupItemRowPx + this.PopupPaddingPx;
 
             this.PopupComponent.Data = struct('title', group.title, 'items', {items});
             this.PopupComponent.Position = [anchorX, anchorY - popupHeight, popupWidth, popupHeight];
@@ -289,6 +310,23 @@ classdef AlakazamRibbon < handle
             if ~inside
                 this.hidePopup();
             end
+        end
+
+        function cols = popupColsAtWidth(this, popupWidth)
+        %POPUPCOLSATWIDTH  How many items AlakazamRibbonPopup.html will
+        %   actually fit on one row at POPUPWIDTH, which is what the popup's
+        %   row count (and so its height) has to be derived from.
+        %
+        %   The +pitch-minus-gap term is the usual flex-wrap arithmetic: n
+        %   items need n*width + (n-1)*gap, so the count that fits in W is
+        %   floor((W + gap) / (width + gap)) -- the last item needs no
+        %   trailing gap. At least 1, so a popup narrower than one item
+        %   still reports one column instead of zero (which would make the
+        %   row count Inf).
+            usable = double(popupWidth) - this.PopupItemsPadPx;
+            pitch = this.PopupItemWidthPx + this.PopupItemGapPx;
+            cols = floor((usable + this.PopupItemGapPx) / pitch);
+            cols = max(1, cols);
         end
 
         function hidePopup(this)

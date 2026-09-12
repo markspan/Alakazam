@@ -31,7 +31,15 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-tab.alz-active { background: #f5f5f5; color: #333; font-weight: bold; border-bottom: 2px solid #4472c4; }
 
 .alz-content { flex: 1; overflow-x: auto; overflow-y: auto; display: flex; align-items: flex-start; padding: 3px; box-sizing: border-box; }
-.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 320px; }
+/* max-width SETS THE ICONS-PER-ROW, and has to agree with ALZ_PER_ROW in the
+   script below -- the two drifted apart once already (ALZ_PER_ROW said 6 while
+   this said 320px, so groups wrapped at 5 and only became collapsible at 7).
+   The arithmetic, for whenever either changes: no box-sizing here, so
+   max-width is the CONTENT box, and n items need
+        n * (.alz-item width) + (n - 1) * (.alz-group-items gap)
+        = 62n + 2(n - 1) = 64n - 2
+   so 6 icons need 382px, 5 need 318px, 7 would need 446px. */
+.alz-group { border: 1px solid #ccc; border-radius: 3px; margin-right: 5px; padding: 3px; display: flex; flex-direction: column; flex: none; max-width: 382px; }
 .alz-group-items { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
 /* padding-left/right (not just padding-top) matters here specifically because a
    group's own width (.alz-group, flex-direction: column, children stretched to
@@ -178,8 +186,9 @@ function alzRenderContent() {
     });
 }
 
-// Full-size icons that fit in one row at the group's max width (see the
-// .alz-group max-width and .alz-item width in the CSS above).
+// Full-size icons that fit in one row at the group's max width. This must
+// match what .alz-group's own max-width actually allows -- see the arithmetic
+// in that rule's comment above, which is where to change both together.
 var ALZ_PER_ROW = 6;
 
 function alzClosePopup() {
