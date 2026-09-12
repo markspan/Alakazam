@@ -53,6 +53,7 @@ function results = runAlakazamTests(scope, opts)
     import matlab.unittest.selectors.HasTag
 
     folder = fileparts(mfilename('fullpath'));
+    initialiseEEGLab(folder);
     suite = TestSuite.fromFolder(folder);
 
     switch scope
@@ -108,6 +109,47 @@ function reportSlowest(results)
     fprintf('\nslowest classes:\n');
     for k = 1:min(10, numel(order))
         fprintf('  %7.2f s  %s\n', totals(k), uniqueNames(order(k)));
+    end
+end
+
+% ======================================================================= %
+function initialiseEEGLab(testFolder)
+%INITIALISEEEGLAB  Put EEGLAB and its subfolders on the path before the
+%   suite runs, so the EEGLAB-dependent cases actually execute.
+%
+%   Many cases gate themselves on an EEGLAB function being present
+%   (assumeTrue(exist('eeg_interp','file')==2), and similar) and SKIP when
+%   it is not. Nothing here used to initialise EEGLAB, so whether those
+%   cases ran depended entirely on whatever the developer happened to have
+%   on their saved MATLAB path. That silently stopped being true when EEGLAB
+%   updated itself: having eeglab.m on the path is not enough, because
+%   EEGLAB only adds its own subfolders (pop_reref, eeg_interp, firfilt, ...)
+%   when eeglab() itself runs, and the saved path was left holding just the
+%   root. The result was 37 cases quietly reporting "filtered by
+%   assumption" instead of testing anything, including the whole of
+%   ReRefTest and NativeExportEquivalenceTest.
+%
+%   A skip is not a pass, so the suite should not leave this to chance.
+%   Failing to initialise is reported and left to the individual
+%   assumptions rather than aborting the run: the great majority of cases
+%   need no EEGLAB at all and should still run on a machine without it.
+    if ~isempty(which('pop_reref'))
+        return;   % already initialised in this session
+    end
+    srcFolder = fullfile(fileparts(testFolder), 'src');
+    if exist(srcFolder, 'dir')
+        addpath(srcFolder);
+    end
+    try
+        EEGLabEnvironment.ensure();
+    catch err
+        fprintf(['=== EEGLAB could not be initialised (%s), so its cases will ' ...
+                 'skip rather than run ===\n'], err.identifier);
+        return;
+    end
+    if isempty(which('pop_reref'))
+        fprintf(['=== EEGLAB is on the path but its subfolders are not, so its ' ...
+                 'cases will skip rather than run ===\n']);
     end
 end
 
