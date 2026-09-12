@@ -99,7 +99,8 @@ common montage of scalp electrodes plus horizontal and vertical EOG. The book
   is a branch.
 - The ribbon groups transformations like the book's pipeline:
   *1. Preprocessing* (SelectData, ReRef, Resample, Filter, Baseline, Interpolate,
-  ChannelEditor, Average, Rectify, DC-Detrend, EventEditor, Photodiode),
+  ChannelEditor, Average, Rectify, DC-Detrend, EventEditor, Photodiode,
+  Derive Channels),
   *2. Artifact Rejection / Reduction* (ArtefactDetect, AutoICA, ICA,
   ManualReject, AutoGEDAI), *3. Segments* (DefineBins),
   *4. Frequency and Component Analysis* (Fourier, Welch PSD, Spectral Measure,
@@ -861,9 +862,40 @@ committing to a measure.
 
 **In Alakazam.**
 
-- Reproduce the bins with **Import BDF...** on `BDF_LRP.txt`; the contra-ipsi
-  difference waves are `bin N "..." = bin A - bin B` lines (Alakazam's difference
-  bins are the `BinOps` equivalent).
+- Reproduce the bins with **Import BDF...** on `BDF_LRP.txt`. The two
+  `BinOps` files need more care than a single sentence, because they are not
+  the same kind of operation:
+  - `BinOps_Diff.txt` (`nb1 = b1 - b2`) is plain bin arithmetic and becomes a
+    difference bin directly: `bin 5 "..." = bin 1 - bin 2`.
+  - `BinOps_Contra.txt` is not. It collapses across the hemispheres
+    conditioned on the response side (`contra = (b1@RH + b2@LH)/2`), mixing
+    bin and channel selection in one expression, and Alakazam's difference
+    bins take only coefficient-weighted whole bins, with no channel-subset
+    operator.
+- **The contra-ipsi difference wave is still available**, by composing a
+  channel operation with a weighted bin operation. Since
+  `contra - ipsi = (lat(b1) - lat(b2)) / 2` where `lat = RH - LH`, put the
+  lateral difference in a **Derive Channels** node and the halving in the bin
+  script:
+
+  ```
+  bin 1 "Left response"  : 11|21 and next(111|121) within [200,1000] ms timelock next(111|121)
+  bin 2 "Right response" : 12|22 and next(212|222) within [200,1000] ms timelock next(212|222)
+
+  bin 3 "LRP (contra-ipsi)" = 0.5 bin 1 - 0.5 bin 2
+  ```
+
+  with `let C34 = C4 - C3` in Derive Channels, and `timelock` making the
+  epochs **response**-locked, which is what an LRP needs. Checked against
+  ERPLAB's own definition on subject 1: the composed waveform and
+  `(b1@RH + b2@LH)/2 - (b1@LH + b2@RH)/2` agree to **6.7e-15 uV**. And it
+  behaves like an LRP should, flat early (-0.07 uV at -500 to -400 ms) and
+  ramping negative into the response (-1.78 uV over the last 150 ms, -2.69 uV
+  at the buttonpress).
+
+  What this does *not* give you is **separate** Contra and Ipsi waveforms, or
+  the collapse across all eleven lateral pairs in one action, which is what
+  `BinOps_Contra.txt` produces.
 - **ERP Measure** scores each bin. Per window it computes: **mean amplitude**;
   **peak** amplitude and latency (absolute or the most extreme **local** peak);
   **area** in four modes (signed / rectified / positive / negative), over the

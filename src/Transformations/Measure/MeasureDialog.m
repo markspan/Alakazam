@@ -23,7 +23,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
 %   .stop, .measure, .polarity, .width, .localPoints, .fraction, .areaMode,
 %   .baseline, .refChannel, .channels -- see Measure.m's own header comment
 %   for why a cell array, never a struct array), and DERIVATIONS, the
-%   derived-channels "let" text (see measureDerivations.m); or [] and '' if
+%   derived-channels "let" text (see TransTools.ApplyDerivations.m); or [] and '' if
 %   the dialog was cancelled -- the same "empty means cancel" contract
 %   GrandAverageDialog/TransformOptionsDialog use. Derived-channel names are
 %   valid channel references in the table, so they are validated together at
@@ -70,7 +70,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         'channel" (Peak / peak-band Area) locks every channel to one found peak latency.'], ...
         'WordWrap', 'on');
 
-    % Derived channels: a block of "let" statements (see measureDerivations).
+    % Derived channels: a block of "let" statements (see TransTools.ApplyDerivations).
     % Each defines a new channel by an elementwise formula over existing (or
     % earlier-derived) channels, usable by name in any Channels/Reference
     % cell -- e.g. "let LRP = C3 - C4" for the lateralised readiness
@@ -182,7 +182,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         % window may name a channel that a "let" statement defines.
         derivText = textFromLines(derivArea.Value);
         try
-            [~, derivedNames] = measureDerivations(dummyEEG(), derivText);
+            [~, derivedNames] = TransTools.ApplyDerivations(dummyEEG(), derivText);
         catch err
             uialert(fig, err.message, 'Check the derived channels');
             return;
@@ -204,7 +204,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
 
     function eeg = dummyEEG()
         % A minimal averaged dataset (this dataset's channels, two dummy
-        % samples) so measureDerivations can parse/evaluate the let block at
+        % samples) so TransTools.ApplyDerivations can parse/evaluate the let block at
         % OK time without needing the real data.
         eeg = struct('chanlocs', chanlocs, 'data', zeros(numel(chanlocs), 2), ...
             'nbchan', numel(chanlocs));
@@ -263,7 +263,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         % overwritten. Two reasons. Replacing wiped a let block the analyst
         % had written whenever the loaded file had none, which every current
         % preset does. And appending a second definition of the same name
-        % would not merely be untidy: measureDerivations appends each
+        % would not merely be untidy: TransTools.ApplyDerivations appends each
         % derived channel to the dataset as it evaluates, so the duplicate
         % hits its "already exists in this dataset" error at OK time, in a
         % message that names the channel and not the load that caused it.

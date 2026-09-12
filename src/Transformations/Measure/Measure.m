@@ -51,7 +51,7 @@ function [EEG, options] = Measure(input, varargin)
 %   here AND shows up downstream on the ERP plot and in grand averages, and
 %   can be named in any window's Channels/Reference cell. A difference
 %   channel has no scalp position, so ScalpDistribution drops it from the
-%   head map automatically. See measureDerivations.m. Apart from those
+%   head map automatically. See TransTools.ApplyDerivations.m. Apart from those
 %   opt-in derived channels, EEG.data/EEG.times/etc. pass through unchanged.
 %
 %   Adds EEG.measurements: a 1xN cell array (N = number of windows, never a
@@ -218,10 +218,10 @@ end
 %% Derived channels: evaluate any "let" statements and append them to EEG
 % (channels x samples[ x bins]) before measuring, so a derivation like
 % "let LRP = C3 - C4" is both measurable here and visible downstream (the
-% ERP line plot, grand averages). measureDerivations is a no-op when the
+% ERP line plot, grand averages). TransTools.ApplyDerivations is a no-op when the
 % block is empty, and idempotent, so replay/Recalculate replaces rather
-% than accumulates the derived channels. See measureDerivations.m.
-EEG = measureDerivations(EEG, derivations);
+% than accumulates the derived channels. See TransTools.ApplyDerivations.m.
+EEG = TransTools.ApplyDerivations(EEG, derivations);
 
 %% Compute
 allLabels = string({EEG.chanlocs.labels});

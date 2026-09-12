@@ -13,7 +13,7 @@ function [hz, funds] = spectralFreqSpecs(exprList, fundamentalsText)
 %   use an earlier one.
 %
 %   The grammar is deliberately small and is parsed, never eval-ed (the same
-%   safety stance as measureDerivations.m, since these definitions live in
+%   safety stance as TransTools.ApplyDerivations.m, since these definitions live in
 %   shared preset files): names, numbers, + - * /, parentheses and unary
 %   minus. Names are matched case-insensitively. A name that is not a declared
 %   fundamental, a syntax error, or a non-finite result throws a friendly,

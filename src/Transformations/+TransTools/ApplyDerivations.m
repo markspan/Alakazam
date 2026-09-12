@@ -1,5 +1,5 @@
-function [EEG, added] = measureDerivations(EEG, text)
-%MEASUREDERIVATIONS  Evaluate a block of "let" statements and append each as
+function [EEG, added] = ApplyDerivations(EEG, text)
+%APPLYDERIVATIONS  Evaluate a block of "let" statements and append each as
 %   a new derived channel on EEG.
 %
 %   TEXT is the Measure dialog's derived-channels field: one statement per
@@ -49,7 +49,7 @@ function [EEG, added] = measureDerivations(EEG, text)
     for i = 1:numel(derivs)
         name = derivs(i).name;
         if any(strcmpi({EEG.chanlocs.labels}, name))
-            throw(MException('Alakazam:Measure', ['Derived channel "%s" clashes with a channel that ' ...
+            throw(MException('Alakazam:Derivations', ['Derived channel "%s" clashes with a channel that ' ...
                 'already exists in this dataset -- would you choose a different name?'], name));
         end
         ast = parseExpression(derivs(i).expr, name);
@@ -84,7 +84,7 @@ function derivs = parseLetLines(text)
         tok = regexp(ln, '^let\s+([A-Za-z][A-Za-z0-9_'']*)\s*=\s*(.+)$', ...
             'tokens', 'once', 'ignorecase');
         if isempty(tok)
-            throw(MException('Alakazam:Measure', ['Derived-channel line %d doesn''t look quite right. Please write one ' ...
+            throw(MException('Alakazam:Derivations', ['Derived-channel line %d doesn''t look quite right. Please write one ' ...
                 '"let <name> = <expression>" per line, e.g. let LRP = C3 - C4.'], li));
         end
         derivs(end + 1) = struct('name', char(tok{1}), 'expr', strtrim(char(tok{2}))); %#ok<AGROW>
@@ -103,11 +103,11 @@ function ast = parseExpression(expr, ctx)
 %   derivation name for error messages.
     toks = lexExpression(expr, ctx);
     if isempty(toks)
-        throw(MException('Alakazam:Measure', 'Derived channel "%s" seems to have an empty expression.', ctx));
+        throw(MException('Alakazam:Derivations', 'Derived channel "%s" seems to have an empty expression.', ctx));
     end
     [ast, k] = parseAddSub(toks, 1, ctx);
     if k <= numel(toks)
-        throw(MException('Alakazam:Measure', 'Derived channel "%s": I wasn''t expecting to find "%s" in the expression.', ...
+        throw(MException('Alakazam:Derivations', 'Derived channel "%s": I wasn''t expecting to find "%s" in the expression.', ...
             ctx, toks(k).text));
     end
 end
@@ -146,7 +146,7 @@ end
 
 function [node, k] = parsePrimary(toks, k, ctx)
     if k > numel(toks)
-        throw(MException('Alakazam:Measure', 'Derived channel "%s": the expression seems to end too early.', ctx));
+        throw(MException('Alakazam:Derivations', 'Derived channel "%s": the expression seems to end too early.', ctx));
     end
     t = toks(k);
     switch t.kind
@@ -157,7 +157,7 @@ function [node, k] = parsePrimary(toks, k, ctx)
             if k < numel(toks) && strcmp(toks(k + 1).kind, 'lpar')
                 fn = lower(t.val);
                 if ~ismember(fn, {'abs', 'sqrt'})
-                    throw(MException('Alakazam:Measure', ['Derived channel "%s": I don''t recognise the function "%s". ' ...
+                    throw(MException('Alakazam:Derivations', ['Derived channel "%s": I don''t recognise the function "%s". ' ...
                         'Only abs and sqrt are allowed here.'], ctx, t.val));
                 end
                 [arg, k] = parseAddSub(toks, k + 2, ctx);
@@ -171,13 +171,13 @@ function [node, k] = parsePrimary(toks, k, ctx)
             [node, k] = parseAddSub(toks, k + 1, ctx);
             k = expectRParen(toks, k, ctx);
         otherwise
-            throw(MException('Alakazam:Measure', 'Derived channel "%s": I wasn''t expecting "%s" there.', ctx, t.text));
+            throw(MException('Alakazam:Derivations', 'Derived channel "%s": I wasn''t expecting "%s" there.', ctx, t.text));
     end
 end
 
 function k = expectRParen(toks, k, ctx)
     if k > numel(toks) || ~strcmp(toks(k).kind, 'rpar')
-        throw(MException('Alakazam:Measure', 'Derived channel "%s": a "(" here is missing its closing ")".', ctx));
+        throw(MException('Alakazam:Derivations', 'Derived channel "%s": a "(" here is missing its closing ")".', ctx));
     end
     k = k + 1;
 end
@@ -217,12 +217,12 @@ function toks = lexExpression(s, ctx)
             numText = s(i:j - 1);
             val = str2double(numText);
             if isnan(val)
-                throw(MException('Alakazam:Measure', 'Derived channel "%s": "%s" doesn''t look like a valid number.', ctx, numText));
+                throw(MException('Alakazam:Derivations', 'Derived channel "%s": "%s" doesn''t look like a valid number.', ctx, numText));
             end
             toks(end + 1) = token('num', val, numText); %#ok<AGROW>
             i = j;
         else
-            throw(MException('Alakazam:Measure', 'Derived channel "%s": I''m afraid "%s" isn''t a character this expression grammar allows.', ctx, c));
+            throw(MException('Alakazam:Derivations', 'Derived channel "%s": I''m afraid "%s" isn''t a character this expression grammar allows.', ctx, c));
         end
     end
 end
@@ -268,7 +268,7 @@ function v = lookupChannel(EEG, nm, ctx)
 %   error naming the derivation CTX that referred to a channel not present.
     idx = find(strcmpi({EEG.chanlocs.labels}, nm), 1);
     if isempty(idx)
-        throw(MException('Alakazam:Measure', ['Derived channel "%s" refers to "%s", which I''m afraid is not a ' ...
+        throw(MException('Alakazam:Derivations', ['Derived channel "%s" refers to "%s", which I''m afraid is not a ' ...
             'channel in this dataset (nor a derived one defined on an earlier line).'], ctx, nm));
     end
     v = EEG.data(idx, :, :);

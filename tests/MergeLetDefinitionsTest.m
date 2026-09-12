@@ -9,7 +9,7 @@ classdef MergeLetDefinitionsTest < matlab.unittest.TestCase
 %   file had none, which every shipped preset does.
 %
 %   Appending the let block instead is not enough on its own.
-%   measureDerivations appends each derived channel to the dataset as it
+%   TransTools.ApplyDerivations appends each derived channel to the dataset as it
 %   evaluates the block, so a second definition of the same name raises
 %   "already exists in this dataset" at OK time, in a message that names
 %   the channel and gives no hint that a Load caused it. The merge below
@@ -69,7 +69,7 @@ classdef MergeLetDefinitionsTest < matlab.unittest.TestCase
         end
 
         function nameMatchingIgnoresCase(testCase)
-        %NAMEMATCHINGIGNORESCASE  measureDerivations compares the new name
+        %NAMEMATCHINGIGNORESCASE  TransTools.ApplyDerivations compares the new name
         %   against existing channel labels with strcmpi, so "lrp" and
         %   "LRP" collide there. Merging case-sensitively would let the
         %   duplicate through to fail later.

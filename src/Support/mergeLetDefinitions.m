@@ -12,7 +12,7 @@ function [merged, keptNames] = mergeLetDefinitions(existingText, loadedText)
 %   typed, and every window already in their table was written against it;
 %   replacing it would silently change what those windows measure.
 %
-%   WHY NOT SIMPLY CONCATENATE. measureDerivations appends each derived
+%   WHY NOT SIMPLY CONCATENATE. TransTools.ApplyDerivations appends each derived
 %   channel to the dataset as it evaluates the block, so a second "let LRP"
 %   finds LRP already present and raises "already exists in this dataset"
 %   at OK time, in a message that names the channel and gives no hint that
@@ -22,7 +22,7 @@ function [merged, keptNames] = mergeLetDefinitions(existingText, loadedText)
 %   MeasureDialog it was reachable only by opening the dialog, and the
 %   parsing below has more cases than that would ever exercise: a
 %   commented-out definition defines nothing, a name differing only in case
-%   is the same name (measureDerivations matches channel labels with
+%   is the same name (TransTools.ApplyDerivations matches channel labels with
 %   strcmpi), and blank lines carry nothing either way.
 %
 %   See also MEASUREDERIVATIONS, MEASUREDIALOG, LINESFROMTEXT.
@@ -73,7 +73,7 @@ end
 function name = letName(line)
 %LETNAME  The name a "let" line defines, or '' for anything else.
 %   Comments run from '%' to the end of the line, the rule
-%   measureDerivations applies, so a commented-out definition defines
+%   TransTools.ApplyDerivations applies, so a commented-out definition defines
 %   nothing and must not block a real one from being added.
     name = '';
     text = char(string(line));
