@@ -9,9 +9,9 @@ function groups = channelGroup(chanlocs)
 %   A channel's own chanlocs.type wins when set (never overridden, same
 %   convention GUESSCHANNELTYPES uses); otherwise the type is guessed from
 %   its label (CHANNELTYPEFROMLABEL) without requiring GUESSCHANNELTYPES to
-%   have been run first (e.g. via the ChannelEditor's "Look up 10-5
-%   locations" button) -- a channel plainly labelled "EOG1"/"HEOG" groups
-%   as EOG even in a freshly imported, untyped dataset.
+%   have been run first (e.g. via the ChannelEditor's "Look up locations"
+%   button) -- a channel plainly labelled "EOG1"/"HEOG" groups as EOG even
+%   in a freshly imported, untyped dataset.
 %
 %   EOG/HEOG/VEOG/IEOG group as 'EOG'; every other known peripheral
 %   (ECG/EMG/GSR/RESP/...) groups as 'OTHER'; an explicit or unrecognised

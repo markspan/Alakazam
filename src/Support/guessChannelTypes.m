@@ -5,7 +5,7 @@ function chanlocs = guessChannelTypes(chanlocs)
 %   a known peripheral but the channel has a resolved scalp position. Channels
 %   that already carry a type are left untouched, so a manual choice is never
 %   overwritten. Used after a location lookup (FillChanlocs, the ChannelEditor
-%   'Look up 10-5 locations' button) so eegChannelMask can tell brain channels
+%   'Look up locations' button) so eegChannelMask can tell brain channels
 %   from peripherals -- an untyped dataset otherwise treats every channel as
 %   EEG. See also CHANNELTYPEFROMLABEL, EEGCHANNELMASK.
     if isempty(chanlocs)

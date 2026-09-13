@@ -472,11 +472,14 @@ references so you can see referencing change the waveforms.
   provided `CzRef` and `LmRef` versions to compare.
 - **ChannelEditor** (Preprocessing) is the Alakazam counterpart of `pop_chanedit`:
   edit channel **labels**, **types** and **X/Y/Z coordinates** in a table.
-  **Look up 10-5 locations** fills coordinates by matching labels to the standard
-  template (and, at the same time, guesses each channel's **type** from its label,
-  so EOG/ECG/... are marked and no longer treated as scalp EEG). **Load
+  **Look up locations** fills coordinates by matching labels to a chosen
+  **template** (a dropdown beside the button; Standard 10-5 by default, plus
+  whatever else `src/Electrodes/` carries -- an equidistant montage's labels
+  carry no anatomy at all, so it needs a different template entirely, not a
+  fallback), and, at the same time, guesses each channel's **type** from its
+  label, so EOG/ECG/... are marked and no longer treated as scalp EEG. **Load
   montage...** reads a channel-location file (`.ced`, `.locs`, `.elc`, `.sfp`,
-  `.xyz`, ...). Only the geometry changes; the data is untouched.
+  `.xyz`, ...) directly. Only the geometry changes; the data is untouched.
 - **Resample** (Preprocessing) changes the sampling rate of a continuous
   recording (`pop_resample`); enter the new rate in Hz.
 - **SelectData** for channel/time/point/trial keep-or-remove: drop a dead

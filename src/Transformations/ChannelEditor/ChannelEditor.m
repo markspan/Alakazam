@@ -3,9 +3,12 @@ function [EEG, options] = ChannelEditor(input, varargin)
 %
 %   An Alakazam-styled channel-location editor (the uifigure counterpart of
 %   EEGLAB's pop_chanedit): edit labels/types/coordinates in a table, look up
-%   standard 10-5 positions by label, or load a montage file. Only the channel
-%   geometry (EEG.chanlocs) is changed; the data is untouched. This is what
-%   scalp maps, interpolation, ICA and montage-based references depend on.
+%   positions from a chosen template by label (TransTools.
+%   AvailableElectrodeTemplates lists what is on offer -- not just the 10-5
+%   system; an equidistant montage needs a different one entirely), or load
+%   a montage file. Only the channel geometry (EEG.chanlocs) is changed; the
+%   data is untouched. This is what scalp maps, interpolation, ICA and
+%   montage-based references depend on.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ChannelEditor(input)        % interactive dialog
@@ -17,8 +20,13 @@ if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
 end
 
 if interactive
-    elcFile = TransTools.Template1005File('Alakazam:ChannelEditor');
-    edited = ChannelEditorDialog(input.chanlocs, elcFile);
+    % Not fatal if this comes back empty (neither toolbox installed and
+    % src/Electrodes missing its templates, a broken checkout): the dialog
+    % disables "Look up locations" rather than refusing to open, since
+    % editing labels/types/coordinates by hand and "Load montage..." both
+    % still work without a template at all.
+    templates = TransTools.AvailableElectrodeTemplates();
+    edited = ChannelEditorDialog(input.chanlocs, templates);
     if isempty(edited)
         EEG = [];   % cancelled -- no node, no compute
         options = [];   % the contract is two outputs; both must be assigned

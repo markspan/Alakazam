@@ -1,13 +1,19 @@
-function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
+function chanlocs = ChannelEditorDialog(chanlocs, templates)
 %CHANNELEDITORDIALOG  Alakazam-styled channel location editor: edit labels,
-%   types and 3-D coordinates in a table; look up standard 10-5 positions by
-%   label; or load a montage file. The uifigure counterpart of EEGLAB's
-%   pop_chanedit.
+%   types and 3-D coordinates in a table; look up positions from a chosen
+%   template by label; or load a montage file. The uifigure counterpart of
+%   EEGLAB's pop_chanedit.
 %
-%   CHANLOCS is the dataset's channels; ELCFILE the standard-template path used
-%   by "Look up 10-5 locations". Returns the edited chanlocs struct array (with
-%   the spherical/polar fields re-derived from the Cartesian coordinates), or
-%   [] on cancel.
+%   CHANLOCS is the dataset's channels. TEMPLATES is the struct array
+%   TransTools.AvailableElectrodeTemplates returns (.name for the dropdown,
+%   .file the path "Look up locations" reads) -- NOT hard-coded to the 10-5
+%   system, because a montage whose labels carry no anatomy (an equidistant
+%   cap) needs a different template entirely, not a fallback. MAY BE EMPTY
+%   (neither toolbox installed and src/Electrodes missing its templates),
+%   in which case "Look up locations" is disabled but the rest of the
+%   editor -- hand-editing the table, "Load montage..." -- still works.
+%   Returns the edited chanlocs struct array (with the spherical/polar
+%   fields re-derived from the Cartesian coordinates), or [] on cancel.
     [accentColor, bgColor] = dialogChromeColors();
     result = [];
 
@@ -15,11 +21,11 @@ function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Channel editor', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
-    outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44}, 'Padding', [10 10 10 10]);
+    outer = uigridlayout(root, [4 1], 'RowHeight', {'fit', '1x', 'fit', 44}, 'Padding', [10 10 10 10]);
 
-    uilabel(outer, 'Text', ['Edit channel labels, types and X/Y/Z coordinates. "Look up 10-5 ' ...
-        'locations" fills coordinates by matching labels to a standard template; ' ...
-        '"Load montage..." reads a channel-location file.'], 'WordWrap', 'on');
+    uilabel(outer, 'Text', ['Edit channel labels, types and X/Y/Z coordinates. "Look up ' ...
+        'locations" fills coordinates by matching labels to the selected template below; ' ...
+        '"Load montage..." reads a channel-location file instead.'], 'WordWrap', 'on');
 
     tbl = uitable(outer, 'ColumnName', {'Label', 'Type', 'X', 'Y', 'Z'}, ...
         'ColumnEditable', [true true true true true], ...
@@ -27,9 +33,29 @@ function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
         'Data', toTable(chanlocs));
     tbl.Layout.Row = 2;
 
-    buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {150, 130, '1x', 90, 90}, 'Padding', [0 4 0 0], 'ColumnSpacing', 6);
-    buttons.Layout.Row = 3;
-    uibutton(buttons, 'Text', 'Look up 10-5 locations', 'ButtonPushedFcn', @(~, ~) onLookup());
+    templateRow = uigridlayout(outer, [1 2], 'ColumnWidth', {60, '1x'}, ...
+        'Padding', [0 0 0 0], 'ColumnSpacing', 8);
+    templateRow.Layout.Row = 3;
+    uilabel(templateRow, 'Text', 'Template', 'VerticalAlignment', 'center');
+    noTemplates = isempty(templates);
+    if noTemplates
+        % uidropdown needs at least one item; a placeholder that explains
+        % why nothing is selectable reads better than an empty control, and
+        % "Look up locations" is disabled below so this is never read.
+        templatePicker = uidropdown(templateRow, ...
+            'Items', {'(no template available)'}, 'ItemsData', {''}, 'Enable', 'off');
+    else
+        % ItemsData carries the file path directly, so the dropdown's own
+        % .Value is what to hand to readlocs -- no separate index lookup,
+        % and nothing to keep in sync if the template list's order changes.
+        templatePicker = uidropdown(templateRow, 'Items', {templates.name}, ...
+            'ItemsData', {templates.file});
+    end
+
+    buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {130, 130, '1x', 90, 90}, 'Padding', [0 4 0 0], 'ColumnSpacing', 6);
+    buttons.Layout.Row = 4;
+    uibutton(buttons, 'Text', 'Look up locations', 'Enable', ~noTemplates, ...
+        'ButtonPushedFcn', @(~, ~) onLookup());
     uibutton(buttons, 'Text', 'Load montage...', 'ButtonPushedFcn', @(~, ~) onLoad());
     uilabel(buttons, 'Text', '');
     uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
@@ -42,7 +68,7 @@ function chanlocs = ChannelEditorDialog(chanlocs, elcFile)
 
     function onLookup()
         try
-            template = readlocs(elcFile);
+            template = readlocs(templatePicker.Value);
         catch err
             uialert(fig, err.message, 'Could not read the template'); return;
         end

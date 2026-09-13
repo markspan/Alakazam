@@ -16,10 +16,22 @@ directory and anything placed beside its templates does not follow. A
 montage an analysis depends on should not live somewhere that a routine
 update silently removes.
 
-**Nothing reads these files yet.** `Template1005File` still prefers the
-installed toolbox copies, unchanged. These are a tracked, durable reference;
-wiring the accessor to prefer them is a separate decision, noted at the
-bottom.
+**`Template1005File` itself is unchanged** and still prefers the installed
+toolbox copies, so nothing about ICA eligibility, GEDAI, or the four
+`TemplateScalpLocs` callers (scalp maps, coherence topography, the manual
+ICA selector's component maps, cluster stats) depends on this folder --
+see "If the accessor is ever pointed here" at the bottom for what changing
+that would mean.
+
+**One caller does read this folder directly**: Channel Editor's "Look up
+locations" offers every template here in a dropdown (10-5 first, the rest
+alphabetically), via `TransTools.AvailableElectrodeTemplates`. That is a
+deliberate, analyst-facing choice made once per edit, not a change to what
+any transformation resolves positions from automatically -- it is the
+reason this folder exists in the first place: an equidistant montage's
+labels carry no anatomy, so an analyst filling in its locations needs to
+pick THIS file rather than the 10-5 system a 10-5-only lookup would have
+silently failed to match.
 
 ## `standard_1005.elc`
 
@@ -72,9 +84,13 @@ plus one `EOG`, 65 positions in all.
   `TransTools.LateralPairs`, which pairs by mirrored position or by label
   and never by channel order, and the test that names this case.
 
-## If the accessor is ever pointed here
+## If `Template1005File` itself is ever pointed here
 
-Two consequences worth knowing before making that change:
+That is a different, larger change from Channel Editor's picker above: it
+would move where AutoEyeICA, RemoveComponents' decomposition, GEDAI's
+channel matching and every `TemplateScalpLocs` caller resolve the 10-5
+system from, not just what one dialog offers. Two consequences worth
+knowing before making it:
 
 1. For `standard_1005.elc` it is numerically a no-op, because this copy is
    byte-identical to FieldTrip's and `Template1005Test` already measures
