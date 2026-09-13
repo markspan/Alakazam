@@ -1,0 +1,96 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "LRP (Luck ch 10)",
+  "nodes": [
+    {
+      "transformId": "DefineBins",
+      "parent": -1,
+      "params": {
+        "script": "% From the chapter's own BDF_LRP.txt, collapsed by response side and\n% RESPONSE-locked (timelock), which is what an LRP needs.\n% 11/21 are left-pointing targets, 12/22 right; 111/121 are left\n% responses, 212/222 right.\nbin 1 \"Left response\"  : 11|21 and next(111|121) within [200,1000] ms timelock next(111|121)\nbin 2 \"Right response\" : 12|22 and next(212|222) within [200,1000] ms timelock next(212|222)\n\n% Contralateral minus ipsilateral. ERPLAB's BinOps_Contra.txt writes this\n% as (b1@RH + b2@LH)/2 - (b1@LH + b2@RH)/2, which is the same thing:\n% with lat = C4 - C3 it is 0.5*bin1 - 0.5*bin2. Verified equal to\n% ERPLAB's definition to 6.7e-15 uV; see Docs/luck.md.\nbin 3 \"LRP (contra-ipsi)\" = 0.5 bin 1 - 0.5 bin 2",
+        "epoch": {
+          "lo": -600,
+          "hi": 200,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "DeriveChannels",
+      "parent": 1,
+      "params": {
+        "derivations": "% The lateral motor pair. C4 is contralateral to a LEFT-hand response.\nlet C34 = C4 - C3"
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "parent": 2,
+      "params": {
+        "Start": -600,
+        "Stop": -500
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "parent": 3,
+      "params": {
+        "Method": [
+          "Absolute threshold"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 100,
+        "TestStart": -600,
+        "TestStop": 200,
+        "Channels": "All channels",
+        "Scope": "Whole epoch"
+      }
+    },
+    {
+      "transformId": "Average",
+      "parent": 4,
+      "params": {
+        "Param": "Init"
+      }
+    },
+    {
+      "transformId": "Measure",
+      "parent": 5,
+      "params": {
+        "windows": [
+          {
+            "label": "LRP amplitude",
+            "start": -100,
+            "stop": 0,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "C34"
+          },
+          {
+            "label": "LRP onset",
+            "start": -400,
+            "stop": 0,
+            "measure": "Fractional Area Latency",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Negative",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "C34"
+          }
+        ],
+        "derivations": ""
+      }
+    }
+  ]
+}

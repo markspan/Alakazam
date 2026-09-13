@@ -1,0 +1,96 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "P3b (Luck ch 6)",
+  "nodes": [
+    {
+      "transformId": "DefineBins",
+      "parent": -1,
+      "params": {
+        "script": "% Verified from the recording's own codes. Two digits: the first is the\n% block's target letter (1-5 = A-E), the second the letter shown. So a\n% code whose digits MATCH is that block's rare target, and the twenty\n% mismatched codes are the frequent non-targets: 40 against 160 events,\n% the 20/80 split the chapter describes.\nlet target = {11 22 33 44 55}\nbin 1 \"Rare (target letter)\"     : target\nbin 2 \"Frequent (non-target)\"    : 11-55 and not target\n\n% Add \"and next(201) within [200,1000] ms\" to either bin to keep only\n% trials with a correct response; the chapter ships no BDF saying whether\n% it does, so this leaves every trial in.\nbin 3 \"P3b\" = bin 1 - bin 2",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "parent": 1,
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "parent": 2,
+      "params": {
+        "Method": [
+          "Absolute threshold"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 100,
+        "TestStart": -200,
+        "TestStop": 795,
+        "Channels": "All channels",
+        "Scope": "Whole epoch"
+      }
+    },
+    {
+      "transformId": "Average",
+      "parent": 3,
+      "params": {
+        "Param": "Init"
+      }
+    },
+    {
+      "transformId": "Measure",
+      "parent": 4,
+      "params": {
+        "windows": [
+          {
+            "label": "P3b amplitude",
+            "start": 300,
+            "stop": 600,
+            "measure": "Mean Amplitude",
+            "polarity": "Positive",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "Pz"
+          },
+          {
+            "label": "P3b peak",
+            "start": 300,
+            "stop": 600,
+            "measure": "Peak",
+            "polarity": "Positive",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "Pz"
+          }
+        ],
+        "derivations": ""
+      }
+    },
+    {
+      "transformId": "ScalpDistribution",
+      "parent": 4,
+      "params": {
+        "Param": "Init"
+      }
+    }
+  ]
+}

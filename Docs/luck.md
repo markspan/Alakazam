@@ -1073,21 +1073,24 @@ from the book's (70 of 230 epochs here against 67 with the book's own
 Butterworth high-pass), because Alakazam's Filter is a Kaiser FIR by design;
 see [Not validated](#not-validated-and-why).
 
-### A template per chapter, in the chapter's own folder
+### A template per chapter, in `templates/luck`
 
-Seven chapters ship a ready template beside their data, so opening
-`ChapterN.wksp` and applying the `.alztemplate` in the same folder builds
-that chapter's pipeline in one action:
+Seven chapters ship a ready template, so opening `ChapterN.wksp` and applying
+the matching `.alztemplate` builds that chapter's pipeline in one action. They
+live together in [`templates/luck/`](../templates/luck) rather than beside
+each chapter's data, because `Data/` is gitignored and a template that only
+exists on the machine that made it is no use to anyone. Named chapter-first so
+a file dialog lists them in the book's own order:
 
 | File | Chapter | Chain | Difference bin, subject 1 |
 |---|---|---|---|
-| `ch2/N400-chapter2.alztemplate` | 2, N400 one participant | Filter, bins, baseline, artifacts, average, measure + scalp | **-7.05 uV** |
-| `ch3/N400-chapter3.alztemplate` | 3, N400 many participants | as above, for Apply to All | **-5.90 uV** |
-| `ch6/P3b-chapter6.alztemplate` | 6, P3b | bins, baseline, artifacts, average, measure + scalp | **+5.88 uV** |
-| `ch7/MMN-chapter7.alztemplate` | 7, MMN | as above | **-2.61 uV** |
-| `ch8/N2pc-chapter8.alztemplate` | 8, N2pc | bins, derive PO8-PO7, baseline, artifacts, average, measure | **-1.72 uV** |
-| `ch9/MMN-chapter9.alztemplate` | 9, MMN with ICA | AutoICA, then as chapter 7 | **-1.86 uV** |
-| `ch10/LRP-chapter10.alztemplate` | 10, LRP | response-locked bins, derive C4-C3, baseline, artifacts, average, measure | **-2.50 uV** |
+| `ch02-N400-one-participant.alztemplate` | 2, N400 one participant | Filter, bins, baseline, artifacts, average, measure + scalp | **-7.05 uV** |
+| `ch03-N400-many-participants.alztemplate` | 3, N400 many participants | as above, for Apply to All | **-5.90 uV** |
+| `ch06-P3b.alztemplate` | 6, P3b | bins, baseline, artifacts, average, measure + scalp | **+5.88 uV** |
+| `ch07-MMN.alztemplate` | 7, MMN | as above | **-2.61 uV** |
+| `ch08-N2pc.alztemplate` | 8, N2pc | bins, derive PO8-PO7, baseline, artifacts, average, measure | **-1.72 uV** |
+| `ch09-MMN-with-ICA.alztemplate` | 9, MMN with ICA | AutoICA, then as chapter 7 | **-1.86 uV** |
+| `ch10-LRP.alztemplate` | 10, LRP | response-locked bins, derive C4-C3, baseline, artifacts, average, measure | **-2.50 uV** |
 
 Every one was built from codes **verified in the recordings themselves** (or
 from the chapter's own shipped BDF), not from an assumed convention, and every
@@ -1100,10 +1103,14 @@ Two of them use the composed lateral recipe described under chapter 10: the
 N2pc and the LRP are both contralateral-minus-ipsilateral differences, so both
 derive a lateral channel (`PO8 - PO7`, `C4 - C3`) and halve a bin difference.
 
-**`Data/` is gitignored**, so these files are not version-controlled. If you
-re-run `downloadLuckData.m`, or clone afresh, they will not be there.
-`N400.alztemplate` and `N400-complete.alztemplate` in the repository root are
-the tracked ones.
+The templates are tracked; **the data they run on is not**. `Data/` is
+gitignored, so a fresh clone has the seven templates but no recordings: run
+`downloadLuckData.m` first, then open that chapter's `.wksp`. Nothing in a
+template names a file, so each one applies to whichever dataset the branch
+you drop it on already holds.
+
+`N400.alztemplate` and `N400-complete.alztemplate` remain in the repository
+root; they are cross-chapter walkthroughs rather than one chapter's recipe.
 
 **Two caveats worth knowing before trusting a rejection count.**
 
