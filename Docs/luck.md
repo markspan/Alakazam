@@ -698,8 +698,11 @@ exceeds any threshold chosen for the scalp on every blink, so under the other
 two scopes it is flagged on a large fraction of trials by construction: the
 result is an eye channel marked bad to no purpose, and a data-quality report
 listing VEOG as a candidate for interpolation. Set **Channels to test** to
-*Scalp EEG only* in that case, which uses the recorded channel types and leaves
-an untyped dataset testing everything as before. A channel with no scalp
+*Scalp EEG only* in that case. It uses each channel's recorded type, and falls
+back to reading the **label** when no type was recorded, which is the common
+case: a channel called HEOG-left is an eye channel whether or not anyone filled
+in a type field. A label that names no known peripheral, which includes every
+standard 10-5 scalp label, is kept. A channel with no scalp
 position is never interpolated whatever the scope, since a spherical spline has
 nowhere to place it. **Import BDF...** brings the
 MMN / N2pc bins over. For blink-heavy data you can instead **correct** the blinks
@@ -1104,20 +1107,29 @@ the tracked ones.
 
 **Two caveats worth knowing before trusting a rejection count.**
 
-- Chapters 7 and 9 reject about half their epochs (525 and 524 of 984). The
-  cause is that a +/-100 uV threshold tested on **every** channel rejects each
-  blink, and `Scalp EEG only` cannot help here: these recordings carry no
-  channel **types**, and that option reads types, so on an untyped dataset it
-  tests everything exactly as before. Run the Channel Editor's 10-5 lookup
-  first (it guesses each channel's type from its label) and the option starts
-  working. For chapter 9 in particular the interaction is worth understanding:
-  ICA excludes the ocular channels from its decomposition and splices them
-  back untouched, so testing them afterwards rejects the very blinks the
-  correction had just removed from the scalp.
-- The MMN still comes out at the right sign and a plausible size on the
-  surviving ~460 trials, but that is a large loss, and the threshold is a
-  parameter worth revisiting. Every one of these steps is now recalculable, so
-  editing it and recomputing the branch is a right-click.
+- Chapters 7 and 9 reject about half their epochs (525 and 524 of 984), and
+  the reason is not the threshold or the channel scope: **one bad channel**
+  is doing almost all of it. On subject 1's MMN recording, F8 alone would
+  reject **440 of 984** epochs. Switching to `Scalp EEG only` barely moves
+  the total (508 instead of 525), because the ocular channels were never the
+  main problem: blinks reach the frontal scalp channels too, and F8 is bad
+  outright.
+- ERP CORE is the **same 40 participants in every paradigm**, so that bad F8
+  is not confined to one chapter: on the same subject's chapter 11 N170
+  recording, F8 alone rejects 125 of 160 epochs. A subject with a bad
+  electrode has it everywhere.
+- Which is the lesson chapter 7 teaches, and the reason it cannot be
+  automated away: look at the data, find the bad channel, interpolate it, and
+  only then reject. A template cannot do that step, because the answer is
+  different for each participant. Do it by hand on the node above, then
+  re-run the rest.
+- The threshold is strict for this data too, independently of F8: the median
+  worst scalp amplitude per epoch is 107.7 uV, so +/-100 uV rejects about half
+  of them by construction (+/-200 uV would reject 19%). The MMN still comes
+  out at the right sign and a plausible size on the surviving trials, but
+  both the threshold and the bad channel are worth revisiting. Every one of
+  these steps is now recalculable, so editing one and recomputing the branch
+  is a right-click.
 
 ### Why chapters 1, 4, 5 and 11 have no template
 

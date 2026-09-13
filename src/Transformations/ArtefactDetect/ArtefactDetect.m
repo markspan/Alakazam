@@ -201,10 +201,14 @@ end
 % ======================================================================= %
 function idx = channelsToScan(EEG, opt, nChan)
 %CHANNELSTOSCAN  The channel indices this run tests.
-%   'Scalp EEG only' uses eegChannelMask, which excludes channels TYPED as
-%   a known peripheral (EOG, ECG, ...) and keeps everything else, so an
-%   untyped dataset behaves exactly as it always did rather than being
-%   silently emptied.
+%   'Scalp EEG only' uses eegChannelMask, which excludes channels that are a
+%   known peripheral (EOG, ECG, ...) either by their recorded .type or, when
+%   that is blank, by their LABEL -- so it works on the ordinary recording
+%   that arrived with no types filled in, which is most of them. It used to
+%   read .type alone, which made this option a no-op on exactly those
+%   datasets: it quietly tested the eye channels anyway and rejected every
+%   blink. eegChannelMask never returns an empty mask, so this cannot end up
+%   testing nothing.
     idx = 1:nChan;
     if ~isfield(opt, 'Channels') || ~strcmpi(char(string(opt.Channels)), 'Scalp EEG only')
         return;

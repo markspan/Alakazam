@@ -85,20 +85,45 @@ classdef ArtefactDetectChannelScopeTest < matlab.unittest.TestCase
             testCase.verifyEqual(sum(flags(5, :)), 0, 'VEOG should not be.');
         end
 
-        function anUntypedDatasetIsUnaffected(testCase)
-        %ANUNTYPEDDATASETISUNAFFECTED  eegChannelMask keeps every channel
-        %   whose type is blank, so asking for scalp-only on a dataset that
-        %   never recorded channel types must test everything rather than
-        %   silently testing nothing.
+        function anUntypedEyeChannelIsStillRecognisedByItsLabel(testCase)
+        %ANUNTYPEDEYECHANNELISSTILLRECOGNISEDBYITSLABEL  Most recordings
+        %   arrive with .type blank, so keying the scope off .type alone
+        %   made 'Scalp EEG only' a no-op on exactly the datasets that
+        %   needed it: it tested the eye channel anyway and rejected every
+        %   blink. A channel called VEOG is an eye channel whether or not
+        %   anyone filled in a type field, so eegChannelMask reads the label
+        %   when the type is missing.
+            EEG = testCase.eegWithBlinkingEog();
+            [EEG.chanlocs.type] = deal('');     % as loaded from most files
+            testCase.assertEqual(EEG.chanlocs(5).labels, 'VEOG');
+
+            opts = testCase.options('This channel only');
+            opts.Channels = 'Scalp EEG only';
+            out = ArtefactDetect(EEG, opts);
+
+            flags = testCase.flaggedCells(out);
+            testCase.verifyEqual(sum(flags(5, :)), 0, ...
+                'The eye channel must be left out on its label alone.');
+            testCase.verifyEqual(nnz(flags), 0, ...
+                'And nothing else exceeded the threshold, so nothing is flagged.');
+        end
+
+        function anUnrecognisedLabelIsTreatedAsScalp(testCase)
+        %ANUNRECOGNISEDLABELISTREATEDASSCALP  The fallback only excludes
+        %   labels that unambiguously name a peripheral. Anything else, a
+        %   10-5 scalp label or a name nobody recognises, stays in, so this
+        %   cannot quietly drop real EEG.
             EEG = testCase.eegWithBlinkingEog();
             [EEG.chanlocs.type] = deal('');
+            EEG.chanlocs(5).labels = 'Xy42';    % not a known peripheral
+
             opts = testCase.options('This channel only');
             opts.Channels = 'Scalp EEG only';
             out = ArtefactDetect(EEG, opts);
 
             flags = testCase.flaggedCells(out);
             testCase.verifyEqual(sum(flags(5, :)), 6, ...
-                'With no types recorded, every channel is still tested.');
+                'An unrecognised label is scalp EEG and must still be tested.');
         end
 
         function interpolatingAnEogChannelDoesNotError(testCase)
