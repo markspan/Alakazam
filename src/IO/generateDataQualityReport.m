@@ -416,6 +416,17 @@ function lines = provenanceLines(provenanceCsvName)
 %   it, which is the part that tells you what to change. Rejection and
 %   correction are recorded on the dataset as they run, so this is a report
 %   of what happened rather than a re-derivation of it.
+%
+%   A NOTE ON ONE ESCAPE BELOW, because getting it wrong cost a whole
+%   report: a literal double quote inside an emitted R string is \" and NOT
+%   \\". This is MATLAB source writing R source, and a MATLAB single-quoted
+%   literal passes backslashes through untouched, so \\" arrives in the .qmd
+%   as \\" -- which R reads as a literal backslash followed by a quote that
+%   CLOSES the string. The chunk becomes a syntax error and Quarto renders
+%   nothing at all. Compare the callout-tip line in attentionLines, which
+%   does it right. (The opposite convention applies to a backslash meant for
+%   the OUTPUT, such as LaTeX's \chi: there \\ is correct, because R's parser
+%   consumes one level before cat ever runs. See rejectionByBinLines.)
     if isempty(provenanceCsvName)
         lines = {};
         return;
@@ -442,7 +453,7 @@ function lines = provenanceLines(provenanceCsvName)
         '  # one catch" is every one of them and says nothing.' ...
         '  attributable <- any(!is.na(det$n_unique))' ...
         '  if (attributable) {' ...
-        '    cat("\n\n**The detector figures overlap and do not add up.** Each is what that detector would have rejected *on its own*, and one blink usually trips several at once, so summing them double-counts. The column that answers \\"what would I lose by switching this one off\\" is *only this one*: a detector contributing nothing there is catching only epochs another detector already caught.\n\n")' ...
+        '    cat("\n\n**The detector figures overlap and do not add up.** Each is what that detector would have rejected *on its own*, and one blink usually trips several at once, so summing them double-counts. The column that answers \"what would I lose by switching this one off\" is *only this one*: a detector contributing nothing there is catching only epochs another detector already caught.\n\n")' ...
         '  }' ...
         '  det <- det %>% mutate(pct_only = 100 * n_unique / n_total)' ...
         '  dp <- det %>% group_by(item) %>%' ...

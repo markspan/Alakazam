@@ -427,12 +427,23 @@ classdef DataQualityTest < matlab.unittest.TestCase
         %   Skips where Rscript is absent -- it is not on PATH in a stock
         %   Windows R install, and a machine without R is not a broken
         %   report.
+        %
+        %   EVERY OPTIONAL ARGUMENT IS SUPPLIED, and that is the whole point
+        %   of this call. Each companion export adds sections that are
+        %   omitted entirely when its argument is missing, so a call with
+        %   fewer arguments reports green while the R it never generated is
+        %   broken. That is not hypothetical: this test passed two arguments
+        %   and stayed green through a \\" in the provenance section that
+        %   made the whole report refuse to render, because the section was
+        %   never emitted to be parsed. Add an argument to
+        %   generateDataQualityReport, add it here.
             here = fileparts(mfilename('fullpath'));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));
             testCase.assumeTrue(~isempty(ReportFixtures.rscriptExe()), ...
                 'Rscript not found; skipping the generated-R parse check.');
 
-            qmd = generateDataQualityReport(testCase.twoSubjectEntries(), 'q.csv', 't.csv');
+            qmd = generateDataQualityReport(testCase.twoSubjectEntries(), ...
+                'q.csv', 't.csv', 's.csv', 'm.csv', 'p.csv');
             folder = testCase.applyFixture( ...
                 matlab.unittest.fixtures.TemporaryFolderFixture()).Folder;
             file = fullfile(folder, 'quality.R');
