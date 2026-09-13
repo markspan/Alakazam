@@ -228,7 +228,7 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 
     q.byWindowChannel = windowSME(epoched, windows, bins, labels, nChan);
 
-    q.provenance = provenanceRows(epoched, nTrials);
+    q.provenance = provenanceRows(epoched, nChan, nTrials);
 
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
@@ -431,7 +431,7 @@ function labels = channelLabels(EEG, nChan)
     end
 end
 
-function rows = provenanceRows(EEG, nTrials)
+function rows = provenanceRows(EEG, nChan, nTrials)
 %PROVENANCEROWS  What each cleaning step in this branch actually did, as
 %   long-format rows: step, item, n, n_total, pct, detail.
 %
@@ -470,25 +470,40 @@ function rows = provenanceRows(EEG, nTrials)
         % cost this section, not the whole report.
         if isstruct(d) && all(isfield(d, {'methods', 'epochs', 'onlyThis', ...
                 'channelEpochs', 'nTrials', 'totalEpochs', 'scope', 'channelsTested'}))
+            % ONE DETECTOR IS A SPECIAL CASE, and reporting it like the
+            % general one is worse than useless. With a single detector its
+            % own count IS the total, so an "any detector" row repeats it
+            % verbatim, and "how many did only this one catch" is trivially
+            % all of them. A reader seeing two identical rows and a column
+            % that restates the first learns nothing and has to work out why.
+            % So: attribution only where there is something to attribute.
+            single = numel(d.methods) == 1;
+            scopeNote = sprintf('scope: %s; %d channel(s) tested', ...
+                char(string(d.scope)), d.channelsTested);
             for m = 1:numel(d.methods)
+                if single
+                    uniq = NaN;
+                    detail = sprintf('%d channel-epochs; %s', ...
+                        d.channelEpochs(m), scopeNote);
+                else
+                    uniq = d.onlyThis(m);
+                    detail = sprintf('%d channel-epochs', d.channelEpochs(m));
+                end
                 rows(end + 1) = struct( ... %#ok<AGROW>
                     'step', 'ArtefactDetect', ...
                     'item', char(string(d.methods{m})), ...
                     'n', d.epochs(m), ...
                     'n_total', d.nTrials, ...
                     'pct', pct(d.epochs(m), d.nTrials), ...
-                    'n_unique', d.onlyThis(m), ...
-                    'detail', sprintf('%d only this detector; %d channel-epochs', ...
-                        d.onlyThis(m), d.channelEpochs(m)));
+                    'n_unique', uniq, ...
+                    'detail', detail);
             end
-            if ~isempty(d.methods)
+            if numel(d.methods) > 1
                 rows(end + 1) = struct( ... %#ok<AGROW>
                     'step', 'ArtefactDetect', 'item', 'any detector', ...
                     'n', d.totalEpochs, 'n_total', d.nTrials, ...
                     'pct', pct(d.totalEpochs, d.nTrials), ...
-                    'n_unique', NaN, ...
-                    'detail', sprintf('scope: %s; %d channel(s) tested', ...
-                        char(string(d.scope)), d.channelsTested));
+                    'n_unique', NaN, 'detail', scopeNote);
             end
         end
     end
@@ -522,16 +537,36 @@ function rows = provenanceRows(EEG, nTrials)
     if isfield(EEG, 'etc') && isstruct(EEG.etc) && isfield(EEG.etc, 'GEDAI') ...
             && isstruct(EEG.etc.GEDAI)
         g = EEG.etc.GEDAI;
-        totalSamples = nTrials * size(EEG.data, 2);
         nRej = 0;
         if isfield(g, 'nSamplesRejected') && ~isempty(g.nSamplesRejected)
             nRej = double(g.nSamplesRejected);
         end
+
+        % DENOISING IS WHAT GEDAI DID; rejection is the exception. It
+        % corrects in place and leaves nSamplesRejected at 0 on every path
+        % that does not drop samples (see AutoGEDAI's own note), which is the
+        % usual one -- so leading with "0 of 46,600 samples rejected, 0.0%"
+        % put the one thing GEDAI did NOT do in the only columns a skimming
+        % reader takes in, and read as "this step changed nothing".
+        nDenoised = numel(fieldOrEmpty(g, 'channelIndices'));
         rows(end + 1) = struct( ... %#ok<AGROW>
-            'step', 'AutoGEDAI', 'item', 'samples rejected', ...
-            'n', nRej, 'n_total', totalSamples, ...
-            'pct', pct(nRej, totalSamples), ...
-            'n_unique', NaN, 'detail', gedaiDetail(g));
+            'step', 'AutoGEDAI', 'item', 'channels denoised', ...
+            'n', nDenoised, 'n_total', nChan, ...
+            'pct', pct(nDenoised, nChan), ...
+            'n_unique', NaN, 'detail', gedaiDetail(g, nRej));
+
+        % A second row only when there is a rejection to report, for the same
+        % reason: a zero row costs a line and teaches nothing, and the row
+        % above now says in words that nothing was rejected.
+        if nRej > 0
+            totalSamples = nTrials * size(EEG.data, 2);
+            rows(end + 1) = struct( ... %#ok<AGROW>
+                'step', 'AutoGEDAI', 'item', 'samples rejected', ...
+                'n', nRej, 'n_total', totalSamples, ...
+                'pct', pct(nRej, totalSamples), ...
+                'n_unique', NaN, ...
+                'detail', 'returned as NaN across all channels, not dropped');
+        end
     end
 end
 
@@ -565,13 +600,18 @@ function d = autoIcaDetail(e)
     d = strjoin(parts, '; ');
 end
 
-function d = gedaiDetail(g)
+function d = gedaiDetail(g, nRejected)
 %GEDAIDETAIL  GEDAI's own quality numbers. ENOVA is per epoch and per
 %   channel, so the worst of each is the part worth surfacing: a single bad
 %   epoch or channel is exactly what a summary mean would hide.
     parts = {};
     if isfield(g, 'SENSAI_score') && ~isempty(g.SENSAI_score)
-        parts{end + 1} = sprintf('SENSAI %.3f', double(g.SENSAI_score(1)));
+        % One decimal: SENSAI comes back on a 0-100 scale, and three decimals
+        % on a two-digit number claims a precision it does not have.
+        parts{end + 1} = sprintf('SENSAI %.1f', double(g.SENSAI_score(1)));
+    end
+    if nargin > 1 && nRejected == 0
+        parts{end + 1} = 'no samples rejected';
     end
     if isfield(g, 'ENOVA_per_epoch') && ~isempty(g.ENOVA_per_epoch)
         v = double(g.ENOVA_per_epoch(:));

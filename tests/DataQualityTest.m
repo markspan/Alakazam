@@ -455,6 +455,39 @@ classdef DataQualityTest < matlab.unittest.TestCase
             testCase.verifySubstring(output, 'OK');
         end
 
+        function everyChunkThatCatsRawHtmlDeclaresResultsAsis(testCase)
+        %EVERYCHUNKTHATCATSRAWHTMLDECLARESRESULTSASIS  A gt table reaches
+        %   the page as a cat() of raw HTML, and knitr prints a chunk's
+        %   output as a code block unless the chunk says "results: asis". A
+        %   chunk that forgets it renders the table's entire HTML source as
+        %   literal text on the page: valid R, valid markdown, and
+        %   unreadable. Nothing else in the suite can see it -- parse() does
+        %   not look at "#|" lines at all -- so the rule is checked here,
+        %   over every chunk the generator emits rather than any one section.
+            qmd = generateDataQualityReport(testCase.twoSubjectEntries(), ...
+                'q.csv', 't.csv', 's.csv', 'm.csv', 'p.csv');
+
+            offenders = {};
+            chunks = strsplit(qmd, '```{r}');
+            for k = 2:numel(chunks)
+                body = extractBefore([chunks{k} '```'], '```');
+                % "cat(as_raw_html", not merely "as_raw_html": the setup
+                % chunk DEFINES apa_gt, whose body names as_raw_html without
+                % ever emitting any, and flagging it would make this test
+                % fail on a chunk that is correct.
+                if ~contains(body, 'cat(as_raw_html')
+                    continue;
+                end
+                if ~contains(body, 'results: asis')
+                    offenders{end + 1} = chunkLabel(body); %#ok<AGROW>
+                end
+            end
+
+            testCase.verifyEmpty(offenders, sprintf( ...
+                ['These chunks cat raw HTML without "#| results: asis", so their table ' ...
+                 'would render as literal HTML source: %s'], strjoin(offenders, ', ')));
+        end
+
         function reportRefusesAnEmptyExport(testCase)
             empty = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {});
             testCase.verifyError(@() generateDataQualityReport(empty, 'q.csv', 't.csv'), ...
@@ -499,6 +532,17 @@ classdef DataQualityTest < matlab.unittest.TestCase
 end
 
 % ======================================================================= %
+function label = chunkLabel(body)
+%CHUNKLABEL  A chunk's "#| label:" value, for naming it in a failure
+%   message -- "provenance-table" locates the problem, a line number in
+%   generated text does not.
+    label = '(unlabelled)';
+    tok = regexp(body, '#\|\s*label:\s*(\S+)', 'tokens', 'once');
+    if ~isempty(tok)
+        label = tok{1};
+    end
+end
+
 function v = smeOf(q, bin, channel)
     row = q.byBinChannel(strcmp({q.byBinChannel.bin}, bin) & ...
         strcmp({q.byBinChannel.channel}, channel));

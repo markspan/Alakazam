@@ -63,6 +63,66 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 '"Only this one" is meaningless for the union row.');
         end
 
+        function oneDetectorGetsOneRowAndNoAttribution(testCase)
+        %ONEDETECTORGETSONEROWANDNOATTRIBUTION  With a single detector its
+        %   own count IS the total, so an "any detector" row would repeat it
+        %   verbatim, and "how many did only this one catch" is trivially all
+        %   of them. Two identical rows and a column restating the first is
+        %   what the report actually showed; attribution belongs only where
+        %   there is something to attribute.
+            EEG = testCase.epochedFixture();
+            EEG.etc.alz.artefactDetectors = testCase.oneDetectorRecord();
+
+            rows = dataQualityMetrics(EEG).provenance;
+
+            testCase.assertNumElements(rows, 1);
+            testCase.verifyEqual(rows.item, 'Absolute threshold');
+            testCase.verifyEqual(rows.n, 4);
+            testCase.verifyTrue(isnan(rows.n_unique));
+            testCase.verifyTrue(contains(rows.detail, 'Whole epoch'), ...
+                'The scope came off the dropped union row, so it must land here.');
+        end
+
+        function gedaiLeadsWithWhatItDidNotWithWhatItDidNot(testCase)
+        %GEDAILEADSWITHWHATITDIDNOTWITHWHATITDIDNOT  GEDAI corrects in place
+        %   and leaves nSamplesRejected at 0 on every path that drops no
+        %   samples, which is the usual one. Leading with "0 of 46,600
+        %   samples, 0.0%" put the one thing it did NOT do in the only
+        %   columns a skimming reader takes in, and read as "this step
+        %   changed nothing".
+            EEG = testCase.epochedFixture();
+            EEG.etc.GEDAI = struct('SENSAI_score', 57.636, ...
+                'ENOVA_per_epoch', [0.1 0.95], 'ENOVA_per_channel', [0.2 0.4], ...
+                'channelIndices', [1 2], 'nSamplesRejected', 0, ...
+                'excludedChannels', {{'HEOG'}});
+
+            rows = dataQualityMetrics(EEG).provenance;
+
+            testCase.assertNumElements(rows, 1, 'No zero-rejection row.');
+            testCase.verifyEqual(rows.item, 'channels denoised');
+            testCase.verifyEqual(rows.n, 2);
+            testCase.verifyEqual(rows.n_total, 2);
+            testCase.verifyTrue(contains(rows.detail, 'no samples rejected'), ...
+                'The zero is still reported, in words, where it cannot be mistaken for inaction.');
+            testCase.verifyTrue(contains(rows.detail, 'SENSAI 57.6'), ...
+                'One decimal: three on a two-digit score claims precision it lacks.');
+        end
+
+        function gedaiAddsARowOnlyWhenItActuallyRejectedSamples(testCase)
+            EEG = testCase.epochedFixture();
+            EEG.etc.GEDAI = struct('SENSAI_score', 40, 'ENOVA_per_epoch', 0.5, ...
+                'ENOVA_per_channel', 0.5, 'channelIndices', [1 2], ...
+                'nSamplesRejected', 120, 'excludedChannels', {{}});
+
+            rows = dataQualityMetrics(EEG).provenance;
+            rejected = rows(strcmp({rows.item}, 'samples rejected'));
+
+            testCase.assertNotEmpty(rejected);
+            testCase.verifyEqual(rejected.n, 120);
+            testCase.verifyTrue(contains(rejected.detail, 'NaN'), ...
+                'They are NaN''d across all channels, not dropped, which changes what the count means.');
+        end
+
         function automaticIcaReportsWhichComponentsWentAndWhy(testCase)
         %AUTOMATICICAREPORTSWHICHCOMPONENTSWENTANDWHY  AutoEyeICA's own
         %   options carry only the threshold, and pop_subcomp rewrites the
@@ -107,18 +167,19 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
         %   a mean over epochs hides the single bad one that is the reason to
         %   look at all.
             EEG = testCase.epochedFixture();
-            EEG.etc.GEDAI = struct('SENSAI_score', 0.83, ...
+            EEG.etc.GEDAI = struct('SENSAI_score', 83, ...
                 'ENOVA_per_epoch', [0.1 0.2 0.95 0.15], ...
-                'ENOVA_per_channel', [0.2 0.4], ...
+                'ENOVA_per_channel', [0.2 0.4], 'channelIndices', [1 2], ...
                 'nSamplesRejected', 120, 'excludedChannels', {{'HEOG'}});
 
             rows = dataQualityMetrics(EEG).provenance;
-            g = rows(strcmp({rows.step}, 'AutoGEDAI'));
+            g = rows(strcmp({rows.item}, 'channels denoised'));
 
             testCase.assertNotEmpty(g);
-            testCase.verifyEqual(g.n, 120);
             testCase.verifyTrue(contains(g.detail, '0.950'), ...
                 'The worst epoch has to appear, not only the median.');
+            testCase.verifyTrue(contains(g.detail, 'median 0.175'), ...
+                'And the median beside it, or one bad epoch looks like the whole recording.');
             testCase.verifyTrue(contains(g.detail, 'SENSAI'));
         end
 
@@ -267,6 +328,19 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             hit = lines(startsWith(strtrim(lines), prefix));
             testCase.assertNotEmpty(hit, sprintf('No line starting "%s".', prefix));
             line = hit{1};
+        end
+
+        function d = oneDetectorRecord(testCase)
+        %ONEDETECTORRECORD  The commonest real case, and the one the report
+        %   handled worst: a single ticked detector over 10 trials.
+            d = testCase.detectorRecord();
+            mask = d.epochMask(:, 1);
+            d.methods       = {'Absolute threshold'};
+            d.epochs        = 4;
+            d.channelEpochs = 5;
+            d.onlyThis      = 4;
+            d.epochMask     = mask(:);
+            d.totalEpochs   = 4;
         end
 
         function d = detectorRecord(~)
