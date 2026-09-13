@@ -1,4 +1,4 @@
-function [summaryCsv, trialCsv, smeCsv] = exportDataQualityCSVs(entries, targetStem)
+function [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(entries, targetStem)
 %EXPORTDATAQUALITYCSVS  Write the two long-format CSVs
 %   generateDataQualityReport.m's own R code reads: TARGETSTEM +
 %   "_quality.csv" (one row per subject x bin x channel: rejection rates,
@@ -26,13 +26,48 @@ function [summaryCsv, trialCsv, smeCsv] = exportDataQualityCSVs(entries, targetS
 %   Alakazam.collectDataQualityEntries.
 %
 %   See also DATAQUALITYMETRICS, ERPSCORESME, GENERATEDATAQUALITYREPORT.
-    summaryCsv = [targetStem '_quality.csv'];
-    trialCsv   = [targetStem '_trials.csv'];
-    smeCsv     = [targetStem '_sme.csv'];
+    summaryCsv    = [targetStem '_quality.csv'];
+    trialCsv      = [targetStem '_trials.csv'];
+    smeCsv        = [targetStem '_sme.csv'];
+    provenanceCsv = [targetStem '_provenance.csv'];
 
     writeSummaryCsv(summaryCsv, entries);
     writeTrialCsv(trialCsv, entries);
     writeSmeCsv(smeCsv, entries);
+    writeProvenanceCsv(provenanceCsv, entries);
+end
+
+% ----------------------------------------------------------------------- %
+function writeProvenanceCsv(file, entries)
+%WRITEPROVENANCECSV  One row per subject x cleaning step x item: what each
+%   step in that subject's branch actually did.
+%
+%   A fourth file for the same reason there are three: different grain. The
+%   others are per bin/channel, per trial and per measurement window; this
+%   one is per cleaning STEP, and the questions it answers ("which detector
+%   is costing me trials", "how many components came out") are not asked of
+%   any of those.
+%
+%   Written even when nothing has a provenance record, as a header-only
+%   file, so the report's own read_csv never has to be conditional on the
+%   file existing -- the same choice writeSmeCsv makes.
+    fid = openOrThrow(file);
+    closeFile = onCleanup(@() fclose(fid)); %#ok<NASGU>
+    fprintf(fid, 'dataset,group,session,step,item,n,n_total,pct,n_unique,detail\n');
+    for e = 1:numel(entries)
+        entry = entries(e);
+        if ~isfield(entry.quality, 'provenance')
+            continue;
+        end
+        rows = entry.quality.provenance;
+        for r = 1:numel(rows)
+            fprintf(fid, '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n', ...
+                csvField(entry.subject), csvField(entry.group), csvField(entry.session), ...
+                csvField(rows(r).step), csvField(rows(r).item), ...
+                num(rows(r).n), num(rows(r).n_total), num(rows(r).pct), ...
+                num(rows(r).n_unique), csvField(rows(r).detail));
+        end
+    end
 end
 
 % ----------------------------------------------------------------------- %

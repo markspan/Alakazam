@@ -117,6 +117,21 @@ end
 eyeComps = find(probs(:, eyeCol) > opts.EyeThreshold);
 fprintf('AutoEyeICA: pruned %d of %d component(s) as eye (threshold %.2f).\n', ...
     numel(eyeComps), size(probs, 1), opts.EyeThreshold);
+
+% WHICH COMPONENTS WENT, recorded before they go. The node's own options
+% carry only the threshold, and etc.ic_classification is rewritten by
+% pop_subcomp below to describe the components that SURVIVE -- so once this
+% has run there is no way to recover which ones were removed, or how
+% confident ICLabel was about them. The data-quality report reads this field
+% to say what the correction actually did, the same way it reads
+% etc.alz.artefactDetectors to say what rejection did.
+eyeRecord = struct( ...
+    'threshold',        opts.EyeThreshold, ...
+    'removed',          eyeComps(:)', ...
+    'nRemoved',         numel(eyeComps), ...
+    'nComponents',      size(probs, 1), ...
+    'eyeProbabilities', probs(eyeComps, eyeCol)');
+
 if ~isempty(eyeComps)
     eegOnly = pop_subcomp(eegOnly, eyeComps, 0);
 end
@@ -136,5 +151,6 @@ merged.icawinv     = eegOnly.icawinv;
 merged.icaact      = eegOnly.icaact;
 merged.icachansind = eegIdx(eegOnly.icachansind);
 merged.etc.ic_classification = eegOnly.etc.ic_classification;
+merged.etc.alz.eyeICA = eyeRecord;
 EEG = merged;
 EEG.id = name;

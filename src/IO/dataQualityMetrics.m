@@ -79,13 +79,18 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 %   Alakazam.collectDataQualityEntries, which reads it off the tree), or []
 %   when it does not.
 %
-%   Returns a struct of four long-format tables, one row per unit of
+%   Returns a struct of five long-format tables, one row per unit of
 %   analysis, ready for exportDataQualityCSVs:
 %     q.subject         scalar struct: n_trials/n_rejected/pct_rejected/...
 %     q.byBinChannel    struct array, one row per (bin, channel)
 %     q.byTrial         struct array, one row per (trial, bin) membership
 %     q.byWindowChannel struct array, one row per (window, bin, channel);
 %                       empty when WINDOWS is empty
+%     q.provenance      struct array, one row per cleaning step x item:
+%                       WHAT each step did, rather than how much was lost.
+%                       Which detector cost which trials, and what the
+%                       correction steps removed. Empty when no step in the
+%                       chain recorded anything. See provenanceRows.
 %
 %   See also ERPSCORESME, EXPORTDATAQUALITYCSVS, GENERATEDATAQUALITYREPORT,
 %   AVERAGE, MEASURE.
@@ -222,6 +227,8 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
     end
 
     q.byWindowChannel = windowSME(epoched, windows, bins, labels, nChan);
+
+    q.provenance = provenanceRows(epoched, nTrials);
 
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
@@ -421,6 +428,177 @@ function labels = channelLabels(EEG, nChan)
                 labels{c} = name;
             end
         end
+    end
+end
+
+function rows = provenanceRows(EEG, nTrials)
+%PROVENANCEROWS  What each cleaning step in this branch actually did, as
+%   long-format rows: step, item, n, n_total, pct, detail.
+%
+%   The report can already say how many trials were lost. What it could not
+%   say is WHICH step lost them, or what the correction steps changed --
+%   and those are the questions that decide what to adjust. Rejection and
+%   correction are both recorded on the dataset as they happen
+%   (etc.alz.artefactDetectors, etc.alz.eyeICA, etc.alz.manualICA,
+%   etc.GEDAI) and, because EEG.etc travels down the chain, all of it is
+%   still here on the epoched node this function receives.
+%
+%   ONE LONG SHAPE for two kinds of thing, rather than a file each: a
+%   detector row and a correction row differ in what they count, not in
+%   grain -- both are "one step, one item, a count out of a total". That
+%   keeps the CSV and the report table simple, and means a new cleaning
+%   step only has to add rows.
+%
+%   Read defensively and NOT through TransTools: EEG.etc is EEGLAB's
+%   free-form field, may be absent or not a struct, and this is IO code that
+%   must stay usable without the Transformations package on the path. A
+%   record of the wrong shape is skipped rather than guessed at.
+    % n_unique is populated only for detector rows, where "how many did
+    % ONLY this one catch" is meaningful; NaN elsewhere. Carried as its own
+    % column rather than left inside .detail because the report charts it,
+    % and a chart that regex-parses its own prose breaks silently the day
+    % the wording changes.
+    rows = struct('step', {}, 'item', {}, 'n', {}, 'n_total', {}, 'pct', {}, ...
+        'n_unique', {}, 'detail', {});
+    alz = alzStruct(EEG);
+
+    % --- rejection: which detector cost which trials ------------------- %
+    if isfield(alz, 'artefactDetectors')
+        d = alz.artefactDetectors;
+        % Every field the loop below reads, not just the first two: a
+        % half-shaped record (an older release's, or a hand-built one) should
+        % cost this section, not the whole report.
+        if isstruct(d) && all(isfield(d, {'methods', 'epochs', 'onlyThis', ...
+                'channelEpochs', 'nTrials', 'totalEpochs', 'scope', 'channelsTested'}))
+            for m = 1:numel(d.methods)
+                rows(end + 1) = struct( ... %#ok<AGROW>
+                    'step', 'ArtefactDetect', ...
+                    'item', char(string(d.methods{m})), ...
+                    'n', d.epochs(m), ...
+                    'n_total', d.nTrials, ...
+                    'pct', pct(d.epochs(m), d.nTrials), ...
+                    'n_unique', d.onlyThis(m), ...
+                    'detail', sprintf('%d only this detector; %d channel-epochs', ...
+                        d.onlyThis(m), d.channelEpochs(m)));
+            end
+            if ~isempty(d.methods)
+                rows(end + 1) = struct( ... %#ok<AGROW>
+                    'step', 'ArtefactDetect', 'item', 'any detector', ...
+                    'n', d.totalEpochs, 'n_total', d.nTrials, ...
+                    'pct', pct(d.totalEpochs, d.nTrials), ...
+                    'n_unique', NaN, ...
+                    'detail', sprintf('scope: %s; %d channel(s) tested', ...
+                        char(string(d.scope)), d.channelsTested));
+            end
+        end
+    end
+
+    % --- correction: automatic eye ICA --------------------------------- %
+    if isfield(alz, 'eyeICA')
+        e = alz.eyeICA;
+        if isstruct(e) && isfield(e, 'nRemoved') && isfield(e, 'nComponents')
+            rows(end + 1) = struct( ... %#ok<AGROW>
+                'step', 'AutoICA', 'item', 'components removed', ...
+                'n', e.nRemoved, 'n_total', e.nComponents, ...
+                'pct', pct(e.nRemoved, e.nComponents), ...
+                'n_unique', NaN, 'detail', autoIcaDetail(e));
+        end
+    end
+
+    % --- correction: manual component removal -------------------------- %
+    if isfield(alz, 'manualICA')
+        r = alz.manualICA;
+        if isstruct(r) && isfield(r, 'nRemoved') && isfield(r, 'nComponents')
+            rows(end + 1) = struct( ... %#ok<AGROW>
+                'step', 'ICA', 'item', 'components removed', ...
+                'n', r.nRemoved, 'n_total', r.nComponents, ...
+                'pct', pct(r.nRemoved, r.nComponents), ...
+                'n_unique', NaN, ...
+                'detail', sprintf('by hand: %s', numberList(r.removed)));
+        end
+    end
+
+    % --- correction: GEDAI --------------------------------------------- %
+    if isfield(EEG, 'etc') && isstruct(EEG.etc) && isfield(EEG.etc, 'GEDAI') ...
+            && isstruct(EEG.etc.GEDAI)
+        g = EEG.etc.GEDAI;
+        totalSamples = nTrials * size(EEG.data, 2);
+        nRej = 0;
+        if isfield(g, 'nSamplesRejected') && ~isempty(g.nSamplesRejected)
+            nRej = double(g.nSamplesRejected);
+        end
+        rows(end + 1) = struct( ... %#ok<AGROW>
+            'step', 'AutoGEDAI', 'item', 'samples rejected', ...
+            'n', nRej, 'n_total', totalSamples, ...
+            'pct', pct(nRej, totalSamples), ...
+            'n_unique', NaN, 'detail', gedaiDetail(g));
+    end
+end
+
+function s = alzStruct(EEG)
+%ALZSTRUCT  EEG.etc.alz, or an empty struct when there is none.
+    s = struct();
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || isempty(EEG.etc)
+        return;
+    end
+    if ~isfield(EEG.etc, 'alz') || ~isstruct(EEG.etc.alz) || isempty(EEG.etc.alz)
+        return;
+    end
+    s = EEG.etc.alz;
+end
+
+function d = autoIcaDetail(e)
+%AUTOICADETAIL  The threshold that chose the components, and which they were.
+%   Worth carrying both: the threshold is the parameter to adjust, the
+%   indices are what lets anyone check the decision against the topographies.
+    parts = {};
+    if isfield(e, 'threshold') && ~isempty(e.threshold)
+        parts{end + 1} = sprintf('eye p > %.2f', double(e.threshold));
+    end
+    if isfield(e, 'removed') && ~isempty(e.removed)
+        parts{end + 1} = numberList(e.removed);
+    end
+    if isfield(e, 'eyeProbabilities') && ~isempty(e.eyeProbabilities)
+        parts{end + 1} = sprintf('p = %s', strjoin(compose('%.2f', ...
+            double(e.eyeProbabilities(:)')), ', '));
+    end
+    d = strjoin(parts, '; ');
+end
+
+function d = gedaiDetail(g)
+%GEDAIDETAIL  GEDAI's own quality numbers. ENOVA is per epoch and per
+%   channel, so the worst of each is the part worth surfacing: a single bad
+%   epoch or channel is exactly what a summary mean would hide.
+    parts = {};
+    if isfield(g, 'SENSAI_score') && ~isempty(g.SENSAI_score)
+        parts{end + 1} = sprintf('SENSAI %.3f', double(g.SENSAI_score(1)));
+    end
+    if isfield(g, 'ENOVA_per_epoch') && ~isempty(g.ENOVA_per_epoch)
+        v = double(g.ENOVA_per_epoch(:));
+        parts{end + 1} = sprintf('epoch ENOVA max %.3f, median %.3f', ...
+            max(v, [], 'omitnan'), median(v, 'omitnan'));
+    end
+    if isfield(g, 'ENOVA_per_channel') && ~isempty(g.ENOVA_per_channel)
+        v = double(g.ENOVA_per_channel(:));
+        parts{end + 1} = sprintf('channel ENOVA max %.3f', max(v, [], 'omitnan'));
+    end
+    if isfield(g, 'excludedChannels') && ~isempty(g.excludedChannels)
+        parts{end + 1} = sprintf('%d channel(s) excluded', numel(g.excludedChannels));
+    end
+    d = strjoin(parts, '; ');
+end
+
+function s = numberList(v)
+%NUMBERLIST  A short "1, 4, 9" list, elided past a handful so one pathological
+%   decomposition cannot push a CSV cell to hundreds of characters.
+    v = double(v(:)');
+    if isempty(v)
+        s = 'none'; return;
+    end
+    if numel(v) > 8
+        s = sprintf('%s and %d more', strjoin(compose('%g', v(1:8)), ', '), numel(v) - 8);
+    else
+        s = strjoin(compose('%g', v), ', ');
     end
 end
 

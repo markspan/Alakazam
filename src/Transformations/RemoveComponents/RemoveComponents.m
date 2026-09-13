@@ -66,6 +66,18 @@ if ~isfield(opts, 'components') || isempty(opts.components)
     return;   % nothing selected: keep the decomposed dataset unchanged
 end
 
+% Recorded on the dataset, not only in the node's options, so the
+% data-quality report can say what the correction did from the data alone --
+% the same reason AutoEyeICA records its own pruning (etc.alz.eyeICA) and
+% ArtefactDetect records its detectors. pop_subcomp below rewrites
+% etc.ic_classification to describe the components that SURVIVE, so after it
+% runs there is nothing left saying which ones went.
+nComponents = size(EEG.icaweights, 1);
+EEG.etc.alz.manualICA = struct( ...
+    'removed',     opts.components(:)', ...
+    'nRemoved',    numel(opts.components), ...
+    'nComponents', nComponents);
+
 EEG = pop_subcomp(EEG, opts.components(:)', 0);
 end
 
