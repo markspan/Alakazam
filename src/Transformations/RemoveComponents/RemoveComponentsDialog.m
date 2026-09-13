@@ -1,7 +1,8 @@
 function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, srate, dipoleRv)
 %REMOVECOMPONENTSDIALOG  Alakazam-styled manual ICA component selector.
 %
-%   Shows every independent component in a table with its ICLabel class
+%   Shows every independent component in a sortable table with the class
+%   ICLabel assigned it, that class's probability, the full per-class
 %   probabilities and a "Remove" tick-box, alongside a live scalp-topography,
 %   activation time-course and power-spectrum preview of the currently
 %   selected component, so the analyst can inspect and remove components by
@@ -37,8 +38,11 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44}, 'Padding', [10 10 10 10]);
 
     uilabel(outer, 'Text', ['Tick the components to subtract from the data. Select a row to preview ' ...
-        'its scalp topography, activation time course and power spectrum. ICLabel probabilities (%) ' ...
-        'are shown to help identify artefact components (eye, muscle, heart, line/channel noise). ' ...
+        'its scalp topography, activation time course and power spectrum. Label is the class ' ...
+        'ICLabel assigned (its most probable one), with that probability; the per-class ' ...
+        'probabilities (%) follow, because a component labelled at 40% against a close ' ...
+        'runner-up is a different proposition from one labelled at 90%. Click a column ' ...
+        'heading to sort, to bring all the eye or muscle components together. ' ...
         'Dipole RV is the share of a component''s scalp map that a single equivalent dipole ' ...
         'cannot explain: values above roughly 15% suggest the component is not one cortical ' ...
         'source, and "no fit" means no dipole could be fitted at all, which says so more ' ...
@@ -53,37 +57,21 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     % have produced this map -- by a physical argument rather than a trained
     % classifier, so the informative case is the two disagreeing: a
     % component ICLabel calls brain but no dipole explains is worth a look.
-    % Blank when dipfit could not fit (see TransTools.ComponentDipoles).
-    if nargin < 6 || isempty(dipoleRv)
-        dipoleRv = nan(ncomp, 1);
+    % Blank when dipfit could not fit (see TransTools.ComponentDipoles);
+    % componentTableColumns pads a short or absent vector itself.
+    if nargin < 6
+        dipoleRv = [];
     end
-    dipoleRv = dipoleRv(:);
-    dipoleRv(end+1:ncomp) = NaN;
 
-    % A CHAR COLUMN, so that "no fit" can be said rather than left blank.
-    % Measured on a 63-component decomposition, dipfit fits about 57% of
-    % components and the rest fail outright. An empty cell reads as missing
-    % data; it is not. A component no single dipole can be fitted to at all
-    % is the strongest evidence available here that it is not one cortical
-    % source, which is more than a high residual variance says.
-    colNames = [{'IC'}, classes, {'Dipole RV %'}, {'Remove'}];
-    colFmt   = [{'numeric'}, repmat({'numeric'}, 1, numel(classes)), {'char'}, {'logical'}];
-    colEdit  = [false, false(1, numel(classes)), false, true];
-    data = cell(ncomp, numel(colNames));
-    for c = 1:ncomp
-        data{c, 1} = c;
-        for k = 1:numel(classes)
-            data{c, 1 + k} = round(probs(c, k) * 100);
-        end
-        if isnan(dipoleRv(c))
-            data{c, end - 1} = 'no fit';
-        else
-            data{c, end - 1} = sprintf('%d', round(dipoleRv(c) * 100));
-        end
-        data{c, end} = false;
-    end
+    [colNames, colFmt, colEdit, data] = componentTableColumns(classes, probs, dipoleRv);
+    % SORTABLE, so "all the eye components" is one click on the Label heading
+    % rather than a read down seven numeric columns. Safe only because
+    % componentsTicked reads each row's own IC number instead of its position
+    % (see there); with the position assumption a sort would have subtracted
+    % the wrong components.
     tbl = uitable(middle, 'ColumnName', colNames, 'ColumnFormat', colFmt, ...
         'ColumnEditable', colEdit, 'Data', data, 'RowName', {}, ...
+        'ColumnSortable', true, ...
         'CellSelectionCallback', @(~, ev) onSelect(ev));
 
     rightPanel = uigridlayout(middle, [3 1], 'RowHeight', {'1x', 130, 130}, ...
@@ -116,8 +104,15 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     uiwait(fig);
 
     function onSelect(ev)
+    %ONSELECT  Preview the component the clicked row BELONGS TO, read from
+    %   the row's own IC cell rather than its position: once the table has
+    %   been sorted by Label, row 3 is no longer component 3, and previewing
+    %   by position would show a different component from the one ticked.
         if isempty(ev.Indices); return; end
-        drawComponent(ev.Indices(1, 1));
+        d = tbl.Data;
+        row = ev.Indices(1, 1);
+        if row < 1 || row > size(d, 1); return; end
+        drawComponent(d{row, 1});
     end
 
     function drawComponent(ic)
@@ -171,13 +166,7 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     end
 
     function onOK()
-        d = tbl.Data;
-        flags = false(ncomp, 1);
-        for r = 1:ncomp
-            v = d{r, end};
-            flags(r) = ~isempty(v) && islogical(v) && v;
-        end
-        removed = find(flags(:))';
+        removed = componentsTicked(tbl.Data);
         ok = true;
         uiresume(fig); delete(fig);
     end
