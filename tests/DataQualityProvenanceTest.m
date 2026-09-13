@@ -294,6 +294,56 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 'Parsing the detail prose back out is what the column replaced.');
         end
 
+        function theSectionDefinesItsOwnColumns(testCase)
+        %THESECTIONDEFINESITSOWNCOLUMNS  "n" counts epochs on one row,
+        %   components on the next and channels on the third, so a reader
+        %   cannot take the column at face value and the header cannot tell
+        %   them so. The section therefore carries a legend, and this checks
+        %   it is there and names the columns it explains.
+            qmd = testCase.report('p.csv');
+
+            for needle = {'`n` counts a different thing', '`n_total`', 'share', ...
+                          'never down the column'}
+                testCase.verifyTrue(contains(qmd, needle{1}), sprintf( ...
+                    'The legend should mention %s.', needle{1}));
+            end
+        end
+
+        function theLegendNamesEveryItemTheMetricsCanProduce(testCase)
+        %THELEGENDNAMESEVERYITEMTHEMETRICSCANPRODUCE  A legend is a second
+        %   copy of the truth, so it can rot: rename an item in
+        %   dataQualityMetrics and the table would show a row the legend
+        %   does not explain, with nothing failing. The fixed item names are
+        %   enumerable, so they are checked against the emitted legend here.
+        %   (Detector names are not: they come from whatever methods the
+        %   analyst ticked, and the legend covers them as a class.)
+            EEG = testCase.epochedFixture();
+            EEG.etc.alz.artefactDetectors = testCase.detectorRecord();
+            EEG.etc.alz.eyeICA = struct('threshold', 0.6, 'removed', 1, 'nRemoved', 1, ...
+                'nComponents', 28, 'eyeProbabilities', 0.9);
+            EEG.etc.alz.manualICA = struct('removed', 3, 'nRemoved', 1, 'nComponents', 20);
+            EEG.etc.GEDAI = struct('SENSAI_score', 40, 'ENOVA_per_epoch', 0.5, ...
+                'ENOVA_per_channel', 0.5, 'channelIndices', [1 2], ...
+                'nSamplesRejected', 9, 'excludedChannels', {{}});
+            rows = dataQualityMetrics(EEG).provenance;
+
+            qmd = testCase.report('p.csv');
+
+            % The detector rows aside, every item and every step the metrics
+            % produced must be findable in the document's own legend.
+            fixed = setdiff({rows.item}, testCase.detectorRecord().methods);
+            testCase.assertNotEmpty(fixed);
+            for k = 1:numel(fixed)
+                testCase.verifyTrue(contains(qmd, ['`' fixed{k} '`']), sprintf( ...
+                    'The legend does not explain the item "%s", which the metrics emit.', ...
+                    fixed{k}));
+            end
+            for step = unique({rows.step})
+                testCase.verifyTrue(contains(qmd, ['`' step{1} '`']), sprintf( ...
+                    'The legend does not explain the step "%s".', step{1}));
+            end
+        end
+
         function theSectionIsOmittedWhenThereIsNoFile(testCase)
         %THESECTIONISOMITTEDWHENTHEREISNOFILE  An older export has no
         %   provenance CSV, and the report should lose this section rather
