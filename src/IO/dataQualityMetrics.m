@@ -432,8 +432,8 @@ function labels = channelLabels(EEG, nChan)
 end
 
 function rows = provenanceRows(EEG, nChan, nTrials)
-%PROVENANCEROWS  What each cleaning step in this branch actually did, as
-%   long-format rows: step, item, n, n_total, pct, detail.
+%PROVENANCEROWS  What each cleaning step in this branch actually did, one
+%   row per step per item. See blankProvenanceRow for the column list.
 %
 %   The report can already say how many trials were lost. What it could not
 %   say is WHICH step lost them, or what the correction steps changed --
@@ -443,23 +443,31 @@ function rows = provenanceRows(EEG, nChan, nTrials)
 %   etc.GEDAI) and, because EEG.etc travels down the chain, all of it is
 %   still here on the epoched node this function receives.
 %
-%   ONE LONG SHAPE for two kinds of thing, rather than a file each: a
-%   detector row and a correction row differ in what they count, not in
-%   grain -- both are "one step, one item, a count out of a total". That
-%   keeps the CSV and the report table simple, and means a new cleaning
-%   step only has to add rows.
+%   ONE LONG SHAPE, one row per step per item, because every row is "one
+%   step did this much of something". But the SOMETHING differs per step --
+%   epochs for rejection, components for ICA, channels for GEDAI -- so each
+%   step's own figures get their own named columns rather than being packed
+%   into one prose blob. The report then draws a separate, properly headed
+%   table per step: a single table over all three could only label its
+%   count column "n", which no reader could interpret without a legend, and
+%   a legend is a second copy of the truth that rots.
+%
+%   Every row carries every column, blank where the column does not apply
+%   to that step. That is what keeps this one CSV and one struct array
+%   rather than three of each, and it is why the columns are named for what
+%   they hold (channel_epochs, sensai, enova_epoch_max) rather than
+%   generically.
+%
+%   NOTHING THE REPORT PLOTS OR TABULATES IS LEFT INSIDE .detail, which is
+%   prose for a human and nothing else. A figure that regex-parses its own
+%   sentences breaks silently the day the wording changes; that already
+%   happened once here with the unique-epoch count.
 %
 %   Read defensively and NOT through TransTools: EEG.etc is EEGLAB's
 %   free-form field, may be absent or not a struct, and this is IO code that
 %   must stay usable without the Transformations package on the path. A
 %   record of the wrong shape is skipped rather than guessed at.
-    % n_unique is populated only for detector rows, where "how many did
-    % ONLY this one catch" is meaningful; NaN elsewhere. Carried as its own
-    % column rather than left inside .detail because the report charts it,
-    % and a chart that regex-parses its own prose breaks silently the day
-    % the wording changes.
-    rows = struct('step', {}, 'item', {}, 'n', {}, 'n_total', {}, 'pct', {}, ...
-        'n_unique', {}, 'detail', {});
+    rows = emptyProvenanceRows();
     alz = alzStruct(EEG);
 
     % --- rejection: which detector cost which trials ------------------- %
@@ -478,32 +486,26 @@ function rows = provenanceRows(EEG, nChan, nTrials)
             % that restates the first learns nothing and has to work out why.
             % So: attribution only where there is something to attribute.
             single = numel(d.methods) == 1;
-            scopeNote = sprintf('scope: %s; %d channel(s) tested', ...
-                char(string(d.scope)), d.channelsTested);
             for m = 1:numel(d.methods)
                 if single
                     uniq = NaN;
-                    detail = sprintf('%d channel-epochs; %s', ...
-                        d.channelEpochs(m), scopeNote);
                 else
                     uniq = d.onlyThis(m);
-                    detail = sprintf('%d channel-epochs', d.channelEpochs(m));
                 end
-                rows(end + 1) = struct( ... %#ok<AGROW>
-                    'step', 'ArtefactDetect', ...
-                    'item', char(string(d.methods{m})), ...
-                    'n', d.epochs(m), ...
-                    'n_total', d.nTrials, ...
-                    'pct', pct(d.epochs(m), d.nTrials), ...
-                    'n_unique', uniq, ...
-                    'detail', detail);
+                row = blankProvenanceRow('ArtefactDetect', ...
+                    char(string(d.methods{m})), d.epochs(m), d.nTrials);
+                row.n_unique       = uniq;
+                row.channel_epochs = d.channelEpochs(m);
+                row.scope          = char(string(d.scope));
+                row.channels_tested = d.channelsTested;
+                rows(end + 1) = row; %#ok<AGROW>
             end
             if numel(d.methods) > 1
-                rows(end + 1) = struct( ... %#ok<AGROW>
-                    'step', 'ArtefactDetect', 'item', 'any detector', ...
-                    'n', d.totalEpochs, 'n_total', d.nTrials, ...
-                    'pct', pct(d.totalEpochs, d.nTrials), ...
-                    'n_unique', NaN, 'detail', scopeNote);
+                row = blankProvenanceRow('ArtefactDetect', 'any detector', ...
+                    d.totalEpochs, d.nTrials);
+                row.scope           = char(string(d.scope));
+                row.channels_tested = d.channelsTested;
+                rows(end + 1) = row; %#ok<AGROW>
             end
         end
     end
@@ -512,11 +514,12 @@ function rows = provenanceRows(EEG, nChan, nTrials)
     if isfield(alz, 'eyeICA')
         e = alz.eyeICA;
         if isstruct(e) && isfield(e, 'nRemoved') && isfield(e, 'nComponents')
-            rows(end + 1) = struct( ... %#ok<AGROW>
-                'step', 'AutoICA', 'item', 'components removed', ...
-                'n', e.nRemoved, 'n_total', e.nComponents, ...
-                'pct', pct(e.nRemoved, e.nComponents), ...
-                'n_unique', NaN, 'detail', autoIcaDetail(e));
+            row = blankProvenanceRow('AutoICA', 'automatically', ...
+                e.nRemoved, e.nComponents);
+            row.threshold  = fieldNumOrNaN(e, 'threshold');
+            row.components = numberList(fieldOrEmpty(e, 'removed'));
+            row.detail     = autoIcaDetail(e);
+            rows(end + 1) = row; %#ok<AGROW>
         end
     end
 
@@ -524,12 +527,9 @@ function rows = provenanceRows(EEG, nChan, nTrials)
     if isfield(alz, 'manualICA')
         r = alz.manualICA;
         if isstruct(r) && isfield(r, 'nRemoved') && isfield(r, 'nComponents')
-            rows(end + 1) = struct( ... %#ok<AGROW>
-                'step', 'ICA', 'item', 'components removed', ...
-                'n', r.nRemoved, 'n_total', r.nComponents, ...
-                'pct', pct(r.nRemoved, r.nComponents), ...
-                'n_unique', NaN, ...
-                'detail', sprintf('by hand: %s', numberList(r.removed)));
+            row = blankProvenanceRow('ICA', 'by hand', r.nRemoved, r.nComponents);
+            row.components = numberList(fieldOrEmpty(r, 'removed'));
+            rows(end + 1) = row; %#ok<AGROW>
         end
     end
 
@@ -542,31 +542,73 @@ function rows = provenanceRows(EEG, nChan, nTrials)
             nRej = double(g.nSamplesRejected);
         end
 
-        % DENOISING IS WHAT GEDAI DID; rejection is the exception. It
-        % corrects in place and leaves nSamplesRejected at 0 on every path
-        % that does not drop samples (see AutoGEDAI's own note), which is the
-        % usual one -- so leading with "0 of 46,600 samples rejected, 0.0%"
-        % put the one thing GEDAI did NOT do in the only columns a skimming
-        % reader takes in, and read as "this step changed nothing".
+        % ONE ROW, NOT TWO. GEDAI corrects in place and leaves
+        % nSamplesRejected at 0 on every path that drops no samples (see
+        % AutoGEDAI's own note), which is the usual one, so a separate
+        % "samples rejected" row was a line of zeroes for every subject.
+        % Its count is a column here instead, and the quality scores that
+        % are the actual reason to look at GEDAI get columns of their own:
+        % they were the part a reader could not interpret while they sat
+        % inside a semicolon-separated sentence.
         nDenoised = numel(fieldOrEmpty(g, 'channelIndices'));
-        rows(end + 1) = struct( ... %#ok<AGROW>
-            'step', 'AutoGEDAI', 'item', 'channels denoised', ...
-            'n', nDenoised, 'n_total', nChan, ...
-            'pct', pct(nDenoised, nChan), ...
-            'n_unique', NaN, 'detail', gedaiDetail(g, nRej));
+        row = blankProvenanceRow('AutoGEDAI', 'channels denoised', nDenoised, nChan);
+        row.n_samples_rejected = nRej;
+        row.n_samples          = nTrials * size(EEG.data, 2);
+        row.sensai             = fieldNumOrNaN(g, 'SENSAI_score');
+        row.enova_epoch_max    = vecMax(fieldOrEmpty(g, 'ENOVA_per_epoch'));
+        row.enova_epoch_median = vecMedian(fieldOrEmpty(g, 'ENOVA_per_epoch'));
+        row.enova_channel_max  = vecMax(fieldOrEmpty(g, 'ENOVA_per_channel'));
+        row.n_excluded         = numel(fieldOrEmpty(g, 'excludedChannels'));
+        rows(end + 1) = row; %#ok<AGROW>
+    end
+end
 
-        % A second row only when there is a rejection to report, for the same
-        % reason: a zero row costs a line and teaches nothing, and the row
-        % above now says in words that nothing was rejected.
-        if nRej > 0
-            totalSamples = nTrials * size(EEG.data, 2);
-            rows(end + 1) = struct( ... %#ok<AGROW>
-                'step', 'AutoGEDAI', 'item', 'samples rejected', ...
-                'n', nRej, 'n_total', totalSamples, ...
-                'pct', pct(nRej, totalSamples), ...
-                'n_unique', NaN, ...
-                'detail', 'returned as NaN across all channels, not dropped');
-        end
+% ----------------------------------------------------------------------- %
+function rows = emptyProvenanceRows()
+%EMPTYPROVENANCEROWS  The 0x0 struct array with every provenance column, so
+%   the field order is declared in exactly one place and a row built by
+%   blankProvenanceRow can always be appended to it.
+    rows = blankProvenanceRow('', '', NaN, NaN);
+    rows(:) = [];
+end
+
+function row = blankProvenanceRow(step, item, n, nTotal)
+%BLANKPROVENANCEROW  One row with STEP/ITEM/N/N_TOTAL/PCT filled and every
+%   step-specific column blank, for the caller to set the few that apply to
+%   it. Blank is NaN for a number and '' for text: both export as an empty
+%   CSV field, which readr reads back as NA rather than coercing the column
+%   to character.
+    row = struct( ...
+        'step', step, 'item', item, ...
+        'n', n, 'n_total', nTotal, 'pct', pct(n, nTotal), ...
+        'n_unique', NaN, ...
+        'channel_epochs', NaN, 'channels_tested', NaN, 'scope', '', ...
+        'threshold', NaN, 'components', '', ...
+        'n_samples_rejected', NaN, 'n_samples', NaN, 'sensai', NaN, ...
+        'enova_epoch_max', NaN, 'enova_epoch_median', NaN, ...
+        'enova_channel_max', NaN, 'n_excluded', NaN, ...
+        'detail', '');
+end
+
+function v = fieldNumOrNaN(s, name)
+%FIELDNUMORNAN  A scalar numeric field, or NaN when absent or empty.
+    v = NaN;
+    if isfield(s, name) && ~isempty(s.(name))
+        v = double(s.(name)(1));
+    end
+end
+
+function v = vecMax(x)
+    v = NaN;
+    if ~isempty(x)
+        v = max(double(x(:)), [], 'omitnan');
+    end
+end
+
+function v = vecMedian(x)
+    v = NaN;
+    if ~isempty(x)
+        v = median(double(x(:)), 'omitnan');
     end
 end
 
@@ -583,49 +625,17 @@ function s = alzStruct(EEG)
 end
 
 function d = autoIcaDetail(e)
-%AUTOICADETAIL  The threshold that chose the components, and which they were.
-%   Worth carrying both: the threshold is the parameter to adjust, the
-%   indices are what lets anyone check the decision against the topographies.
-    parts = {};
-    if isfield(e, 'threshold') && ~isempty(e.threshold)
-        parts{end + 1} = sprintf('eye p > %.2f', double(e.threshold));
-    end
-    if isfield(e, 'removed') && ~isempty(e.removed)
-        parts{end + 1} = numberList(e.removed);
-    end
+%AUTOICADETAIL  How eye-like ICLabel judged each removed component, in the
+%   same order as the .components list beside it.
+%
+%   ONLY the probabilities. The threshold and the component indices used to
+%   be repeated in here as well, from when this was the whole of an ICA
+%   row's detail; both now have columns of their own, and a cell restating
+%   its neighbours is what made the table hard to read.
+    d = '';
     if isfield(e, 'eyeProbabilities') && ~isempty(e.eyeProbabilities)
-        parts{end + 1} = sprintf('p = %s', strjoin(compose('%.2f', ...
-            double(e.eyeProbabilities(:)')), ', '));
+        d = strjoin(compose('%.2f', double(e.eyeProbabilities(:)')), ', ');
     end
-    d = strjoin(parts, '; ');
-end
-
-function d = gedaiDetail(g, nRejected)
-%GEDAIDETAIL  GEDAI's own quality numbers. ENOVA is per epoch and per
-%   channel, so the worst of each is the part worth surfacing: a single bad
-%   epoch or channel is exactly what a summary mean would hide.
-    parts = {};
-    if isfield(g, 'SENSAI_score') && ~isempty(g.SENSAI_score)
-        % One decimal: SENSAI comes back on a 0-100 scale, and three decimals
-        % on a two-digit number claims a precision it does not have.
-        parts{end + 1} = sprintf('SENSAI %.1f', double(g.SENSAI_score(1)));
-    end
-    if nargin > 1 && nRejected == 0
-        parts{end + 1} = 'no samples rejected';
-    end
-    if isfield(g, 'ENOVA_per_epoch') && ~isempty(g.ENOVA_per_epoch)
-        v = double(g.ENOVA_per_epoch(:));
-        parts{end + 1} = sprintf('epoch ENOVA max %.3f, median %.3f', ...
-            max(v, [], 'omitnan'), median(v, 'omitnan'));
-    end
-    if isfield(g, 'ENOVA_per_channel') && ~isempty(g.ENOVA_per_channel)
-        v = double(g.ENOVA_per_channel(:));
-        parts{end + 1} = sprintf('channel ENOVA max %.3f', max(v, [], 'omitnan'));
-    end
-    if isfield(g, 'excludedChannels') && ~isempty(g.excludedChannels)
-        parts{end + 1} = sprintf('%d channel(s) excluded', numel(g.excludedChannels));
-    end
-    d = strjoin(parts, '; ');
 end
 
 function s = numberList(v)

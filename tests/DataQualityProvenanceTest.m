@@ -79,8 +79,9 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             testCase.verifyEqual(rows.item, 'Absolute threshold');
             testCase.verifyEqual(rows.n, 4);
             testCase.verifyTrue(isnan(rows.n_unique));
-            testCase.verifyTrue(contains(rows.detail, 'Whole epoch'), ...
-                'The scope came off the dropped union row, so it must land here.');
+            testCase.verifyEqual(rows.scope, 'Whole epoch', ...
+                'Every detector row carries the scope, so dropping the union row loses nothing.');
+            testCase.verifyEqual(rows.channels_tested, 2);
         end
 
         function gedaiLeadsWithWhatItDidNotWithWhatItDidNot(testCase)
@@ -98,29 +99,39 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
 
             rows = dataQualityMetrics(EEG).provenance;
 
-            testCase.assertNumElements(rows, 1, 'No zero-rejection row.');
+            testCase.assertNumElements(rows, 1, 'One row for GEDAI, not two.');
             testCase.verifyEqual(rows.item, 'channels denoised');
             testCase.verifyEqual(rows.n, 2);
             testCase.verifyEqual(rows.n_total, 2);
-            testCase.verifyTrue(contains(rows.detail, 'no samples rejected'), ...
-                'The zero is still reported, in words, where it cannot be mistaken for inaction.');
-            testCase.verifyTrue(contains(rows.detail, 'SENSAI 57.6'), ...
-                'One decimal: three on a two-digit score claims precision it lacks.');
+            testCase.verifyEqual(rows.n_samples_rejected, 0, ...
+                'The zero is still carried, as a column the report can drop when it is zero.');
+            testCase.verifyEqual(rows.sensai, 57.636, 'AbsTol', 1e-9, ...
+                'Unrounded: the report decides the precision it prints.');
         end
 
-        function gedaiAddsARowOnlyWhenItActuallyRejectedSamples(testCase)
+        function gedaiQualityScoresGetColumnsNotProse(testCase)
+        %GEDAIQUALITYSCORESGETCOLUMNSNOTPROSE  SENSAI and ENOVA are the only
+        %   part of a GEDAI row that says whether it helped, and they were
+        %   unreadable packed into one semicolon-separated sentence: a
+        %   heading can carry the direction ("higher better", "> 0.9 bad"),
+        %   a blob cannot.
             EEG = testCase.epochedFixture();
-            EEG.etc.GEDAI = struct('SENSAI_score', 40, 'ENOVA_per_epoch', 0.5, ...
-                'ENOVA_per_channel', 0.5, 'channelIndices', [1 2], ...
-                'nSamplesRejected', 120, 'excludedChannels', {{}});
+            EEG.etc.GEDAI = struct('SENSAI_score', 40, ...
+                'ENOVA_per_epoch', [0.1 0.3 0.9], 'ENOVA_per_channel', [0.2 0.6], ...
+                'channelIndices', [1 2], 'nSamplesRejected', 120, ...
+                'excludedChannels', {{'HEOG', 'VEOG'}});
 
-            rows = dataQualityMetrics(EEG).provenance;
-            rejected = rows(strcmp({rows.item}, 'samples rejected'));
+            g = dataQualityMetrics(EEG).provenance;
 
-            testCase.assertNotEmpty(rejected);
-            testCase.verifyEqual(rejected.n, 120);
-            testCase.verifyTrue(contains(rejected.detail, 'NaN'), ...
-                'They are NaN''d across all channels, not dropped, which changes what the count means.');
+            testCase.verifyEqual(g.sensai, 40);
+            testCase.verifyEqual(g.enova_epoch_max, 0.9, 'AbsTol', 1e-12);
+            testCase.verifyEqual(g.enova_epoch_median, 0.3, 'AbsTol', 1e-12);
+            testCase.verifyEqual(g.enova_channel_max, 0.6, 'AbsTol', 1e-12);
+            testCase.verifyEqual(g.n_excluded, 2, ...
+                'The channels GEDAI could not match are why n is below n_total.');
+            testCase.verifyEqual(g.n_samples_rejected, 120);
+            testCase.verifyGreaterThan(g.n_samples, 0, ...
+                'A rejected-sample count needs its denominator to mean anything.');
         end
 
         function automaticIcaReportsWhichComponentsWentAndWhy(testCase)
@@ -138,10 +149,12 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             testCase.assertNotEmpty(ica);
             testCase.verifyEqual(ica.n, 2);
             testCase.verifyEqual(ica.n_total, 28);
-            testCase.verifyTrue(contains(ica.detail, '0.60'), ...
-                'The threshold is the parameter to adjust, so it has to be shown.');
-            testCase.verifyTrue(contains(ica.detail, '1, 12'), ...
+            testCase.verifyEqual(ica.threshold, 0.6, 'AbsTol', 1e-12, ...
+                'The threshold is the parameter to adjust, so it gets its own column.');
+            testCase.verifyEqual(ica.components, '1, 12', ...
                 'And which components went, so the decision can be checked.');
+            testCase.verifyTrue(contains(ica.detail, '0.88'), ...
+                'How eye-like each was stays as a note; nothing tabulates it.');
         end
 
         function manualIcaIsReportedSeparatelyFromAutomatic(testCase)
@@ -159,7 +172,11 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             testCase.assertNotEmpty(manual);
             testCase.verifyEqual(manual.n, 2);
             testCase.verifyEqual(manual.n_total, 20);
-            testCase.verifyTrue(contains(manual.detail, 'by hand'));
+            testCase.verifyEqual(manual.item, 'by hand', ...
+                'How the components were chosen is the difference worth showing.');
+            testCase.verifyEqual(manual.components, '3, 7');
+            testCase.verifyTrue(isnan(manual.threshold), ...
+                'A hand-picked removal has no threshold, so the column is blank rather than 0.');
         end
 
         function gedaiReportsItsWorstEpochNotJustAnAverage(testCase)
@@ -176,11 +193,10 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             g = rows(strcmp({rows.item}, 'channels denoised'));
 
             testCase.assertNotEmpty(g);
-            testCase.verifyTrue(contains(g.detail, '0.950'), ...
+            testCase.verifyEqual(g.enova_epoch_max, 0.95, 'AbsTol', 1e-12, ...
                 'The worst epoch has to appear, not only the median.');
-            testCase.verifyTrue(contains(g.detail, 'median 0.175'), ...
+            testCase.verifyEqual(g.enova_epoch_median, 0.175, 'AbsTol', 1e-12, ...
                 'And the median beside it, or one bad epoch looks like the whole recording.');
-            testCase.verifyTrue(contains(g.detail, 'SENSAI'));
         end
 
         function severalStepsInOneChainAllAppear(testCase)
@@ -229,7 +245,10 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 sprintf('Expected a provenance CSV beside %s.', stem));
             lines = splitlines(strtrim(fileread(provCsv)));
             testCase.verifyEqual(lines{1}, ...
-                'dataset,group,session,step,item,n,n_total,pct,n_unique,detail');
+                ['dataset,group,session,step,item,n,n_total,pct,n_unique,' ...
+                 'channel_epochs,channels_tested,scope,threshold,components,' ...
+                 'n_samples_rejected,n_samples,sensai,enova_epoch_max,' ...
+                 'enova_epoch_median,enova_channel_max,n_excluded,detail']);
             testCase.verifyEqual(numel(lines) - 1, numel(q.provenance));
             testCase.verifyTrue(contains(lines{2}, 'S1'));
         end
@@ -267,19 +286,9 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             testCase.verifyEqual(numel(lines), 1, 'Header only.');
         end
 
-        function theReportsStandInFrameDeclaresEveryColumnItUses(testCase)
-        %THEREPORTSSTANDINFRAMEDECLARESEVERYCOLUMNITUSES  When the CSV is
-        %   missing the section falls back to an empty tibble, and that
-        %   tibble has to name every column the chunks then reference, or
-        %   the fallback errors where it was meant to degrade quietly.
-            qmd = testCase.report('p.csv');
-
-            testCase.verifyTrue(contains(qmd, 'What the Cleaning Steps Did'));
-            frame = testCase.lineStartingWith(qmd, 'prov <- ');
-            for col = {'step', 'item', 'n', 'n_total', 'pct', 'n_unique', 'detail'}
-                testCase.verifyTrue(contains(frame, [col{1} ' = ']), sprintf( ...
-                    'The stand-in frame must declare %s, which the chunks use.', col{1}));
-            end
+        function theSectionAppearsWhenThereIsAFile(testCase)
+            testCase.verifyTrue(contains(testCase.report('p.csv'), ...
+                'What the Cleaning Steps Did'));
         end
 
         function theChartUsesTheColumnRatherThanParsingTheProse(testCase)
@@ -294,53 +303,81 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 'Parsing the detail prose back out is what the column replaced.');
         end
 
-        function theSectionDefinesItsOwnColumns(testCase)
-        %THESECTIONDEFINESITSOWNCOLUMNS  "n" counts epochs on one row,
-        %   components on the next and channels on the third, so a reader
-        %   cannot take the column at face value and the header cannot tell
-        %   them so. The section therefore carries a legend, and this checks
-        %   it is there and names the columns it explains.
+        function oneTablePerStepEachWithItsOwnHeadings(testCase)
+        %ONETABLEPERSTEPEACHWITHITSOWNHEADINGS  One combined table could
+        %   only label its count column "n", which counted epochs on one
+        %   row, components on the next and channels on the third: unreadable
+        %   without a legend, and a legend is a second copy of the truth that
+        %   rots. Three tables can each name their own unit in the heading.
             qmd = testCase.report('p.csv');
 
-            for needle = {'`n` counts a different thing', '`n_total`', 'share', ...
-                          'never down the column'}
-                testCase.verifyTrue(contains(qmd, needle{1}), sprintf( ...
-                    'The legend should mention %s.', needle{1}));
+            for label = {'provenance-rejection-table', 'provenance-ica-table', ...
+                         'provenance-gedai-table'}
+                testCase.verifyTrue(contains(qmd, label{1}), sprintf( ...
+                    'Expected a separate %s chunk.', label{1}));
+            end
+            for heading = {'`Epochs rejected` = n', '`of epochs` = n_total', ...
+                           'Removed = n', '`of components` = n_total', ...
+                           '`Channels denoised` = n', '`of channels` = n_total'}
+                testCase.verifyTrue(contains(qmd, heading{1}), sprintf( ...
+                    'A heading must name its own unit: missing %s.', heading{1}));
+            end
+            testCase.verifyFalse(contains(qmd, 'never down the column'), ...
+                'The legend existed only because one table could not describe itself.');
+        end
+
+        function anInapplicableCellRendersEmptyRatherThanAsTheLettersNA(testCase)
+        %ANINAPPLICABLECELLRENDERSEMPTYRATHERTHANASTHELETTERSNA  These
+        %   tables have columns that apply to some rows and not others (the
+        %   union row has no "only this one"), and gt prints an NA as the
+        %   text "NA", which reads as a measurement that went missing rather
+        %   than as a column that does not apply. Opted in per table, since
+        %   elsewhere in the report an NA really is a failed measurement.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'blank_missing <- function'), ...
+                'The helper has to be defined in the setup chunk to be callable.');
+            for title = {'Epochs Rejected, by Detector', 'ICA Components Removed', ...
+                         'AutoGEDAI Denoising and Its Quality Scores'}
+                testCase.verifyTrue( ...
+                    contains(qmd, ['blank_missing(apa_gt(tab, "' title{1} '"))']), ...
+                    sprintf('The "%s" table should blank its inapplicable cells.', title{1}));
             end
         end
 
-        function theLegendNamesEveryItemTheMetricsCanProduce(testCase)
-        %THELEGENDNAMESEVERYITEMTHEMETRICSCANPRODUCE  A legend is a second
-        %   copy of the truth, so it can rot: rename an item in
-        %   dataQualityMetrics and the table would show a row the legend
-        %   does not explain, with nothing failing. The fixed item names are
-        %   enumerable, so they are checked against the emitted legend here.
-        %   (Detector names are not: they come from whatever methods the
-        %   analyst ticked, and the legend covers them as a class.)
-            EEG = testCase.epochedFixture();
-            EEG.etc.alz.artefactDetectors = testCase.detectorRecord();
-            EEG.etc.alz.eyeICA = struct('threshold', 0.6, 'removed', 1, 'nRemoved', 1, ...
-                'nComponents', 28, 'eyeProbabilities', 0.9);
-            EEG.etc.alz.manualICA = struct('removed', 3, 'nRemoved', 1, 'nComponents', 20);
-            EEG.etc.GEDAI = struct('SENSAI_score', 40, 'ENOVA_per_epoch', 0.5, ...
-                'ENOVA_per_channel', 0.5, 'channelIndices', [1 2], ...
-                'nSamplesRejected', 9, 'excludedChannels', {{}});
-            rows = dataQualityMetrics(EEG).provenance;
-
+        function theGedaiHeadingsCarryTheDirectionOfEachScore(testCase)
+        %THEGEDAIHEADINGSCARRYTHEDIRECTIONOFEACHSCORE  "SENSAI 69.0" is not
+        %   actionable on its own: nothing on the page said whether high was
+        %   good, and ENOVA runs the other way from SENSAI. The heading is
+        %   the only place a reader is certain to look.
             qmd = testCase.report('p.csv');
 
-            % The detector rows aside, every item and every step the metrics
-            % produced must be findable in the document's own legend.
-            fixed = setdiff({rows.item}, testCase.detectorRecord().methods);
-            testCase.assertNotEmpty(fixed);
-            for k = 1:numel(fixed)
-                testCase.verifyTrue(contains(qmd, ['`' fixed{k} '`']), sprintf( ...
-                    'The legend does not explain the item "%s", which the metrics emit.', ...
-                    fixed{k}));
-            end
-            for step = unique({rows.step})
-                testCase.verifyTrue(contains(qmd, ['`' step{1} '`']), sprintf( ...
-                    'The legend does not explain the step "%s".', step{1}));
+            testCase.verifyTrue(contains(qmd, 'SENSAI (higher better)'));
+            testCase.verifyTrue(contains(qmd, 'ENOVA (>0.9 bad)'));
+            testCase.verifyTrue(contains(qmd, 'higher is worse'), ...
+                'ENOVA''s direction is the opposite of SENSAI''s, so it is stated too.');
+        end
+
+        function everyColumnTheTablesUseIsDeclaredInTheFallbackFrame(testCase)
+        %EVERYCOLUMNTHETABLESUSEISDECLAREDINTHEFALLBACKFRAME  With three
+        %   tables over many more columns, the empty stand-in tibble is easy
+        %   to leave a column out of, and the omission only shows on the
+        %   workspace the fallback exists to protect. So it is checked
+        %   against the columns the exporter actually writes.
+            EEG = testCase.epochedFixture();
+            EEG.etc.alz.artefactDetectors = testCase.detectorRecord();
+            entries = struct('subject', 'S1', 'group', '', 'session', '', ...
+                'quality', dataQualityMetrics(EEG));
+            [~, provCsv] = testCase.exportTo(entries);
+            lines = splitlines(strtrim(fileread(provCsv)));
+            header = split(lines{1}, ',');
+
+            frame = testCase.lineStartingWith(testCase.report('p.csv'), 'prov <- ');
+
+            for k = 1:numel(header)
+                testCase.verifyTrue(contains(frame, [header{k} ' = ']), sprintf( ...
+                    ['The stand-in frame does not declare "%s", which the exporter ' ...
+                     'writes and the tables read.'], header{k}));
             end
         end
 

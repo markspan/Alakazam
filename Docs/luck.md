@@ -52,10 +52,10 @@ given, and Luck's should be treated as correct.
   repository root. Each points its *Raw* folder at the matching `Data/Luck/chN`
   and preloads bin, baseline, ICA and time-frequency settings.
 - **Two ready pipelines:**
-  [`N400-complete.alztemplate`](../N400-complete.alztemplate), chapters 2 and 3
+  [`N400-complete.alztemplate`](../templates/N400-complete.alztemplate), chapters 2 and 3
   end to end from the files `ch3` ships (filter through measurement and
   topography, see [Appendix 3](#the-fullest-chain-ready-to-run)), and
-  [`N400.alztemplate`](../N400.alztemplate), the full N400
+  [`N400.alztemplate`](../templates/N400.alztemplate), the full N400
   recipe as a re-appliable template.
 - ERPLAB source files sit next to the data (`BDF_*.txt` bin descriptor files,
   `*.binscript` saved bin scripts, `BinOps_*.txt` bin-operation files), so you
@@ -360,7 +360,7 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
 Plot the **Average** node for the waveforms with standard-error bands
 (AverageView), and add a **Scalp** plot for the N400 topography.
 
-**As a template.** `N400.alztemplate` in the root is this whole pipeline
+**As a template.** `templates/N400.alztemplate` is this whole pipeline
 pre-built (`AutoGEDAI -> DefineBins -> Baseline -> ArtefactDetect -> Average ->
 ERP Measure`); apply it to any raw node (Chapter 3).
 
@@ -1011,7 +1011,7 @@ it. Alakazam's own algorithm citations are in
 
 ## Appendix 3 -- The example pipeline, as a template
 
-`N400.alztemplate` in the repository root, applied on one subject and then
+`templates/N400.alztemplate`, applied on one subject and then
 **Apply to All Raw Files**, finished on the **Grand Average** tab:
 
 ```
@@ -1032,7 +1032,7 @@ the topography.
 
 ### The fullest chain, ready to run
 
-`N400-complete.alztemplate` in the repository root is the whole of chapters 2
+`templates/N400-complete.alztemplate` is the whole of chapters 2
 and 3 as one template, starting from the unfiltered `.set` files `ch3` actually
 ships and ending at the numbers the statistics read:
 
@@ -1109,8 +1109,9 @@ gitignored, so a fresh clone has the seven templates but no recordings: run
 template names a file, so each one applies to whichever dataset the branch
 you drop it on already holds.
 
-`N400.alztemplate` and `N400-complete.alztemplate` remain in the repository
-root; they are cross-chapter walkthroughs rather than one chapter's recipe.
+`N400.alztemplate` and `N400-complete.alztemplate` sit in `templates/` itself
+rather than in `templates/luck/`: they are cross-chapter walkthroughs rather
+than any one chapter's recipe.
 
 **Two caveats worth knowing before trusting a rejection count.**
 

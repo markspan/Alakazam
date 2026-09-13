@@ -2187,7 +2187,7 @@ required.
 ### A worked example, start to finish: the ERP CORE N400 dataset
 
 Unlike the three recipes above, this one is a complete, reproducible run on
-real published data, using a template ([`N400.alztemplate`](N400.alztemplate))
+real published data, using a template ([`N400.alztemplate`](templates/N400.alztemplate))
 that ships in the repository, ending in an actual rendered statistics
 report, not a generic recipe with placeholder marker codes.
 
@@ -2426,7 +2426,7 @@ Scientific/methodological:
   DOI: [10.18115/D5QG92](https://doi.org/10.18115/D5QG92). Licensed CC BY 4.0.
   A practical, EEGLAB/ERPLAB-based reference for the preprocessing, averaging, and
   scoring steps that Alakazam's transformations implement. Its own worked N400
-  example, [`N400.alztemplate`](N400.alztemplate) ported to Alakazam, is the
+  example, [`N400.alztemplate`](templates/N400.alztemplate) ported to Alakazam, is the
   [full worked example](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)
   above.
 - Pütz, C., Span, M., & Lorist, M. M. (2025). Protocol for designing,
