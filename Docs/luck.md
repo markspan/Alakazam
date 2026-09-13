@@ -1070,6 +1070,77 @@ from the book's (70 of 230 epochs here against 67 with the book's own
 Butterworth high-pass), because Alakazam's Filter is a Kaiser FIR by design;
 see [Not validated](#not-validated-and-why).
 
+### A template per chapter, in the chapter's own folder
+
+Seven chapters ship a ready template beside their data, so opening
+`ChapterN.wksp` and applying the `.alztemplate` in the same folder builds
+that chapter's pipeline in one action:
+
+| File | Chapter | Chain | Difference bin, subject 1 |
+|---|---|---|---|
+| `ch2/N400-chapter2.alztemplate` | 2, N400 one participant | Filter, bins, baseline, artifacts, average, measure + scalp | **-7.05 uV** |
+| `ch3/N400-chapter3.alztemplate` | 3, N400 many participants | as above, for Apply to All | **-5.90 uV** |
+| `ch6/P3b-chapter6.alztemplate` | 6, P3b | bins, baseline, artifacts, average, measure + scalp | **+5.88 uV** |
+| `ch7/MMN-chapter7.alztemplate` | 7, MMN | as above | **-2.61 uV** |
+| `ch8/N2pc-chapter8.alztemplate` | 8, N2pc | bins, derive PO8-PO7, baseline, artifacts, average, measure | **-1.72 uV** |
+| `ch9/MMN-chapter9.alztemplate` | 9, MMN with ICA | AutoICA, then as chapter 7 | **-1.86 uV** |
+| `ch10/LRP-chapter10.alztemplate` | 10, LRP | response-locked bins, derive C4-C3, baseline, artifacts, average, measure | **-2.50 uV** |
+
+Every one was built from codes **verified in the recordings themselves** (or
+from the chapter's own shipped BDF), not from an assumed convention, and every
+one was replayed end to end on that chapter's data before being shipped. The
+last column is the chapter's own component, measured on its difference bin,
+and each carries the sign the book says it should: the N400, MMN, N2pc and LRP
+negative, the P3b positive.
+
+Two of them use the composed lateral recipe described under chapter 10: the
+N2pc and the LRP are both contralateral-minus-ipsilateral differences, so both
+derive a lateral channel (`PO8 - PO7`, `C4 - C3`) and halve a bin difference.
+
+**`Data/` is gitignored**, so these files are not version-controlled. If you
+re-run `downloadLuckData.m`, or clone afresh, they will not be there.
+`N400.alztemplate` and `N400-complete.alztemplate` in the repository root are
+the tracked ones.
+
+**Two caveats worth knowing before trusting a rejection count.**
+
+- Chapters 7 and 9 reject about half their epochs (525 and 524 of 984). The
+  cause is that a +/-100 uV threshold tested on **every** channel rejects each
+  blink, and `Scalp EEG only` cannot help here: these recordings carry no
+  channel **types**, and that option reads types, so on an untyped dataset it
+  tests everything exactly as before. Run the Channel Editor's 10-5 lookup
+  first (it guesses each channel's type from its label) and the option starts
+  working. For chapter 9 in particular the interaction is worth understanding:
+  ICA excludes the ocular channels from its decomposition and splices them
+  back untouched, so testing them afterwards rejects the very blinks the
+  correction had just removed from the scalp.
+- The MMN still comes out at the right sign and a plausible size on the
+  surviving ~460 trials, but that is a large loss, and the threshold is a
+  parameter worth revisiting. Every one of these steps is now recalculable, so
+  editing it and recomputing the branch is a right-click.
+
+### Why chapters 1, 4, 5 and 11 have no template
+
+- **Chapter 1** teaches loading and looking, not processing.
+- **Chapter 4** is about filtering and ships no data of its own.
+- **Chapter 5** is about *comparing* references, which is a branch built by
+  hand and inspected, not a fixed chain.
+- **Chapter 11** is the interesting refusal. Its `1_N170.set` is genuinely
+  raw: unreferenced, with per-channel means into the thousands of
+  microvolts. Referencing it to the mean of P9 and P10 does fix the
+  component, taking the faces-minus-cars difference from **+3.4 uV** (wrong
+  sign) to **-1.7 uV at PO7**, which is what an N170 should look like. What
+  cannot be fixed in a template is the rest: **F8 alone would reject 125 of
+  160 epochs** on this subject, and automatic eye correction does not help
+  because blinks are not the cause. Which channel is bad is a per-subject
+  judgement, exactly what chapters 7 to 9 teach and exactly what a fixed
+  recipe cannot encode. A template here would have quietly averaged a fifth
+  of the trials and called it an ERP.
+
+  So chapter 11 needs, by hand: re-reference to the mastoids, look at the
+  data, interpolate what is bad for **that** participant, and only then the
+  chain the other templates use.
+
 ---
 
 ## Validation against Luck's own stage outputs

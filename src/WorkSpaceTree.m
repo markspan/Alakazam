@@ -80,9 +80,25 @@ classdef WorkSpaceTree < handle
         % perform would be worse than not offering it.
         RecalculableTransforms = {'ArtefactDetect', 'AutoEyeICA', 'AutoGEDAI', ...
             'Baseline', 'ChannelEditor', 'CoherenceMap', 'CoherenceTopography', ...
-            'DefineBins', 'Filter', 'Fourier', 'Interpolate', 'ManualReject', ...
-            'Measure', 'ReRef', 'Resample', 'SelectData', 'SourceEstimate', ...
-            'SpectralMeasure', 'TimeFrequency'}
+            'Covariance', 'CrossCorrelation', 'DCDetrend', 'DefineBins', ...
+            'DeriveChannels', 'Filter', 'Fourier', 'Interpolate', 'ManualReject', ...
+            'Measure', 'Rectify', 'ReRef', 'Resample', 'SelectData', ...
+            'SourceEstimate', 'SpectralMeasure', 'TimeFrequency', 'Welch'}
+        % THE TEST FOR MEMBERSHIP is whether the transformation's dialog can
+        % be RE-SEEDED with the node's own stored parameters, because that is
+        % all recalculateTransformNode does: it stands in for
+        % TransformSettings with the node's params and re-runs the transform
+        % interactively. A transform whose dialog ignores stored settings
+        % would open at its defaults and silently discard what the analyst
+        % chose, which is why Photodiode and EventEditor are absent --
+        % PhotodiodeDialog(EEG) and EventEditorDialog(EEG) take no stored
+        % argument and read no TransformSettings. Making either re-seedable
+        % is the prerequisite for adding it here, not a change to this list.
+        % RecalculableTransformsTest pins the rule in both directions so a
+        % new transformation cannot quietly arrive without Recalculate, which
+        % is exactly how Rectify, DCDetrend, Covariance, CrossCorrelation and
+        % DeriveChannels were each missed.
+        %
         % ManualReject is included deliberately, unlike RemoveComponents:
         % both are inspection-driven, but ManualReject's own "input" (an
         % already-epoched dataset's channel/trial identity) is completely
@@ -340,11 +356,13 @@ classdef WorkSpaceTree < handle
         %   see Alakazam.onRecalculateNode), or for a node produced by one
         %   of RecalculableTransforms (revisit its parameters and
         %   recompute it and everything downstream -- see
-        %   Alakazam.recalculateTransformNode); every other node (a raw
-        %   root import, or one produced by a transform with no editable/
-        %   re-seedable dialog, e.g. ReRef/SelectData/Average/
-        %   ScalpDistribution) leaves it disabled rather than offering an
-        %   edit it cannot actually perform. Both are baked into the node
+        %   Alakazam.recalculateTransformNode); every other node leaves it
+        %   disabled rather than offering an edit it cannot actually
+        %   perform. That covers a raw root import, a transform with no
+        %   dialog at all (Average, ScalpDistribution), and a transform
+        %   whose dialog cannot be re-seeded from stored parameters
+        %   (Photodiode, EventEditor) -- see RecalculableTransforms for the
+        %   rule and for why ICA is excluded too. Both are baked into the node
         %   once, here, rather than toggled reactively on right-click (as
         %   the old Java context menu did). Does NOT set canApplyToAll:
         %   unlike the other two flags, that one depends on which tree the
