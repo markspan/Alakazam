@@ -29,6 +29,17 @@ function [EEG, options] = ArtefactDetect(EEG, varargin)
 %   neighbours too). The warning printed below is the automatic caller's
 %   share of that caveat: unlike ManualReject, nobody has looked at these.
 %
+%   WHICH DETECTOR COST WHICH TRIALS is recorded as the detection runs, in
+%   EEG.etc.alz.artefactDetectors (see detectorBreakdown below): per detector,
+%   the epochs and channel-epochs it would have rejected on its own, and the
+%   epochs ONLY it caught. With several detectors ticked, knowing a trial was
+%   rejected is not the same as knowing why, and "which of these four is
+%   costing me my trials" is the question you ask before moving a threshold.
+%   The tree's right-click "Rejection breakdown..." reads exactly this field.
+%   The per-detector figures deliberately overlap (one blink trips three
+%   detectors), so they do not sum to the total; the "only this one" column is
+%   the number to read before switching a detector off.
+%
 %   Backward compatible: an old options struct carrying only Minimum/Maximum
 %   is treated as the Absolute-threshold method over the whole epoch.
 %
@@ -99,6 +110,13 @@ opt = normaliseOptions(options);
 % analyst did not ask for; doing nothing is the only reading of an empty
 % selection that cannot cost anyone their trials.
 if isempty(opt.Method)
+    % An empty breakdown rather than no breakdown: the field is then always
+    % there after ArtefactDetect has run, so the tree's "Rejection
+    % breakdown" reports "no detectors were ticked" instead of having to
+    % treat a missing field as a special case it cannot tell apart from an
+    % old node computed before any of this existed.
+    EEG.etc.alz.artefactDetectors = detectorBreakdown( ...
+        false(nChan, nTrials, 0), opt, 1:nChan, nTrials);
     fprintf(['ArtefactDetect: no detectors were ticked, so nothing was tested and no ' ...
         'data was changed (%d epoch(s) passed through untouched).\n'], nTrials);
     return;
@@ -132,18 +150,34 @@ interpolate = strcmpi(opt.Scope, 'Interpolate this channel');
 % switch off blink rejection for anyone whose pipeline depends on it.
 scanIdx = channelsToScan(EEG, opt, nChan);
 
-flags = false(nChan, nTrials);
+% PER-DETECTOR ATTRIBUTION, recorded as the detection runs. Knowing that a
+% trial was rejected is not the same as knowing WHY, and with several
+% detectors ticked the difference matters: "which of these four is costing me
+% my trials" is the question you ask before changing a threshold. So each
+% ticked detector is evaluated separately and its own verdict kept, rather
+% than asking "did anything trip" and discarding the answer.
+%
+% That costs the two early exits the old loop had (it stopped at the first
+% detector that tripped, and under 'Whole epoch' at the first bad channel).
+% Both were pure optimisations of a boolean OR; neither can be kept while
+% attributing, because a detector that would have tripped on a later channel
+% has to be counted. detFlags is channels x trials x detectors, so 33 x 984 x 4
+% is about 130 kB -- small next to the data it describes, and it lets a report
+% or a view answer per detector without recomputing anything.
+detFlags = false(nChan, nTrials, numel(opt.Method));
 for t = 1:nTrials
     for c = scanIdx
         sig = EEG.data(c, lo:hi, t);
-        if channelIsBad(sig, opt, winN, stepN)
-            flags(c, t) = true;
-            if rejectEpoch
-                break;   % one bad channel condemns the whole epoch
-            end
+        for m = 1:numel(opt.Method)
+            detFlags(c, t, m) = detectorTrips(opt.Method{m}, sig, opt, winN, stepN);
         end
     end
 end
+flags = any(detFlags, 3);
+
+% Recorded before the scope is applied, because the scope is what turns
+% flags into NaN and there would be nothing left to attribute afterwards.
+EEG.etc.alz.artefactDetectors = detectorBreakdown(detFlags, opt, scanIdx, nTrials);
 
 methodLabel = strjoin(opt.Method, ', ');
 if rejectEpoch
@@ -170,6 +204,58 @@ end
 end
 
 % ======================================================================= %
+function report = detectorBreakdown(detFlags, opt, scanIdx, nTrials)
+%DETECTORBREAKDOWN  Per-detector counts, for the tree's "Rejection
+%   breakdown" action and for anything else that wants to know which
+%   detector cost which trials.
+%
+%   Returns a scalar struct:
+%     .methods        cellstr, the detectors that ran, in the order ticked
+%     .epochs         1 x nMethods, epochs this detector alone would reject
+%     .channelEpochs  1 x nMethods, channel-epochs this detector flagged
+%     .onlyThis       1 x nMethods, epochs ONLY this detector caught
+%     .epochMask      nTrials x nMethods logical, which epochs each caught
+%     .totalEpochs    epochs at least one detector caught
+%     .nTrials        trials examined
+%     .channelsTested how many channels were in scope
+%     .scope          the scope the counts are read under
+%
+%   THE PER-DETECTOR COUNTS OVERLAP ON PURPOSE and do not sum to the total:
+%   a blink usually trips the absolute threshold AND the step function AND
+%   the peak-to-peak window, so adding them up would double-count badly.
+%   Each figure answers "how much would this detector alone have rejected",
+%   which is the question worth asking before changing one threshold.
+%   .onlyThis is the complement: what each detector contributed that nothing
+%   else would have caught, and that IS the number to look at before
+%   switching a detector off.
+    nMethods = numel(opt.Method);
+    epochMask = false(nTrials, nMethods);
+    channelEpochs = zeros(1, nMethods);
+    for m = 1:nMethods
+        thisDet = detFlags(:, :, m);
+        epochMask(:, m) = any(thisDet, 1)';
+        channelEpochs(m) = nnz(thisDet);
+    end
+
+    onlyThis = zeros(1, nMethods);
+    for m = 1:nMethods
+        others = epochMask;
+        others(:, m) = false;
+        onlyThis(m) = nnz(epochMask(:, m) & ~any(others, 2));
+    end
+
+    report = struct( ...
+        'methods',        {opt.Method}, ...
+        'epochs',         sum(epochMask, 1), ...
+        'channelEpochs',  channelEpochs, ...
+        'onlyThis',       onlyThis, ...
+        'epochMask',      epochMask, ...
+        'totalEpochs',    nnz(any(epochMask, 2)), ...
+        'nTrials',        nTrials, ...
+        'channelsTested', numel(scanIdx), ...
+        'scope',          char(string(opt.Scope)));
+end
+
 function warnCrowdedTrials(flags, nChan)
 %WARNCROWDEDTRIALS  Warn when interpolation is asked to reconstruct a channel
 %   from neighbours that are themselves flagged.
@@ -223,21 +309,13 @@ function idx = channelsToScan(EEG, opt, nChan)
     idx = find(mask);
 end
 
-function bad = channelIsBad(sig, opt, winN, stepN)
-%CHANNELISBAD  Does this channel's signal (over the test window) trip any of
-%   the selected detectors? A single trip is enough to flag the channel.
-    sig = sig(:).';
-    bad = false;
-    for m = 1:numel(opt.Method)
-        if detectorTrips(opt.Method{m}, sig, opt, winN, stepN)
-            bad = true;
-            return;
-        end
-    end
-end
-
 function bad = detectorTrips(method, sig, opt, winN, stepN)
 %DETECTORTRIPS  Evaluate one named detector against SIG.
+%   Called once per detector per channel-epoch, so that which detector
+%   tripped is recorded rather than collapsed into "something did" -- see the
+%   note on attribution at the detection loop. The old channelIsBad wrapper,
+%   which OR-ed the detectors and returned on the first trip, is gone with it.
+    sig = sig(:).';
     switch lower(strrep(method, ' ', ''))
         case 'absolutethreshold'
             bad = any(sig > opt.Maximum) || any(sig < opt.Minimum);

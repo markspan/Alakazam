@@ -1225,6 +1225,7 @@ var AlakazamTree = (() => {
     { separator: true },
     { action: "rename", label: "Rename" },
     { action: "recalculate", label: "Recalculate" },
+    { action: "rejectionBreakdown", label: "Rejection breakdown..." },
     { action: "applyToAll", label: "Apply to All Raw Files..." },
     { separator: true },
     { action: "saveTemplate", label: "Save Template..." },
@@ -1324,7 +1325,8 @@ var AlakazamTree = (() => {
           canRecalculate: !!n.canRecalculate,
           canApplyToAll: !!n.canApplyToAll,
           canExportErpset: !!n.canExportErpset,
-          canApplyTemplate: !!n.canApplyTemplate
+          canApplyTemplate: !!n.canApplyTemplate,
+          canRejectionBreakdown: !!n.canRejectionBreakdown
         });
       }
       this._root.children = [];
@@ -1531,7 +1533,7 @@ var AlakazamTree = (() => {
         const row = document.createElement("div");
         row.className = "alz-menu-item";
         row.textContent = item.label;
-        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset || item.action === "exportSet" && !data.canApplyTemplate || item.action === "applyTemplate" && !data.canApplyTemplate;
+        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset || item.action === "exportSet" && !data.canApplyTemplate || item.action === "applyTemplate" && !data.canApplyTemplate || item.action === "rejectionBreakdown" && !data.canRejectionBreakdown;
         if (disabled) {
           row.classList.add("alz-menu-item-disabled");
         } else {

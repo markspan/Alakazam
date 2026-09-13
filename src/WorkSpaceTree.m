@@ -160,7 +160,8 @@ classdef WorkSpaceTree < handle
         %ADDNODE  Add a node, returning its struct(Id,Name,UserData,IsRoot).
         %   PARENTID is another node's Id, or '' for a top-level node. OPTS
         %   is a struct with optional fields canListEvents, canRecalculate,
-        %   canApplyToAll, canExportErpset, canApplyTemplate, isRoot.
+        %   canApplyToAll, canExportErpset, canApplyTemplate,
+        %   canRejectionBreakdown, isRoot.
         %   canApplyTemplate defaults to TRUE (Apply Template is valid for
         %   any ordinary dataset node, see onApplyTemplate); every other
         %   flag defaults to false.
@@ -170,6 +171,9 @@ classdef WorkSpaceTree < handle
             if ~isfield(opts, 'canApplyToAll');    opts.canApplyToAll    = false; end
             if ~isfield(opts, 'canExportErpset');  opts.canExportErpset  = false; end
             if ~isfield(opts, 'canApplyTemplate'); opts.canApplyTemplate = true; end
+            if ~isfield(opts, 'canRejectionBreakdown')
+                opts.canRejectionBreakdown = false;
+            end
             if ~isfield(opts, 'isRoot');           opts.isRoot           = false; end
 
             id = sprintf('n%d', this.NextId);
@@ -181,6 +185,7 @@ classdef WorkSpaceTree < handle
                 'canApplyToAll', logical(opts.canApplyToAll), ...
                 'canExportErpset', logical(opts.canExportErpset), ...
                 'canApplyTemplate', logical(opts.canApplyTemplate), ...
+                'canRejectionBreakdown', logical(opts.canRejectionBreakdown), ...
                 'isRoot', logical(opts.isRoot));
             this.push();
             node = this.nodeStruct(id);
@@ -373,9 +378,19 @@ classdef WorkSpaceTree < handle
             isGrandAverage = isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage');
             isEditableTransform = isfield(EEG, 'Call') && ~isempty(EEG.Call) && ...
                 any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
+            % 'Rejection breakdown' is offered when the node actually carries
+            % one. ArtefactDetect records it as it runs (etc.alz.
+            % artefactDetectors), so the field's presence is the honest test:
+            % it enables the action for exactly the nodes that can answer, and
+            % leaves it greyed out on an ArtefactDetect node computed before
+            % the breakdown existed, rather than opening an empty report.
+            hasBreakdown = isfield(EEG, 'etc') && isstruct(EEG.etc) ...
+                && isfield(EEG.etc, 'alz') && isstruct(EEG.etc.alz) ...
+                && isfield(EEG.etc.alz, 'artefactDetectors');
             opts = struct( ...
                 'canListEvents',  isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'CONTINUOUS'), ...
                 'canRecalculate', isGrandAverage || isEditableTransform, ...
+                'canRejectionBreakdown', hasBreakdown, ...
                 'canExportErpset', isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'Averaged'));
         end
     end
@@ -452,7 +467,9 @@ classdef WorkSpaceTree < handle
                 nodes{i} = struct('id', n.id, 'label', n.label, 'icon', n.icon, ...
                     'parentId', parentId, 'canListEvents', n.canListEvents, ...
                     'canRecalculate', n.canRecalculate, 'canApplyToAll', n.canApplyToAll, ...
-                    'canExportErpset', n.canExportErpset, 'canApplyTemplate', n.canApplyTemplate);
+                    'canExportErpset', n.canExportErpset, ...
+                    'canApplyTemplate', n.canApplyTemplate, ...
+                    'canRejectionBreakdown', n.canRejectionBreakdown);
             end
             selId = this.SelectedId;
             if isempty(selId); selId = []; end

@@ -135,7 +135,11 @@ const menu = window.document.querySelector('.alz-menu')
 assert.ok(menu, 'context menu should be shown')
 const items = [...menu.querySelectorAll('.alz-menu-item')].map(el => el.textContent)
 console.log('menu items:', items);
-assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
+assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Rejection breakdown...', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
+// 'Average1' is not an ArtefactDetect node (canRejectionBreakdown falsy) ->
+// the breakdown item is present but greyed out, the same way List events is.
+const breakdownItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Rejection breakdown...')
+assert.ok(breakdownItemC.classList.contains('alz-menu-item-disabled'), 'Rejection breakdown should be disabled on a node that is not an ArtefactDetect result')
 // 'Average1' is an averaged node (canExportErpset: true) -> Export as ERPset enabled.
 const exportItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
 assert.ok(!exportItemC.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be enabled for an averaged node')

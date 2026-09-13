@@ -15,6 +15,8 @@ function onContextMenuAction(this, eventData, sourceTree)
             this.onRenameNode();
         case 'recalculate'
             this.onRecalculateNode();
+        case 'rejectionBreakdown'
+            this.onRejectionBreakdown();
         case 'applyToAll'
             this.onApplyToAllRawFiles();
         case 'saveTemplate'

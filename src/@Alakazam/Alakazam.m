@@ -135,6 +135,7 @@ classdef Alakazam < handle
         onGrandAveragePerCell(this)
         recordings = collectDesignRecordings(this)
         onRecalculateNode(this)
+        onRejectionBreakdown(this)
         recalculateTransformNode(this, node, ownEEG)
         recalculateAffectedGrandAverages(this, touchedFiles)
         plan = planDescendantRecalc(this, parentFile, parentEEG)
