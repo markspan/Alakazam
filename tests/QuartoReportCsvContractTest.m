@@ -2,9 +2,9 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
 %QUARTOREPORTCSVCONTRACTTEST  Ties the exported CSV's column contract to
 %   the generated Quarto report that reads it, by EXECUTING both sides.
 %
-%   The contract exists twice, independently. src/IO/exportMeasurementsCSV.m
-%   and src/IO/exportSpectralCSV.m each state it as a literal fprintf
-%   format string; src/IO/generateQuartoReport.m and its +ReportSections
+%   The contract exists twice, independently. src/Reports/exportMeasurementsCSV.m
+%   and src/Reports/exportSpectralCSV.m each state it as a literal fprintf
+%   format string; src/Reports/generateQuartoReport.m and its +ReportSections
 %   package state it again as column names hardcoded into the R they emit.
 %   Nothing ties the two together -- they agree today by coincidence, not
 %   by construction.
@@ -63,7 +63,7 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));

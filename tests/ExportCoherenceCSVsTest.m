@@ -26,7 +26,7 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
     methods (TestClassSetup)
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
-            for p = {fullfile(root, 'src', 'IO'), fullfile(root, 'src', 'Support'), ...
+            for p = {fullfile(root, 'src', 'Reports'), fullfile(root, 'src', 'Support'), ...
                      fullfile(root, 'src', 'Transformations')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end

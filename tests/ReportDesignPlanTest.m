@@ -1,5 +1,5 @@
 classdef ReportDesignPlanTest < matlab.unittest.TestCase
-%REPORTDESIGNPLANTEST  Unit tests for src/IO/reportDesignPlan.m.
+%REPORTDESIGNPLANTEST  Unit tests for src/Reports/reportDesignPlan.m.
 %
 %   The report engine decides which model to fit. Until recently that
 %   decision lived inside emitted R, where the only way to check it was to
@@ -26,7 +26,7 @@ classdef ReportDesignPlanTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
         end
     end
 

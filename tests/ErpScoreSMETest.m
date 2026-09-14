@@ -1,5 +1,5 @@
 classdef ErpScoreSMETest < matlab.unittest.TestCase
-%ERPSCORESMETEST  Unit tests for src/IO/erpScoreSME.m.
+%ERPSCORESMETEST  Unit tests for src/Reports/erpScoreSME.m.
 %
 %   The tests that matter most here are the AGREEMENT ones. erpScoreSME
 %   carries its own scoring implementation rather than calling into
@@ -17,7 +17,7 @@ classdef ErpScoreSMETest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations', 'Measure')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...

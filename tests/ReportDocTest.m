@@ -26,7 +26,7 @@ classdef ReportDocTest < matlab.unittest.TestCase
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));
@@ -162,7 +162,7 @@ classdef ReportDocTest < matlab.unittest.TestCase
                 'install.packages(missing'};
 
             for g = ReportDocTest.Generators
-                source = fileread(fullfile(root, 'src', 'IO', [g{1} '.m']));
+                source = fileread(fullfile(root, 'src', 'Reports', [g{1} '.m']));
                 for m = markers
                     testCase.verifyEmpty(strfind(source, m{1}), ...
                         sprintf(['%s defines "%s" itself again. That is how apa_gt came ' ...
@@ -190,7 +190,7 @@ classdef ReportDocTest < matlab.unittest.TestCase
 
             root = fileparts(fileparts(mfilename('fullpath')));
             for g = ReportDocTest.Generators
-                source = fileread(fullfile(root, 'src', 'IO', [g{1} '.m']));
+                source = fileread(fullfile(root, 'src', 'Reports', [g{1} '.m']));
                 for call = {'ReportDoc.yamlHeader(', 'ReportDoc.packageBootstrap(', ...
                         'ReportDoc.apaHelpers('}
                     testCase.verifySubstring(source, call{1}, ...

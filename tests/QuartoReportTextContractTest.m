@@ -1,6 +1,6 @@
 classdef QuartoReportTextContractTest < matlab.unittest.TestCase
 %QUARTOREPORTTEXTCONTRACTTEST  Everything a chunk label cannot see, for
-%   src/IO/generateQuartoReport.m and the src/IO/+ReportSections package.
+%   src/Reports/generateQuartoReport.m and the src/Reports/+ReportSections package.
 %
 %   TESTING PHILOSOPHY.  Its sibling QuartoReportDispatchTest pins WHICH
 %   section builder each design routes to, by censusing chunk labels. That
@@ -109,13 +109,13 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
-        %ADDSOURCETOPATH  src/IO (generateQuartoReport + the
+        %ADDSOURCETOPATH  src/Reports (generateQuartoReport + the
         %   +ReportSections package), src/Support, and the tests folder
         %   itself so ReportFixtures resolves.
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));

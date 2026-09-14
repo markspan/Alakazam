@@ -53,13 +53,13 @@ classdef QuartoReportRSyntaxTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
-        %ADDSOURCETOPATH  src/IO (generateQuartoReport + the exporters),
+        %ADDSOURCETOPATH  src/Reports (generateQuartoReport + the exporters),
         %   src/Support, and the tests folder itself so ReportFixtures
         %   resolves however runtests was invoked.
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));

@@ -1,6 +1,6 @@
 classdef GenerateQuartoReportTest < matlab.unittest.TestCase
 %GENERATEQUARTOREPORTTEST  Smoke coverage for
-%   src/IO/generateQuartoReport.m and the src/IO/+ReportSections package it
+%   src/Reports/generateQuartoReport.m and the src/Reports/+ReportSections package it
 %   delegates to.
 %
 %   generateQuartoReport had no test coverage at all before this file: its
@@ -24,7 +24,7 @@ classdef GenerateQuartoReportTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
         end

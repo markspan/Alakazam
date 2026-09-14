@@ -80,13 +80,13 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function renderGroundTruthReport(testCase)
-        %RENDERGROUNDTRUTHREPORT  Put src/IO, src/Support and the tests
+        %RENDERGROUNDTRUTHREPORT  Put src/Reports, src/Support and the tests
         %   folder (for ReportFixtures) on the path, skip the whole class
         %   when R/Quarto/the R packages are unavailable, then pay the one
         %   render cost and cache everything the methods read.
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...

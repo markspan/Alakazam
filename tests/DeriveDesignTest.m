@@ -1,5 +1,5 @@
 classdef DeriveDesignTest < matlab.unittest.TestCase
-%DERIVEDESIGNTEST  Unit tests for src/IO/deriveDesign.m.
+%DERIVEDESIGNTEST  Unit tests for src/Reports/deriveDesign.m.
 %
 %   The derivation exists to be diagnostic: an empty cell, an unbalanced
 %   pair of groups, or a subject recorded under two group labels should be
@@ -18,7 +18,7 @@ classdef DeriveDesignTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
         end
     end
 

@@ -10,8 +10,12 @@ function setupDirectories(this)
     % Authored source is grouped into folders under src (added explicitly, since
     % src itself is added non-recursively so the @class / +package folders are
     % not put on the path directly): the plot View classes, the uifigure
-    % Dialogs, IO (import/export/format conversion) and Support helpers.
-    for sub = {'Views', 'Dialogs', 'IO', 'Support'}
+    % Dialogs, IO (import/export/format conversion), Reports (the Quarto/R
+    % report generators and the CSV exporters that feed them, including the
+    % +ReportDoc/+ReportSections packages -- IO's own name stopped describing
+    % most of what lived there once this grew past three files) and Support
+    % helpers.
+    for sub = {'Views', 'Dialogs', 'IO', 'Reports', 'Support'}
         addpath(fullfile(this.RootDir, sub{1}), '-end');
     end
     addpath(genpath(fullfile(this.RootDir, 'Transformations')));

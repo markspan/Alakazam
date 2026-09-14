@@ -193,7 +193,7 @@ classdef InlineDataUriResourcesTest < matlab.unittest.TestCase
         %THERENDERERCALLSIT  Weaker than an end-to-end render, which needs
         %   quarto and R, but it still fails if the call is dropped.
             root = fileparts(fileparts(mfilename('fullpath')));
-            source = fileread(fullfile(root, 'src', 'IO', 'renderQuartoReport.m'));
+            source = fileread(fullfile(root, 'src', 'Reports', 'renderQuartoReport.m'));
 
             testCase.verifySubstring(source, 'inlineDataUriResources(expectedHtml)');
         end

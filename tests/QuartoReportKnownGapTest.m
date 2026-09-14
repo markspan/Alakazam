@@ -3,7 +3,7 @@ classdef (TestTags = {'KnownGap', 'Slow'}) QuartoReportKnownGapTest < matlab.uni
 %   cannot go stale, because it runs against the code.
 %
 %   Every case here asserts the CORRECT contract for a defect that
-%   src/IO/generateQuartoReport.m and src/IO/+ReportSections still have,
+%   src/Reports/generateQuartoReport.m and src/Reports/+ReportSections still have,
 %   so every case FAILS today, deliberately. The whole class carries
 %   TestTags = {'KnownGap'} so a default run can exclude it with
 %   HasTag('KnownGap') and stay green, while a report-only continuous-
@@ -44,7 +44,7 @@ classdef (TestTags = {'KnownGap', 'Slow'}) QuartoReportKnownGapTest < matlab.uni
 %         itself does, so single-session studies are unaffected. Its case
 %         has left this register; the contract is pinned properly in
 %         tests/QuartoReportPersonGroupingTest.m, and the model choice it
-%         belongs to is decided in src/IO/reportDesignPlan.m.
+%         belongs to is decided in src/Reports/reportDesignPlan.m.
 %
 %     SIGN  CLOSED. cohens_d is now given an explicitly ordered factor, so
 %         it subtracts in the same direction as the t-test it is reported
@@ -130,13 +130,13 @@ classdef (TestTags = {'KnownGap', 'Slow'}) QuartoReportKnownGapTest < matlab.uni
     methods (TestClassSetup)
 
         function addSourceToPath(testCase)
-        %ADDSOURCETOPATH  Put the code under test (src/IO, which carries
+        %ADDSOURCETOPATH  Put the code under test (src/Reports, which carries
         %   the +ReportSections package, and src/Support) and the tests
         %   folder itself (for ReportFixtures) on the path for this class.
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));

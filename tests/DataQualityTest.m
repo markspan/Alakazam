@@ -1,6 +1,6 @@
 classdef DataQualityTest < matlab.unittest.TestCase
-%DATAQUALITYTEST  Unit tests for src/IO/dataQualityMetrics.m,
-%   src/IO/exportDataQualityCSVs.m and src/IO/generateDataQualityReport.m.
+%DATAQUALITYTEST  Unit tests for src/Reports/dataQualityMetrics.m,
+%   src/Reports/exportDataQualityCSVs.m and src/Reports/generateDataQualityReport.m.
 %
 %   dataQualityMetrics is the part worth testing hardest: it is a pure
 %   function over an epoched EEG struct, and every number the report
@@ -22,7 +22,7 @@ classdef DataQualityTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...

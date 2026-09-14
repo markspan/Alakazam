@@ -1,5 +1,5 @@
 classdef QuartoReportDispatchTest < matlab.unittest.TestCase
-%QUARTOREPORTDISPATCHTEST  What src/IO/generateQuartoReport.m's own
+%QUARTOREPORTDISPATCHTEST  What src/Reports/generateQuartoReport.m's own
 %   dispatch loop ROUTES TO -- one assertion per cell of the
 %   (ordinary-bin count x grouped x report kind x combination bin) matrix
 %   its if/elseif chain at lines 109-144 implements.
@@ -142,14 +142,14 @@ classdef QuartoReportDispatchTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
-        %ADDSOURCETOPATH  src/IO (generateQuartoReport + the
+        %ADDSOURCETOPATH  src/Reports (generateQuartoReport + the
         %   +ReportSections package), src/Support (measureRowTypes and
         %   friends) and the tests folder itself, so ReportFixtures
         %   resolves however the suite was launched.
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));

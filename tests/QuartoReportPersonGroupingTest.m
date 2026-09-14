@@ -20,14 +20,14 @@ classdef QuartoReportPersonGroupingTest < matlab.unittest.TestCase
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
-        %ADDSOURCETOPATH  src/IO (generateQuartoReport + the +ReportSections
+        %ADDSOURCETOPATH  src/Reports (generateQuartoReport + the +ReportSections
         %   package), src/Support (measureRowTypes and friends) and the
         %   tests folder itself, so ReportFixtures resolves however the
         %   suite was launched. Same three as every sibling report test.
             here = fileparts(mfilename('fullpath'));
             root = fileparts(here);
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
-                fullfile(root, 'src', 'IO')));
+                fullfile(root, 'src', 'Reports')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(here));
