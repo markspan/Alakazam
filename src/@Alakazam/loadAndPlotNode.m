@@ -7,7 +7,13 @@ function loadAndPlotNode(this, eventData, sourceTree, action)
 %
 %   Shared by onSelectionChanged and onNodeDoubleClicked, whose bodies
 %   were previously byte-identical apart from that one ACTION string.
+%
+%   Also clears any selection the OTHER two trees are still showing (see
+%   deselectOtherTrees), so picking a node in one tree -- most visibly, a
+%   Grand Average -- does not leave an unrelated dataset looking selected
+%   in a different tree above or below it.
     this.Workspace.ActiveTree = sourceTree;
+    this.deselectOtherTrees(sourceTree);
     EEG = this.loadNodeEEG(eventData.UserData, action);
     if isempty(EEG)
         return;

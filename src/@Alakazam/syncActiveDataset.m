@@ -38,6 +38,7 @@ function syncActiveDataset(this, file)
         if ~isempty(hit)
             tree.SelectedNodes = hit(1);
             this.Workspace.ActiveTree = tree;
+            this.deselectOtherTrees(tree);
             break;
         end
     end

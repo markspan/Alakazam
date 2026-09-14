@@ -94,6 +94,7 @@ classdef Alakazam < handle
         entries = collectDataQualityEntries(this)
         restoreDir = enterRepoRoot(this)
         loadAndPlotNode(this, eventData, sourceTree, action)
+        deselectOtherTrees(this, keepTree)
         dispatchToActiveView(this, eventData, viewNames, methodName, tab)
         saveGrandAverage(this, spec, existingNode)
         retile(this)

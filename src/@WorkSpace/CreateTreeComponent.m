@@ -19,8 +19,13 @@ function CreateTreeComponent(this)
 %   anonymous functions run long after all three properties are assigned)
 %   so those handlers can update this.ActiveTree -- the tree a later
 %   action (rename/delete/recalculate/run a transformation) should act
-%   on, since only one of the three trees can have a real "selection" at
-%   a time in the underlying WorkSpaceTree/yy-tree model.
+%   on. Each WorkSpaceTree is its OWN independent uihtml component with
+%   its own selection state, so nothing in the widget itself keeps only
+%   one of the three actually highlighted at a time; that invariant is
+%   enforced from the MATLAB side instead, in Alakazam.deselectOtherTrees
+%   (called from loadAndPlotNode and syncActiveDataset, the two places a
+%   tree's selection can change), which clears the other two trees'
+%   SelectedNodes whenever one of them gains a selection.
 %
 %   The context menu (List events / Rename / Recalculate / Delete) and its
 %   per-node icons now live in WorkSpaceTree.html itself; per-node enable
