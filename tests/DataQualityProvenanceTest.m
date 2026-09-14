@@ -387,6 +387,65 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 'The variance-ratio definition itself should be stated, not only its range.');
         end
 
+        function gedaiExplainsWhatCountsAsAnArtifactAndWhy(testCase)
+        %GEDAIEXPLAINSWHATCOUNTSASANARTIFACTANDWHY  Checked against the
+        %   method paper itself (Ros et al., 2025, bioRxiv preprint
+        %   2025.10.04.680449, Docs/2025.10.04.680449v1.full.pdf): "those
+        %   components with a spatial covariance inconsistent with the brain
+        %   model are identified as artifacts (large eigenvalues), while
+        %   consistent components are treated as neural signals". That is
+        %   the actual mechanism, and the whole reason GEDAI is not just
+        %   another variance threshold -- a big, brain-like event survives
+        %   where a plain-amplitude method (ASR) cannot tell it apart from
+        %   an eyeblink of the same size. The old text never said any of
+        %   this; it only described the input/output shape (denoises in
+        %   place, matches by label) and left "what makes something noise"
+        %   unstated.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'leadfield'), ...
+                'The theoretical reference GEDAI compares against should be named.');
+            testCase.verifyTrue(contains(qmd, '40-brain average head'), ...
+                'Where the reference comes from (not this recording) is the point.');
+            testCase.verifyTrue(contains(qmd, 'not simply because it is large'), ...
+                'The deviation-from-a-brain-model criterion is what distinguishes this from a variance threshold.');
+        end
+
+        function gedaiExplainsItHasNoSeparateBadChannelStep(testCase)
+        %GEDAIEXPLAINSITHASNOSEPARATEBADCHANNELSTEP  The paper: "GEDAI
+        %   offers a novel alternative by avoiding this binary rejection. It
+        %   instead treats activity from compromised channels as artifactual
+        %   components... removed if their spatial characteristics deviate
+        %   from the theoretical brain signal model." A reader looking for
+        %   which channels were "rejected" needs to know there is no such
+        %   list -- a chronically bad channel shows up as a high ENOVA
+        %   instead, which is the connection this section now states rather
+        %   than leaving the two facts to be pieced together separately.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'no separate bad-channel step'), ...
+                'GEDAI folds a bad channel into the same per-epoch correction; it does not flag it.');
+            testCase.verifyTrue(contains(qmd, 'high ENOVA across most epochs'), ...
+                'The two facts (no channel flag, but a persistent ENOVA signature) should be connected explicitly.');
+        end
+
+        function gedaiNamesElectrodePositionAccuracyAsItsOwnStatedLimitation(testCase)
+        %GEDAINAMESELECTRODEPOSITIONACCURACYASITSOWNSTATEDLIMITATION  The
+        %   paper is direct about this: "GEDAI's performance is highly
+        %   dependent on an accurate match between the theoretical leadfield
+        %   model and the actual EEG electrode positions. Any spatial
+        %   mismatch will proportionally degrade its efficacy." Without this,
+        %   a low SENSAI reads as "the recording was noisy" when it might
+        %   instead mean "the electrode positions given to GEDAI were only
+        %   approximate" -- a materially different thing to go fix.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'electrode-position accuracy'), ...
+                'The paper''s own named main limitation should appear, not just the denoising mechanism.');
+            testCase.verifyTrue(contains(qmd, 'not only genuine contamination'), ...
+                'A low score having two different possible causes is the actionable part.');
+        end
+
         function theIcaSectionExplainsWhatTheProbabilityThresholdActuallyTests(testCase)
         %THEICASECTIONEXPLAINSWHATTHEPROBABILITYTHRESHOLDACTUALLYTESTS  The
         %   threshold is on the Eye class alone, not on whether Eye is a
