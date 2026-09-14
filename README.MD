@@ -126,8 +126,9 @@ current publication standards, Keil et al. (2014) (see
 
 A single `uifigure` hosts the whole application: a control-strip ribbon
 along the top (Home/Tools/Grand Average tabs, discovering transformations
-automatically), the two dataset trees on the left, and the plots area on
-the right (tabbed or tiled, see above). The Alakazam tab's **Help** button opens
+automatically), three trees stacked on the left (Data & Analyses, Grand
+Averages, Reports -- selecting a node in one clears the other two), and the
+plots area on the right (tabbed or tiled, see above). The Alakazam tab's **Help** button opens
 this document as an in-app page, with screenshots and searchable with Ctrl+F.
 The page is generated from this file and is not kept in version control; if it
 has not been built, the button explains how and offers to open `README.MD`
