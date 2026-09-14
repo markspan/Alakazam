@@ -358,6 +358,49 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 'ENOVA''s direction is the opposite of SENSAI''s, so it is stated too.');
         end
 
+        function sensaiIsExplainedAsBoundedNotOpenEnded(testCase)
+        %SENSAIISEXPLAINEDASBOUNDEDNOTOPENENDED  A shipped draft of this
+        %   section once claimed SENSAI had "no fixed upper bound". It does:
+        %   signal- and noise-subspace similarity are each a mean
+        %   cosine-angle product in [0, 1] scaled to 0-100
+        %   (GEDAI-master 1.7's auxiliaries/SENSAI_basic.m), and the weight
+        %   GEDAI.m gives the noise term for the score AutoGEDAI reads is 1
+        %   -- so the range is exactly -100 to 100, checked against that
+        %   source directly rather than trusted from an earlier draft.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, '-100 to 100'), ...
+                'SENSAI''s true range should be stated, not left implied.');
+            testCase.verifyFalse(contains(qmd, 'no fixed upper bound'), ...
+                'That claim is the one this test exists to keep out: it is false.');
+        end
+
+        function enovaIsExplainedNotJustBounded(testCase)
+        %ENOVAISEXPLAINEDNOTJUSTBOUNDED  "0 to 1, higher worse" says the
+        %   scale without saying what is being scaled; ENOVA is a named,
+        %   concrete quantity (Explained Noise Variance, a variance ratio),
+        %   not an arbitrary index, and a reader should not have to ask.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'Explained Noise Variance'));
+            testCase.verifyTrue(contains(qmd, 'variance of what GEDAI classified as noise'), ...
+                'The variance-ratio definition itself should be stated, not only its range.');
+        end
+
+        function theIcaSectionExplainsWhatTheProbabilityThresholdActuallyTests(testCase)
+        %THEICASECTIONEXPLAINSWHATTHEPROBABILITYTHRESHOLDACTUALLYTESTS  The
+        %   threshold is on the Eye class alone, not on whether Eye is a
+        %   component's most likely class overall -- a real distinction a
+        %   reader cannot get right by guessing, and the section previously
+        %   said nothing about it at all.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'seven classes'), ...
+                'ICLabel''s classes should be named, not left as an unexplained number.');
+            testCase.verifyTrue(contains(qmd, 'not the same test as Eye being the single most likely class'), ...
+                'The threshold-vs-plurality distinction is the part easiest to misread.');
+        end
+
         function everyColumnTheTablesUseIsDeclaredInTheFallbackFrame(testCase)
         %EVERYCOLUMNTHETABLESUSEISDECLAREDINTHEFALLBACKFRAME  With three
         %   tables over many more columns, the empty stand-in tibble is easy
