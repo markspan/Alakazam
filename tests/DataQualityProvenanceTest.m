@@ -491,6 +491,23 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
 
             testCase.verifyFalse(contains(qmd, 'What the Cleaning Steps Did'));
         end
+
+        function theGedaiPaperIsCitedInTheReferencesSection(testCase)
+        %THEGEDAIPAPERISCITEDINTHEREFERENCESSECTION  The report explains
+        %   GEDAI/SENSAI/ENOVA at length now (see the provenance-gedai-table
+        %   chunk), sourced from Ros et al., 2025 -- a claim that has to
+        %   trace to a citation a reader can actually go verify, the same
+        %   way the SME section already cites Luck et al., 2021. Present
+        %   regardless of whether this particular export used GEDAI, since
+        %   References is one fixed section, not conditioned on the data.
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, '## References'));
+            testCase.verifyTrue(contains(qmd, 'Ros, T.'), ...
+                'The GEDAI paper should be cited, not only named in passing.');
+            testCase.verifyTrue(contains(qmd, '10.1101/2025.10.04.680449'), ...
+                'A DOI, not just an author/year, is what lets a reader actually find it.');
+        end
     end
 
     methods (Access = private)
