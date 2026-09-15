@@ -21,7 +21,12 @@ function loadMATFile(this, name)
         saveEegCache(matfilename, EEG);
     end
     if ~isfield(EEG, 'DataFormat')
-        EEG.DataFormat = 'CONTINUOUS';
+        % Derived from the loaded EEG's own shape, not assumed continuous
+        % -- see inferDataFormat's own header comment (loadSETFile's
+        % matching fix, for the same reason: a foreign .mat holding an
+        % already-epoched EEG struct has no more reason to be continuous
+        % than a foreign .set does).
+        EEG.DataFormat = inferDataFormat(EEG);
     end
     if ~isfield(EEG, 'DataType')
         EEG.DataType = 'TIMEDOMAIN';

@@ -26,9 +26,24 @@ function loadSETFile(this, name)
         % No cache yet, or the raw file is newer: (re)read it.
         EEG = pop_loadset(name, this.RawDirectory);
         EEG = eeg_checkset(EEG);
-        EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
-        EEG.DataFormat = 'CONTINUOUS';
+        % A .set file, unlike a BrainVision .vhdr, is not always raw
+        % continuous data -- it is just as often something already
+        % epoched or averaged elsewhere (another EEGLAB pipeline, or an
+        % Alakazam result re-exported via onExportSet and dropped back
+        % into the data directory). DataFormat has to be DERIVED from
+        % the loaded data's own shape (see inferDataFormat), not assumed
+        % continuous: an epoched set stamped "CONTINUOUS" routed to
+        % SignalView, whose 2-D-only y = y.' then threw "TRANSPOSE does
+        % not support N-D arrays" on the 3-D data -- reported directly.
+        EEG.DataFormat = inferDataFormat(EEG);
+        if strcmpi(EEG.DataFormat, 'CONTINUOUS')
+            % Alakazam keeps continuous EEG.times in seconds (see
+            % Resample.m's own comment); epoched/averaged data keeps
+            % EEGLAB's own millisecond .times, already correct from
+            % eeg_checkset's xmin/xmax/srate bookkeeping above.
+            EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
+        end
         EEG.id = id;
         EEG.File = matfilename;
         % -v7.3 on every save, not just the first one -- see loadBVAFile's
