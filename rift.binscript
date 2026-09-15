@@ -1,0 +1,9 @@
+% epoch_start_ms: 0
+% epoch_stop_ms: 8332
+% Codes are markers; ? = any char; { } lists alternatives; | is or.
+% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.
+% let names a reusable expression (codes or relations); = makes a difference bin.
+
+bin 1 "RIFT 64Hz"  {"s33248"}
+bin 2 "SSVEP 30Hz" {"s33258"}
+bin 3 "RIFT 60Hz"  {"s33268"}
