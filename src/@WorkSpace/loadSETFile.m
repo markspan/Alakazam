@@ -51,6 +51,15 @@ function loadSETFile(this, name)
             % window), so treat it as seconds and convert.
             EEG.times = EEG.times * 1000;
         end
+        % An epoched .set from outside Alakazam (another EEGLAB pipeline's
+        % output, not DefineBins' own) carries condition info as pop_epoch's
+        % own per-epoch event list, not Alakazam's EEG.bindesc/.bini -- adapt
+        % it so the data is immediately groupable and further editable the
+        % same way a DefineBins result is. A safe no-op on data that already
+        % has bindesc (an Alakazam result round-tripped through .set) or has
+        % nothing to derive from (continuous data, or no per-epoch event
+        % info) -- see its own header comment.
+        EEG = deriveBinsFromEpochs(EEG);
         EEG.id = id;
         EEG.File = matfilename;
         % -v7.3 on every save, not just the first one -- see loadBVAFile's
