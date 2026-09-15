@@ -1,0 +1,91 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "RIFT frequency tagging (Dimigen et al. 2025)",
+  "nodes": [
+    {
+      "transformId": "Resample",
+      "parent": -1,
+      "params": {
+        "NewRate": 1000
+      }
+    },
+    {
+      "transformId": "Filter",
+      "parent": 1,
+      "params": {
+        "highpass": { "enabled": true, "freq": 1, "db": 40 },
+        "lowpass":  { "enabled": false, "freq": 30, "db": 40 },
+        "notch":    { "enabled": false, "freq": 50, "db": 40 }
+      }
+    },
+    {
+      "transformId": "DefineBins",
+      "parent": 2,
+      "params": {
+        "script": "% Trigger codes from the paper's protocol:\n%   10 = RIFT 60 Hz onramp (foveal)\n%   30 = RIFT 64 Hz onramp (foveal)\n%   20 = third condition onramp -- 30 Hz SSVEP in early pilot subjects,\n%        60 Hz peripheral RIFT in later ones (check your own protocol\n%        and the actual trigger code used; some recordings used 120\n%        for the peripheral condition instead of 20).\nbin 1 \"RIFT 60 Hz\"            : 10\nbin 2 \"RIFT 64 Hz\"            : 30\nbin 3 \"RIFT 60 Hz peripheral\" : 20",
+        "epoch": { "lo": -1500, "hi": 10500, "unit": "ms" }
+      }
+    },
+    {
+      "transformId": "AutoEyeICA",
+      "parent": 3,
+      "params": {
+        "EyeThreshold": 0.9
+      }
+    },
+    {
+      "transformId": "CoherenceMap",
+      "parent": 4,
+      "params": {
+        "RefChannel": "Photodiode",
+        "Method": "STFT",
+        "MinFreq": 52,
+        "MaxFreq": 68,
+        "NumFreqs": 40,
+        "MinCycles": 3,
+        "MaxCycles": 12,
+        "WindowMs": 510,
+        "PadRatio": 4
+      }
+    },
+    {
+      "transformId": "CoherenceTopography",
+      "parent": 4,
+      "params": {
+        "RefChannel": "Photodiode",
+        "MinFreq": 52,
+        "MaxFreq": 68,
+        "Frequency": 0,
+        "TimeStart": 883,
+        "TimeStop": 8594
+      }
+    },
+    {
+      "transformId": "SelectData",
+      "parent": 4,
+      "params": {
+        "channels": { "mode": "(off)", "labels": [] },
+        "time":     { "mode": "Keep", "range": [883, 8594] },
+        "points":   { "mode": "(off)", "range": [1, 1] },
+        "trials":   { "mode": "(off)", "indices": [] }
+      }
+    },
+    {
+      "transformId": "SpectralMeasure",
+      "parent": 7,
+      "params": {
+        "rows": [
+          { "label": "60Hz", "freq": "60", "channels": "Oz" },
+          { "label": "64Hz", "freq": "64", "channels": "Oz" }
+        ],
+        "fundamentals": "",
+        "refChannel": "Photodiode",
+        "method": "Hann",
+        "tapers": 3,
+        "snrNeighbours": 10,
+        "snrGuard": 1
+      }
+    }
+  ]
+}

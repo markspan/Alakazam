@@ -29,6 +29,10 @@ function loadSETFile(this, name)
         EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = 'CONTINUOUS';
+        if ndims(EEG.data) == 3
+            EEG.DataFormat = 'EPOCHED';
+            EEG.times = EEG.times * 1000;
+        end
         EEG.id = id;
         EEG.File = matfilename;
         % -v7.3 on every save, not just the first one -- see loadBVAFile's
