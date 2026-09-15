@@ -26,12 +26,21 @@ function loadSETFile(this, name)
         % No cache yet, or the raw file is newer: (re)read it.
         EEG = pop_loadset(name, this.RawDirectory);
         EEG = eeg_checkset(EEG);
-        EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
-        EEG.DataFormat = 'CONTINUOUS';
-        if ndims(EEG.data) == 3
-            EEG.DataFormat = 'EPOCHED';
-            EEG.times = EEG.times * 1000;
+EEG.DataFormat = inferDataFormat(EEG);
+if strcmpi(EEG.DataFormat, 'CONTINUOUS')
+    % Alakazam keeps continuous EEG.times in seconds (see Resample.m);
+    % set continuous times from sample count and srate.
+    EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
+elseif strcmpi(EEG.DataFormat, 'EPOCHED')
+    % Epoched/averaged data usually carry EEGLAB's millisecond .times.
+    % Some .set files, however, have epoched times in seconds; if the
+    % times appear to be on a seconds scale (max abs < 10s), convert
+    % them to milliseconds to match Alakazam expectations elsewhere.
+    if ~isempty(EEG.times) && max(abs(EEG.times(:))) < 10
+        EEG.times = EEG.times * 1000;
+    end
+end
         end
         EEG.id = id;
         EEG.File = matfilename;

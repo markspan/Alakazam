@@ -93,6 +93,16 @@ computeOpts.RefIndex = refIdx;
 
 %% Build the result: pass the epoched data through, add the coherence map.
 EEG = input;
+% Clear any CoherenceTopography fields inherited from an ancestor node --
+% the symmetric case of CoherenceTopography's own clearing of .coherence
+% below; see its header comment for why a stale sibling-result field here
+% would break AlakazamPlotter.plotEpoched's routing.
+for f = {'CohTopoValues', 'CohTopoChanlocs', 'CohTopoDrawn', 'CohTopoFreqs', 'CohTopoRef', ...
+        'CohTopoLimit', 'CohTopoRefAmp', 'CohTopoAmpFreqs', 'CohTopoBins', 'CohTopoBinLabels'}
+    if isfield(EEG, f{1})
+        EEG = rmfield(EEG, f{1});
+    end
+end
 EEG.coherence = coh;
 EEG.cohFreqs  = freqs;
 EEG.cohTimes  = cohTimes;

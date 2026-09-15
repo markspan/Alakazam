@@ -60,7 +60,18 @@ classdef CoherenceView < AlakazamView
                 {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
             this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "left", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
-            this.ChannelLabel.Layout.Column = [2, nCols + 1];
+            % A uigridlayout Column span must be a SCALAR or a strictly
+            % INCREASING 1x2 pair -- [2, nCols+1] collapses to the invalid
+            % [2, 2] for single-bin data (nCols == 1, e.g. a coherence map
+            % with no DefineBins applied), which threw
+            % MATLAB:ui:GridLayoutOptions:InvalidGridColumn on construction
+            % and left the whole view unbuilt. Confirmed directly: a real
+            % single-bin dataset reproduced it.
+            if nCols + 1 > 2
+                this.ChannelLabel.Layout.Column = [2, nCols + 1];
+            else
+                this.ChannelLabel.Layout.Column = 2;
+            end
 
             cmap = parula(256);
             freqs = eeg.cohFreqs;

@@ -60,7 +60,17 @@ classdef TimeFrequencyView < AlakazamView
                 {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
             this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "left", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
-            this.ChannelLabel.Layout.Column = [2, nCols + 1];
+            % A uigridlayout Column span must be a SCALAR or a strictly
+            % INCREASING 1x2 pair -- [2, nCols+1] collapses to the invalid
+            % [2, 2] for single-bin data (nCols == 1), which threw
+            % MATLAB:ui:GridLayoutOptions:InvalidGridColumn on construction
+            % (see CoherenceView's identical fix, where a real single-bin
+            % dataset reproduced it).
+            if nCols + 1 > 2
+                this.ChannelLabel.Layout.Column = [2, nCols + 1];
+            else
+                this.ChannelLabel.Layout.Column = 2;
+            end
 
             cmap = TransTools.DivergingColormap();
 

@@ -75,7 +75,12 @@ end
 function a = rangeArgs(o, field, keepK, removeK, scale)
     a = {};
     if isfield(o, field) && ~strcmp(o.(field).mode, '(off)')
-        a = {keepKey(o.(field).mode, keepK, removeK), o.(field).range * scale};
+        % (:)' forces a ROW vector: the dialog always produces one ([lo.Value
+        % hi.Value]), but jsondecode has no notion of row vs column and turns
+        % any JSON numeric array back into a COLUMN on Apply Template -- pop_select
+        % rejects that outright ("Time/point range must contain 2 columns exactly").
+        % Confirmed directly: jsondecode(jsonencode([883 8594])) comes back 2x1.
+        a = {keepKey(o.(field).mode, keepK, removeK), o.(field).range(:)' * scale};
     end
 end
 
