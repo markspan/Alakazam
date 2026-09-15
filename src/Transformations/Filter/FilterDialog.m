@@ -4,13 +4,21 @@ function options = FilterDialog(srate, labels, stored)
 %     * global (default) -- three filters (high-pass, low-pass, notch), each an
 %       enable tickbox plus a frequency (Hz) and a dB rating (stopband
 %       attenuation), applied to every channel;
-%     * per-channel -- a table, one row per channel, with its own leading
-%       "Filter?" tickbox (default on) plus a High-pass / Low-pass / Notch
-%       frequency and dB each; a frequency of 0 (or blank) leaves that one
-%       filter off for that channel, while unticking "Filter?" skips the
-%       channel entirely regardless of what its own frequencies say --
-%       the direct way to mark "this channel does not need filtering" at
-%       all, rather than zeroing out three fields to the same effect.
+%     * per-channel -- the same global panel STAYS visible (it is the
+%       template the "Copy settings" button below it copies from, and
+%       editing it live still reseeds an untouched table the first time
+%       this session switches into per-channel mode -- see
+%       onPerChanToggled), plus a table, one row per channel, with its own
+%       leading "Filter?" tickbox (default on) plus a High-pass / Low-pass
+%       / Notch frequency and dB each; a frequency of 0 (or blank) leaves
+%       that one filter off for that channel, while unticking "Filter?"
+%       skips the channel entirely regardless of what its own frequencies
+%       say -- the direct way to mark "this channel does not need
+%       filtering" at all, rather than zeroing out three fields to the
+%       same effect. "Copy settings" overwrites EVERY row (unlike the
+%       automatic first-switch reseed, which leaves an already-customised
+%       row alone) -- a deliberate, repeatable "make every channel match
+%       the panel above, right now" action.
 %   Everything else about the FIR design is worked out by Filter.m.
 %
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
@@ -33,22 +41,30 @@ function options = FilterDialog(srate, labels, stored)
 
     COLS = {'Filter?', 'Channel', 'High-pass (Hz)', 'HP dB', 'Low-pass (Hz)', 'LP dB', 'Notch (Hz)', 'Notch dB'};
 
-    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 620 410]), 'Color', bgColor);
+    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 620 560]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
-    outer = uigridlayout(root, [4 1], 'RowHeight', {'fit', 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
+    % Every row below is given an EXPLICIT Layout.Row (not left to
+    % uigridlayout's own auto-placement): globalPanel/copyRow/chanTable's
+    % visibility and even row HEIGHT change at runtime (see refreshMode),
+    % which is only safe to reason about when nothing relies on an
+    % implicit "next slot" placement alongside them.
+    outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
 
-    uilabel(outer, 'Text', [ ...
+    descLabel = uilabel(outer, 'Text', [ ...
         'FIR windowed-sinc, zero-phase filtering. Give each filter a frequency and a dB rating ' ...
         '(the stopband attenuation); the order and transition band are automatic. Filter the ' ...
         'continuous recording before epoching.'], 'WordWrap', 'on');
+    descLabel.Layout.Row = 1;
 
     perChanBox = uicheckbox(outer, 'Text', 'Per-channel settings', 'Value', seedPerChannel);
+    perChanBox.Layout.Row = 2;
     perChanBox.ValueChangedFcn = @(~, ~) onPerChanToggled();
     hasReseededFromGlobal = false; % see onPerChanToggled
 
-    % --- Global panel (row 3) ---
+    % --- Global panel (row 3, ALWAYS visible -- also per-channel mode's
+    % "Copy settings" template, see copyRow below) ---
     globalPanel = uigridlayout(outer, [4 3], 'ColumnWidth', {150, '1x', '1x'}, ...
         'RowHeight', repmat({'fit'}, 1, 4), 'RowSpacing', 6, 'ColumnSpacing', 10, 'Padding', [0 0 0 0]);
     globalPanel.Layout.Row = 3;
@@ -67,13 +83,22 @@ function options = FilterDialog(srate, labels, stored)
         ctl.(key) = struct('cb', cb, 'freq', f, 'db', d);
     end
 
-    % --- Per-channel table (row 3, shown when toggled on) ---
+    % --- "Copy settings" (row 4, per-channel mode only) ---
+    copyRow = uigridlayout(outer, [1 2], 'ColumnWidth', {140, '1x'}, 'Padding', [0 0 0 0]);
+    copyRow.Layout.Row = 4;
+    uibutton(copyRow, 'Text', 'Copy settings', ...
+        'Tooltip', 'Copy the panel above to every channel below, replacing its current settings.', ...
+        'ButtonPushedFcn', @(~, ~) onCopySettings());
+    uilabel(copyRow, 'Text', '');
+
+    % --- Per-channel table (row 5, per-channel mode only) ---
     chanTable = uitable(outer, 'ColumnName', COLS, 'ColumnEditable', [true false true(1, 6)], ...
         'ColumnFormat', {'logical', 'char', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric'}, ...
         'Data', seedTable(labels, seed, stored));
-    chanTable.Layout.Row = 3;
+    chanTable.Layout.Row = 5;
 
     buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, 'Padding', [0 4 0 0]);
+    buttons.Layout.Row = 6;
     uilabel(buttons, 'Text', '');
     uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
     uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, ...
@@ -84,10 +109,29 @@ function options = FilterDialog(srate, labels, stored)
     uiwait(fig);
 
     function refreshMode()
+        % globalPanel stays visible in both modes now -- it doubles as the
+        % per-channel table's own "Copy settings" template, so hiding it
+        % there would hide the very thing that button reads from.
         per = logical(perChanBox.Value);
         onoff = {'on', 'off'};
-        globalPanel.Visible = onoff{1 + per};
-        chanTable.Visible   = onoff{2 - per};
+        copyRow.Visible   = onoff{2 - per};
+        chanTable.Visible = onoff{2 - per};
+        if per
+            outer.RowHeight{4} = 'fit';
+            outer.RowHeight{5} = '1x';
+        else
+            outer.RowHeight{4} = 0;
+            outer.RowHeight{5} = 0;
+        end
+    end
+
+    function onCopySettings()
+        % Unlike onPerChanToggled's automatic first-switch reseed (which
+        % leaves an already-customised row alone), this is a deliberate,
+        % repeatable action: overwrite EVERY row with the panel above,
+        % right now -- so stored.perChannelRows is deliberately not
+        % consulted here (pass [] where onPerChanToggled passes stored).
+        chanTable.Data = seedTable(labels, currentGlobalSeed(), []);
     end
 
     function onPerChanToggled()
