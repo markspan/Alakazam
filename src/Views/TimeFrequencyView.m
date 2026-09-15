@@ -23,8 +23,9 @@ classdef TimeFrequencyView < AlakazamView
     properties (SetAccess = private)
         Figure          % owning uitab
         EEG             % dataset carrying .ersp (nChan x nFreqs x nTime x nBins) and .freqs
-        Grid            % (nRows+1) x nCols uigridlayout: row 1 the channel label, rest tiles
-        ChannelLabel    % spanning label across row 1
+        Grid            % (nRows+1) x nCols uigridlayout: row 1 the channel dropdown + count label, rest tiles
+        ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1 column 1
+        ChannelLabel    % trailing "(i/N)" count, row 1 rest of the columns
         Axes            % 1 x nBins array of uiaxes, one per bin
         Images          % 1 x nBins array of Image objects (imagesc handles), one per bin
         Channel = 1     % channel currently shown
@@ -50,9 +51,16 @@ classdef TimeFrequencyView < AlakazamView
                 "RowHeight", [{22}, repmat({'1x'}, 1, nRows)], ...
                 "ColumnWidth", [repmat({'1x'}, 1, nCols), {TransTools.ColorbarColumnWidth()}], "Padding", [4 4 4 4]);
 
-            this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "center", "FontWeight", "bold");
+            % Column 1 of row 1 holds the channel dropdown -- jump straight
+            % to an electrode instead of stepping to it one channel at a
+            % time with the up/down arrow keys (onKey); the rest of the row
+            % keeps the "(i/N)" count the dropdown's own selected item does
+            % not carry.
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(this.Grid, 1, 1, ...
+                {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
+            this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "left", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
-            this.ChannelLabel.Layout.Column = [1, nCols + 1]; % always >1 columns wide, no [1 1] risk here
+            this.ChannelLabel.Layout.Column = [2, nCols + 1];
 
             cmap = TransTools.DivergingColormap();
 
@@ -129,8 +137,8 @@ classdef TimeFrequencyView < AlakazamView
                 this.Images(b).CData = squeeze(ersp(ch, :, :, b));
                 this.Axes(b).CLim = [-climAbs, climAbs];
             end
-            this.ChannelLabel.Text = sprintf('Channel: %s (%d/%d)', ...
-                this.EEG.chanlocs(ch).labels, ch, this.EEG.nbchan);
+            this.ChannelLabel.Text = sprintf('(%d/%d)', ch, this.EEG.nbchan);
+            this.ChannelDropdown.Value = ch;
         end
 
         function onKey(this, event)
@@ -166,6 +174,17 @@ classdef TimeFrequencyView < AlakazamView
             this.notifyActivated();
         end
 
+    end
+
+    methods (Access = private)
+        function onChannelSelected(this, idx)
+        %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: jump straight
+        %   to the picked electrode, the same effect as stepping there one
+        %   channel at a time with the up/down arrow keys (onKey).
+            this.notifyActivated();
+            this.Channel = idx;
+            this.redraw();
+        end
     end
 
     methods

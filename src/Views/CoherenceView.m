@@ -20,7 +20,8 @@ classdef CoherenceView < AlakazamView
         Figure
         EEG             % dataset carrying .coherence / .cohFreqs / .cohTimes / .cohRef
         Grid
-        ChannelLabel
+        ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1 column 1
+        ChannelLabel    % trailing "(i/N) vs ref" text, row 1 rest of the columns
         Axes
         Images
         BinIndices      % original coherence 4th-dim index for each drawn tile
@@ -51,9 +52,15 @@ classdef CoherenceView < AlakazamView
                 "RowHeight", [{22}, repmat({'1x'}, 1, nRows)], ...
                 "ColumnWidth", [repmat({'1x'}, 1, nCols), {TransTools.ColorbarColumnWidth()}], "Padding", [4 4 4 4]);
 
-            this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "center", "FontWeight", "bold");
+            % Column 1 of row 1 holds the channel dropdown -- jump straight
+            % to an electrode instead of stepping to it one channel at a
+            % time with the up/down arrow keys (onKey); see
+            % TimeFrequencyView's identical row-1 split for why.
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(this.Grid, 1, 1, ...
+                {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
+            this.ChannelLabel = uilabel(this.Grid, "HorizontalAlignment", "left", "FontWeight", "bold");
             this.ChannelLabel.Layout.Row = 1;
-            this.ChannelLabel.Layout.Column = [1, nCols + 1];
+            this.ChannelLabel.Layout.Column = [2, nCols + 1];
 
             cmap = parula(256);
             freqs = eeg.cohFreqs;
@@ -113,8 +120,8 @@ classdef CoherenceView < AlakazamView
             if isfield(this.EEG, 'cohRef') && ~isempty(this.EEG.cohRef)
                 ref = sprintf('  vs %s', char(string(this.EEG.cohRef)));
             end
-            this.ChannelLabel.Text = sprintf('Channel: %s (%d/%d)%s', ...
-                this.EEG.chanlocs(ch).labels, ch, this.EEG.nbchan, ref);
+            this.ChannelLabel.Text = sprintf('(%d/%d)%s', ch, this.EEG.nbchan, ref);
+            this.ChannelDropdown.Value = ch;
         end
 
         function onKey(this, event)
@@ -145,6 +152,15 @@ classdef CoherenceView < AlakazamView
     end
 
     methods (Access = private)
+        function onChannelSelected(this, idx)
+        %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: jump straight
+        %   to the picked electrode, the same effect as stepping there one
+        %   channel at a time with the up/down arrow keys (onKey).
+            this.notifyActivated();
+            this.Channel = idx;
+            this.redraw();
+        end
+
         function m = climMax(this)
         %CLIMMAX  Upper colour limit: the largest coherence in the whole
         %   tensor, floored so an all-low-coherence dataset is not a flat scale.

@@ -21,7 +21,8 @@ classdef AverageView < AlakazamView
 
     properties (SetAccess = private)
         Figure          % owning figure
-        Grid            % 1x2 uigridlayout: axes | checkbox strip
+        Grid            % 2x2 uigridlayout: channel dropdown row, then axes | checkbox strip
+        ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1
         Axes            % axes the averages are drawn in
         CheckboxGrid    % uigridlayout the tickboxes stack into (right strip)
         Series          % flat cell array of per-line series structs
@@ -46,12 +47,20 @@ classdef AverageView < AlakazamView
         function this = AverageView(fig, eeg)
         %AVERAGEVIEW  Build the view for an averaged dataset in FIG.
             this.Figure = fig;
-            this.Grid   = uigridlayout(fig, [1 2], "ColumnWidth", {'9x', '1x'}, ...
-                "Padding", [4 4 4 4]);
+            this.Grid   = uigridlayout(fig, [2 2], "RowHeight", {22, '1x'}, ...
+                "ColumnWidth", {'9x', '1x'}, "Padding", [4 4 4 4]);
+            % Jump straight to an electrode instead of stepping to it one
+            % channel at a time with the up/down arrow keys (onKey). Built
+            % from EEG.chanlocs directly (not this.Series, prepared just
+            % below) since the first series' labels are exactly those.
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(this.Grid, 1, [1, 2], ...
+                {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
             this.Axes   = uiaxes(this.Grid);
+            this.Axes.Layout.Row = 2;
             this.Axes.Layout.Column = 1;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
             this.CheckboxGrid = uigridlayout(this.Grid, [1 1], "Padding", [0 0 0 0]);
+            this.CheckboxGrid.Layout.Row = 2;
             this.CheckboxGrid.Layout.Column = 2;
             this.Series  = this.prepare(eeg);
             this.Visible = true(1, numel(this.Series));
@@ -147,6 +156,7 @@ classdef AverageView < AlakazamView
             first = this.Series{1};
             ch = min(this.Channel, numel(first.labels));
             title(ax, "Channel: " + first.labels{ch});
+            this.ChannelDropdown.Value = ch;
             % Data quality (analytic aSME per bin, at the shown channel) is shown
             % below the bin tickboxes rather than as an axes subtitle -- see
             % buildCheckboxes / asmeText.
@@ -222,6 +232,16 @@ classdef AverageView < AlakazamView
     end
 
     methods (Access = private)
+        function onChannelSelected(this, idx)
+        %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: jump straight
+        %   to the picked electrode for every line, the same effect as
+        %   stepping there one channel at a time with the up/down arrow
+        %   keys (onKey).
+            this.notifyActivated();
+            this.Channel = idx;
+            this.redraw();
+        end
+
         function [lo, hi] = globalExtent(this)
         %GLOBALEXTENT  Min/max over every channel and series, so a clamped axis
         %   fits the electrode with the largest deflection. Includes the +/- 3 SE

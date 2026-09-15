@@ -87,8 +87,10 @@ classdef FourierView < AlakazamView
                 stepFcn = @(delta) this.trialStep(delta);
             end
             channelStepFcn = [];
+            channelLabels = {};
             if size(eeg.data, 1) > 1
                 channelStepFcn = @(delta) this.channelStep(delta);
+                channelLabels = {eeg.chanlocs.labels};
             end
             if thirdDimIsBins(eeg)
                 stepLabel = 'Bin';
@@ -96,7 +98,8 @@ classdef FourierView < AlakazamView
                 stepLabel = 'Trial';
             end
             this.Buttons = ZoomPanButtons(this.Grid, [2 3 4], this.Axes, eeg.srate / 2, ...
-                @() this.notifyActivated(), stepFcn, channelStepFcn, stepLabel);
+                @() this.notifyActivated(), stepFcn, channelStepFcn, stepLabel, ...
+                channelLabels, @(idx) this.onChannelSelected(idx));
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -180,6 +183,7 @@ classdef FourierView < AlakazamView
             % y-zoom slider's level, not just the absolute range, survives
             % too -- see ZoomPanButtons' own header comment.
             this.Buttons.applyYZoom(max(spectrum, [], "omitnan"));
+            this.Buttons.setChannelValue(this.Channel);
         end
 
         function onKey(this, event)
@@ -268,6 +272,15 @@ classdef FourierView < AlakazamView
         %   a non-empty channelStepFcn.
             nchan = size(this.EEG.data, 1);
             this.Channel = min(nchan, max(1, this.Channel - delta));
+            this.redraw();
+        end
+
+        function onChannelSelected(this, idx)
+        %ONCHANNELSELECTED  The channel dropdown's ValueChangedFcn (see
+        %   ZoomPanButtons.buildButtonRow): jump straight to the picked
+        %   electrode, the same effect as stepping there one channel at a
+        %   time with channelStep/onKey.
+            this.Channel = idx;
             this.redraw();
         end
     end

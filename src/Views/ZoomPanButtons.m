@@ -40,6 +40,8 @@ classdef ZoomPanButtons < handle
         Axes
         Nyquist        % upper x-limit clamp (EEG.srate / 2)
         ActivatedFcn   % function handle (), or empty
+        ChannelDropdown = [] % "Channel:" uidropdown (see TransTools.BuildChannelDropdown),
+                              % built only when CHANNELLABELS/CHANNELSELECTFCN are given; empty otherwise
 
         XStart = 0     % Hz, left edge of the visible x-window
         XZoomValue = 0 % 0..1, x-zoom slider value (0 = full range)
@@ -53,7 +55,8 @@ classdef ZoomPanButtons < handle
     end
 
     methods
-        function this = ZoomPanButtons(grid, rows, ax, nyquist, activatedFcn, stepFcn, channelStepFcn, stepLabel)
+        function this = ZoomPanButtons(grid, rows, ax, nyquist, activatedFcn, stepFcn, channelStepFcn, ...
+                stepLabel, channelLabels, channelSelectFcn)
         %ZOOMPANBUTTONS  Build the button row into GRID's ROWS(1), the
         %   x-zoom slider into ROWS(2) and the y-zoom slider into ROWS(3).
         %   ACTIVATEDFCN(), if non-empty, is called before every button's
@@ -68,18 +71,44 @@ classdef ZoomPanButtons < handle
         %   CHANNELSTEPFCN(1); omit (or pass empty) to skip it too, so a
         %   caller with only one navigable dimension (or none) is not
         %   forced to pass both.
+        %
+        %   CHANNELLABELS/CHANNELSELECTFCN, both optional, add a "Channel:"
+        %   dropdown (TransTools.BuildChannelDropdown) in the button row's
+        %   own trailing filler column -- jump straight to an electrode
+        %   instead of stepping to it one at a time with CHANNELSTEPFCN.
+        %   Built only when CHANNELSTEPFCN is also given (there is nothing
+        %   to jump to on single-channel data); omit either (or pass empty)
+        %   to skip it, matching CHANNELSTEPFCN's own opt-in convention.
             if nargin < 8 || isempty(stepLabel)
                 stepLabel = 'Trial';
+            end
+            if nargin < 9
+                channelLabels = {};
+            end
+            if nargin < 10
+                channelSelectFcn = [];
             end
             this.Axes = ax;
             this.Nyquist = nyquist;
             this.ActivatedFcn = activatedFcn;
 
-            this.buildButtonRow(grid, rows(1), stepFcn, channelStepFcn, char(stepLabel));
+            this.buildButtonRow(grid, rows(1), stepFcn, channelStepFcn, char(stepLabel), ...
+                channelLabels, channelSelectFcn);
             this.makeSliderRow(grid, rows(2), "x zoom", "Zoom the frequency axis", @(v) this.onXZoomChanged(v));
             this.makeSliderRow(grid, rows(3), "y zoom", "Zoom the amplitude axis", @(v) this.onYZoomChanged(v));
 
             this.applyXLim();
+        end
+
+        function setChannelValue(this, idx)
+        %SETCHANNELVALUE  Reflect the owning view's current channel in the
+        %   dropdown. A no-op when none was built (single-channel data, or
+        %   CHANNELLABELS/CHANNELSELECTFCN were not given) -- call
+        %   unconditionally from the owning view's own redraw(), the same
+        %   way applyYZoom is called unconditionally at its end.
+            if ~isempty(this.ChannelDropdown) && isvalid(this.ChannelDropdown)
+                this.ChannelDropdown.Value = idx;
+            end
         end
 
         function applyYZoom(this, naturalTop)
@@ -96,7 +125,8 @@ classdef ZoomPanButtons < handle
     end
 
     methods (Access = private)
-        function buildButtonRow(this, grid, row, stepFcn, channelStepFcn, stepLabel)
+        function buildButtonRow(this, grid, row, stepFcn, channelStepFcn, stepLabel, ...
+                channelLabels, channelSelectFcn)
         %BUILDBUTTONROW  Channel-step / pan / trial-or-bin-step buttons
         %   (zoom moved to the slider rows below -- see the class header
         %   comment). Every button carries a one-letter prefix naming what
@@ -105,7 +135,10 @@ classdef ZoomPanButtons < handle
         %   used to read as the same control, which is exactly what made a
         %   pan click look like "the bin/trial never changes" -- it moves
         %   the visible x-range, not which bin/trial is shown, so nothing
-        %   about panning was ever going to change a bin label.
+        %   about panning was ever going to change a bin label. The row's
+        %   own trailing filler column (previously empty, just '1x' of
+        %   spacing) holds the channel dropdown when one is wanted -- see
+        %   the constructor's own comment on CHANNELLABELS/CHANNELSELECTFCN.
             labels    = {"P<", "P>"};
             tooltips  = {"Pan left (shifts the visible frequency range)", ...
                          "Pan right (shifts the visible frequency range)"};
@@ -131,6 +164,18 @@ classdef ZoomPanButtons < handle
                     "ButtonPushedFcn", @(~, ~) this.onButtonPushed(callbacks{i}));
                 b.Layout.Column = i;
             end
+            if ~isempty(channelStepFcn) && ~isempty(channelLabels) && ~isempty(channelSelectFcn)
+                this.ChannelDropdown = TransTools.BuildChannelDropdown(btnGrid, 1, n + 1, ...
+                    channelLabels, @(idx) this.onChannelSelected(idx, channelSelectFcn));
+            end
+        end
+
+        function onChannelSelected(this, idx, channelSelectFcn)
+        %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: mark the
+        %   owning view activated (mirroring onButtonPushed), then hand the
+        %   picked index to CHANNELSELECTFCN (captured at construction).
+            this.notifyOwnerActivated();
+            channelSelectFcn(idx);
         end
 
         function makeSliderRow(this, grid, row, labelText, tip, changedFcn)

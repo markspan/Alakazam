@@ -61,7 +61,8 @@ classdef EpochView < AlakazamView
 
     properties (SetAccess = private)
         Figure          % owning figure
-        Grid            % (2x3) uigridlayout: brace margin | heatmap | colorbar, with the summary trace spanning the heatmap's own column below
+        Grid            % (3x3) uigridlayout: channel dropdown row, then brace margin | heatmap | colorbar, with the summary trace spanning the heatmap's own column below
+        ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1
         BraceAxes       % narrow left-margin axes: bin-group brackets + rotated labels (empty/unused when ~HasBins)
         HeatAxes        % the ERP-image axes
         HeatImage       % the heatmap's Image object (imagesc handle)
@@ -141,11 +142,19 @@ classdef EpochView < AlakazamView
             % attaching directly to HeatAxes (confirmed directly: doing so
             % narrows HeatAxes' own Position to make room for it, breaking
             % the "same width as TraceAxes" pixel alignment below).
-            this.Grid = uigridlayout(fig, [2 3], "RowHeight", {'3x', '1x'}, ...
+            this.Grid = uigridlayout(fig, [3 3], "RowHeight", {22, '3x', '1x'}, ...
                 "ColumnWidth", {0, '1x', TransTools.ColorbarColumnWidth()}, "Padding", [4 4 4 4], "RowSpacing", 2);
 
+            % Row 1: jump straight to an electrode instead of stepping to it
+            % one channel at a time with the up/down arrow keys (onKey) --
+            % spans every column, above the brace margin/heatmap/colorbar
+            % row, so it is unaffected by the brace column's own width
+            % (collapsed to 0 except while "group by bin" is active).
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(this.Grid, 1, [1, 3], ...
+                this.Labels, @(idx) this.onChannelSelected(idx));
+
             this.BraceAxes = uiaxes(this.Grid);
-            this.BraceAxes.Layout.Row = 1;
+            this.BraceAxes.Layout.Row = 2;
             this.BraceAxes.Layout.Column = 1;
             this.BraceAxes.Visible = "off";
             this.BraceAxes.XLim = [0, 1];
@@ -166,7 +175,7 @@ classdef EpochView < AlakazamView
             disableDefaultInteractivity(this.BraceAxes); % a fixed-scale decoration panel, not a real interactive plot
 
             this.HeatAxes = uiaxes(this.Grid);
-            this.HeatAxes.Layout.Row = 1;
+            this.HeatAxes.Layout.Row = 2;
             this.HeatAxes.Layout.Column = 2;
             % No y-axis at all (no ruler, no ticks, no "Trial" label):
             % row identity is conveyed by the bracket panel when grouped,
@@ -195,7 +204,7 @@ classdef EpochView < AlakazamView
             % own comment).
 
             this.TraceAxes = uiaxes(this.Grid);
-            this.TraceAxes.Layout.Row = 2;
+            this.TraceAxes.Layout.Row = 3;
             % Same column as HeatAxes (not spanning the brace margin or
             % colorbar columns too) so the two axes are exactly the same
             % width -- their x-axes then land at identical pixel
@@ -251,13 +260,14 @@ classdef EpochView < AlakazamView
                 if ~isempty(this.ColorbarWrap) && isvalid(this.ColorbarWrap)
                     delete(this.ColorbarWrap);
                 end
-                this.ColorbarWrap = TransTools.AddSharedColorbar(this.Grid, 1, 3, ...
+                this.ColorbarWrap = TransTools.AddSharedColorbar(this.Grid, 2, 3, ...
                     TransTools.DivergingColormap(), [-lim, lim], "Amplitude (\muV)");
                 this.ShownGroup = group;
             end
             xlim(this.HeatAxes, [this.Times(1), this.Times(end)]);
             ylim(this.HeatAxes, [0.5, nRows + 0.5]);
             title(this.HeatAxes, "Channel: " + this.Labels{this.Channel});
+            this.ChannelDropdown.Value = this.Channel;
             this.drawBinGroupLines(nRows);
 
             this.TraceLine.YData = mean(data, 1, "omitnan");
@@ -300,6 +310,15 @@ classdef EpochView < AlakazamView
     end
 
     methods (Access = private)
+        function onChannelSelected(this, idx)
+        %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: jump straight
+        %   to the picked electrode, the same effect as stepping there one
+        %   channel at a time with the up/down arrow keys (onKey).
+            this.notifyActivated();
+            this.Channel = idx;
+            this.redraw();
+        end
+
         function drawBinGroupLines(this, nRows)
         %DRAWBINGROUPLINES  Thin horizontal separators between bin groups
         %   in HeatAxes, and, in the dedicated BraceAxes margin, a
