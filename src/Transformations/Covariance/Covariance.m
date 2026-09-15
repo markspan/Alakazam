@@ -152,6 +152,13 @@ for b = 1:nBins
 end
 
 EEG = input;
+% Clear any TimeFrequency/CoherenceMap/CoherenceTopography/CrossCorrelation
+% fields inherited from an ancestor node -- Covariance has no DataFormat
+% gate of its own, so chaining it onto any of their EPOCHED results is
+% reachable. All four are checked in AlakazamPlotter.plotEpoched BEFORE the
+% .covariance branch, so a stale non-empty field left in place would route
+% this node to the wrong view. See TransTools.ClearForeignResultFields.
+EEG = TransTools.ClearForeignResultFields(EEG, 'TimeFrequency', 'CoherenceMap', 'CoherenceTopography', 'CrossCorrelation');
 EEG.covariance    = matrices;
 EEG.covLabels     = labels(chanIdx);
 EEG.covBinLabels  = binLabels;

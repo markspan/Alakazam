@@ -165,6 +165,13 @@ end
 [peakR, peakLagMs] = peaks(rMean, lagMs);
 
 EEG = input;
+% Clear any TimeFrequency/CoherenceMap/CoherenceTopography fields inherited
+% from an ancestor node -- CrossCorrelation has no DataFormat gate of its
+% own, so chaining it onto any of their EPOCHED results is reachable. All
+% three are checked in AlakazamPlotter.plotEpoched BEFORE the .xcorr branch,
+% so a stale non-empty field left in place would route this node to the
+% wrong view. See TransTools.ClearForeignResultFields.
+EEG = TransTools.ClearForeignResultFields(EEG, 'TimeFrequency', 'CoherenceMap', 'CoherenceTopography');
 EEG.xcorr           = rMean;
 EEG.xcorrSE         = zSE;          % in Fisher-z units; see the header
 EEG.xcorrLags       = lagMs;

@@ -45,6 +45,14 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %% Guard
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:SpectralMeasure', varargin{:});
 EEG = input;
+% Clear an inherited EEG.ersp: running SpectralMeasure on a TimeFrequency
+% result is reachable (both only need EPOCHED data, no reference channel
+% required by either), and TimeFrequency's id-or-field check in
+% AlakazamPlotter.plotEpoched runs before SpectralMeasure's own id check, so
+% a stale non-empty .ersp left in place would route this node to
+% TimeFrequencyView instead of SpectralMeasureView. See
+% TransTools.ClearForeignResultFields.
+EEG = TransTools.ClearForeignResultFields(EEG, 'TimeFrequency');
 if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
     throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
         'Problem in SpectralMeasure: this needs single-trial epoched data (DataFormat = ' ...

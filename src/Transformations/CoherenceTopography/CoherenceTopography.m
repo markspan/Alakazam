@@ -129,19 +129,18 @@ mapLim  = max(mapVals(:), [], 'omitnan');
 if ~isfinite(mapLim) || mapLim <= 0; mapLim = 1; end
 
 EEG = input;
-% Clear any CoherenceMap fields inherited from an ancestor node (running
-% CoherenceTopography on a CoherenceMap result is a normal thing to do --
-% both need EPOCHED data with a reference channel). Left in place, a stale
-% non-empty EEG.coherence made AlakazamPlotter.plotEpoched's routing
-% (checked BEFORE the CohTopoValues branch, since "or a grand average,
-% renamed" needs a field-presence fallback alongside the id check) pick
-% CoherenceView over CoherenceTopographyView for this node -- reported
-% directly: CoherenceMap and CoherenceTopography rendering identically.
-for f = {'coherence', 'cohFreqs', 'cohTimes', 'cohRef', 'cohMethod'}
-    if isfield(EEG, f{1})
-        EEG = rmfield(EEG, f{1});
-    end
-end
+% Clear any CoherenceMap/TimeFrequency fields inherited from an ancestor
+% node (running CoherenceTopography on either's result is a normal thing to
+% do -- all three just need EPOCHED data, CoherenceMap/CoherenceTopography
+% also a reference channel). Left in place, a stale non-empty EEG.coherence
+% or EEG.ersp made AlakazamPlotter.plotEpoched's routing (both checked
+% BEFORE the CohTopoValues branch, since "or a grand average, renamed"
+% needs a field-presence fallback alongside the id check) pick CoherenceView
+% or TimeFrequencyView over CoherenceTopographyView for this node --
+% reported directly for the CoherenceMap case: CoherenceMap and
+% CoherenceTopography rendering identically. See
+% TransTools.ClearForeignResultFields for the full field lists.
+EEG = TransTools.ClearForeignResultFields(EEG, 'CoherenceMap', 'TimeFrequency');
 EEG.CohTopoValues    = coh;                 % nChan x nKeptBins (all channels; NaN ref)
 EEG.CohTopoChanlocs  = scalpLocs(drawn);    % positioned, non-reference channels drawn
 EEG.CohTopoDrawn     = find(drawn);         % their indices into the full channel list

@@ -93,16 +93,12 @@ computeOpts.RefIndex = refIdx;
 
 %% Build the result: pass the epoched data through, add the coherence map.
 EEG = input;
-% Clear any CoherenceTopography fields inherited from an ancestor node --
-% the symmetric case of CoherenceTopography's own clearing of .coherence
-% below; see its header comment for why a stale sibling-result field here
-% would break AlakazamPlotter.plotEpoched's routing.
-for f = {'CohTopoValues', 'CohTopoChanlocs', 'CohTopoDrawn', 'CohTopoFreqs', 'CohTopoRef', ...
-        'CohTopoLimit', 'CohTopoRefAmp', 'CohTopoAmpFreqs', 'CohTopoBins', 'CohTopoBinLabels'}
-    if isfield(EEG, f{1})
-        EEG = rmfield(EEG, f{1});
-    end
-end
+% Clear any CoherenceTopography/TimeFrequency fields inherited from an
+% ancestor node -- both are a normal thing to chain this onto (EPOCHED data
+% with a reference channel; TimeFrequency needs no reference channel at
+% all). See TransTools.ClearForeignResultFields for why a stale sibling
+% field here would break AlakazamPlotter.plotEpoched's routing.
+EEG = TransTools.ClearForeignResultFields(EEG, 'CoherenceTopography', 'TimeFrequency');
 EEG.coherence = coh;
 EEG.cohFreqs  = freqs;
 EEG.cohTimes  = cohTimes;
