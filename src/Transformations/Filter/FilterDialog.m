@@ -4,17 +4,21 @@ function options = FilterDialog(srate, labels, stored)
 %     * global (default) -- three filters (high-pass, low-pass, notch), each an
 %       enable tickbox plus a frequency (Hz) and a dB rating (stopband
 %       attenuation), applied to every channel;
-%     * per-channel -- a table, one row per channel, with a High-pass /
-%       Low-pass / Notch frequency and dB each; a frequency of 0 (or blank)
-%       leaves that filter off for that channel.
+%     * per-channel -- a table, one row per channel, with its own leading
+%       "Filter?" tickbox (default on) plus a High-pass / Low-pass / Notch
+%       frequency and dB each; a frequency of 0 (or blank) leaves that one
+%       filter off for that channel, while unticking "Filter?" skips the
+%       channel entirely regardless of what its own frequencies say --
+%       the direct way to mark "this channel does not need filtering" at
+%       all, rather than zeroing out three fields to the same effect.
 %   Everything else about the FIR design is worked out by Filter.m.
 %
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
 %   channel labels (for the per-channel table); STORED a previous run's options
 %   (or [] on first use). Returns the options struct (.perChannel, the global
 %   .highpass/.lowpass/.notch each {enabled,freq,db}, and .perChannelRows -- a
-%   struct array {label, hpFreq, hpDb, lpFreq, lpDb, notchFreq, notchDb}), or []
-%   on cancel.
+%   struct array {label, enabled, hpFreq, hpDb, lpFreq, lpDb, notchFreq,
+%   notchDb}), or [] on cancel.
     nyq = srate / 2;
     labels = cellfun(@(s) char(string(s)), labels, 'UniformOutput', false);
     [accentColor, bgColor] = dialogChromeColors();
@@ -27,7 +31,7 @@ function options = FilterDialog(srate, labels, stored)
     seed = mergeSeed(defaults, stored);
     seedPerChannel = (isstruct(stored) && isfield(stored, 'perChannel') && logical(stored.perChannel));
 
-    COLS = {'Channel', 'High-pass (Hz)', 'HP dB', 'Low-pass (Hz)', 'LP dB', 'Notch (Hz)', 'Notch dB'};
+    COLS = {'Filter?', 'Channel', 'High-pass (Hz)', 'HP dB', 'Low-pass (Hz)', 'LP dB', 'Notch (Hz)', 'Notch dB'};
 
     fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 620 410]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
@@ -41,7 +45,8 @@ function options = FilterDialog(srate, labels, stored)
         'continuous recording before epoching.'], 'WordWrap', 'on');
 
     perChanBox = uicheckbox(outer, 'Text', 'Per-channel settings', 'Value', seedPerChannel);
-    perChanBox.ValueChangedFcn = @(~, ~) refreshMode();
+    perChanBox.ValueChangedFcn = @(~, ~) onPerChanToggled();
+    hasReseededFromGlobal = false; % see onPerChanToggled
 
     % --- Global panel (row 3) ---
     globalPanel = uigridlayout(outer, [4 3], 'ColumnWidth', {150, '1x', '1x'}, ...
@@ -63,8 +68,8 @@ function options = FilterDialog(srate, labels, stored)
     end
 
     % --- Per-channel table (row 3, shown when toggled on) ---
-    chanTable = uitable(outer, 'ColumnName', COLS, 'ColumnEditable', [false true(1, 6)], ...
-        'ColumnFormat', {'char', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric'}, ...
+    chanTable = uitable(outer, 'ColumnName', COLS, 'ColumnEditable', [true false true(1, 6)], ...
+        'ColumnFormat', {'logical', 'char', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric', 'numeric'}, ...
         'Data', seedTable(labels, seed, stored));
     chanTable.Layout.Row = 3;
 
@@ -85,6 +90,34 @@ function options = FilterDialog(srate, labels, stored)
         chanTable.Visible   = onoff{2 - per};
     end
 
+    function onPerChanToggled()
+        % The table was seeded once, at construction, from STORED (the
+        % last run's remembered settings) -- so switching to per-channel
+        % after editing the global fields would silently show whatever was
+        % remembered, not what was just typed. Reseed from the CURRENT
+        % (live) global control values the first time this session
+        % switches into per-channel mode, so those edits carry over as
+        % every channel's starting default -- stored.perChannelRows, when
+        % present, still wins per channel by label, same as at
+        % construction (see seedTable). Only the FIRST such switch:
+        % toggling back to global and forward again must not silently
+        % discard a per-channel edit made in between.
+        if logical(perChanBox.Value) && ~hasReseededFromGlobal
+            chanTable.Data = seedTable(labels, currentGlobalSeed(), stored);
+            hasReseededFromGlobal = true;
+        end
+        refreshMode();
+    end
+
+    function s = currentGlobalSeed()
+        s = struct();
+        for k = 1:numel(rowDefs)
+            key = rowDefs(k).key;
+            s.(key) = struct('enabled', logical(ctl.(key).cb.Value), ...
+                'freq', ctl.(key).freq.Value, 'db', ctl.(key).db.Value);
+        end
+    end
+
     function onOK()
         per = logical(perChanBox.Value);
         out = struct('perChannel', per);
@@ -97,24 +130,28 @@ function options = FilterDialog(srate, labels, stored)
             out.(key) = struct('enabled', en, 'freq', f, 'db', d);
         end
 
-        % Per-channel rows.
+        % Per-channel rows. Column 1 is the "Filter?" tickbox: unticked
+        % skips the channel entirely, so its own frequency/dB fields are
+        % not even validated -- whatever is left in them does not matter
+        % once the channel is marked as not needing filtering.
         data = chanTable.Data;
-        rows = repmat(struct('label', '', 'hpFreq', 0, 'hpDb', 0, 'lpFreq', 0, 'lpDb', 0, ...
+        rows = repmat(struct('label', '', 'enabled', true, 'hpFreq', 0, 'hpDb', 0, 'lpFreq', 0, 'lpDb', 0, ...
             'notchFreq', 0, 'notchDb', 0), 1, size(data, 1));
         for r = 1:size(data, 1)
-            lab = char(string(data{r, 1}));
-            trip = {'High-pass', 'x', 2, 3; 'Low-pass', 'x', 4, 5; 'Notch', 'notch', 6, 7};
+            en  = logical(data{r, 1});
+            lab = char(string(data{r, 2}));
+            trip = {'High-pass', 'x', 3, 4; 'Low-pass', 'x', 5, 6; 'Notch', 'notch', 7, 8};
             for t = 1:3
                 fr = num0(data{r, trip{t, 3}}); db = num0(data{r, trip{t, 4}});
-                if per && fr > 0
+                if per && en && fr > 0
                     if ~validOne(sprintf('%s %s', lab, trip{t, 1}), trip{t, 2}, fr, db)
                         return;
                     end
                 end
             end
-            rows(r) = struct('label', lab, 'hpFreq', num0(data{r, 2}), 'hpDb', num0(data{r, 3}), ...
-                'lpFreq', num0(data{r, 4}), 'lpDb', num0(data{r, 5}), ...
-                'notchFreq', num0(data{r, 6}), 'notchDb', num0(data{r, 7}));
+            rows(r) = struct('label', lab, 'enabled', en, 'hpFreq', num0(data{r, 3}), 'hpDb', num0(data{r, 4}), ...
+                'lpFreq', num0(data{r, 5}), 'lpDb', num0(data{r, 6}), ...
+                'notchFreq', num0(data{r, 7}), 'notchDb', num0(data{r, 8}));
         end
         out.perChannelRows = rows;
 
@@ -146,9 +183,12 @@ end
 % ======================================================================= %
 function data = seedTable(labels, seed, stored)
 %SEEDTABLE  Per-channel table data: from a stored per-channel set if present,
-%   else every channel seeded from the global settings (0 = off).
+%   else every channel seeded from the global settings (0 = off). The
+%   leading "Filter?" column defaults to true (every channel filtered) --
+%   TransTools.FieldOr covers a stored row saved before that column
+%   existed, which has no .enabled field of its own to read.
     n = numel(labels);
-    data = cell(n, 7);
+    data = cell(n, 8);
     storedRows = [];
     if isstruct(stored) && isfield(stored, 'perChannelRows') && ~isempty(stored.perChannelRows)
         storedRows = stored.perChannelRows;
@@ -157,12 +197,12 @@ function data = seedTable(labels, seed, stored)
     gLp = seed.lowpass.enabled  * seed.lowpass.freq;
     gNo = seed.notch.enabled    * seed.notch.freq;
     for i = 1:n
-        row = {labels{i}, gHp, seed.highpass.db, gLp, seed.lowpass.db, gNo, seed.notch.db};
+        row = {true, labels{i}, gHp, seed.highpass.db, gLp, seed.lowpass.db, gNo, seed.notch.db};
         if ~isempty(storedRows)
             hit = find(strcmpi({storedRows.label}, labels{i}), 1);
             if ~isempty(hit)
                 s = storedRows(hit);
-                row = {labels{i}, s.hpFreq, s.hpDb, s.lpFreq, s.lpDb, s.notchFreq, s.notchDb};
+                row = {TransTools.FieldOr(s, 'enabled', true), labels{i}, s.hpFreq, s.hpDb, s.lpFreq, s.lpDb, s.notchFreq, s.notchDb};
             end
         end
         data(i, :) = row;

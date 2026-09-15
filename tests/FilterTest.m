@@ -141,6 +141,45 @@ classdef FilterTest < matlab.unittest.TestCase
                 'Channel 2 (not named in perChannelRows) should be untouched.');
         end
 
+        function aDisabledChannelIsLeftUntouched(testCase)
+        %ADISABLEDCHANNELISLEFTUNTOUCHED  A perChannelRows entry with
+        %   enabled=false (the per-channel dialog's own "Filter?" tickbox,
+        %   unticked) must not be filtered at all, even though it still
+        %   carries a real hpFreq/hpDb -- the direct "this channel does not
+        %   need filtering" case, not achieved by zeroing every frequency.
+            [EEG, ~] = eegFixture([0.5, 0.5], [10, 10]); % same signal shape on both channels
+            opts = struct('perChannel', true, 'perChannelRows', [ ...
+                struct('label', 'Ch1', 'enabled', true,  'hpFreq', 2, 'hpDb', 40, ...
+                    'lpFreq', 0, 'lpDb', 0, 'notchFreq', 0, 'notchDb', 0), ...
+                struct('label', 'Ch2', 'enabled', false, 'hpFreq', 2, 'hpDb', 40, ...
+                    'lpFreq', 0, 'lpDb', 0, 'notchFreq', 0, 'notchDb', 0)]);
+
+            before = EEG.data;
+            [result, ~] = Filter(EEG, opts);
+
+            testCase.verifyNotEqual(result.data(1, :), before(1, :), ...
+                'Channel 1 (enabled) should have been filtered.');
+            testCase.verifyEqual(result.data(2, :), before(2, :), ...
+                'Channel 2 (enabled=false) must be bit-identical to the input.');
+        end
+
+        function aRowWithNoEnabledFieldDefaultsToFiltered(testCase)
+        %AROWWITHNOENABLEDFIELDDEFAULTSTOFILTERED  Backward compatibility: a
+        %   perChannelRows entry saved before the "Filter?" column existed
+        %   has no .enabled field at all, and must still filter normally
+        %   (default true), not be silently skipped.
+            [EEG, ~] = eegFixture([0.5, 20], [10, 1]);
+            opts = struct('perChannel', true, 'perChannelRows', struct( ...
+                'label', 'Ch1', 'hpFreq', 2, 'hpDb', 40, ...
+                'lpFreq', 0, 'lpDb', 0, 'notchFreq', 0, 'notchDb', 0));
+
+            before = EEG.data;
+            [result, ~] = Filter(EEG, opts);
+
+            testCase.verifyNotEqual(result.data(1, :), before(1, :), ...
+                'A row with no .enabled field should default to filtered.');
+        end
+
         function filtersEveryBinOfAnAveragedDataset(testCase)
         %FILTERSEVERYBINOFANAVERAGEDDATASET  An averaged dataset (Average or
         %   GrandAverage) holds one waveform per bin in the third dimension

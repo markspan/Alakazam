@@ -70,10 +70,18 @@ function EEG = applyPerChannel(EEG, rows)
 %APPLYPERCHANNEL  Apply each channel's own high-pass / low-pass / notch (a
 %   frequency of 0 means that filter is off for that channel). Channels are
 %   matched by label, so a stored per-channel set can be replayed on a dataset
-%   whose channels differ (rows naming absent channels are skipped).
+%   whose channels differ (rows naming absent channels are skipped). A row
+%   with .enabled false (the per-channel dialog's own "Filter?" tickbox,
+%   unticked) is skipped outright -- the direct "this channel does not need
+%   filtering" case, regardless of whatever its own frequency fields still
+%   say. FieldOr's default (true) covers a row saved before that tickbox
+%   existed, which has no .enabled field of its own.
     labels = channelLabels(EEG);
     for r = 1:numel(rows)
         row = rows(r);
+        if ~TransTools.FieldOr(row, 'enabled', true)
+            continue;
+        end
         c = find(strcmpi(labels, char(string(row.label))), 1);
         if isempty(c)
             continue;

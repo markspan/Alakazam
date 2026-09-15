@@ -1,5 +1,5 @@
 {
-  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/RIFT/eeg_preproc/",
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/RIFT/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
   "TransformSettings": {},
