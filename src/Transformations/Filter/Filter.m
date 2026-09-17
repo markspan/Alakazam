@@ -67,32 +67,32 @@ function tf = isEnabled(options, name)
 end
 
 function EEG = applyPerChannel(EEG, rows)
-%APPLYPERCHANNEL  Apply each channel's own high-pass / low-pass / notch (a
-%   frequency of 0 means that filter is off for that channel). Channels are
-%   matched by label, so a stored per-channel set can be replayed on a dataset
-%   whose channels differ (rows naming absent channels are skipped). A row
-%   with .enabled false (the per-channel dialog's own "Filter?" tickbox,
-%   unticked) is skipped outright -- the direct "this channel does not need
-%   filtering" case, regardless of whatever its own frequency fields still
-%   say. FieldOr's default (true) covers a row saved before that tickbox
-%   existed, which has no .enabled field of its own.
+%APPLYPERCHANNEL  Apply each channel's own high-pass / low-pass / notch.
+%   Each filter has its own enable tickbox (the per-channel dialog's own
+%   hpEnabled/lpEnabled/notchEnabled), independent of the other two on the
+%   same channel -- unticking just Notch, say, still runs that channel's
+%   own High-pass/Low-pass -- and a frequency of 0 also means that filter
+%   is off, so a row from before these tickboxes existed still replays
+%   correctly. Channels are matched by label, so a stored per-channel set
+%   can be replayed on a dataset whose channels differ (rows naming absent
+%   channels are skipped). FieldOr's default (true) covers a row saved
+%   before a given tickbox existed (either the single-checkbox design's
+%   .enabled, or no enable concept at all), which has no .hpEnabled/
+%   .lpEnabled/.notchEnabled field of its own.
     labels = channelLabels(EEG);
     for r = 1:numel(rows)
         row = rows(r);
-        if ~TransTools.FieldOr(row, 'enabled', true)
-            continue;
-        end
         c = find(strcmpi(labels, char(string(row.label))), 1);
         if isempty(c)
             continue;
         end
-        if row.hpFreq > 0
+        if TransTools.FieldOr(row, 'hpEnabled', true) && row.hpFreq > 0
             EEG = applyFir(EEG, 'high', row.hpFreq, row.hpDb, c);
         end
-        if row.lpFreq > 0
+        if TransTools.FieldOr(row, 'lpEnabled', true) && row.lpFreq > 0
             EEG = applyFir(EEG, 'low', row.lpFreq, row.lpDb, c);
         end
-        if row.notchFreq > 0
+        if TransTools.FieldOr(row, 'notchEnabled', true) && row.notchFreq > 0
             EEG = applyFir(EEG, 'notch', row.notchFreq, row.notchDb, c);
         end
     end
