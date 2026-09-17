@@ -1,4 +1,4 @@
-function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
+function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, crossf] = ...
         SpectralMeasureDialog(chanlocs, stored)
 %SPECTRALMEASUREDIALOG  Modal editor for SpectralMeasure's settings: a table
 %   of named frequency rows (Label, Frequency expression, Channels), plus the
@@ -13,15 +13,19 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
 %
 %   Returns ROWS (a 1xN cell of scalar structs .label/.freq/.channels),
 %   FUNDAMENTALS (the "let f1 = 63" block), REFCHANNEL, METHOD ('Hann' or
-%   'Multitaper'), NTAPERS, SNRN (neighbour bins each side) and SNRGUARD
-%   (guard bins); or [] / '' on Cancel, the same "empty means cancel"
-%   contract MeasureDialog/GrandAverageDialog use.
+%   'Multitaper'), NTAPERS, SNRN (neighbour bins each side), SNRGUARD
+%   (guard bins) and CROSSF (a struct: .enabled plus, when enabled,
+%   .WinSize/.PadRatio/.TimesOut/.MinFreq/.MaxFreq/.TimeStart/.TimeStop --
+%   see SpectralMeasure's own header comment for what each means); or
+%   [] / '' on Cancel, the same "empty means cancel" contract
+%   MeasureDialog/GrandAverageDialog use.
     METHOD_CHOICES = {'Hann', 'Multitaper'};
     COLUMN_NAMES   = {'Label', 'Frequency', 'Channels'};
     COLUMN_WIDTHS  = {'2x', '3x', '4x'};
 
     rows = []; fundamentals = ''; refChannel = ''; method = 'Hann';
     nTapers = 3; snrN = 10; snrGuard = 1;               % returned only on OK
+    crossf = struct('enabled', false);
     allLabels = string({chanlocs.labels});
     selectedRow = 0;
 
@@ -29,6 +33,8 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     seedRows = {{'f1', 'f1', ''}};
     seedFund = 'let f1 = 60';
     seedRef = ''; seedMethod = 'Hann'; seedTapers = 3; seedN = 10; seedGuard = 1;
+    seedCrossf = struct('enabled', false, 'WinSize', 510, 'PadRatio', 4, 'TimesOut', 500, ...
+        'MinFreq', [], 'MaxFreq', [], 'TimeStart', [], 'TimeStop', []);
     if isstruct(stored) && isfield(stored, 'rows') && ~isempty(stored.rows)
         storedRows = stored.rows;
         if isstruct(storedRows)
@@ -51,15 +57,24 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         seedTapers = getField(stored, 'tapers', 3);
         seedN      = getField(stored, 'snrNeighbours', 10);
         seedGuard  = getField(stored, 'snrGuard', 1);
+        storedCrossf = getField(stored, 'crossf', struct());
+        seedCrossf.enabled   = logical(getField(storedCrossf, 'enabled', false));
+        seedCrossf.WinSize   = getField(storedCrossf, 'WinSize', 510);
+        seedCrossf.PadRatio  = getField(storedCrossf, 'PadRatio', 4);
+        seedCrossf.TimesOut  = getField(storedCrossf, 'TimesOut', 500);
+        seedCrossf.MinFreq   = getField(storedCrossf, 'MinFreq', []);
+        seedCrossf.MaxFreq   = getField(storedCrossf, 'MaxFreq', []);
+        seedCrossf.TimeStart = getField(storedCrossf, 'TimeStart', []);
+        seedCrossf.TimeStop  = getField(storedCrossf, 'TimeStop', []);
     end
     tableData = vertcat(seedRows{:});
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'SpectralMeasure', 'Position', fitOnScreen([100 100 900 560]), 'Color', bgColor);
+    fig = uifigure('Name', 'SpectralMeasure', 'Position', fitOnScreen([100 100 900 640]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Spectral measure', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
-    outer = uigridlayout(root, [5 1], 'RowHeight', {'fit', 'fit', '1x', 'fit', 44});
+    outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...
         'Quantify tagged responses at named frequencies. Declare fundamentals below ' ...
@@ -91,18 +106,55 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
     uilabel(ctrl, 'Text', 'SNR guard bins:');
     guardField = uieditfield(ctrl, 'numeric', 'Value', seedGuard, 'Limits', [0 20], 'RoundFractionalValues', 'on');
 
+    % Coherence via newcrossf: a checkbox plus its own compact strip of
+    % newcrossf parameters, enabled/disabled together with it. Only
+    % coherence/phase-lag are affected -- see SpectralMeasure's own header
+    % comment for why this exists (the default single-window coherence is a
+    % biased estimator) and needs EEGLAB (checked at compute time, not here,
+    % so this dialog itself works without EEGLAB on the path).
+    crossfPanel = uigridlayout(outer, [2 1], 'RowHeight', {'fit', 'fit'}, ...
+        'Padding', [0 0 0 0], 'RowSpacing', 2);
+    crossfPanel.Layout.Row = 3;
+    crossfCheck = uicheckbox(crossfPanel, 'Text', [ ...
+        'Compute coherence / phase-lag via EEGLAB''s newcrossf (sliding-window, trial- and ' ...
+        'frame-averaged) instead of the single-window default; needs EEGLAB.'], ...
+        'Value', seedCrossf.enabled);
+    crossfFields = uigridlayout(crossfPanel, [2 7], 'ColumnWidth', repmat({'1x'}, 1, 7), ...
+        'RowHeight', {'fit', 'fit'}, 'Padding', [24 0 0 0], 'ColumnSpacing', 6);
+    crossfLabels = {'Window (samples)', 'Pad ratio', 'Time points', 'Min freq (Hz)', ...
+        'Max freq (Hz)', 'Window start (ms)', 'Window stop (ms)'};
+    for i = 1:numel(crossfLabels)
+        uilabel(crossfFields, 'Text', crossfLabels{i}, 'FontSize', 10);
+    end
+    winSizeField   = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.WinSize, ...
+        'Limits', [4 Inf], 'RoundFractionalValues', 'on');
+    padRatioField  = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.PadRatio, ...
+        'Limits', [1 Inf], 'RoundFractionalValues', 'on');
+    timesOutField  = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.TimesOut, ...
+        'Limits', [2 Inf], 'RoundFractionalValues', 'on');
+    minFreqField   = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.MinFreq, ...
+        'AllowEmpty', 'on', 'Placeholder', 'auto');
+    maxFreqField   = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.MaxFreq, ...
+        'AllowEmpty', 'on', 'Placeholder', 'auto');
+    timeStartField = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.TimeStart, ...
+        'AllowEmpty', 'on', 'Placeholder', 'whole epoch');
+    timeStopField  = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.TimeStop, ...
+        'AllowEmpty', 'on', 'Placeholder', 'whole epoch');
+    crossfCheck.ValueChangedFcn = @(~, ~) setCrossfFieldsEnabled(crossfCheck.Value);
+    setCrossfFieldsEnabled(seedCrossf.enabled);
+
     table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 3), ...
         'ColumnFormat', {'char', 'char', 'char'}, 'ColumnWidth', COLUMN_WIDTHS, 'Data', tableData);
-    table.Layout.Row = 3;
+    table.Layout.Row = 4;
     table.CellSelectionCallback = @(~, event) onCellSelected(event);
 
     rowButtons = uigridlayout(outer, [1 3], 'ColumnWidth', {110, 130, '1x'}, 'Padding', [0 0 0 0]);
-    rowButtons.Layout.Row = 4;
+    rowButtons.Layout.Row = 5;
     uibutton(rowButtons, 'Text', 'Add Frequency', 'ButtonPushedFcn', @(~, ~) addRow());
     uibutton(rowButtons, 'Text', 'Remove Selected', 'ButtonPushedFcn', @(~, ~) removeSelectedRow());
 
     buttons = uigridlayout(outer, [1 5], 'ColumnWidth', {90, 90, '1x', 90, 90}, 'Padding', [8 6 8 6]);
-    buttons.Layout.Row = 5;
+    buttons.Layout.Row = 6;
     b1 = uibutton(buttons, 'Text', 'Save...', 'ButtonPushedFcn', @(~, ~) onSave());  b1.Layout.Column = 1;
     b2 = uibutton(buttons, 'Text', 'Load...', 'ButtonPushedFcn', @(~, ~) onLoad());  b2.Layout.Column = 2;
     b3 = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel()); b3.Layout.Column = 4;
@@ -162,6 +214,17 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
             uialert(fig, sprintf('I''m afraid reference channel "%s" is not in this dataset.', ref), ...
                 'Check the reference channel'); return;
         end
+        newCrossf = crossfFromFields();
+        if newCrossf.enabled
+            if ~isempty(newCrossf.MinFreq) && ~isempty(newCrossf.MaxFreq) && newCrossf.MinFreq >= newCrossf.MaxFreq
+                uialert(fig, 'Min freq must be less than Max freq for the newcrossf coherence band.', ...
+                    'Check the newcrossf settings'); return;
+            end
+            if ~isempty(newCrossf.TimeStart) && ~isempty(newCrossf.TimeStop) && newCrossf.TimeStart >= newCrossf.TimeStop
+                uialert(fig, 'Window start must be before Window stop for the newcrossf averaging window.', ...
+                    'Check the newcrossf settings'); return;
+            end
+        end
 
         rows = rowsFromData(data);
         fundamentals = fundText;
@@ -170,11 +233,31 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         nTapers = tapersField.Value;
         snrN = neighField.Value;
         snrGuard = guardField.Value;
+        crossf = newCrossf;
         uiresume(fig); delete(fig);
     end
 
     function onCancel()
         uiresume(fig); delete(fig);
+    end
+
+    function c = crossfFromFields()
+    %CROSSFFROMFIELDS  The crossf struct from the dialog's own fields --
+    %   MinFreq/MaxFreq/TimeStart/TimeStop stay [] ("auto"/"whole epoch")
+    %   when their field was left empty, same "empty means unset" contract
+    %   SpectralMeasure.m's own numOr expects.
+        c = struct('enabled', logical(crossfCheck.Value), ...
+            'WinSize', winSizeField.Value, 'PadRatio', padRatioField.Value, ...
+            'TimesOut', timesOutField.Value, 'MinFreq', minFreqField.Value, ...
+            'MaxFreq', maxFreqField.Value, 'TimeStart', timeStartField.Value, ...
+            'TimeStop', timeStopField.Value);
+    end
+
+    function setCrossfFieldsEnabled(tf)
+        state = matlab.lang.OnOffSwitchState(tf);
+        winSizeField.Enable = state; padRatioField.Enable = state; timesOutField.Enable = state;
+        minFreqField.Enable = state; maxFreqField.Enable = state;
+        timeStartField.Enable = state; timeStopField.Enable = state;
     end
 
     function onSave()
@@ -210,7 +293,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
             'refChannel', strtrim(char(string(refField.Value))), ...
             'method', methodDrop.Value, 'tapers', tapersField.Value, ...
             'snrNeighbours', neighField.Value, 'snrGuard', guardField.Value, ...
-            'rows', {rowStructs});
+            'crossf', crossfFromFields(), 'rows', {rowStructs});
         json = jsonencode(file, 'PrettyPrint', true, 'ConvertInfAndNaN', false);
         fid = fopen(filePath, 'w');
         if fid < 0
@@ -241,6 +324,16 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
         tapersField.Value = getField(raw, 'tapers', 3);
         neighField.Value = getField(raw, 'snrNeighbours', 10);
         guardField.Value = getField(raw, 'snrGuard', 1);
+        loadedCrossf = getField(raw, 'crossf', struct());
+        crossfCheck.Value  = logical(getField(loadedCrossf, 'enabled', false));
+        winSizeField.Value   = getField(loadedCrossf, 'WinSize', 510);
+        padRatioField.Value  = getField(loadedCrossf, 'PadRatio', 4);
+        timesOutField.Value  = getField(loadedCrossf, 'TimesOut', 500);
+        minFreqField.Value   = getField(loadedCrossf, 'MinFreq', []);
+        maxFreqField.Value   = getField(loadedCrossf, 'MaxFreq', []);
+        timeStartField.Value = getField(loadedCrossf, 'TimeStart', []);
+        timeStopField.Value  = getField(loadedCrossf, 'TimeStop', []);
+        setCrossfFieldsEnabled(crossfCheck.Value);
     end
 end
 
