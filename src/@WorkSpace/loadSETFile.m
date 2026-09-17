@@ -27,6 +27,7 @@ function loadSETFile(this, name)
         EEG = pop_loadset(name, this.RawDirectory);
         EEG = eeg_checkset(EEG);
         EEG.DataType = 'TIMEDOMAIN';
+<<<<<<< Updated upstream
         % A .set file, unlike a BrainVision .vhdr, is not always raw
         % continuous data -- it is just as often something already
         % epoched or averaged elsewhere (another EEGLAB pipeline, or an
@@ -50,6 +51,21 @@ function loadSETFile(this, name)
             % millisecond epoch (10 ms is far shorter than any real ERP
             % window), so treat it as seconds and convert.
             EEG.times = EEG.times * 1000;
+=======
+        EEG.DataFormat = inferDataFormat(EEG);
+        if strcmpi(EEG.DataFormat, 'CONTINUOUS')
+            % Alakazam keeps continuous EEG.times in seconds (see Resample.m);
+            % set continuous times from sample count and srate.
+            EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
+        elseif strcmpi(EEG.DataFormat, 'EPOCHED')
+            % Epoched/averaged data usually carry EEGLAB's millisecond .times.
+            % Some .set files, however, have epoched times in seconds; if the
+            % times appear to be on a seconds scale (max abs < 10s), convert
+            % them to milliseconds to match Alakazam expectations elsewhere.
+            if ~isempty(EEG.times) && max(abs(EEG.times(:))) < 10
+                EEG.times = EEG.times * 1000;
+            end
+>>>>>>> Stashed changes
         end
         % An epoched .set from outside Alakazam (another EEGLAB pipeline's
         % output, not DefineBins' own) carries condition info as pop_epoch's
@@ -70,6 +86,5 @@ function loadSETFile(this, name)
     EEG.id = id;
     EEG.File = matfilename;
     this.EEG = EEG;
-
     this.registerRootNode(id, matfilename, 'raw');
 end
