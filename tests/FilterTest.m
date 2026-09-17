@@ -141,33 +141,71 @@ classdef FilterTest < matlab.unittest.TestCase
                 'Channel 2 (not named in perChannelRows) should be untouched.');
         end
 
-        function aDisabledChannelIsLeftUntouched(testCase)
-        %ADISABLEDCHANNELISLEFTUNTOUCHED  A perChannelRows entry with
-        %   enabled=false (the per-channel dialog's own "Filter?" tickbox,
-        %   unticked) must not be filtered at all, even though it still
-        %   carries a real hpFreq/hpDb -- the direct "this channel does not
-        %   need filtering" case, not achieved by zeroing every frequency.
+        function perFilterEnabledFlagsActIndependently(testCase)
+        %PERFILTERENABLEDFLAGSACTINDEPENDENTLY  Each filter has its own
+        %   tickbox (hpEnabled/lpEnabled/notchEnabled) -- disabling one must
+        %   not disable the others on the same channel. Ch1's high-pass is
+        %   ticked (should run) while its notch is unticked despite a real
+        %   notchFreq/notchDb (should not run).
+            [EEG, t] = eegFixture([0.5, 50], [10, 5]);
+            opts = struct('perChannel', true, 'perChannelRows', struct( ...
+                'label', 'Ch1', ...
+                'hpEnabled', true, 'hpFreq', 2, 'hpDb', 40, ...
+                'lpEnabled', true, 'lpFreq', 0, 'lpDb', 0, ...
+                'notchEnabled', false, 'notchFreq', 50, 'notchDb', 40));
+
+            before = EEG.data;
+            [result, ~] = Filter(EEG, opts);
+
+            lowBefore   = freqAmplitude(before(1, :), t, 0.5);
+            lowAfter    = freqAmplitude(result.data(1, :), t, 0.5);
+            notchBefore = freqAmplitude(before(1, :), t, 50);
+            notchAfter  = freqAmplitude(result.data(1, :), t, 50);
+
+            testCase.verifyLessThan(lowAfter, lowBefore * 0.1, ...
+                'High-pass (enabled) should have attenuated the 0.5 Hz drift.');
+            % Loosely, not bit-exactly: the enabled high-pass still runs
+            % over the whole signal (its own passband ripple is not
+            % perfectly flat at 50 Hz), so "the notch did not run" is
+            % "50 Hz mostly survived", the same largely-intact standard
+            % this file's other tests use for a frequency well clear of a
+            % filter's own transition band -- not exact equality.
+            testCase.verifyGreaterThan(notchAfter, notchBefore * 0.9, ...
+                'Notch (disabled, despite a real notchFreq/notchDb) must not have run.');
+        end
+
+        function aChannelWithAllThreeFiltersDisabledIsLeftUntouched(testCase)
+        %ACHANNELWITHALLTHREEFILTERSDISABLEDISLEFTUNTOUCHED
+        %   hpEnabled/lpEnabled/notchEnabled all false must leave the
+        %   channel bit-identical, even though it still carries real
+        %   frequency/dB numbers for all three -- the direct "this channel
+        %   does not need filtering" case, not achieved by zeroing every
+        %   frequency by hand.
             [EEG, ~] = eegFixture([0.5, 0.5], [10, 10]); % same signal shape on both channels
             opts = struct('perChannel', true, 'perChannelRows', [ ...
-                struct('label', 'Ch1', 'enabled', true,  'hpFreq', 2, 'hpDb', 40, ...
-                    'lpFreq', 0, 'lpDb', 0, 'notchFreq', 0, 'notchDb', 0), ...
-                struct('label', 'Ch2', 'enabled', false, 'hpFreq', 2, 'hpDb', 40, ...
-                    'lpFreq', 0, 'lpDb', 0, 'notchFreq', 0, 'notchDb', 0)]);
+                struct('label', 'Ch1', ...
+                    'hpEnabled', true, 'hpFreq', 2, 'hpDb', 40, ...
+                    'lpEnabled', true, 'lpFreq', 0, 'lpDb', 0, ...
+                    'notchEnabled', true, 'notchFreq', 0, 'notchDb', 0), ...
+                struct('label', 'Ch2', ...
+                    'hpEnabled', false, 'hpFreq', 2, 'hpDb', 40, ...
+                    'lpEnabled', false, 'lpFreq', 40, 'lpDb', 40, ...
+                    'notchEnabled', false, 'notchFreq', 50, 'notchDb', 40)]);
 
             before = EEG.data;
             [result, ~] = Filter(EEG, opts);
 
             testCase.verifyNotEqual(result.data(1, :), before(1, :), ...
-                'Channel 1 (enabled) should have been filtered.');
+                'Channel 1 (high-pass enabled) should have been filtered.');
             testCase.verifyEqual(result.data(2, :), before(2, :), ...
-                'Channel 2 (enabled=false) must be bit-identical to the input.');
+                'Channel 2 (all three filters disabled) must be bit-identical to the input.');
         end
 
         function aRowWithNoEnabledFieldDefaultsToFiltered(testCase)
         %AROWWITHNOENABLEDFIELDDEFAULTSTOFILTERED  Backward compatibility: a
-        %   perChannelRows entry saved before the "Filter?" column existed
-        %   has no .enabled field at all, and must still filter normally
-        %   (default true), not be silently skipped.
+        %   perChannelRows entry saved before these tickboxes existed has no
+        %   .hpEnabled/.lpEnabled/.notchEnabled field at all, and must still
+        %   filter normally (default true), not be silently skipped.
             [EEG, ~] = eegFixture([0.5, 20], [10, 1]);
             opts = struct('perChannel', true, 'perChannelRows', struct( ...
                 'label', 'Ch1', 'hpFreq', 2, 'hpDb', 40, ...
