@@ -97,11 +97,27 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
     prefix = [strjoin(fields, ','), ','];
 
     for b = 1:nBin
-        binField = csvField(csvBinLabel(EEG, b));
         slab = coh(:, :, :, b);                        % nChan x nFreq x nTime
 
-        % The tag: strongest coherence averaged over channels and time.
+        % The tag: strongest coherence averaged over channels and time. A
+        % bin this dataset has no trials for (a condition run for other
+        % subjects but not this one, e.g. RIFT's own peripheral-60Hz/SSVEP
+        % split by subject group) or a combination bin (see
+        % coherenceOverBins) is entirely NaN here -- max() of an all-NaN
+        % vector does not itself return NaN, it silently returns INDEX 1,
+        % so without this check tagHz would become freqs(1), the analysis
+        % band's own lowest frequency, written out as if it were a real
+        % detected tag for every channel and timepoint. Once even one
+        % dataset contributes that fabricated value for a bin, it can
+        % surface as THE reported "tagged frequency" for that condition
+        % across the whole report. Skipping the bin entirely here -- no
+        % trace rows, no map rows, no tag -- is the same "nothing to say"
+        % response coherenceOverBins already gives an empty-trial bin.
         perFreq = mean(mean(slab, 3, 'omitnan'), 1, 'omitnan');
+        if all(isnan(perFreq))
+            continue;
+        end
+        binField = csvField(csvBinLabel(EEG, b));
         [~, fTag] = max(perFreq);
         tagHz = freqs(fTag);
 

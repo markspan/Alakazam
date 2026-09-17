@@ -35,7 +35,7 @@ classdef label
                     'Parent', hAxes, ...
                     varargin{:} );
                 text(pos, h(2) - (.015 * (max(h)-min(h))), lab, ...
-                    'Parent', hAxes, 'FontSize', 8, 'Color', col/1.5, 'Interpreter', 'none');
+                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none');
             else
                 obj.VPatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
                     'ButtonDownFcn', @obj.buttondn, ...
@@ -43,7 +43,7 @@ classdef label
                     varargin{:} );
 
                 text(pos, h(2) + (.015 * (max(h)-min(h))), lab, ...
-                    'Parent', hAxes, 'FontSize', 8, 'Color', col/1.5, 'Interpreter', 'none');
+                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none');
             end
         end
 

@@ -4,8 +4,40 @@
   "name": "RIFT frequency tagging (Dimigen et al. 2025)",
   "nodes": [
     {
-      "transformId": "Filter",
+      "transformId": "SelectData",
+      "parent": -1,
+      "params": {
+        "channels": { "mode": "Keep", "labels": [
+          "Fz", "Cz", "C3", "C4", "FP1", "Pz", "FP2",
+          "PO7", "PO3", "POz", "PO4", "PO8", "O1", "Oz", "O2", "PO9", "PO10",
+          "M1", "M2", "IO2", "LO2", "IO1", "LO1", "PhotoDiode"
+        ] },
+        "time":     { "mode": "(off)", "range": [0, 0] },
+        "points":   { "mode": "(off)", "range": [1, 1] },
+        "trials":   { "mode": "(off)", "indices": [] }
+      }
+    },
+    {
+      "transformId": "ReRef",
       "parent": 1,
+      "params": {
+        "mode": "Specific channels",
+        "refChannels": ["Cz"],
+        "exclude": ["PhotoDiode"],
+        "keepref": false,
+        "implicitRef": ""
+      }
+    },
+    {
+      "transformId": "Resample",
+      "parent": 2,
+      "params": {
+        "NewRate": 960
+      }
+    },
+    {
+      "transformId": "Filter",
+      "parent": 3,
       "params": {
         "highpass": { "enabled": true, "freq": 1, "db": 12 },
         "lowpass":  { "enabled": false, "freq": 30, "db": 12 },
@@ -13,15 +45,23 @@
       }
     },
     {
+      "transformId": "DefineBins",
+      "parent": 4,
+      "params": {
+        "script": "% epoch_start_ms: 0\n% epoch_stop_ms: 8332\n% Codes are markers; ? = any char; { } lists alternatives; | is or.\n% Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.\n% let names a reusable expression (codes or relations); = makes a difference bin.\n% Trigger codes are TSMI/OpenViBE inverted+offset (recorded = 33279 - true code).\n% The \"third condition\" trigger differs by subject group: subjects 1-3 ran a\n% 30Hz binary SSVEP control (true code 21, recorded s33258); subjects 4-10 ran\n% 60Hz peripheral RIFT instead (true code 121, recorded s33158). Kept as\n% separate bins since they are different stimulus types, not a relabeling of\n% the same condition -- each bin is simply empty for the subject group that\n% didn't run it.\n\nbin 1 \"RIFT 64Hz\"            {\"s33248\"}\nbin 2 \"SSVEP 30Hz\"           {\"s33258\"}\nbin 3 \"RIFT 60Hz\"            {\"s33268\"}\nbin 4 \"RIFT 60Hz peripheral\" {\"s33158\"}",
+        "epoch": { "lo": 0, "hi": 8332, "unit": "ms" }
+      }
+    },
+    {
       "transformId": "AutoEyeICA",
-      "parent": 3,
+      "parent": 5,
       "params": {
         "EyeThreshold": 0.9
       }
     },
     {
       "transformId": "CoherenceMap",
-      "parent": 4,
+      "parent": 6,
       "params": {
         "RefChannel": "Photodiode",
         "Method": "STFT",
@@ -36,7 +76,7 @@
     },
     {
       "transformId": "CoherenceTopography",
-      "parent": 4,
+      "parent": 6,
       "params": {
         "RefChannel": "Photodiode",
         "MinFreq": 52,
@@ -48,7 +88,7 @@
     },
     {
       "transformId": "SelectData",
-      "parent": 4,
+      "parent": 6,
       "params": {
         "channels": { "mode": "(off)", "labels": [] },
         "time":     { "mode": "Keep", "range": [883, 8594] },
@@ -58,7 +98,7 @@
     },
     {
       "transformId": "SpectralMeasure",
-      "parent": 7,
+      "parent": 9,
       "params": {
         "rows": [
           { "label": "60Hz", "freq": "60", "channels": "Oz" },
@@ -69,7 +109,15 @@
         "method": "Hann",
         "tapers": 3,
         "snrNeighbours": 10,
-        "snrGuard": 1
+        "snrGuard": 1,
+        "crossf": {
+          "enabled": true,
+          "WinSize": 510,
+          "PadRatio": 4,
+          "TimesOut": 500,
+          "MinFreq": 52,
+          "MaxFreq": 68
+        }
       }
     }
   ]

@@ -27,6 +27,21 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %   optional DPSS multitaper (Signal Processing Toolbox) averages over K
 %   tapers to cut variance.
 %
+%   COHERENCE VIA NEWCROSSF (options.crossf.enabled = true). The default
+%   coherence above is ONE Hann-tapered DFT bin per trial (the whole
+%   selected epoch as a single window), then pooled over trials -- cheap and
+%   EEGLAB-free, but a biased estimator: fewer independent samples going
+%   into the average inflates the coherence value. EEGLAB's own newcrossf
+%   (via pop_newcrossf) instead slides a shorter window across each trial
+%   with heavy overlap and averages over every one of those frames as well
+%   as over trials, which is far less biased. Setting options.crossf.enabled
+%   computes coherence/phaselag this way instead (needs EEGLAB's newcrossf
+%   on the path); every other measure (power/amplitude/snr/itc/phase) is
+%   unaffected, since those are single-channel, not cross-channel. See
+%   options.crossf's own fields below for what newcrossf parameters are
+%   exposed, and crossfCoherence (this file) for exactly how they map onto
+%   the newcrossf call.
+%
 %   The epoched data passes through unchanged; the result adds
 %   EEG.spectralMeasures (1xN cell of scalar structs, mirroring
 %   EEG.measurements: .label, .freq, .channels, .refChannel, and
@@ -62,7 +77,7 @@ if ~isfield(input, 'DataFormat') || ~strcmpi(input.DataFormat, 'EPOCHED')
 end
 if interactive
     stored = TransformSettings.get('SpectralMeasure');
-    [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard] = ...
+    [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, crossf] = ...
         SpectralMeasureDialog(input.chanlocs, stored);
     if isempty(rows)
         % OPTIONS (the second declared output) must still be assigned:
@@ -75,7 +90,7 @@ if interactive
     end
     options = struct('rows', {rows}, 'fundamentals', fundamentals, ...
         'refChannel', refChannel, 'method', method, 'tapers', nTapers, ...
-        'snrNeighbours', snrN, 'snrGuard', snrGuard);
+        'snrNeighbours', snrN, 'snrGuard', snrGuard, 'crossf', crossf);
     TransformSettings.set('SpectralMeasure', options);
 else
     if ~isstruct(opts) || ~isfield(opts, 'rows')
@@ -108,6 +123,8 @@ method       = TransTools.FieldOr(options, 'method', 'Hann');
 nTapers      = TransTools.FieldOr(options, 'tapers', 3);
 snrN         = TransTools.FieldOr(options, 'snrNeighbours', 10);
 snrGuard     = TransTools.FieldOr(options, 'snrGuard', 1);
+crossf       = TransTools.FieldOr(options, 'crossf', struct('enabled', false));
+crossf.enabled = logical(TransTools.FieldOr(crossf, 'enabled', false));
 
 if isempty(rows)
     throw(MException('Alakazam:SpectralMeasure', ...
@@ -117,6 +134,29 @@ end
 %% Resolve frequencies (Hz) from the expression rows + fundamentals
 freqExprs = cellfun(@(r) r.freq, rows, 'UniformOutput', false);
 freqHz = spectralFreqSpecs(freqExprs, fundamentals);
+
+%% Fill in the newcrossf option's own defaults (only matters if enabled).
+%  MinFreq/MaxFreq default to the rows' own frequency span padded by 8 Hz
+%  either side -- enough room for a coherent bandwidth around each named
+%  frequency without the analyst having to work it out by hand; explicit
+%  values (as the RIFT template sets, matching the paper's own 52-68 Hz
+%  band exactly) always win.
+if crossf.enabled
+    if exist('newcrossf', 'file') ~= 2
+        throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
+            'Problem in SpectralMeasure: "coherence via newcrossf" is turned on, but EEGLAB''s ' ...
+            'own newcrossf function isn''t on the path here. Would you initialise EEGLAB first ' ...
+            '(eeglab), or turn this option off and use the default single-window coherence?'])));
+    end
+    crossf.WinSize   = TransTools.FieldOr(crossf, 'WinSize', 510);     % samples, matches newcrossf's own 'winsize'
+    crossf.PadRatio  = TransTools.FieldOr(crossf, 'PadRatio', 4);
+    crossf.TimesOut  = TransTools.FieldOr(crossf, 'TimesOut', 500);
+    crossf.MinFreq   = numOr(TransTools.FieldOr(crossf, 'MinFreq', NaN), min(freqHz) - 8);
+    crossf.MaxFreq   = numOr(TransTools.FieldOr(crossf, 'MaxFreq', NaN), max(freqHz) + 8);
+    crossf.TimeStart = numOr(TransTools.FieldOr(crossf, 'TimeStart', NaN), NaN);
+    crossf.TimeStop  = numOr(TransTools.FieldOr(crossf, 'TimeStop', NaN), NaN);
+end
+options.crossf = crossf;   % normalised form persists onto this node, like options.rows above
 
 %% Build tapers (nsamp x K)
 [~, nsamp, ~] = size(EEG.data);
@@ -139,10 +179,20 @@ t = (0:nsamp - 1) / srate;
 df = srate / nsamp;
 
 %% Per-row computation
+% crossfCache: keyed by "<channel members>_<bin>", shared across every row
+% in this call, since several rows commonly name the same channel (e.g.
+% both a 60Hz and a 64Hz row asking about "Oz") -- newcrossf's own
+% time-frequency image for a given channel/bin doesn't depend on which
+% row's target frequency is being read out of it afterwards, so computing
+% it once and letting every row pick its own frequency bin out of the same
+% image is both cheaper and exactly how the source analyses this mirrors
+% (e.g. the RIFT paper's own script) reuse one coherence image per
+% channel/condition across multiple reported frequencies.
+crossfCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
 measurements = cell(1, numel(rows));
 for w = 1:numel(rows)
     measurements{w} = computeRow(EEG, rows{w}, freqHz(w), allLabels, refIdx, ...
-        nBins, t, df, nyq, tapers, snrN, snrGuard);
+        nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache);
 end
 EEG.spectralMeasures = measurements;
 
@@ -151,7 +201,7 @@ EEG.spectralMeasures = measurements;
 end
 
 % ======================================================================= %
-function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tapers, snrN, snrGuard)
+function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache)
 %COMPUTEROW  All metrics for one frequency row, per channel x bin.
     specs = measureChannelSpecs(row.channels, allLabels, row.label);
     nCh = numel(specs);
@@ -212,11 +262,16 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
             end
 
             if ~isempty(refIdx)
-                cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
-                den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
-                if den > 0
-                    coherence(c, b) = abs(cross)^2 / den;
-                    phaselag(c, b)  = angle(cross);
+                if crossf.enabled
+                    [coherence(c, b), phaselag(c, b)] = crossfCoherence( ...
+                        EEG, specs(c).members, refIdx, b, trials, fUse, crossf, crossfCache);
+                else
+                    cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
+                    den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
+                    if den > 0
+                        coherence(c, b) = abs(cross)^2 / den;
+                        phaselag(c, b)  = angle(cross);
+                    end
                 end
             end
         end
@@ -227,6 +282,74 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
     m = struct('label', row.label, 'freq', fHz, 'channels', {{specs.label}}, ...
         'refChannel', ref, 'power', power, 'amplitude', amplitude, 'snr', snr, ...
         'itc', itc, 'phase', phase, 'coherence', coherence, 'phaselag', phaselag);
+end
+
+function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, crossf, cache)
+%CROSSFCOHERENCE  Magnitude-squared coherence and phase-lag at frequency
+%   FUSE, for one channel spec and one bin, computed via EEGLAB's newcrossf
+%   instead of SpectralMeasure's own single-window DFT (see this file's
+%   header comment for why the two differ numerically).
+%
+%   newcrossf produces a whole time x frequency coherence image per
+%   channel/bin, shared across every row that asks about this same
+%   channel/bin (CACHE, a containers.Map keyed by "<members>_<bin>",
+%   created once per SpectralMeasure call and threaded through every
+%   computeRow) -- exactly mirroring how the source analyses this mirrors
+%   (e.g. the RIFT paper's own script) compute one newcrossf call per
+%   channel/condition and read multiple frequencies back out of it.
+    key = sprintf('%s_%d', mat2str(members), b);
+    if isKey(cache, key)
+        img = cache(key);
+    else
+        Vc   = poolWave(EEG, members, trials);          % nsamp x nTrials
+        Vref = poolWave(EEG, refIdx, trials);            % nsamp x nTrials
+
+        % newcrossf wants each signal flattened to 1 x (frames*nepochs),
+        % frame-then-epoch -- exactly what reshape(V, 1, []) gives a
+        % nsamp x nTrials matrix (column-major: each trial's samples run
+        % together before the next trial's), the same layout pop_newcrossf
+        % itself builds from EEG.data(chan,:,:) internally.
+        xflat = reshape(Vc, 1, []);
+        yflat = reshape(Vref, 1, []);
+        nsamp = size(Vc, 1);
+        tlimits = [EEG.times(1), EEG.times(end)];   % ms
+
+        % newcrossf's 'coh' output is already a REAL magnitude (coherence),
+        % not a complex coherency -- phase lives in the separate 'cohangle'
+        % output (its own positional output #6; mcoh/cohboot in between are
+        % unused here). See this function's header comment for how each is
+        % reduced to a scalar below.
+        [cohImg, ~, timesOut, freqsOut, ~, angleImg] = newcrossf(xflat, yflat, nsamp, tlimits, ...
+            EEG.srate, 0, 'type', 'coher', 'winsize', crossf.WinSize, 'padratio', crossf.PadRatio, ...
+            'freqs', [crossf.MinFreq crossf.MaxFreq], 'timesout', crossf.TimesOut, ...
+            'plotamp', 'off', 'plotphase', 'off');
+
+        img = struct('coh', cohImg, 'angle', angleImg, 'times', timesOut, 'freqs', freqsOut);
+        cache(key) = img;
+    end
+
+    if isnan(crossf.TimeStart) || isnan(crossf.TimeStop)
+        tIdx = true(size(img.times));
+    else
+        tIdx = img.times >= crossf.TimeStart & img.times <= crossf.TimeStop;
+    end
+    if ~any(tIdx)
+        coh = NaN; phlag = NaN;
+        return;
+    end
+
+    [~, fIdx] = min(abs(img.freqs - fUse));
+    % Magnitude-squared coherence: square EACH time frame's (already real,
+    % already trial-pooled) coherence magnitude, THEN average over the
+    % chosen time window -- exactly mean(crosscoh(:, window_ix).^2, 2) in
+    % the RIFT paper's own script, not "average then square".
+    coh = mean(img.coh(fIdx, tIdx) .^ 2, 2);
+    % Phase-lag: newcrossf reports this separately per time frame (in
+    % radians); a plain mean here is a reasonable single summary of a
+    % narrow, already-selected steady-state window, though note this is an
+    % addition beyond what the paper itself reports (its own script never
+    % uses cohangle).
+    phlag = mean(img.angle(fIdx, tIdx), 2);
 end
 
 function V = poolWave(EEG, members, trials)
@@ -256,6 +379,15 @@ function tapers = buildTapers(method, nsamp, K)
     else
         n = (0:nsamp - 1)';
         tapers = 0.5 - 0.5 * cos(2 * pi * n / (nsamp - 1));   % Hann, nsamp x 1
+    end
+end
+
+function v = numOr(value, default)
+%NUMOR  VALUE, unless it's empty or NaN, in which case DEFAULT.
+    if isempty(value) || (isnumeric(value) && isscalar(value) && isnan(value))
+        v = default;
+    else
+        v = value;
     end
 end
 

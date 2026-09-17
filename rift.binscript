@@ -3,7 +3,15 @@
 % Codes are markers; ? = any char; { } lists alternatives; | is or.
 % Relations: next(c) prev(c) adjacent(c) any(c) within (lo,hi] ms/samples/events.
 % let names a reusable expression (codes or relations); = makes a difference bin.
+% Trigger codes are TSMI/OpenViBE inverted+offset (recorded = 33279 - true code).
+% The "third condition" trigger differs by subject group: subjects 1-3 ran a
+% 30Hz binary SSVEP control (true code 21, recorded s33258); subjects 4-10 ran
+% 60Hz peripheral RIFT instead (true code 121, recorded s33158). Kept as
+% separate bins since they are different stimulus types, not a relabeling of
+% the same condition -- each bin is simply empty for the subject group that
+% didn't run it.
 
-bin 1 "RIFT 64Hz"  {"s33248"}
-bin 2 "SSVEP 30Hz" {"s33258"}
-bin 3 "RIFT 60Hz"  {"s33268"}
+bin 1 "RIFT 64Hz"            {"s33248"}
+bin 2 "SSVEP 30Hz"           {"s33258"}
+bin 3 "RIFT 60Hz"            {"s33268"}
+bin 4 "RIFT 60Hz peripheral" {"s33158"}
