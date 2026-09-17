@@ -91,13 +91,47 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
         % surfaced by pop_saveset on export, since nothing internal to
         % Alakazam itself ever reads this field). Set on each trial's own
         % anchor event only, matching this epoching model's one-anchor-
-        % per-trial design (see EEG.epoch itself, above); every other
-        % event -- one that was never matched to a bin, so belongs to no
-        % kept trial -- is left with MATLAB's default [] for a struct
-        % field none of its siblings set, which eeg_checkset's own
-        % 'eventconsistency' cleanup already knows to prune as invalid.
+        % per-trial design (see EEG.epoch itself, above).
         EEG.event(ei).epoch = k;
     end
+
+    % Every event that never matched a bin belongs to no trial in this
+    % one-anchor-per-trial model. Leaving it at MATLAB's default [] for a
+    % struct field none of its siblings set is NOT safe to trust to
+    % eeg_checkset's own pruning: struct-field comma-list concatenation
+    % (eeg_checkset's own [EEG.event.epoch]) silently DROPS an empty entry
+    % rather than keeping a placeholder, so an all-[] event can survive
+    % that pruning check undetected and reach eeg_checkset's later "build
+    % epoch structure" step instead, where its .epoch no longer matches
+    % every other field's length and throws inside eeg_point2lat -- surfaced
+    % only as EEGLAB's own blocking "minor problem encountered when
+    % generating the EEG epoch structure" dialog. Reported directly: this
+    % froze Apply Template on the RIFT template partway through, at the
+    % first later step to run eeg_checkset on the freshly-epoched data
+    % (whether or not that happens depends on how large an unmatched
+    % event's own stale, still-continuous-recording latency is relative to
+    % this dataset's pnts*trials, which is why a short test fixture never
+    % caught it). 0 is an explicit, always-present, always-invalid epoch
+    % number (eeg_checkset's own check is `allepochs < 1 | allepochs >
+    % EEG.trials`), so it participates in the concatenation like every
+    % other event's real epoch number and is reliably pruned by
+    % eeg_checkset's own early cleanup, before the fragile step above is
+    % ever reached.
+    nonAnchor = setdiff(1:numel(EEG.event), allEvents);
+    for i = nonAnchor
+        EEG.event(i).epoch = 0;
+    end
+
+    % An anchor's own .latency is still on the ORIGINAL CONTINUOUS-recording
+    % sample numbering at this point; EEGLAB expects it on the per-epoch
+    % concatenated timeline once EEG.trials > 1 (see
+    % rewriteEpochedEventLatencies' own header comment). Rewrite it here,
+    % right after epoching, so the dataset stays EEGLAB-consistent for
+    % every later pipeline step (AutoEyeICA onward), not just deferred to
+    % eventual .set export (onExportSet.m calls the same function again;
+    % it is idempotent, so that is harmless, defence-in-depth redundancy).
+    EEG = rewriteEpochedEventLatencies(EEG);
+
     for b = 1:numel(bindesc)
         if isempty(bindesc(b).events)
             bindesc(b).trials = [];

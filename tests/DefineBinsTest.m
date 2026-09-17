@@ -313,6 +313,96 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyEqual(size(result.data), [2, 20, 2]); % 80ms window @ 250Hz = 20 samples
         end
 
+        function unmatchedEventsGetAnExplicitInvalidEpochNumber(testCase)
+        %UNMATCHEDEVENTSGETANEXPLICITINVALIDEPOCHNUMBER  An event that
+        %   matched no bin belongs to no trial, and cutEpochs must leave it
+        %   with .epoch = 0 (an explicit, always-invalid sentinel), not
+        %   MATLAB's default []. See cutEpochs.m's own comment: eeg_checkset
+        %   silently drops an empty .epoch from its own concatenated
+        %   [EEG.event.epoch] rather than treating it as present-but-invalid,
+        %   so [] can survive its pruning undetected -- 0 cannot.
+            EEG = eegWithEvents({'999', '112', '112'}, [20, 100, 300]);
+            EEG.data = zeros(2, 500);
+            opts = struct('script', 'bin 1 "Targets" 112', ...
+                'epoch', struct('lo', -40, 'hi', 40, 'unit', 'ms'));
+
+            [result, ~] = DefineBins(EEG, opts);
+
+            testCase.verifyEqual(result.event(1).epoch, 0);
+            testCase.verifyEqual(result.event(2).epoch, 1);
+            testCase.verifyEqual(result.event(3).epoch, 2);
+        end
+
+        function anchorLatenciesAreOnTheConcatenatedTimelineImmediatelyAfterEpoching(testCase)
+        %ANCHORLATENCIESAREONTHECONCATENATEDTIMELINEIMMEDIATELYAFTEREPOCHING
+        %   cutEpochs must rewrite each anchor's .latency onto EEGLAB's
+        %   per-epoch-concatenated numbering itself (see
+        %   rewriteEpochedEventLatencies), not leave it on the stale
+        %   original-continuous-recording sample number, so the dataset is
+        %   already EEGLAB-consistent for every later pipeline step, not
+        %   just at eventual .set export.
+            EEG = eegWithEvents({'112', '112'}, [100, 300]);
+            EEG.data = zeros(2, 500);
+            opts = struct('script', 'bin 1 "Targets" 112', ...
+                'epoch', struct('lo', -40, 'hi', 40, 'unit', 'ms'));
+
+            [result, ~] = DefineBins(EEG, opts);
+
+            zeroSample = find(abs(result.times) < 1e-9, 1);
+            testCase.verifyEqual(result.event(1).latency, zeroSample);
+            testCase.verifyEqual(result.event(2).latency, result.pnts + zeroSample);
+        end
+
+        function anUnmatchedEventWithAnInBoundsLatencySurvivesARealEegCheckestRoundTrip(testCase)
+        %ANUNMATCHEDEVENTWITHANINBOUNDSLATENCYSURVIVESAREALEEGCHECKESTROUNDTRIP
+        %   THE BUG THIS PINS. eeg_checkset('eventconsistency')'s own early
+        %   "invalid epoch" pruning computes allepochs = [EEG.event.epoch];
+        %   an event left with MATLAB's default [] for .epoch is silently
+        %   DROPPED from that concatenation rather than counted as invalid,
+        %   so it is never flagged there. Whether such an event then gets
+        %   pruned anyway depends purely on luck: eeg_checkset separately
+        %   prunes events whose stale, still-continuous-recording .latency
+        %   exceeds EEG.pnts*EEG.trials. A short test fixture's non-anchor
+        %   event latency easily exceeds that small bound by accident; a
+        %   real, long recording's does not always. When it survives both,
+        %   it reaches eeg_checkset's later "build epoch structure" step
+        %   with a .epoch that no longer matches every other field's
+        %   length, which throws inside eeg_point2lat -- surfaced only as
+        %   EEGLAB's own blocking "minor problem encountered when
+        %   generating the EEG epoch structure" dialog. Reported directly:
+        %   this froze Apply Template on the RIFT template. This fixture's
+        %   own non-anchor latency (20) is deliberately kept well inside
+        %   EEG.pnts*EEG.trials (40) so it cannot be pruned by luck, and
+        %   only cutEpochs' own explicit .epoch = 0 sentinel (see
+        %   unmatchedEventsGetAnExplicitInvalidEpochNumber above) can catch
+        %   it -- without that fix, this test reproduces the exact reported
+        %   dialog as a thrown MATLAB error instead.
+            testCase.assumeTrue(~isempty(which('eeglab')), ...
+                'EEGLAB not found on the MATLAB path -- skipping the round-trip test.');
+            if isempty(which('eeg_checkset'))
+                eeglab('nogui');
+            end
+            testCase.assumeFalse(isempty(which('eeg_checkset')), ...
+                'EEGLAB''s eeg_checkset is not available -- skipping the round-trip test.');
+
+            EEG = inBoundsUnmatchedFixture();
+            opts = struct('script', 'bin 1 "Targets" 112', ...
+                'epoch', struct('lo', -40, 'hi', 40, 'unit', 'ms'));
+            [result, ~] = DefineBins(EEG, opts);
+
+            result = eeg_checkset(result, 'eventconsistency');
+
+            testCase.verifyEqual(numel(result.epoch), 2, ...
+                'no trial anchor should have been pruned.');
+            testCase.verifyEqual(numel(result.event), 2, ...
+                'the unmatched event should have been pruned.');
+            testCase.verifyTrue(all(strcmp({result.event.type}, '112')));
+            for k = 1:numel(result.epoch)
+                testCase.verifyEqual(result.epoch(k).eventlatency, 0, sprintf( ...
+                    'trial %d''s own anchor should be at exactly latency 0 within its epoch.', k));
+            end
+        end
+
         % ---- reaction time ------------------------------------------------
         function reactionTimeIsIndependentOfTermOrder(testCase)
         %REACTIONTIMEISINDEPENDENTOFTERMORDER  The regression this pins.
@@ -545,4 +635,25 @@ function EEG = eegWithEvents(types, latencies)
     EEG = struct();
     EEG.srate = 250;
     EEG.event = struct('type', types, 'latency', num2cell(latencies));
+end
+
+function EEG = inBoundsUnmatchedFixture()
+%INBOUNDSUNMATCHEDFIXTURE  A real, EEGLAB-checkset-clean dataset (built on
+%   eeg_emptyset, not the bare eegWithEvents struct -- eeg_checkset's own
+%   pop_editeventvals resort step needs a properly-shaped EEG, not just the
+%   handful of fields DefineBins itself reads) for
+%   anUnmatchedEventWithAnInBoundsLatencySurvivesARealEegCheckestRoundTrip.
+%   1 event (code "999") matches no bin and is deliberately given a small
+%   latency (20 samples) that stays well inside this fixture's own
+%   EEG.pnts*EEG.trials (20*2 = 40), so it cannot be pruned by
+%   eeg_checkset's separate "latency out of bounds" check -- only cutEpochs'
+%   own explicit .epoch = 0 sentinel can catch it.
+    srate = 250;
+    EEG = eeg_emptyset();
+    EEG.data = zeros(2, 500);
+    EEG.srate = srate; EEG.nbchan = 2;
+    EEG.chanlocs = struct('labels', {'Fz', 'Cz'});
+    EEG.times = (0:size(EEG.data, 2) - 1) / srate;
+    EEG.event = struct('type', {'999', '112', '112'}, ...
+        'latency', {20, 100, 300});
 end
