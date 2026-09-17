@@ -222,7 +222,7 @@ function packages = setupChunkPackages()
 %   declares -- restated here only so this file can ASK whether they are
 %   present before executing that chunk, never to assert anything about
 %   it.
-    packages = {'tidyverse', 'rstatix', 'ggpubr', 'gt', 'BayesFactor', ...
+    packages = {'tidyverse', 'rstatix', 'coin', 'ggpubr', 'gt', ...
         'lme4', 'lmerTest', 'emmeans', 'performance', 'effectsize'};
 end
 

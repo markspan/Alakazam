@@ -480,8 +480,8 @@ classdef (TestTags = {'KnownGap', 'Slow'}) QuartoReportKnownGapTest < matlab.uni
                 ['The percent-label report could not be rendered: ' errorMessage]);
 
             plain = plainTextOf(htmlFile);
-            testCase.verifyTrue(contains(plain, 'paired-samples'), ...
-                'The percent-label report ran no paired-samples test at all.');
+            testCase.verifyTrue(contains(plain, 'Paired t-test') || contains(plain, 'Wilcoxon signed-rank'), ...
+                'The percent-label report ran no paired test at all.');
             testCase.verifyFalse(contains(plain, 'Could not be analysed'), ...
                 'The percent-label report swallowed an R error into a bland italic note.');
         end
@@ -544,32 +544,28 @@ function formats = sprintfFormatStrings(chunks)
 end
 
 function stats = apaPairedStatistics(htmlFile)
-%APAPAIREDSTATISTICS  The .df/.t/.dz/.ciLow/.ciHigh of the first APA
-%   paired-samples sentence in HTMLFILE, or [] when there is none.
+%APAPAIREDSTATISTICS  The .df/.t/.dz/.ciLow/.ciHigh of the "Paired t-test"
+%   row of the "Test Result" gt table in HTMLFILE, or [] when there is
+%   none.
 %
 %   One regular expression captures all five in a single pass over the
-%   tag-stripped text. It is deliberately loose about the apostrophe in
-%   "Cohen's", which the rendered HTML writes as a typographic apostrophe
-%   that may arrive as more than one char depending on the encoding.
+%   tag-stripped text. Anchored on the table's own "Paired t-test" label
+%   cell, not on prose -- pairedSection reports one test (a t-test or a
+%   Wilcoxon signed-rank, chosen by a Shapiro-Wilk check), as a compact
+%   table rather than a narrated sentence, so there is no sentence left to
+%   parse. A gt table's cells each sit on their own line once tags are
+%   stripped, hence 'dotall' rather than assuming single spaces between
+%   them.
     plain = plainTextOf(htmlFile);
-    % A BOUNDED GAP BETWEEN p AND Cohen, because the sentence around these
-    % numbers is prose and prose gets rewritten. It once read
-    % "..., p = .004, Cohen's dz = ..." and now reads "..., p = .004, with a
-    % standardised effect of Cohen's dz = ...", which the old contiguous
-    % pattern could not find at all -- so the case failed for wording rather
-    % than for the sign invariant it exists to protect. The gap forbids a
-    % full stop, so it still cannot wander into the following sentence and
-    % pair a t with some other test's effect size.
-    pattern = ['t\s*\(\s*(\d+)\s*\)\s*=\s*(-?[\d.]+)\s*,\s*' ...
-               'p\s*[<=]\s*[\d.]+\s*,[^.]{0,80}?Cohen.{1,3}s\s*d\s*z\s*=\s*(-?[\d.]+)\s*' ...
-               '\([^)]*\)\s*,\s*95%\s*CI\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]'];
-    tokens = regexp(plain, pattern, 'tokens', 'once');
+    pattern = ['Paired t-test\s*(-?\d+\.\d+)\s*(\d+)\s*[<=]\s*\S+\s*' ...
+        '[^0-9\-]*?(-?\d+\.\d+)\s*(-?\d+\.\d+)\s*(-?\d+\.\d+)'];
+    tokens = regexp(plain, pattern, 'tokens', 'once', 'dotall');
 
     if isempty(tokens)
         stats = [];
         return;
     end
-    stats = struct('df', str2double(tokens{1}), 't', str2double(tokens{2}), ...
+    stats = struct('df', str2double(tokens{2}), 't', str2double(tokens{1}), ...
         'dz', str2double(tokens{3}), 'ciLow', str2double(tokens{4}), ...
         'ciHigh', str2double(tokens{5}));
 end

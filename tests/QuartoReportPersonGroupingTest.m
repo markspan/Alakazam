@@ -62,9 +62,6 @@ classdef QuartoReportPersonGroupingTest < matlab.unittest.TestCase
                         'Groups', {'young', 'young', 'old', 'old'})}
                 qmd = generateQuartoReport(entries{1}, 'x.csv');
 
-                % Specifically the RANDOM-EFFECT form. A bare "| dataset)"
-                % would also match the Friedman check below, which stays on
-                % the recording deliberately.
                 testCase.verifyEmpty(strfind(qmd, '(1 + bin | dataset)'), ...
                     'A random slope is still grouped by the recording.'); %#ok<STREMP>
                 testCase.verifyEmpty(strfind(qmd, '(1 | dataset)'), ...
@@ -131,19 +128,6 @@ classdef QuartoReportPersonGroupingTest < matlab.unittest.TestCase
             testCase.verifySubstring(qmd, 'if (!"person_id" %in% names(dat))');
             testCase.verifySubstring(qmd, 'if (!"session" %in% names(dat))');
             testCase.verifySubstring(qmd, 'as.character(dataset), person_id)');
-        end
-
-        % ---- the deliberate exception --------------------------------------
-        function theFriedmanCheckStaysOnTheRecording(testCase)
-        %THEFRIEDMANCHECKSTAYSONTHERECORDING  Not an oversight. A rank test
-        %   over a subject x bin table needs one value per cell, which a
-        %   person with two sessions does not have. It is a robustness check
-        %   on the recordings; the mixed model above is the statement about
-        %   people. Pinned so it is not "corrected" to match the model.
-            qmd = generateQuartoReport(ReportFixtures.erpEntries( ...
-                'Bindesc', ReportFixtures.bindesc({'A', 'B', 'C'})), 'x.csv');
-
-            testCase.verifySubstring(qmd, 'friedman_test(data = d_complete, value ~ bin | dataset)');
         end
     end
 end

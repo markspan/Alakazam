@@ -306,7 +306,7 @@ function packages = reportPackages()
 %REPORTPACKAGES  The R packages the generated setup chunk loads, so
 %   rPackagesPresent can be asked about exactly them and the chunk's own
 %   install.packages() branch can never fire during a test run.
-    packages = {'tidyverse', 'rstatix', 'ggpubr', 'gt', 'BayesFactor', ...
+    packages = {'tidyverse', 'rstatix', 'coin', 'ggpubr', 'gt', ...
         'lme4', 'lmerTest', 'emmeans', 'performance', 'effectsize'};
 end
 
@@ -342,30 +342,28 @@ function plain = plainTextOf(html)
 end
 
 function stats = parsePairedSentence(plain)
-%PARSEPAIREDSENTENCE  The paired-samples APA sentence's numbers out of the
-%   stripped render, as a struct with .df, .t, .dz, .ciLow and .ciHigh, or
-%   an empty struct when the sentence is not there at all.
+%PARSEPAIREDSENTENCE  The paired t-test row's numbers out of the "Test
+%   Result" gt table in the stripped render, as a struct with .df, .t,
+%   .dz, .ciLow and .ciHigh, or an empty struct when the row is not there
+%   at all.
 %
-%   Deliberately loose about everything except the numbers. Pandoc renders
-%   "Cohen's" with a typographic apostrophe and "*d~z~*" as a d with a
-%   subscripted z, which the tag strip flattens to "dz"; matching those
-%   exactly would make this test fail on a pandoc upgrade rather than on a
-%   statistical defect. Anchoring on "A paired-samples" instead is what
-%   keeps the loose match from wandering into some other section's numbers.
-%
-%   A lookbehind rather than \b in front of the "t(": MATLAB's own regexp
-%   does not honour \b as a word boundary (verified live -- "\bt\(" matches
-%   nothing at all in text where "t\(" matches perfectly well), so a \b
-%   here would silently make this test unable to see any render whatsoever.
-    pattern = ['A paired-samples.*?(?<![A-Za-z0-9_])t\((\d+)\)\s*=\s*(-?\d+\.\d+)\s*,' ...
-        '.*?=\s*(-?\d+\.\d+)\s*\([^)]*\)\s*,\s*' ...
-        '95%\s*CI\s*\[\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*\]'];
+%   Anchored on the table's own "Paired t-test" cell, which the Wilcoxon
+%   branch (a differently-labelled, differently-shaped row) cannot
+%   produce -- this ground-truth fixture's Shapiro-Wilk p-value is .39
+%   (checked directly against R), so the parametric branch is the one
+%   that always renders here, but anchoring on its own label rather than
+%   assuming that is what keeps this loose match from wandering into some
+%   other row. A gt table's cells each sit on their own line once tags
+%   are stripped, so the pattern spans newlines (dotall) between them
+%   rather than assuming single spaces.
+    pattern = ['Paired t-test\s*(-?\d+\.\d+)\s*(\d+)\s*[<=]\s*\S+\s*' ...
+        '[^0-9\-]*?(-?\d+\.\d+)\s*(-?\d+\.\d+)\s*(-?\d+\.\d+)'];
     tokens = regexp(plain, pattern, 'tokens', 'once', 'dotall');
     if isempty(tokens)
         stats = struct();
         return;
     end
-    stats = struct('df', str2double(tokens{1}), 't', str2double(tokens{2}), ...
+    stats = struct('df', str2double(tokens{2}), 't', str2double(tokens{1}), ...
         'dz', str2double(tokens{3}), 'ciLow', str2double(tokens{4}), ...
         'ciHigh', str2double(tokens{5}));
 end

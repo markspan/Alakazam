@@ -337,25 +337,9 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
                 'The difference scores are not bin2 - bin1.');
             testCase.verifySubstring(txt, 't.test(wide[["B"]], wide[["A"]], paired = TRUE)', ...
                 'The paired t-test does not test bin2 against bin1.');
-            testCase.verifySubstring(txt, 'wilcox.test(wide[["B"]], wide[["A"]], paired = TRUE)', ...
+            testCase.verifySubstring(txt, ...
+                'wilcox.test(wide[["B"]], wide[["A"]], paired = TRUE, conf.int = TRUE)', ...
                 'The Wilcoxon check does not test bin2 against bin1.');
-        end
-
-        function theEffectIsPlottedInTheDirectionItIsReported(testCase)
-        %THEEFFECTISPLOTTEDINTHEDIRECTIONITISREPORTED  The estimation panel
-        %   is drawn from the same diffs vector the sentence and the t-test
-        %   use, so it cannot point the other way. Asserted as a literal
-        %   because a panel fed wide[["A"]] - wide[["B"]] would render
-        %   perfectly and contradict the prose beside it.
-            txt = generateQuartoReport(ReportFixtures.censusEntries('F-ERP2'), ...
-                QuartoReportTextContractTest.CsvName);
-
-            testCase.verifySubstring(txt, 'ep <- estimation_panel(diffs, "B minus A', ...
-                'The estimation panel is not drawn from bin2 - bin1.');
-            testCase.verifySubstring(txt, 'estimation_panel <- function(', ...
-                'The estimation panel helper is not defined in the setup chunk.');
-            testCase.verifySubstring(txt, 'geom_hline(yintercept = 0', ...
-                'The estimation panel must always draw zero.');
         end
 
         function theRaincloudShowsDensityAndObservationsSeparately(testCase)
@@ -410,11 +394,11 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
         %   entirely in these literals: the MAXIMAL model (random
         %   intercept AND random slope for bin), the DISTINCT
         %   intercept-only fallback it drops to on a singular fit, the
-        %   singularity test that decides between them, the model-based
-        %   Holm-corrected contrasts, and the Friedman robustness check.
-        %   Silently losing the random slope, or losing the fallback and
-        %   keeping a singular fit, changes every degree of freedom the
-        %   report prints without changing one word of its prose.
+        %   singularity test that decides between them, and the
+        %   model-based Holm-corrected contrasts. Silently losing the
+        %   random slope, or losing the fallback and keeping a singular
+        %   fit, changes every degree of freedom the report prints
+        %   without changing one word of its prose.
             anovaTxt = generateQuartoReport(ReportFixtures.censusEntries('F-ERP3C'), ...
                 QuartoReportTextContractTest.CsvName);
 
@@ -430,9 +414,6 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
             testCase.verifySubstring(anovaTxt, ...
                 'emmeans::emmeans(m, pairwise ~ bin, adjust = "holm")', ...
                 'The Holm-corrected model-based pairwise contrasts are missing.');
-            testCase.verifySubstring(anovaTxt, ...
-                'friedman_test(data = d_complete, value ~ bin | dataset)', ...
-                'The Friedman robustness check is missing.');
 
             % The two subject guards, which decide whose data reaches any
             % of the above: one document-wide (in the setup chunk), one
