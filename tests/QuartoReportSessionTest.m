@@ -131,12 +131,18 @@ classdef QuartoReportSessionTest < matlab.unittest.TestCase
         %   only following a term that reached significance. A report that
         %   runs every family it can think of has spent its alpha before
         %   anyone decided what the question was.
+        %
+        %   No "no post-hoc contrasts were run" fallback message any more:
+        %   post-hoc contrasts are now a table clustered across every
+        %   channel (see lmmSection's own header comment), and a channel
+        %   simply not appearing in it already says neither term reached
+        %   significance there -- restating that per channel would be the
+        %   same information twice.
             txt = QuartoReportSessionTest.withinSessions();
 
             testCase.verifySubstring(txt, 'if (!is.na(p_head) && p_head < .05) {');
             testCase.verifySubstring(txt, '} else if (!is.na(p_bin) && p_bin < .05) {');
             testCase.verifySubstring(txt, 'pairwise ~ bin | session');
-            testCase.verifySubstring(txt, 'No post-hoc contrasts were run');
         end
 
         function onlyOneContrastFamilyCanRun(testCase)

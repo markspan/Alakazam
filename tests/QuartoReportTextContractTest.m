@@ -356,18 +356,13 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
 
         function theAnovaTableCarriesItsEffectNames(testCase)
         %THEANOVATABLECARRIESITSEFFECTNAMES  lmerTest::anova() puts the
-        %   effect names in the data frame's ROW names, and gt() drops row
-        %   names unless asked for a stub. The fixed-effect table therefore
-        %   rendered as columns of numbers with nothing saying which row was
-        %   bin, which was session, and which was an interaction -- worst on
-        %   a three-factor design, where six unlabelled rows are genuinely
-        %   unreadable, but wrong on every LMM design.
-        %
-        %   Two halves, and both matter. The displayed frame must gain a real
-        %   Effect column, and aov_tab itself must KEEP its row names,
-        %   because the narrative above indexes it by them (aov_tab[eff, ]).
-        %   A fix that promoted the row names in place would silently break
-        %   every F and p printed in the prose.
+        %   effect names in the data frame's ROW names, not a column --
+        %   the combined fixed-effect table (one row per channel per
+        %   effect, see lmmSection's own header comment) builds its own
+        %   Effect column directly from EFF as it iterates
+        %   view.effectVector, rather than promoting aov_tab's row names in
+        %   place, and aov_tab itself must KEEP its row names, because the
+        %   lookup above indexes it by them (aov_tab[eff, ]).
             for entries = {ReportFixtures.censusEntries('F-ERP3C'), ...
                     ReportFixtures.censusEntries('F-ERP3CG'), ...
                     ReportFixtures.censusEntries('F-ERP3S'), ...
@@ -375,14 +370,12 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
                 txt = generateQuartoReport(entries{1}, QuartoReportTextContractTest.CsvName);
 
                 testCase.verifySubstring(txt, ...
-                    'aov_disp <- data.frame(Effect = rownames(aov_tab), aov_tab, check.names = FALSE)', ...
-                    'The fixed-effect table no longer promotes its row names to a column.');
-                testCase.verifySubstring(txt, 'apa_gt(aov_disp,', ...
-                    'The fixed-effect table is being rendered from the row-named frame again.');
+                    'effects_list[[paste(ch, eff)]] <- tibble(Channel = ch, Effect = eff,', ...
+                    'The combined fixed-effect table no longer tags each row with its own Effect.');
                 testCase.verifySubstring(txt, 'aov_tab <- as.data.frame(anova(m))', ...
-                    'aov_tab must survive unchanged: the narrative indexes it by row name.');
+                    'aov_tab must survive unchanged: the lookup below indexes it by row name.');
                 testCase.verifySubstring(txt, 'if (eff %in% rownames(aov_tab))', ...
-                    'The narrative no longer looks its effects up by row name.');
+                    'The lookup no longer looks its effects up by row name.');
             end
         end
 
