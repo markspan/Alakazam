@@ -215,8 +215,8 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 ['A per-channel tryCatch swallowed a genuine R error in the ' ...
                  'circular section. See ' html '.']);
             testCase.verifySubstring(text, 'Circular Descriptive Statistics');
-            testCase.verifySubstring(text, 'mean angle');
-            testCase.verifySubstring(text, '95% CI');
+            testCase.verifySubstring(text, 'mean_angle_deg');
+            testCase.verifySubstring(text, 'ci_lo_deg');
         end
 
         function theCoherenceSectionComputesRatherThanParses(testCase)
