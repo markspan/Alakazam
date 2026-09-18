@@ -69,7 +69,7 @@ classdef SignalView < AlakazamView
     properties (Constant, Access = private)
         LabelWidthPx = 40  % slider row's label column width, pixels
         SliderRowPx  = 24  % each slider row's height, pixels
-        MaxVisibleChannels = 40 % above this many channels a vertical scrollbar
+        MaxVisibleChannels = 80 % above this many channels a vertical scrollbar
                                 % pages through them, showing this many at a time
         ChannelSliderPx = 18    % width of that scrollbar's column, pixels
         StepButtonPx = 16       % width of the pan step buttons, pixels
