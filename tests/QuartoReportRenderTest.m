@@ -290,6 +290,15 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                     'chanlocs', struct('labels', labels), ...
                     'bindesc', struct('label', {'A', 'B'}, 'index', {1, 2}));
                 eeg.coherence = cat(4, coh, coh * 0.5);
+
+                % The reference (photodiode) channel's own power, exercising
+                % the real tag-detection path end to end rather than only
+                % the channel-averaged fallback: a clean 60 Hz peak inside
+                % the response window, agreeing with the coherence planted
+                % above so this test's existing assertions still hold.
+                refPower = 1e-3 * ones(numel(freqs), numel(times));
+                refPower(fIdx, inWindow) = 1;
+                eeg.cohRefPower = cat(3, refPower, refPower);
                 entries(s) = struct('subject', sprintf('sub%02d', s), ...
                     'datasetType', 'subject', 'group', '', ...
                     'person', sprintf('p%02d', s), 'session', '', 'EEG', eeg);

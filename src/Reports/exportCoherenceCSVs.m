@@ -91,6 +91,23 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
         return;    % a shape nothing here can interpret; skip rather than guess
     end
 
+    % The reference channel's own power spectrum (see CoherenceMap.m /
+    % TransTools.ComputeCoherenceMap's own header): present from any dataset
+    % processed since cohRefPower was added, absent (and so silently unused
+    % below) for an older cached result computed before it existed.
+    % size(X), the vector form, drops a trailing singleton dimension (a
+    % single-bin cohRefPower is nFreq x nTime x 1, and size() reports that
+    % as just [nFreq nTime]) -- checked per dimension instead, since an
+    % isequal against a literal 3-element size vector silently never
+    % matches a 1-bin export and falls back to the noisier read-out below
+    % for the single most common case there is.
+    refPower = [];
+    if isfield(EEG, 'cohRefPower') && ndims(EEG.cohRefPower) <= 3 && ...
+            size(EEG.cohRefPower, 1) == nFreq && size(EEG.cohRefPower, 2) == nTime && ...
+            size(EEG.cohRefPower, 3) == nBin
+        refPower = double(EEG.cohRefPower);
+    end
+
     labels = channelLabels(EEG, nChan);
     fields = {csvField(entry.subject), csvField(entry.datasetType), ...
         csvField(entry.group), csvField(entry.person), csvField(entry.session)};
@@ -99,8 +116,24 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
     for b = 1:nBin
         slab = coh(:, :, :, b);                        % nChan x nFreq x nTime
 
-        % The tag: strongest coherence averaged over channels and time. A
-        % bin this dataset has no trials for (a condition run for other
+        % THE TAG: read off the REFERENCE'S OWN power, not off the EEG
+        % channels' coherence to it -- reported directly, averaging
+        % coherence over every channel picked the same wrong frequency for
+        % two different RIFT/SSVEP conditions, because that average is
+        % small and noisy for a weak/distant channel and can peak on line
+        % noise, a harmonic, or another condition's own tag entirely. The
+        % reference (typically a photodiode) measures the physical flicker
+        % directly, so its own spectral peak IS the tag, independent of how
+        % any one EEG channel responded. Falls back to the old channel-
+        % averaged read-out when cohRefPower is absent (an older cached
+        % result, or a reference this dataset never recorded a clean
+        % signal for) so a report from before this fix still renders.
+        if ~isempty(refPower)
+            perFreq = mean(refPower(:, :, b), 2, 'omitnan')';
+        else
+            perFreq = mean(mean(slab, 3, 'omitnan'), 1, 'omitnan');
+        end
+        % A bin this dataset has no trials for (a condition run for other
         % subjects but not this one, e.g. RIFT's own peripheral-60Hz/SSVEP
         % split by subject group) or a combination bin (see
         % coherenceOverBins) is entirely NaN here -- max() of an all-NaN
@@ -113,7 +146,6 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
         % across the whole report. Skipping the bin entirely here -- no
         % trace rows, no map rows, no tag -- is the same "nothing to say"
         % response coherenceOverBins already gives an empty-trial bin.
-        perFreq = mean(mean(slab, 3, 'omitnan'), 1, 'omitnan');
         if all(isnan(perFreq))
             continue;
         end

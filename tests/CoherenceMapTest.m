@@ -43,6 +43,43 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             testCase.verifyTrue(all(isnan(coh(opts.RefIndex, :, :, :)), 'all'));
         end
 
+        function refPowerPeaksAtTheReferencesOwnFrequency(testCase)
+        %REFPOWERPEAKSATTHEREFERENCESOWNFREQUENCY  refPower has to answer
+        %   "which frequency was the reference itself doing the most at"
+        %   using nothing but the reference's own signal -- exactly the
+        %   read-out self-coherence (always NaN, see
+        %   referenceChannelRowIsNaN above) cannot supply. coherenceFixture
+        %   makes channel 1 (the reference) a clean 20 Hz tone. MaxFreq is
+        %   set to exactly 20: logspace always includes its own endpoints
+        %   exactly, so this is one of the analysed frequencies on the
+        %   nose rather than whichever grid point happens to sit closest,
+        %   and the test cannot pass merely by returning a constant or the
+        %   grid's own first bin.
+            EEG = coherenceFixture();
+            opts = waveletOpts();
+            opts.MaxFreq = 20;
+            [~, freqs, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+
+            perFreq = mean(refPower(:, :, 1), 2);
+            [~, fIdx] = max(perFreq);
+            testCase.verifyEqual(freqs(fIdx), 20, 'AbsTol', 1e-6);
+        end
+
+        function refPowerIsNaNForACombinationBinOrEmptyBin(testCase)
+        %REFPOWERISNANFORACOMBINATIONBINOREMPTYBIN  Mirrors
+        %   combinationBinIsNaN/binWithNoTrialsIsNaN for coh itself: a bin
+        %   nothing was accumulated for must not silently carry over
+        %   whatever refPower happened to hold from a previous bin, or
+        %   zero-initialised values that would misreport as "the reference
+        %   was flat at every frequency" rather than "not computed".
+            EEG = coherenceFixture();
+            EEG.bindesc(2) = struct('index', 2, 'label', 'Combo', 'trials', [], ...
+                'combo', struct('bin', 1, 'coeff', 1));
+            opts = waveletOpts();
+            [~, ~, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+            testCase.verifyTrue(all(isnan(refPower(:, :, 2)), 'all'));
+        end
+
         function combinationBinIsNaN(testCase)
             EEG = coherenceFixture();
             EEG.bindesc(2) = struct('index', 2, 'label', 'Combo', 'trials', [], ...

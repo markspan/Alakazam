@@ -1,4 +1,4 @@
-function [coh, freqs, cohTimes] = ComputeCoherenceMap(input, opts)
+function [coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(input, opts)
 %COMPUTECOHERENCEMAP  Time-resolved magnitude-squared coherence between every
 %   channel and a reference channel (e.g. a photodiode), as an
 %   nChan x nFreqs x nTime x nBins array -- the RIFT / frequency-tagging
@@ -26,15 +26,31 @@ function [coh, freqs, cohTimes] = ComputeCoherenceMap(input, opts)
 %   derived from the referenced bins. The reference channel's own row is left
 %   NaN (self-coherence is trivially 1). COHTIMES is EEG.times for Wavelet, or
 %   the STFT frame centres for STFT; FREQS is the analysed frequency vector.
+%
+%   REFPOWER, an nFreqs x nTime x nBins array, is the reference channel's
+%   OWN summed power (sum_trials|R|^2, the same Syy the coherence
+%   denominator uses) -- exactly the quantity self-coherence cannot supply
+%   (see above), and the one that answers "which frequency was the
+%   reference itself doing the most at", independent of how strongly any
+%   EEG channel happened to track it. exportCoherenceCSVs.m uses this,
+%   not an average of every channel's own coherence, to read off the
+%   tagged frequency: a physical flicker signal (a photodiode) shows one
+%   clean peak, where an EEG channel's coherence to it is small, noisy, and
+%   can spuriously peak at a neighbouring or unrelated frequency band
+%   dominated by something else (line noise, a harmonic, another
+%   simultaneously-tagged condition) -- reported directly: with several
+%   RIFT/SSVEP conditions tagged at different true frequencies, averaging
+%   coherence over every EEG channel picked the same wrong frequency for
+%   two different conditions.
     if strcmpi(opts.Method, 'STFT')
-        [coh, freqs, cohTimes] = stftCoherence(input, opts);
+        [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts);
     else
-        [coh, freqs, cohTimes] = waveletCoherence(input, opts);
+        [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts);
     end
 end
 
 % ======================================================================= %
-function [coh, freqs, cohTimes] = waveletCoherence(input, opts)
+function [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts)
 %WAVELETCOHERENCE  Morlet-wavelet time-frequency coherence, reusing the same
 %   variable-cycle wavelet-FFT precompute as TransTools.ComputeErsp.
     times = input.times;
@@ -65,7 +81,7 @@ function [coh, freqs, cohTimes] = waveletCoherence(input, opts)
     end
 
     analytic = @(sig) waveletTransform(sig, waveletFFTs, halfLens, nfft, nT, nF);
-    coh = coherenceOverBins(input, nChan, nF, nT, nBins, refIdx, analytic);
+    [coh, refPower] = coherenceOverBins(input, nChan, nF, nT, nBins, refIdx, analytic);
     cohTimes = times;
 end
 
@@ -81,7 +97,7 @@ function A = waveletTransform(sig, waveletFFTs, halfLens, nfft, nT, nF)
 end
 
 % ======================================================================= %
-function [coh, freqs, cohTimes] = stftCoherence(input, opts)
+function [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts)
 %STFTCOHERENCE  Fixed-window short-time Fourier coherence (the RIFT paper's
 %   newcrossf approach): a Hann-tapered window slid across the epoch,
 %   zero-padded, giving complex coefficients per frame and frequency.
@@ -111,7 +127,7 @@ function [coh, freqs, cohTimes] = stftCoherence(input, opts)
     nFrame = numel(starts);
 
     analytic = @(sig) stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame);
-    coh = coherenceOverBins(input, nChan, nF, nFrame, nBins, refIdx, analytic);
+    [coh, refPower] = coherenceOverBins(input, nChan, nF, nFrame, nBins, refIdx, analytic);
 end
 
 function A = stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame)
@@ -130,11 +146,18 @@ function w = hannWindow(n)
 end
 
 % ======================================================================= %
-function coh = coherenceOverBins(input, nChan, nF, nTime, nBins, refIdx, analytic)
+function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, refIdx, analytic)
 %COHERENCEOVERBINS  Accumulate trial-wise cross/auto spectra per bin and form
 %   the magnitude-squared coherence to the reference. ANALYTIC(sig) returns an
 %   nF x nTime complex time-frequency matrix for one trial's signal.
+%
+%   REFPOWER (nF x nTime x nBins) is the reference's own trial-averaged
+%   power, |R|^2 -- see this file's own ComputeCoherenceMap header for why
+%   it is returned at all (self-coherence cannot supply it, and it is a
+%   cleaner read-out of the tagged frequency than any channel's coherence
+%   to the reference).
     coh = nan(nChan, nF, nTime, nBins);
+    refPower = nan(nF, nTime, nBins);
     isCombo = false(1, nBins);
     if isfield(input.bindesc, 'combo')
         isCombo = ~cellfun(@isempty, {input.bindesc.combo});
@@ -171,6 +194,7 @@ function coh = coherenceOverBins(input, nChan, nF, nTime, nBins, refIdx, analyti
             c(den == 0) = NaN;
             coh(ch, :, :, b) = c;
         end
+        refPower(:, :, b) = Syy / numel(trials);
         TransTools.progressbar(bi / total);
     end
     if isempty(binsToDo)

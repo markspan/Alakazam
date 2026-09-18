@@ -14,6 +14,13 @@ function [EEG, opts] = CoherenceMap(varargin)
 %   wavelet TimeFrequency uses) or a fixed-window STFT (as in the RIFT paper's
 %   newcrossf).
 %
+%   Also stores EEG.cohRefPower, the reference channel's OWN power spectrum
+%   (see TransTools.ComputeCoherenceMap's own header) -- exportCoherenceCSVs.m
+%   reads the tagged frequency off this, not off an average of every
+%   channel's coherence, since the reference (typically a photodiode)
+%   measures the physical flicker directly and a noisy EEG channel's
+%   coherence to it can peak at the wrong frequency entirely.
+%
 %   Signature (Alakazam transformation contract, matching TimeFrequency.m):
 %   [EEG, opts] = CoherenceMap(input) pops the options dialog and stores the
 %   chosen settings; [EEG, opts] = CoherenceMap(input, opts) replays a stored
@@ -89,7 +96,7 @@ end
 
 computeOpts = opts;
 computeOpts.RefIndex = refIdx;
-[coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(input, computeOpts);
+[coh, freqs, cohTimes, refPower] = TransTools.ComputeCoherenceMap(input, computeOpts);
 
 %% Build the result: pass the epoched data through, add the coherence map.
 EEG = input;
@@ -99,9 +106,10 @@ EEG = input;
 % all). See TransTools.ClearForeignResultFields for why a stale sibling
 % field here would break AlakazamPlotter.plotEpoched's routing.
 EEG = TransTools.ClearForeignResultFields(EEG, 'CoherenceTopography', 'TimeFrequency');
-EEG.coherence = coh;
-EEG.cohFreqs  = freqs;
-EEG.cohTimes  = cohTimes;
-EEG.cohRef    = char(labels{refIdx});
-EEG.cohMethod = char(string(opts.Method));
+EEG.coherence   = coh;
+EEG.cohFreqs    = freqs;
+EEG.cohTimes    = cohTimes;
+EEG.cohRefPower = refPower;
+EEG.cohRef      = char(labels{refIdx});
+EEG.cohMethod   = char(string(opts.Method));
 end
