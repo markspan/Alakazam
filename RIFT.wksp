@@ -2,6 +2,9 @@
   "RawDirectory": "~/Documents/GitHub/Alakazam/Data/RIFT/eeg_raw_set/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
-  "TransformSettings": {},
+  "TransformSettings": {
+    "CoherenceMap": [],
+    "SpectralMeasure": []
+  },
   "Groups": []
 }
