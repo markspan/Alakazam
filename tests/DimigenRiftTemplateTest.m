@@ -53,6 +53,30 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function templateReferencesToTheAverageAsThePaperDid(testCase)
+        %TEMPLATEREFERENCESTOTHEAVERAGEASTHEPAPERDID  Dimigen et al. (2025)
+        %   recorded against an online average reference and analysed
+        %   average-referenced data. The template used to re-reference to Cz
+        %   instead, which lowered the Oz coherence at the tag by about 13%
+        %   (0.242 against the paper's 0.280 at 60 Hz) and made the weak
+        %   peripheral condition look significant when the paper's is barely
+        %   so. With the average reference Alakazam reproduces the paper's
+        %   t statistics to within 0.03, so this is the one preprocessing
+        %   choice a template named after the paper must not get wrong. The
+        %   photodiode is excluded so the average is over electrodes only.
+            nodes = testCase.readTemplateNodes();
+            ids = string({nodes.transformId});
+            k = find(ids == "ReRef", 1);
+            testCase.assertNotEmpty(k, 'The template has no ReRef node.');
+            params = nodes(k).params;
+            testCase.verifyEqual(string(params.mode), "Average", ...
+                'The paper used an average reference; a Cz reference changes the Oz result.');
+            testCase.verifyTrue(any(strcmpi(cellstr(string(params.exclude)), 'PhotoDiode')), ...
+                'The photodiode is not an electrode and must stay out of the average.');
+        end
+    end
+
     methods (Test, TestTags = {'Slow'})
         function appliesEndToEndToRealRiftData(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
@@ -117,7 +141,16 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
             % check the result actually looks like a RIFT analysis, not a
             % dataset that merely survived.
             testCase.verifyEqual(final.DataFormat, 'EPOCHED');
-            testCase.verifyEqual(final.nbchan, 23);   % 24 raw channels, minus Cz (re-ref)
+            testCase.verifyEqual(final.nbchan, 24);   % all 24 raw channels: an average reference drops none
+
+            % The ReRef node really did produce an average reference: across
+            % the electrodes (everything but the photodiode) the mean at
+            % every sample is zero.
+            reref = results{2};
+            electrodes = ~strcmp({reref.chanlocs.labels}, 'PhotoDiode');
+            testCase.verifyLessThan( ...
+                max(abs(mean(double(reref.data(electrodes, :)), 1))), 1e-3, ...
+                'The ReRef node did not leave the electrodes average-referenced.');
             testCase.verifyGreaterThan(final.trials, 0);
 
             testCase.assertTrue(isfield(final, 'bindesc') && numel(final.bindesc) == 4, ...
