@@ -1,7 +1,7 @@
 {
   "alakazamTemplate": true,
   "version": 2,
-  "name": "SelectData",
+  "name": "RIFT frequency tagging (Dimigen et al. 2025)",
   "nodes": [
     {
       "transformId": "SelectData",
