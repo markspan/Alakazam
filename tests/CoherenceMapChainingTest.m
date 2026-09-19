@@ -42,6 +42,10 @@ classdef CoherenceMapChainingTest < matlab.unittest.TestCase
             testCase.verifyFalse(isfield(out, 'cohTimes'));
             testCase.verifyFalse(isfield(out, 'cohRef'));
             testCase.verifyFalse(isfield(out, 'cohMethod'));
+            for stale = {'cohRefPower', 'cohRefSpectrum', 'cohRefSpecFreqs', 'cohRefPeakHz'}
+                testCase.verifyFalse(isfield(out, stale{1}), ...
+                    ['A stale ' stale{1} ' was carried into the chained result.']);
+            end
             testCase.verifyTrue(isfield(out, 'xcorr'));
         end
 
@@ -55,6 +59,10 @@ classdef CoherenceMapChainingTest < matlab.unittest.TestCase
             testCase.verifyFalse(isfield(out, 'cohTimes'));
             testCase.verifyFalse(isfield(out, 'cohRef'));
             testCase.verifyFalse(isfield(out, 'cohMethod'));
+            for stale = {'cohRefPower', 'cohRefSpectrum', 'cohRefSpecFreqs', 'cohRefPeakHz'}
+                testCase.verifyFalse(isfield(out, stale{1}), ...
+                    ['A stale ' stale{1} ' was carried into the chained result.']);
+            end
             testCase.verifyTrue(isfield(out, 'covariance'));
         end
     end

@@ -8,7 +8,10 @@ belongs upstream.
 Verified against the source rather than recalled. The command that produced
 it is at the foot of this page, so it can be re-run rather than trusted.
 
-*Last verified: 30 August 2026, 22 transformations.*
+*Last verified: 30 August 2026, 22 transformations. The `CoherenceMap` sizes
+below were refreshed on 19 September 2026, after it gained a filter-Hilbert
+method and a reference spectrum; the same command found no toolkit call in the
+new code.*
 
 ## Wrappers: the toolkit does the work
 
@@ -47,7 +50,7 @@ from those rather than asked for.
 | `Fourier` | 207 lines |
 | `Average` | 182 lines |
 | `TimeFrequency` | 101, plus 175 in `TransTools.ComputeErsp` |
-| `CoherenceMap` | 97, plus 179 in `TransTools.ComputeCoherenceMap` |
+| `CoherenceMap` | 176, plus 302 in `TransTools.ComputeCoherenceMap` and 76 in `TransTools.ReferenceSpectrum` |
 | `Baseline` | 65 lines |
 | `Brain3D` | scalp-position resolution; the drawing is in `Brain3DView` |
 | `ScalpDistribution` | the distribution; the drawing is in `ScalpDistributionView` |

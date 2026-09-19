@@ -1,42 +1,65 @@
-function [traceFile, mapFile, chosen] = exportCoherenceCSVs(entries, stem, opts)
+function [traceFile, mapFile, chosen, referenceFile] = exportCoherenceCSVs(entries, stem, opts)
 %EXPORTCOHERENCECSVS  The CoherenceMap result, as data rather than a picture.
-%   [TRACEFILE, MAPFILE, CHOSEN] = exportCoherenceCSVs(ENTRIES, STEM, OPTS)
-%   writes two long-format CSVs beside each other and returns their paths
-%   plus the channel labels the map was written for.
+%   [TRACEFILE, MAPFILE, CHOSEN, REFERENCEFILE] = exportCoherenceCSVs(ENTRIES,
+%   STEM, OPTS) writes three long-format CSVs beside each other and returns
+%   their paths plus the channel labels the map was written for.
 %
-%   WHY TWO FILES AND NOT ONE. A coherence map is nChan x nFreq x nTime x
+%   WHY THREE FILES AND NOT ONE. A coherence map is nChan x nFreq x nTime x
 %   nBin, and at the settings of Dimigen et al. (2025) (STFT 510 ms, pad 4,
 %   52 to 68 Hz, a 13 s epoch at 1000 Hz) that is 33 frequencies by 98
 %   frames. Written whole for 64 channels and 3 bins it is 620,928 rows,
 %   about 37 MB PER SUBJECT, so a twenty-subject study would put three
-%   quarters of a gigabyte beside the report. The two files split that
-%   along the axis that matters:
+%   quarters of a gigabyte beside the report. The files split that along the
+%   axis that matters:
 %
 %     TRACE  coherence against time at the tagged frequency alone, for
 %            EVERY channel. 18,816 rows, about 1 MB, and it is the plot
 %            that shows fade-in, steady state and fade-out, which is where
-%            the steady-state measurement window comes from.
+%            the steady-state measurement window comes from. Each row also
+%            carries the number of trials behind it (n_trials), because the
+%            coherence of N independent trials is 1/N by chance alone.
 %     MAP    the full time x frequency plane, for a FEW channels. The
 %            figure a tagging paper prints, at about 5 MB for eight
 %            channels rather than 37 for all of them.
+%     REFERENCE  the reference channel's own amplitude spectrum, 0 to 150 Hz,
+%            per dataset and condition, with the band the coherence covers
+%            and the reference's strongest frequency. About 25,000 rows for
+%            ten datasets and four conditions. It shows where the flicker
+%            actually was, which the band-limited trace cannot: a condition
+%            tagged outside the analysed band is otherwise reported at
+%            whatever unrelated frequency inside the band is strongest.
 %
-%   THE TAGGED FREQUENCY IS FOUND IN THE DATA, per bin, as the frequency
-%   whose coherence is greatest averaged over channels and time. In a
-%   tagging design that IS the tag, it needs nothing the map does not
-%   already carry, and it cannot drift out of step with a number typed
-%   somewhere else. A design where that is not the tag is one where this
-%   whole read-out does not apply.
+%   THE TAGGED FREQUENCY IS FOUND IN THE DATA, per bin, from the reference
+%   channel's OWN power (EEG.cohRefPower) at the frequency where it is
+%   greatest, averaged over time. A photodiode measures the flicker directly,
+%   so its own peak is the tag, independent of how any EEG channel responded.
+%   A result computed before cohRefPower existed has no such field, and falls
+%   back to the frequency whose coherence is greatest averaged over channels
+%   and time, which is noisier: for a weak response it can peak on line noise
+%   or on another condition's tag. Either way the tag is the strongest
+%   frequency INSIDE the analysed band, so a condition tagged outside it must
+%   be recognised from the REFERENCE file.
 %
 %   THE MAP'S CHANNELS ARE CHOSEN BY RESPONSE, AND THAT IS A DISPLAY
 %   DECISION, NOT AN ANALYSIS ONE. They are the OPTS.MaxChannels (default
 %   8) with the highest coherence at the tagged frequency. Choosing what to
 %   plot after seeing the data is how every figure in every tagging paper
 %   is made, and it is only dangerous when a test follows; nothing here is
-%   tested, and the report says which channels were picked and why.
+%   tested, and the report says which channels were picked and why. If a test
+%   does follow, Arora et al. (2026) ask that channels be chosen blind to the
+%   conditions being compared, which OPTS.SelectBy = 'pooled' does: every
+%   condition of a dataset then uses the channels that respond most on
+%   average over all its conditions, rather than each its own strongest.
 %
 %   OPTS fields, all optional:
 %     MaxChannels   how many channels the map is written for   (default 8)
 %     Channels      explicit labels for the map instead        (default [])
+%     SelectBy      'condition' (each condition its own strongest channels,
+%                   the default) or 'pooled' (the same channels for every
+%                   condition of a dataset, ranked over all of them)
+%
+%   A condition whose coherence is entirely missing (a single trial, or none)
+%   contributes no trace or map rows; its reference spectrum is still written.
 %
 %   See also COHERENCEMAP, EXPORTSPECTRACSV, GENERATEQUARTOREPORT.
     if nargin < 3 || isempty(opts)
@@ -44,23 +67,35 @@ function [traceFile, mapFile, chosen] = exportCoherenceCSVs(entries, stem, opts)
     end
     maxChannels = TransTools.FieldOr(opts, 'MaxChannels', 8);
     wanted = TransTools.FieldOr(opts, 'Channels', {});
+    selectBy = lower(char(string(TransTools.FieldOr(opts, 'SelectBy', 'condition'))));
+    if ~any(strcmp(selectBy, {'condition', 'pooled'}))
+        throw(MException('Alakazam:exportCoherenceCSVs', '%s', sprintf( ...
+            'I''m afraid SelectBy must be "condition" or "pooled", not "%s".', selectBy)));
+    end
 
     traceFile = [stem '_coherence_trace.csv'];
     mapFile   = [stem '_coherence_map.csv'];
+    referenceFile = [stem '_coherence_reference.csv'];
     chosen = {};
 
     traceFid = openFile(traceFile);
     closeTrace = onCleanup(@() fclose(traceFid));
     fprintf(traceFid, ['dataset,dataset_type,group,person_id,session,bin,channel,' ...
-        'time_ms,tag_hz,coherence\n']);
+        'time_ms,tag_hz,coherence,n_trials\n']);
 
     mapFid = openFile(mapFile);
     closeMap = onCleanup(@() fclose(mapFid));
     fprintf(mapFid, ['dataset,dataset_type,group,person_id,session,bin,channel,' ...
         'time_ms,frequency_hz,coherence\n']);
 
+    referenceFid = openFile(referenceFile);
+    closeReference = onCleanup(@() fclose(referenceFid));
+    fprintf(referenceFid, ['dataset,dataset_type,group,person_id,session,bin,' ...
+        'n_trials,band_lo_hz,band_hi_hz,peak_hz,frequency_hz,amplitude\n']);
+
     for i = 1:numel(entries)
-        picked = writeEntry(traceFid, mapFid, entries(i), maxChannels, wanted);
+        picked = writeEntry(traceFid, mapFid, referenceFid, entries(i), ...
+            maxChannels, wanted, selectBy);
         chosen = unique([chosen, picked], 'stable');
     end
 end
@@ -74,8 +109,8 @@ function fid = openFile(path)
     end
 end
 
-function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
-%WRITEENTRY  One dataset's trace and map rows.
+function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels, wanted, selectBy)
+%WRITEENTRY  One dataset's trace, map and reference rows.
     chosen = {};
     EEG = entry.EEG;
     if ~isfield(EEG, 'coherence') || isempty(EEG.coherence) || ...
@@ -97,7 +132,7 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
     % below) for an older cached result computed before it existed.
     % size(X), the vector form, drops a trailing singleton dimension (a
     % single-bin cohRefPower is nFreq x nTime x 1, and size() reports that
-    % as just [nFreq nTime]) -- checked per dimension instead, since an
+    % as just [nFreq nTime]), so it is checked per dimension instead: an
     % isequal against a literal 3-element size vector silently never
     % matches a 1-bin export and falls back to the noisier read-out below
     % for the single most common case there is.
@@ -112,22 +147,29 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
     fields = {csvField(entry.subject), csvField(entry.datasetType), ...
         csvField(entry.group), csvField(entry.person), csvField(entry.session)};
     prefix = [strjoin(fields, ','), ','];
+    nTrials = trialCounts(EEG, nBin);
 
+    writeReference(referenceFid, prefix, EEG, nBin, nTrials, freqs);
+
+    % First pass: each condition's tag and its trace at that frequency.
+    valid = false(1, nBin);
+    tagHz = nan(1, nBin);
+    traces = cell(1, nBin);
     for b = 1:nBin
         slab = coh(:, :, :, b);                        % nChan x nFreq x nTime
 
         % THE TAG: read off the REFERENCE'S OWN power, not off the EEG
-        % channels' coherence to it -- reported directly, averaging
-        % coherence over every channel picked the same wrong frequency for
-        % two different RIFT/SSVEP conditions, because that average is
-        % small and noisy for a weak/distant channel and can peak on line
-        % noise, a harmonic, or another condition's own tag entirely. The
-        % reference (typically a photodiode) measures the physical flicker
-        % directly, so its own spectral peak IS the tag, independent of how
-        % any one EEG channel responded. Falls back to the old channel-
-        % averaged read-out when cohRefPower is absent (an older cached
-        % result, or a reference this dataset never recorded a clean
-        % signal for) so a report from before this fix still renders.
+        % channels' coherence to it. Averaging coherence over every channel
+        % picked the same wrong frequency for two different RIFT/SSVEP
+        % conditions, because that average is small and noisy for a
+        % weak/distant channel and can peak on line noise, a harmonic, or
+        % another condition's own tag entirely. The reference (typically a
+        % photodiode) measures the physical flicker directly, so its own
+        % spectral peak IS the tag, independent of how any one EEG channel
+        % responded. Falls back to the old channel-averaged read-out when
+        % cohRefPower is absent (an older cached result, or a reference this
+        % dataset never recorded a clean signal for) so a report from before
+        % this fix still renders.
         if ~isempty(refPower)
             perFreq = mean(refPower(:, :, b), 2, 'omitnan')';
         else
@@ -135,37 +177,57 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
         end
         % A bin this dataset has no trials for (a condition run for other
         % subjects but not this one, e.g. RIFT's own peripheral-60Hz/SSVEP
-        % split by subject group) or a combination bin (see
-        % coherenceOverBins) is entirely NaN here -- max() of an all-NaN
-        % vector does not itself return NaN, it silently returns INDEX 1,
-        % so without this check tagHz would become freqs(1), the analysis
-        % band's own lowest frequency, written out as if it were a real
-        % detected tag for every channel and timepoint. Once even one
-        % dataset contributes that fabricated value for a bin, it can
-        % surface as THE reported "tagged frequency" for that condition
-        % across the whole report. Skipping the bin entirely here -- no
-        % trace rows, no map rows, no tag -- is the same "nothing to say"
-        % response coherenceOverBins already gives an empty-trial bin.
-        if all(isnan(perFreq))
+        % split by subject group), a combination bin (see coherenceOverBins),
+        % or a bin with a single trial (whose coherence is undefined) is
+        % entirely NaN here. max() of an all-NaN vector does not itself
+        % return NaN, it silently returns INDEX 1, so without this check
+        % tagHz would become freqs(1), the analysis band's own lowest
+        % frequency, written out as if it were a real detected tag for every
+        % channel and timepoint. Once even one dataset contributes that
+        % fabricated value for a bin, it can surface as THE reported "tagged
+        % frequency" for that condition across the whole report. Skipping the
+        % bin entirely here (no trace rows, no map rows, no tag) is the same
+        % "nothing to say" response coherenceOverBins already gives an
+        % empty-trial bin.
+        if all(isnan(perFreq)) || all(isnan(slab(:)))
             continue;
         end
-        binField = csvField(csvBinLabel(EEG, b));
         [~, fTag] = max(perFreq);
-        tagHz = freqs(fTag);
+        valid(b) = true;
+        tagHz(b) = freqs(fTag);
+        traces{b} = reshape(slab(:, fTag, :), nChan, nTime);
+    end
 
-        % Every channel's trace at that frequency.
-        trace = reshape(slab(:, fTag, :), nChan, nTime);
+    % Which channels the map is written for. By default each condition gets
+    % its own strongest, which is a display decision (see the header). Pooled
+    % ranks every channel once over all the dataset's conditions, so the
+    % choice does not depend on which condition happened to win.
+    peaks = nan(nChan, nBin);
+    for b = find(valid)
+        peaks(:, b) = max(traces{b}, [], 2, 'omitnan');
+    end
+    pooledPeak = mean(peaks, 2, 'omitnan');
+
+    for b = find(valid)
+        binField = csvField(csvBinLabel(EEG, b));
+        trace = traces{b};
         for c = 1:nChan
             chField = csvField(labels{c});
             for t = 1:nTime
-                fprintf(traceFid, '%s%s,%s,%s,%s,%s\n', prefix, binField, chField, ...
-                    numField(times(t)), numField(tagHz), numField(trace(c, t)));
+                fprintf(traceFid, '%s%s,%s,%s,%s,%s,%s\n', prefix, binField, chField, ...
+                    numField(times(t)), numField(tagHz(b)), numField(trace(c, t)), ...
+                    numField(nTrials(b)));
             end
         end
 
         % And the full plane, for the few channels worth printing.
-        picked = pickChannels(trace, labels, maxChannels, wanted);
+        if strcmp(selectBy, 'pooled')
+            picked = pickChannels(pooledPeak, labels, maxChannels, wanted);
+        else
+            picked = pickChannels(peaks(:, b), labels, maxChannels, wanted);
+        end
         chosen = unique([chosen, labels(picked)], 'stable');
+        slab = coh(:, :, :, b);
         for c = picked
             chField = csvField(labels{c});
             for f = 1:nFreq
@@ -179,11 +241,57 @@ function chosen = writeEntry(traceFid, mapFid, entry, maxChannels, wanted)
     end
 end
 
-function idx = pickChannels(trace, labels, maxChannels, wanted)
+function n = trialCounts(EEG, nBin)
+%TRIALCOUNTS  Trials behind each bin, NaN where the dataset does not say.
+    n = nan(1, nBin);
+    if ~isfield(EEG, 'bindesc') || ~isfield(EEG.bindesc, 'trials')
+        return;
+    end
+    for b = 1:min(nBin, numel(EEG.bindesc))
+        if ~isempty(EEG.bindesc(b).trials)
+            n(b) = numel(EEG.bindesc(b).trials);
+        end
+    end
+end
+
+function writeReference(fid, prefix, EEG, nBin, nTrials, freqs)
+%WRITEREFERENCE  The reference channel's amplitude spectrum, one row per
+%   frequency cell, for each bin that has one. Nothing is written for a
+%   result computed before the spectrum was stored.
+    if ~isfield(EEG, 'cohRefSpectrum') || isempty(EEG.cohRefSpectrum) || ...
+            ~isfield(EEG, 'cohRefSpecFreqs')
+        return;
+    end
+    spec = double(EEG.cohRefSpectrum);
+    specFreqs = reshape(double(EEG.cohRefSpecFreqs), 1, []);
+    if size(spec, 1) ~= numel(specFreqs) || size(spec, 2) ~= nBin
+        return;
+    end
+    peakHz = nan(1, nBin);
+    if isfield(EEG, 'cohRefPeakHz') && numel(EEG.cohRefPeakHz) == nBin
+        peakHz = reshape(double(EEG.cohRefPeakHz), 1, []);
+    end
+    lo = min(freqs);
+    hi = max(freqs);
+    for b = 1:nBin
+        if all(isnan(spec(:, b)))
+            continue;
+        end
+        binField = csvField(csvBinLabel(EEG, b));
+        for k = 1:numel(specFreqs)
+            fprintf(fid, '%s%s,%s,%s,%s,%s,%s,%s\n', prefix, binField, ...
+                numField(nTrials(b)), numField(lo), numField(hi), numField(peakHz(b)), ...
+                numField(specFreqs(k)), numField(spec(k, b)));
+        end
+    end
+end
+
+function idx = pickChannels(peak, labels, maxChannels, wanted)
 %PICKCHANNELS  Which channels the full map is written for.
 %   An explicit list wins, so an analyst who knows their montage is never
 %   overruled by the data. Otherwise the strongest responders, which is
-%   what a figure shows.
+%   what a figure shows. PEAK is each channel's strongest coherence at the
+%   tagged frequency, nChan x 1.
     if ~isempty(wanted)
         idx = [];
         for k = 1:numel(wanted)
@@ -196,7 +304,6 @@ function idx = pickChannels(trace, labels, maxChannels, wanted)
             return;
         end
     end
-    peak = max(trace, [], 2, 'omitnan');
     peak(~isfinite(peak)) = -Inf;
     [~, order] = sort(peak, 'descend');
     idx = sort(order(1:min(maxChannels, numel(order))))';

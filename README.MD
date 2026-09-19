@@ -527,7 +527,7 @@ The current library:
 | `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `Covariance` | Channel-by-channel covariance or correlation matrix per bin, pooled over a bin's trials within a time window (BrainVision Analyzer's Covariance module, extended): optional Ledoit-Wolf shrinkage toward a scaled identity for a well-conditioned estimate, complete-observation deletion rather than pairwise, and the condition number reported before and after shrinkage. |
 | `CrossCorrelation` | Averaged cross-correlation of each channel to a reference channel: the Pearson correlation at each lag, computed per trial and averaged over a bin's trials, plus the peak correlation and the lag it occurs at. A positive lag means the channel follows the reference. Shown in the ribbon as "Cross Correlation". |
-| `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet or a fixed-window STFT: the RIFT-figure view (Dimigen et al., 2025). Shown in the ribbon as "Coherence Map". |
+| `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet, a fixed-window STFT (Hann or boxcar taper) or a filter-Hilbert band-pass: the RIFT-figure view (Dimigen et al., 2025). The reference can be a recorded channel or a synthetic sine. Shown in the ribbon as "Coherence Map". |
 | `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
 
 `TimeFrequency`'s own grid view, one event-related spectral perturbation
@@ -1778,7 +1778,9 @@ exact), and reports:
 For the time-resolved picture, the **Coherence Map** transform draws the
 coherence between each channel and a reference (photodiode) as a per-channel
 **time x frequency heatmap**, the plot the RIFT figures show (Dimigen et al.,
-2025), using either a Morlet wavelet or a fixed-window STFT decomposition:
+2025), using a Morlet wavelet, a fixed-window STFT (Hann or boxcar taper) or a filter-Hilbert
+band-pass. The reference can be a recorded channel or, for a recording with no
+photodiode, a synthetic sine (which gives inter-trial coherence):
 
 ![CoherenceMap: per-bin channel-to-reference coherence, time x frequency](Screenshots/Coherence.jpg)
 

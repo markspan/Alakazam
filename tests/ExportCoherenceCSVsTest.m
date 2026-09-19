@@ -157,6 +157,115 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
                 'The map must be smaller than the unscoped one it replaces.');
         end
 
+        function theTraceCarriesTheTrialCountBehindEachCondition(testCase)
+        %THETRACECARRIESTHETRIALCOUNTBEHINDEACHCONDITION  The coherence of N
+        %   independent trials is 1/N by chance, so a coherence is
+        %   uninterpretable without the N beside it.
+            [~, entry] = testCase.fixture();
+            entry.EEG.bindesc = struct('label', {'Tagged'}, 'index', {1}, 'trials', {1:14});
+            folder = testCase.tempFolder();
+            exportCoherenceCSVs(entry, fullfile(folder, 'x'));
+
+            trace = readtable(fullfile(folder, 'x_coherence_trace.csv'), ...
+                'VariableNamingRule', 'preserve', 'TreatAsMissing', 'NA');
+            testCase.verifyEqual(unique(trace.n_trials), 14);
+        end
+
+        function aDatasetThatDoesNotSayHowManyTrialsIsMissingNotZero(testCase)
+            [trace, ~] = testCase.exportFixture();
+            testCase.verifyTrue(all(isnan(trace.n_trials)), ...
+                'Without bindesc.trials the count is unknown, and unknown is not zero.');
+        end
+
+        function theReferenceFileHoldsTheSpectrumTheBandAndThePeak(testCase)
+        %THEREFERENCEFILEHOLDSTHESPECTRUMTHEBANDANDTHEPEAK  A 30 Hz reference
+        %   peak under a 55 to 65 Hz band: exactly the SSVEP-among-RIFT case
+        %   the file exists to expose.
+            [~, entry] = testCase.fixture();
+            entry.EEG.bindesc = struct('label', {'Tagged'}, 'index', {1}, 'trials', {1:20});
+            specFreqs = 0:0.25:150;
+            spec = 1e-3 * ones(numel(specFreqs), 1);
+            spec(specFreqs == 30) = 9;
+            entry.EEG.cohRefSpectrum = single(spec);
+            entry.EEG.cohRefSpecFreqs = specFreqs;
+            entry.EEG.cohRefPeakHz = 29.94;
+            folder = testCase.tempFolder();
+
+            [~, ~, ~, referenceFile] = exportCoherenceCSVs(entry, fullfile(folder, 'x'));
+
+            ref = readtable(referenceFile, 'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(height(ref), numel(specFreqs));
+            testCase.verifyEqual(unique(ref.band_lo_hz), 55);
+            testCase.verifyEqual(unique(ref.band_hi_hz), 65);
+            testCase.verifyEqual(unique(ref.peak_hz), 29.94, 'AbsTol', 1e-9);
+            testCase.verifyEqual(unique(ref.n_trials), 20);
+            testCase.verifyEqual(ref.amplitude(ref.frequency_hz == 30), 9, 'AbsTol', 1e-6);
+        end
+
+        function theReferenceFileIsHeaderOnlyForAnOlderResult(testCase)
+        %   A result computed before the spectrum was stored has nothing to
+        %   write, and the file must still exist with its columns so the
+        %   report can tell "not stored" from "no such file".
+            [~, entry] = testCase.fixture();
+            folder = testCase.tempFolder();
+
+            [~, ~, ~, referenceFile] = exportCoherenceCSVs(entry, fullfile(folder, 'x'));
+
+            testCase.assertTrue(isfile(referenceFile));
+            ref = readtable(referenceFile, 'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(height(ref), 0);
+            testCase.verifyTrue(all(ismember({'bin', 'n_trials', 'band_lo_hz', 'band_hi_hz', ...
+                'peak_hz', 'frequency_hz', 'amplitude'}, ref.Properties.VariableNames)));
+        end
+
+        function aConditionWithNoCoherenceGivesNoTraceRowsButKeepsItsReferenceSpectrum(testCase)
+        %   A single-trial condition has no coherence (see ComputeCoherenceMap)
+        %   but its reference spectrum is still true and still worth showing.
+            entry = testCase.twoConditionEntry();
+            entry.EEG.coherence(:, :, :, 2) = NaN;
+            folder = testCase.tempFolder();
+
+            [traceFile, ~, ~, referenceFile] = exportCoherenceCSVs(entry, fullfile(folder, 'x'));
+
+            trace = readtable(traceFile, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+            ref = readtable(referenceFile, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(unique(trace.bin), "A");
+            testCase.verifyEqual(sort(unique(ref.bin)), ["A"; "B"]);
+        end
+
+        function eachConditionGetsItsOwnStrongestChannelsByDefault(testCase)
+            entry = testCase.twoConditionEntry();
+            folder = testCase.tempFolder();
+            [~, mapFile] = exportCoherenceCSVs(entry, fullfile(folder, 'x'), struct('MaxChannels', 2));
+
+            map = readtable(mapFile, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(sort(unique(map.channel(map.bin == "A"))), ["E2"; "E5"]);
+            testCase.verifyEqual(sort(unique(map.channel(map.bin == "B"))), ["E1"; "E3"]);
+        end
+
+        function pooledSelectionUsesTheSameChannelsForEveryCondition(testCase)
+        %   Channels picked from the average over all conditions cannot depend
+        %   on which condition happened to win, which is what a test that
+        %   follows needs (Arora et al., 2026). Peaks at the tag, by channel:
+        %   A: E2 .9, E5 .8; B: E1 .9, E3 .8, E2 .5. Pooled means: E2 .7,
+        %   E1 .5, E3 .45, E5 .45, so the pooled pair is E1 and E2.
+            entry = testCase.twoConditionEntry();
+            folder = testCase.tempFolder();
+            [~, mapFile] = exportCoherenceCSVs(entry, fullfile(folder, 'x'), ...
+                struct('MaxChannels', 2, 'SelectBy', 'pooled'));
+
+            map = readtable(mapFile, 'TextType', 'string', 'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(sort(unique(map.channel(map.bin == "A"))), ["E1"; "E2"]);
+            testCase.verifyEqual(sort(unique(map.channel(map.bin == "B"))), ["E1"; "E2"]);
+        end
+
+        function anUnknownSelectionRuleIsRefused(testCase)
+            [~, entry] = testCase.fixture();
+            folder = testCase.tempFolder();
+            testCase.verifyError(@() exportCoherenceCSVs(entry, fullfile(folder, 'x'), ...
+                struct('SelectBy', 'best')), 'Alakazam:exportCoherenceCSVs');
+        end
+
         function anEntryWithNoMapContributesNothing(testCase)
         %ANENTRYWITHNOMAPCONTRIBUTESNOTHING  A workspace holds all kinds of
         %   results; only the ones carrying a map belong in these files.
@@ -255,6 +364,44 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
                 'group', '', 'person', 'p01', 'session', '', 'EEG', eeg);
         end
 
+        function entry = twoConditionEntry(testCase)
+        %TWOCONDITIONENTRY  Two conditions, A and B, tagged at 60 Hz, whose
+        %   strongest channels differ. Peak coherence at the tag by channel
+        %   (E1..E6): A = .1 .9 .1 .1 .8 .1; B = .9 .5 .8 .1 .1 .1.
+            nChan = 6;
+            freqs = 55:1:65;
+            times = linspace(-200, 800, 9);
+            fIdx = find(freqs == testCase.TagHz, 1);
+            inWindow = times > 0 & times < 600;
+            peakA = [.1 .9 .1 .1 .8 .1];
+            peakB = [.9 .5 .8 .1 .1 .1];
+
+            coh = 0.05 * ones(nChan, numel(freqs), numel(times), 2);
+            for c = 1:nChan
+                coh(c, fIdx, inWindow, 1) = peakA(c);
+                coh(c, fIdx, inWindow, 2) = peakB(c);
+            end
+            refPower = 1e-6 * ones(numel(freqs), numel(times), 2);
+            refPower(fIdx, inWindow, :) = 1;
+
+            eeg = struct();
+            eeg.coherence = coh;
+            eeg.cohFreqs = freqs;
+            eeg.cohTimes = times;
+            eeg.cohRefPower = refPower;
+            eeg.chanlocs = struct('labels', ...
+                arrayfun(@(k) sprintf('E%d', k), 1:nChan, 'UniformOutput', false));
+            eeg.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:20, 1:20});
+
+            specFreqs = 0:0.25:150;
+            eeg.cohRefSpectrum = single(1e-3 * ones(numel(specFreqs), 2));
+            eeg.cohRefSpecFreqs = specFreqs;
+            eeg.cohRefPeakHz = [60 60];
+
+            entry = struct('subject', 'sub01', 'datasetType', 'subject', ...
+                'group', '', 'person', 'p01', 'session', '', 'EEG', eeg);
+        end
+
         function [trace, map] = exportFixture(testCase, opts)
             if nargin < 2
                 opts = struct();
@@ -264,9 +411,9 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
             exportCoherenceCSVs(entry, fullfile(folder, 'x'), opts);
 
             trace = readtable(fullfile(folder, 'x_coherence_trace.csv'), ...
-                'TextType', 'string', 'VariableNamingRule', 'preserve');
+                'TextType', 'string', 'VariableNamingRule', 'preserve', 'TreatAsMissing', 'NA');
             map = readtable(fullfile(folder, 'x_coherence_map.csv'), ...
-                'TextType', 'string', 'VariableNamingRule', 'preserve');
+                'TextType', 'string', 'VariableNamingRule', 'preserve', 'TreatAsMissing', 'NA');
             trace.channel = cellstr(trace.channel);
             map.channel = cellstr(map.channel);
         end

@@ -80,6 +80,96 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             testCase.verifyTrue(all(isnan(refPower(:, :, 2)), 'all'));
         end
 
+        function aBinWithASingleTrialHasNoCoherenceButKeepsItsReferencePower(testCase)
+        %ABINWITHASINGLETRIALHASNOCOHERENCEBUTKEEPSITSREFERENCEPOWER  With
+        %   one trial the numerator and the denominator are the same number,
+        %   so coherence is exactly 1 at every point and channel: a value
+        %   that looks like a perfect response and is nothing at all. It must
+        %   be missing, not 1. The reference's own power is still meaningful
+        %   (it is one trial's spectrum) and is what names the tag.
+            EEG = coherenceFixture();
+            EEG.bindesc(1).trials = 1;
+            [coh, ~, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, waveletOpts());
+            testCase.verifyTrue(all(isnan(coh(:, :, :, 1)), 'all'));
+            testCase.verifyTrue(all(isfinite(refPower(:, :, 1)), 'all'));
+        end
+
+        function boxcarTaperStillGivesUnitCoherenceForAScalarMultiple(testCase)
+            EEG = coherenceFixture();
+            opts = stftOpts();
+            opts.Taper = 'Boxcar';
+            [coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(EEG, opts);
+            testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
+        end
+
+        function theTaperActuallyChangesTheEstimate(testCase)
+        %THETAPERACTUALLYCHANGESTHEESTIMATE  A taper option that is silently
+        %   ignored would pass every other test. A boxcar leaks far more of
+        %   the 20 Hz reference tone into frequencies well away from it than
+        %   a Hann does (side lobes fall off as 1/f against 1/f^3), so the
+        %   reference power at 36 Hz and above must be larger with a boxcar.
+            EEG = coherenceFixture();
+            hann = stftOpts();
+            hann.Taper = 'Hann';
+            hann.MaxFreq = 60;
+            boxcar = hann;
+            boxcar.Taper = 'Boxcar';
+
+            [~, freqs, ~, powerHann] = TransTools.ComputeCoherenceMap(EEG, hann);
+            [~, ~, ~, powerBox] = TransTools.ComputeCoherenceMap(EEG, boxcar);
+
+            far = freqs >= 36;
+            testCase.assertTrue(any(far), 'test setup: the grid should reach 36 Hz.');
+            testCase.verifyGreaterThan(mean(powerBox(far, :, 1), 'all'), ...
+                10 * mean(powerHann(far, :, 1), 'all'));
+        end
+
+        function anUnknownTaperIsRefused(testCase)
+            EEG = coherenceFixture();
+            opts = stftOpts();
+            opts.Taper = 'Blackman';
+            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, opts), ...
+                'Alakazam:ComputeCoherenceMap');
+        end
+
+        function filterHilbertCoherenceIsOneForAScalarMultiple(testCase)
+            EEG = coherenceFixture();
+            [coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(EEG, filterHilbertOpts());
+            testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
+        end
+
+        function filterHilbertReferencePowerPeaksAtTheReferencesOwnFrequency(testCase)
+        %   linspace includes its endpoints exactly, so MaxFreq = 20 puts
+        %   the 20 Hz tone on the analysed grid.
+            EEG = coherenceFixture();
+            opts = filterHilbertOpts();
+            opts.MaxFreq = 20;
+            [~, freqs, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [~, fIdx] = max(mean(refPower(:, :, 1), 2));
+            testCase.verifyEqual(freqs(fIdx), 20, 'AbsTol', 1e-9);
+        end
+
+        function filterHilbertOutputsOnePointPerStep(testCase)
+            EEG = coherenceFixture();
+            opts = filterHilbertOpts();
+            opts.StepMs = 20;
+            [~, ~, cohTimes] = TransTools.ComputeCoherenceMap(EEG, opts);
+            testCase.verifyGreaterThan(numel(cohTimes), 2);
+            testCase.verifyEqual(diff(cohTimes), 20 * ones(1, numel(cohTimes) - 1), 'AbsTol', 1e-9);
+        end
+
+        function filterHilbertRefusesANonPositiveBandwidthOrStep(testCase)
+            EEG = coherenceFixture();
+            badBand = filterHilbertOpts();
+            badBand.BandwidthHz = 0;
+            badStep = filterHilbertOpts();
+            badStep.StepMs = -5;
+            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, badBand), ...
+                'Alakazam:ComputeCoherenceMap');
+            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, badStep), ...
+                'Alakazam:ComputeCoherenceMap');
+        end
+
         function combinationBinIsNaN(testCase)
             EEG = coherenceFixture();
             EEG.bindesc(2) = struct('index', 2, 'label', 'Combo', 'trials', [], ...
@@ -170,4 +260,9 @@ end
 function opts = stftOpts()
     opts = struct('Method', 'STFT', 'RefIndex', 1, 'MinFreq', 10, 'MaxFreq', 30, ...
         'WindowMs', 200, 'PadRatio', 2);
+end
+
+function opts = filterHilbertOpts()
+    opts = struct('Method', 'FilterHilbert', 'RefIndex', 1, 'MinFreq', 10, 'MaxFreq', 30, ...
+        'NumFreqs', 5, 'BandwidthHz', 4, 'StepMs', 8);
 end

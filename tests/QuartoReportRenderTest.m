@@ -234,28 +234,8 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
         %   The fixture plants a 60 Hz response at Oz between 0 and 600 ms,
         %   so the section has something real to find and the assertions
         %   below are about content rather than the absence of an error.
-            temporary = testCase.applyFixture( ...
-                matlab.unittest.fixtures.TemporaryFolderFixture);
-            folder = temporary.Folder;
+            [text, html] = testCase.renderCoherence(testCase.coherenceEntries());
 
-            entries = ReportFixtures.censusEntries('F-SPEC3CR');
-            [qmdFile, csvFile] = ReportFixtures.writeReport(entries, folder, 'coherence');
-            [~, csvName, csvExt] = fileparts(csvFile);
-
-            [traceFile, mapFile] = exportCoherenceCSVs( ...
-                testCase.coherenceEntries(), fullfile(folder, 'coherence'));
-            [~, traceName, traceExt] = fileparts(traceFile);
-            [~, mapName, mapExt] = fileparts(mapFile);
-
-            qmd = generateQuartoReport(entries, [csvName csvExt], '', '', '', '', ...
-                struct('Trace', [traceName traceExt], 'Map', [mapName mapExt]));
-            writeQmdFile(qmdFile, qmd, 'Alakazam:QuartoReportRenderTest');
-
-            [html, errorMessage] = renderQuartoReport(qmdFile);
-            testCase.assertEmpty(errorMessage, sprintf( ...
-                'quarto could not render the coherence report:\n%s', errorMessage));
-
-            text = plainTextOf(readWholeFile(html));
             testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
                 ['A tryCatch swallowed a genuine R error in the coherence ' ...
                  'section. See ' html '.']);
@@ -264,11 +244,111 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
             testCase.verifySubstring(text, 'Channels shown');
             testCase.verifyFalse(contains(text, 'No coherence export'), ...
                 'The exports were written, so the absent-file branch is wrong here.');
+            testCase.verifySubstring(text, 'Coherence at the Tagged Frequency');
+            testCase.verifySubstring(text, 'Chance (1/N)');
+            testCase.verifySubstring(text, 'Reference spectrum');
+            testCase.verifySubstring(text, 'Strongest reference frequency per condition');
+            testCase.verifyFalse(contains(text, 'Outside the analysed band'), ...
+                'Both conditions are tagged inside the band, so nothing should be flagged.');
+            testCase.verifyFalse(contains(text, 'tagged at different frequencies'), ...
+                'Both conditions share one tag, so the frequency warning is wrong here.');
+        end
+
+        function theCoherenceSectionSaysWhenATagIsOutsideTheBandOrTheFrequenciesDiffer(testCase)
+        %THECOHERENCESECTIONSAYSWHENATAGISOUTSIDETHEBANDORTHEFREQUENCIESDIFFER
+        %   The situation reported from real RIFT data: a 30 Hz SSVEP
+        %   condition analysed over a band that stops at 65 Hz was printed as
+        %   "SSVEP 30Hz at 60.00 Hz", the strongest thing inside the band and
+        %   a 1% residual of the photodiode. The section has to say the
+        %   reference actually peaks at 30 Hz, outside the band, and that
+        %   conditions tagged at 60 and 64 Hz differ in frequency, and it has
+        %   to note that one recording disagreed about the 64 Hz tag.
+            [text, html] = testCase.renderCoherence(testCase.outOfBandEntries());
+
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, ...
+                'SSVEP 30Hz at 60.00 Hz (the strongest inside the band; the reference peaks at 30.00 Hz)');
+            testCase.verifySubstring(text, 'Reference peak (Hz)');
+            testCase.verifySubstring(text, 'Outside the analysed band');
+            testCase.verifySubstring(text, 'SSVEP 30Hz (the reference peaks at 30.00 Hz');
+            testCase.verifySubstring(text, 'the band covers 55.00 to 65.00 Hz');
+            testCase.verifySubstring(text, 'Conditions were tagged at different frequencies');
+            testCase.verifySubstring(text, ...
+                'Recordings did not all find the same tag for RIFT 64Hz (2 of 3 agreed)');
+            testCase.verifySubstring(text, 'Coherence at the Tagged Frequency');
         end
 
     end
 
     methods (Access = private)
+        function [text, html] = renderCoherence(testCase, coherenceData)
+        %RENDERCOHERENCE  Export the coherence CSVs for COHERENCEDATA, render a
+        %   real report over them, and return its visible text and file.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+            folder = temporary.Folder;
+
+            entries = ReportFixtures.censusEntries('F-SPEC3CR');
+            [qmdFile, csvFile] = ReportFixtures.writeReport(entries, folder, 'coherence');
+            [~, csvName, csvExt] = fileparts(csvFile);
+
+            [traceFile, mapFile, ~, referenceFile] = exportCoherenceCSVs( ...
+                coherenceData, fullfile(folder, 'coherence'));
+            [~, traceName, traceExt] = fileparts(traceFile);
+            [~, mapName, mapExt] = fileparts(mapFile);
+            [~, refName, refExt] = fileparts(referenceFile);
+
+            qmd = generateQuartoReport(entries, [csvName csvExt], '', '', '', '', ...
+                struct('Trace', [traceName traceExt], 'Map', [mapName mapExt], ...
+                       'Reference', [refName refExt]));
+            writeQmdFile(qmdFile, qmd, 'Alakazam:QuartoReportRenderTest');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+            testCase.assertEmpty(errorMessage, sprintf( ...
+                'quarto could not render the coherence report:\n%s', errorMessage));
+            text = plainTextOf(readWholeFile(html));
+        end
+
+        function entries = outOfBandEntries(~)
+        %OUTOFBANDENTRIES  Three recordings, three conditions. RIFT 60Hz: tag
+        %   and reference peak both at 60 Hz. SSVEP 30Hz: the reference peaks
+        %   at 30 Hz, OUTSIDE the 55 to 65 Hz band, so the strongest in-band
+        %   frequency is a 60 Hz residual. RIFT 64Hz: tagged at 64 Hz, except
+        %   in the third recording, whose reference peaks at 63 Hz.
+            entries = struct('subject', {}, 'datasetType', {}, 'group', {}, ...
+                'person', {}, 'session', {}, 'EEG', {});
+            freqs = 55:1:65;
+            times = linspace(-200, 800, 12);
+            labels = {'Fz', 'Cz', 'Pz', 'Oz', 'PO7', 'PO8'};
+            inWindow = times > 0 & times < 600;
+            rng(11);
+            for s = 1:3
+                tagsHz = [60 60 64];
+                if s == 3
+                    tagsHz(3) = 63;
+                end
+                coh = 0.05 + 0.01 * rand(numel(labels), numel(freqs), numel(times), 3);
+                refPower = 1e-3 * ones(numel(freqs), numel(times), 3);
+                for b = 1:3
+                    fIdx = find(freqs == tagsHz(b), 1);
+                    coh(4, fIdx, inWindow, b) = 0.8;
+                    refPower(fIdx, inWindow, b) = 1;
+                end
+                eeg = struct('cohFreqs', freqs, 'cohTimes', times, ...
+                    'chanlocs', struct('labels', labels), ...
+                    'bindesc', struct('label', {'RIFT 60Hz', 'SSVEP 30Hz', 'RIFT 64Hz'}, ...
+                        'index', {1, 2, 3}, 'trials', {1:20, 1:20, 1:20}));
+                eeg.coherence = coh;
+                eeg.cohRefPower = refPower;
+                eeg = withReferenceSpectrum(eeg, [tagsHz(1) 30 tagsHz(3)]);
+                entries(s) = struct('subject', sprintf('sub%02d', s), ...
+                    'datasetType', 'subject', 'group', '', ...
+                    'person', sprintf('p%02d', s), 'session', '', 'EEG', eeg);
+            end
+        end
+
         function entries = coherenceEntries(~)
         %COHERENCEENTRIES  Two recordings with a planted 60 Hz tag at Oz,
         %   present between 0 and 600 ms and absent outside it, so the
@@ -288,7 +368,7 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 coh(6, fIdx, inWindow) = 0.6;
                 eeg = struct('cohFreqs', freqs, 'cohTimes', times, ...
                     'chanlocs', struct('labels', labels), ...
-                    'bindesc', struct('label', {'A', 'B'}, 'index', {1, 2}));
+                    'bindesc', struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:20, 1:20}));
                 eeg.coherence = cat(4, coh, coh * 0.5);
 
                 % The reference (photodiode) channel's own power, exercising
@@ -299,6 +379,7 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 refPower = 1e-3 * ones(numel(freqs), numel(times));
                 refPower(fIdx, inWindow) = 1;
                 eeg.cohRefPower = cat(3, refPower, refPower);
+                eeg = withReferenceSpectrum(eeg, [60 60]);
                 entries(s) = struct('subject', sprintf('sub%02d', s), ...
                     'datasetType', 'subject', 'group', '', ...
                     'person', sprintf('p%02d', s), 'session', '', 'EEG', eeg);
@@ -310,6 +391,20 @@ end
 % =========================================================================== %
 %  Local helpers (callable only from the class above)
 % =========================================================================== %
+
+function eeg = withReferenceSpectrum(eeg, peakHz)
+%WITHREFERENCESPECTRUM  Store the reference channel's own spectrum on EEG: a
+%   flat floor with one sharp peak per condition at PEAKHZ, over 0 to 150 Hz.
+    specFreqs = 0:0.25:150;
+    spec = 1e-3 * ones(numel(specFreqs), numel(peakHz));
+    for b = 1:numel(peakHz)
+        [~, k] = min(abs(specFreqs - peakHz(b)));
+        spec(k, b) = 10;
+    end
+    eeg.cohRefSpectrum = single(spec);
+    eeg.cohRefSpecFreqs = specFreqs;
+    eeg.cohRefPeakHz = peakHz;
+end
 
 function packages = reportPackages()
 %REPORTPACKAGES  The R packages the generated setup chunk loads, so

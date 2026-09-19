@@ -54,6 +54,10 @@ classdef CoherenceChainingTest < matlab.unittest.TestCase
             testCase.verifyFalse(isfield(topoResult, 'cohTimes'));
             testCase.verifyFalse(isfield(topoResult, 'cohRef'));
             testCase.verifyFalse(isfield(topoResult, 'cohMethod'));
+            for stale = {'cohRefPower', 'cohRefSpectrum', 'cohRefSpecFreqs', 'cohRefPeakHz'}
+                testCase.verifyFalse(isfield(topoResult, stale{1}), ...
+                    ['A stale ' stale{1} ' was carried into the chained result.']);
+            end
             testCase.verifyTrue(isfield(topoResult, 'CohTopoValues'));
         end
 

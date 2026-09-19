@@ -90,20 +90,21 @@ function onExportSpectral(this)
         % entries above: the map lives on its own nodes, and a workspace
         % routinely has one without the other. Best effort, like the
         % spectra: the figures are lost, the report is not.
-        coherenceCsvs = struct('Trace', '', 'Map', '');
+        coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '');
         try
             coherenceEntries = this.collectEntriesWithField('coherence');
             if ~isempty(coherenceEntries)
                 setBusy('Exporting the coherence maps...');
-                [traceFile, mapFile] = exportCoherenceCSVs(coherenceEntries, ...
-                    fullfile(reportsDir, [stem '_' stampTxt]));
+                [traceFile, mapFile, ~, referenceFile] = exportCoherenceCSVs( ...
+                    coherenceEntries, fullfile(reportsDir, [stem '_' stampTxt]));
                 [~, traceName, traceExt] = fileparts(traceFile);
                 [~, mapName, mapExt] = fileparts(mapFile);
+                [~, refName, refExt] = fileparts(referenceFile);
                 coherenceCsvs = struct('Trace', [traceName traceExt], ...
-                    'Map', [mapName mapExt]);
+                    'Map', [mapName mapExt], 'Reference', [refName refExt]);
             end
         catch
-            coherenceCsvs = struct('Trace', '', 'Map', '');
+            coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '');
         end
 
         qmdText = generateQuartoReport(entries, reportCsvName, '', '', '', ...

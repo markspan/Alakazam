@@ -437,9 +437,11 @@ function parts = uniqueChunkLabels(parts)
 end
 
 function lines = coherenceReadLines(coherenceCsvs)
-%COHERENCEREADLINES  Read the trace and map exports, or set them to NULL.
+%COHERENCEREADLINES  Read the trace, map and reference exports, or set them to NULL.
+%   The reference file has no channel column, so the text columns are
+%   converted only where they exist.
     lines = {};
-    for spec = {{'Trace', 'cohtrace'}, {'Map', 'cohmap'}}
+    for spec = {{'Trace', 'cohtrace'}, {'Map', 'cohmap'}, {'Reference', 'cohref'}}
         field = spec{1}{1};
         name = spec{1}{2};
         file = '';
@@ -454,7 +456,8 @@ function lines = coherenceReadLines(coherenceCsvs)
             sprintf('%s_file <- "%s"', name, ReportSections.rLit(file)) ...
             sprintf(['%s <- if (file.exists(%s_file)) read_csv(%s_file, ' ...
                      'show_col_types = FALSE) else NULL'], name, name, name) ...
-            sprintf('if (!is.null(%s)) %s <- %s %%>%% mutate(bin = as.character(bin), channel = as.character(channel))', ...
+            sprintf(['if (!is.null(%s)) %s <- %s %%>%% ' ...
+                     'mutate(across(any_of(c("bin", "channel")), as.character))'], ...
                 name, name, name)}]; %#ok<AGROW>
     end
 end

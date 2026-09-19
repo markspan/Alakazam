@@ -101,7 +101,8 @@ classdef QuartoReportRSyntaxTest < matlab.unittest.TestCase
                 % ones. Add an argument to generateQuartoReport, add it here.
                 qmdText = generateQuartoReport(ReportFixtures.censusEntries(ids{k}), 'x.csv', ...
                     '', 'grandaverages.csv', 'trials.csv', 'spectra.csv', ...
-                    struct('Trace', 'coherence_trace.csv', 'Map', 'coherence_map.csv'));
+                    struct('Trace', 'coherence_trace.csv', 'Map', 'coherence_map.csv', ...
+                           'Reference', 'coherence_reference.csv'));
                 scriptFiles{k} = fullfile(folder, [ids{k} '.R']);
                 writeText(scriptFiles{k}, ReportFixtures.rCode(qmdText));
             end
