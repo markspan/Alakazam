@@ -246,12 +246,35 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 'The exports were written, so the absent-file branch is wrong here.');
             testCase.verifySubstring(text, 'Coherence at the Tagged Frequency');
             testCase.verifySubstring(text, 'Chance (1/N)');
+            testCase.verifySubstring(text, 'Before 0 ms');
+            testCase.verifyFalse(contains(text, 'no baseline period'), ...
+                'These epochs start before 0 ms, so a baseline exists and nothing should say otherwise.');
             testCase.verifySubstring(text, 'Reference spectrum');
             testCase.verifySubstring(text, 'Strongest reference frequency per condition');
             testCase.verifyFalse(contains(text, 'Outside the analysed band'), ...
                 'Both conditions are tagged inside the band, so nothing should be flagged.');
             testCase.verifyFalse(contains(text, 'tagged at different frequencies'), ...
                 'Both conditions share one tag, so the frequency warning is wrong here.');
+        end
+
+        function theCoherenceSectionSaysSoWhenTheEpochsHaveNoBaseline(testCase)
+        %THECOHERENCESECTIONSAYSSOWHENTHEEPOCHSHAVENOBASELINE  The real RIFT
+        %   epochs run from 0 ms, so nothing precedes the stimulus. A "Before
+        %   0 ms" column that is blank for every condition reads as a
+        %   measurement that failed; the section has to drop it and say why.
+            entries = testCase.outOfBandEntries();
+            for s = 1:numel(entries)
+                entries(s).EEG.cohTimes = entries(s).EEG.cohTimes + 200;   % -200..800 ms becomes 0..1000 ms
+            end
+            [text, html] = testCase.renderCoherence(entries);
+
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, 'Coherence at the Tagged Frequency');
+            testCase.verifySubstring(text, 'no baseline period');
+            testCase.verifyFalse(contains(text, 'Before 0 ms'), ...
+                'With no time before 0 ms the column can only be empty, so it should not be shown.');
         end
 
         function theCoherenceSectionSaysWhenATagIsOutsideTheBandOrTheFrequenciesDiffer(testCase)
