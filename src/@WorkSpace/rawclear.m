@@ -1,47 +1,51 @@
-function rawclear(this,~,~)
-%RAWCLEAR  "Clear WorkSpace": delete this workspace's cached analyses.
+function rawclear(this, mode, ~)
+%RAWCLEAR  "Clear WorkSpace": delete this workspace's cached analyses, in one
+%   of two strengths the analyst chooses between.
 %
-%   SCOPED TO THIS WORKSPACE. This used to be rmdir(CacheDirectory, 's') --
+%     NORMAL CLEAR removes every transformation result, and the grand
+%     averages built only from this workspace's recordings, but keeps each
+%     recording's own cache file: the recording as loaded from its raw file.
+%     Reopening a subject is then quick, and this is what to do before
+%     re-running a revised pipeline.
+%
+%     DEEP CLEAN removes that loaded copy too, so every recording is read
+%     from its raw file again the next time it is opened.
+%
+%   RAWCLEAR(THIS, MODE) with MODE 'normal' or 'deep' skips the question,
+%   for scripts and tests. Any other second argument (this used to be a
+%   callback, so a graphics object can arrive here) is ignored and the
+%   question is asked.
+%
+%   SCOPED TO THIS WORKSPACE. This used to be rmdir(CacheDirectory, 's'),
 %   the whole cache folder, unconditionally. One cache is routinely shared
-%   by several workspaces analysing different studies (eleven .wksp files
-%   in this repository alone point at Data/Cache), so "Clear WorkSpace" in
-%   one of them silently destroyed every other one's work as well, with a
-%   confirmation dialog that gave no hint it would.
+%   by several workspaces analysing different studies (eleven .wksp files in
+%   this repository alone point at Data/Cache), so "Clear WorkSpace" in one
+%   of them silently destroyed every other one's work as well, with a
+%   confirmation dialog that gave no hint it would. Only data rooted on a
+%   recording in this workspace's Raw directory belongs to it; the rules,
+%   including for grand averages, are in clearWorkspaceCache.
 %
-%   The rule is the same one findGrandAverageCandidates and
-%   loadGrandAverages already follow: only data rooted on a recording in
-%   this workspace's Raw directory belongs to this workspace. Each root
-%   node owns <CacheDirectory>/<id>.mat plus the <CacheDirectory>/<id>/
-%   folder its descendants live in (see resolveCachePaths/treeTraverse),
-%   and those are what get removed. Anything else in the cache belongs to
-%   somebody else and is left alone.
-%
-%   Grand averages are deleted only when EVERY subject they combine is
-%   rooted here. loadGrandAverages shows one when ANY of its sources is --
-%   which is right for displaying it, and much too loose for deleting it,
-%   since a grand average combining this study with another is partly
-%   somebody else's result. The asymmetry is deliberate: show generously,
-%   delete conservatively.
+%   See also CLEARWORKSPACECACHE, CHOOSEACTION.
 
-    targets = ownedCacheTargets(this);
+    fig = this.Parent.MainFigure;
+    nodes = this.Tree.allNodes();
 
-    if ~confirmAction(this.Parent.MainFigure, confirmationText(targets), ...
-            'Clear Workspace?', 'Yes, delete!', 'Sorry, what? No!', 'Icon', 'warning')
-        return;
+    if nargin < 2 || ~(ischar(mode) || isstring(mode)) || isempty(char(mode))
+        mode = askClearMode(fig, nodes);
+        if isempty(mode)
+            return;
+        end
     end
 
     % gcf ignores this app's uifigure (it only tracks classic figures),
-    % so it used to silently CREATE a new blank one here -- exactly the
+    % so it used to silently CREATE a new blank one here, exactly the
     % stray figure window users saw, which then sat on top of/stole
     % focus from MainFigure and made the app look hung. Use the app's
     % own window instead, restored via onCleanup so the busy indicator
     % can't get stuck if a delete or open throws partway through.
-    fig = this.Parent.MainFigure;
     restoreBusy = beginBusy(fig, 'Clearing cache...'); %#ok<NASGU>
 
-    for i = 1:numel(targets)
-        removeTarget(targets{i}, this.CacheDirectory);
-    end
+    clearWorkspaceCache(nodes, this.CacheDirectory, mode, false);
 
     if exist(this.CacheDirectory, 'dir') ~= 7
         mkdir(this.CacheDirectory);   % only if it went missing entirely
@@ -50,147 +54,45 @@ function rawclear(this,~,~)
 end
 
 % ======================================================================= %
-function targets = ownedCacheTargets(this)
-%OWNEDCACHETARGETS  Every path this workspace may delete: one root cache
-%   file and its descendants folder per recording, plus the grand averages
-%   built entirely from them.
-    targets = {};
-
-    nodes = this.Tree.allNodes();
-    ownedFiles = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+function mode = askClearMode(fig, nodes)
+%ASKCLEARMODE  Ask whether to clear normally or deeply. Returns 'normal',
+%   'deep', or '' when the analyst cancels.
+    nRecordings = 0;
     for i = 1:numel(nodes)
-        key = normalisePath(nodes(i).UserData);
-        if ~isempty(key)
-            ownedFiles(key) = true;
-        end
-        if ~nodes(i).IsRoot || isempty(nodes(i).UserData)
-            continue;
-        end
-        rootFile = nodes(i).UserData;
-        targets{end + 1} = rootFile; %#ok<AGROW>
-        % Every cache node is written alongside a "<file>.mat.json"
-        % sidecar (see saveEegCache/readEegCacheInfo); deleting the .mat
-        % without it would leave the cache littered with descriptions of
-        % datasets that no longer exist.
-        targets{end + 1} = [rootFile '.json']; %#ok<AGROW>
-        % The descendants of <id>.mat live in the sibling folder <id>/,
-        % whose own sidecars go with it when the folder is removed.
-        [folder, stem] = fileparts(rootFile);
-        targets{end + 1} = fullfile(folder, stem); %#ok<AGROW>
-    end
-
-    gaDir = fullfile(this.CacheDirectory, 'GrandAverages');
-    if exist(gaDir, 'dir') ~= 7
-        return;
-    end
-    found = dir(fullfile(gaDir, '*.mat'));
-    for i = 1:numel(found)
-        file = fullfile(found(i).folder, found(i).name);
-        if whollyOwned(file, ownedFiles)
-            targets{end + 1} = file; %#ok<AGROW>
-            sidecar = [file '.json'];
-            if exist(sidecar, 'file') == 2
-                targets{end + 1} = sidecar; %#ok<AGROW>
-            end
+        if nodes(i).IsRoot && ~isempty(nodes(i).UserData)
+            nRecordings = nRecordings + 1;
         end
     end
-end
 
-function tf = whollyOwned(gaFile, ownedFiles)
-%WHOLLYOWNED  Is every subject in this grand average rooted in this
-%   workspace? A grand average with no recorded provenance is NOT claimed:
-%   when in doubt, do not delete.
-    tf = false;
-    try
-        loaded = load(gaFile, 'EEG');
-    catch
-        return;   % unreadable: leave it alone
-    end
-    EEG = loaded.EEG;
-    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'GrandAverage')
-        return;
-    end
-    ga = EEG.etc.GrandAverage;
-    if ~isstruct(ga) || ~isfield(ga, 'sources') || isempty(ga.sources)
-        return;
-    end
-    sources = ga.sources;
-    if ~iscell(sources)
-        sources = {sources};
-    end
-    for i = 1:numel(sources)
-        key = normalisePath(sources{i});
-        if isempty(key) || ~isKey(ownedFiles, key)
-            return;
+    mode = '';
+    if nRecordings == 0
+        if confirmAction(fig, ...
+                sprintf('There are no cached analyses for this workspace to clear.\n\nClear anyway?'), ...
+                'Clear Workspace?', 'Yes, clear', 'Sorry, what? No!', 'Icon', 'warning')
+            mode = 'normal';
         end
-    end
-    tf = true;
-end
-
-function removeTarget(target, cacheDir)
-%REMOVETARGET  Delete one file or folder, but only from inside the cache.
-%   The containment check is the point: these paths come from tree node
-%   data, and a delete is not something to perform on a path that has not
-%   been proven to be where it claims to be. A target outside the cache is
-%   skipped with a warning rather than removed.
-    if ~isUnder(target, cacheDir)
-        warning('Alakazam:WorkSpace:rawclear', ...
-            'Refusing to delete "%s": it is outside the cache directory.', target);
         return;
     end
-    if exist(target, 'dir') == 7
-        rmdir(target, 's');
-    elseif exist(target, 'file') == 2
-        delete(target);
-    end
-end
 
-function tf = isUnder(target, root)
-%ISUNDER  Is TARGET inside ROOT (and not ROOT itself)?
-    t = normalisePath(target);
-    r = normalisePath(root);
-    if isempty(t) || isempty(r)
-        tf = false; return;
-    end
-    if r(end) ~= filesep
-        r = [r filesep];
-    end
-    tf = strncmp(t, r, numel(r)) && numel(t) > numel(r);
-end
-
-function text = confirmationText(targets)
-%CONFIRMATIONTEXT  Say what will actually go, and what will not.
-%   The old wording -- "delete all your work" -- was both alarming and,
-%   on a shared cache, an understatement of the blast radius. Now that the
-%   scope is real, the dialog states it.
-    nRoots = 0;
-    for i = 1:numel(targets)
-        if endsWith(lower(targets{i}), '.mat') && ~contains(targets{i}, [filesep 'GrandAverages' filesep])
-            nRoots = nRoots + 1;
-        end
-    end
-    if nRoots == 0
-        text = sprintf(['There are no cached analyses for this workspace to clear.' ...
-            '\n\nClear anyway?']);
-        return;
-    end
-    text = sprintf([ ...
-        'Delete the cached analyses for the %d recording(s) in this workspace?\n\n' ...
+    normal = 'Normal clear';
+    deep = 'Deep clean';
+    cancel = 'Cancel';
+    message = sprintf([ ...
+        'Clear the cached analyses for the %d recording(s) in this workspace?\n\n' ...
+        'A normal clear removes every transformation result, and grand averages built ' ...
+        'only from these recordings. Each recording''s loaded data is kept, so ' ...
+        'reopening it is quick.\n\n' ...
+        'A deep clean also removes that loaded data, so every recording is read again ' ...
+        'from its raw file the next time it is opened.\n\n' ...
         'The raw recordings themselves are not touched, and neither is anything in ' ...
-        'the cache folder belonging to other workspaces.'], nRoots);
-end
+        'the cache folder belonging to other workspaces. This cannot be undone.'], nRecordings);
 
-function key = normalisePath(p)
-%NORMALISEPATH  A path reduced to a comparable key: separators unified, and
-%   case folded on Windows, where the same file is routinely named with
-%   different capitalisation. Case is preserved elsewhere, where it matters.
-    key = '';
-    if isempty(p)
-        return;
-    end
-    key = char(p);
-    key = strrep(strrep(key, '/', filesep), '\', filesep);
-    if ispc
-        key = lower(key);
+    choice = chooseAction(fig, message, 'Clear Workspace?', ...
+        {normal, deep, cancel}, normal, cancel, 'Icon', 'warning');
+    switch choice
+        case normal
+            mode = 'normal';
+        case deep
+            mode = 'deep';
     end
 end

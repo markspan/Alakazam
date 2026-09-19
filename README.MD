@@ -1971,11 +1971,16 @@ The Alakazam tab's **Workspace** group provides the following operations.
 - **Edit WorkSpace...**: modifies the Raw, Intermediate, and Exports
   directories directly, via a directory-browser control for each field,
   without requiring a `.wksp` file.
-- **Clear WorkSpace**: deletes the entire Intermediate (cache) directory
-  and rescans the raw directory from its initial state. This operation
-  removes the results of every transformation for every subject, not a
-  single selected subject; a confirmation prompt precedes execution, but
-  the operation cannot be reversed once confirmed.
+- **Clear WorkSpace**: asks whether to do a **normal** or a **deep** clean,
+  then rescans the raw directory. A normal clean removes the results of every
+  transformation for every subject in this workspace, and grand averages built
+  only from them, but keeps each recording's loaded data, so reopening a
+  subject is quick; it is the one to use before re-running a revised
+  pipeline. A deep clean also removes that loaded data, so every recording is
+  read again from its raw file. Either way only this workspace's recordings are
+  affected, never another workspace that shares the cache folder, and the raw
+  recordings are left alone. It applies to every subject, not a single selected
+  one, and it cannot be reversed once chosen.
 - **Clear Other**: retains a single subject's analysis branch (the
   selected root node, or the first such node if none is selected) and
   removes every other subject's branch, for use when regenerating the

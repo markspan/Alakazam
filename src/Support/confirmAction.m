@@ -45,32 +45,10 @@ function ok = confirmAction(fig, message, title, affirmative, negative, varargin
         end
     end
 
-    if isUiFigure(fig)
-        selection = uiconfirm(fig, message, title, ...
-            'Options', {affirmative, negative}, ...
-            'DefaultOption', affirmative, ...
-            'CancelOption', negative, ...
-            'Icon', icon);
-    else
-        selection = questdlg(message, title, affirmative, negative, affirmative);
-    end
+    selection = chooseAction(fig, message, title, {affirmative, negative}, ...
+        affirmative, negative, 'Icon', icon);
 
-    % strcmp rather than a truthiness test: both dialogs return '' when the
-    % window is dismissed without a choice, and '' must not read as yes.
+    % strcmp rather than a truthiness test: a dismissed dialog comes back as
+    % the negative option, and anything else must not read as yes.
     ok = strcmp(selection, affirmative);
-end
-
-% ======================================================================= %
-function tf = isUiFigure(fig)
-%ISUIFIGURE  Whether FIG is a live uifigure, which is what uiconfirm needs.
-%   A uifigure has an empty Number, unlike a classic figure -- the standard
-%   way to tell them apart, and cheaper than probing for a property only
-%   one of them has.
-    tf = false;
-    try
-        tf = ~isempty(fig) && isscalar(fig) && isgraphics(fig) && ...
-            isa(fig, 'matlab.ui.Figure') && isempty(fig.Number);
-    catch
-        tf = false;   % a deleted or exotic handle is simply not usable
-    end
 end
