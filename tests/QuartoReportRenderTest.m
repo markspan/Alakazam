@@ -257,6 +257,35 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 'Both conditions share one tag, so the frequency warning is wrong here.');
         end
 
+        function theCoherenceSectionChoosesChannelsPerConditionAndIgnoresAGrandAverage(testCase)
+        %THECOHERENCESECTIONCHOOSESCHANNELSPERCONDITIONANDIGNORESAGRANDAVERAGE
+        %   Two problems found on the first real ten-subject run. (1) A grand
+        %   average in the workspace was counted as an eleventh recording
+        %   ("Averaged over 11"). (2) The four highlighted channels, which the
+        %   table's Peak describes, were chosen across all conditions at once, so
+        %   when a strong condition came into the analysed band it took over the
+        %   channel set and the 60 Hz Peak fell from 0.290 to 0.213 with nothing
+        %   changed in that condition.
+        %
+        %   The fixture has condition A responding at channels 1 to 4 (coherence
+        %   0.83) and condition B at channels 5 to 8 (0.67). Chosen across both,
+        %   the four strongest are all A's, so B's row would describe channels
+        %   that do not respond in B and read about 0.06. Chosen per condition it
+        %   reads 0.670. Two recordings plus a grand average must read as two.
+            [text, html] = testCase.renderCoherence(testCase.perConditionEntries());
+
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, 'Averaged over 2 recording(s)');
+            testCase.verifyFalse(contains(text, 'Averaged over 3 recording(s)'), ...
+                'The grand average was counted as a recording.');
+            testCase.verifySubstring(text, '0.830');
+            testCase.verifySubstring(text, '0.670');
+            testCase.verifySubstring(text, 'Oz mean (SD)');
+            testCase.verifySubstring(text, 'Dimigen et al. (2025) report');
+        end
+
         function theCoherenceSectionSaysSoWhenTheEpochsHaveNoBaseline(testCase)
         %THECOHERENCESECTIONSAYSSOWHENTHEEPOCHSHAVENOBASELINE  The real RIFT
         %   epochs run from 0 ms, so nothing precedes the stimulus. A "Before
@@ -332,6 +361,39 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
             testCase.assertEmpty(errorMessage, sprintf( ...
                 'quarto could not render the coherence report:\n%s', errorMessage));
             text = plainTextOf(readWholeFile(html));
+        end
+
+        function entries = perConditionEntries(~)
+        %PERCONDITIONENTRIES  Two subjects and their grand average, ten channels
+        %   (Oz is the fourth). Condition A responds at channels 1 to 4 (0.83) and
+        %   condition B at channels 5 to 8 (0.67), both at 60 Hz. The grand
+        %   average carries the same data, as a real one carries the subjects' mean.
+            entries = struct('subject', {}, 'datasetType', {}, 'group', {}, ...
+                'person', {}, 'session', {}, 'EEG', {});
+            freqs = 55:1:65;
+            times = linspace(-200, 800, 12);
+            labels = {'Fz', 'Cz', 'Pz', 'Oz', 'PO7', 'PO8', 'O1', 'O2', 'P3', 'P4'};
+            fIdx = find(freqs == 60, 1);
+            inWindow = times > 0 & times < 600;
+            names = {'sub01', 'sub02', 'ga'};
+            types = {'subject', 'subject', 'grand_average'};
+            rng(5);
+            for s = 1:3
+                coh = 0.05 + 0.01 * rand(numel(labels), numel(freqs), numel(times), 2);
+                coh(1:4, fIdx, inWindow, 1) = 0.83;
+                coh(5:8, fIdx, inWindow, 2) = 0.67;
+                refPower = 1e-3 * ones(numel(freqs), numel(times), 2);
+                refPower(fIdx, inWindow, :) = 1;
+                eeg = struct('cohFreqs', freqs, 'cohTimes', times, ...
+                    'chanlocs', struct('labels', labels), ...
+                    'bindesc', struct('label', {'A', 'B'}, 'index', {1, 2}, ...
+                        'trials', {1:20, 1:20}));
+                eeg.coherence = coh;
+                eeg.cohRefPower = refPower;
+                eeg = withReferenceSpectrum(eeg, [60 60]);
+                entries(s) = struct('subject', names{s}, 'datasetType', types{s}, ...
+                    'group', '', 'person', names{s}, 'session', '', 'EEG', eeg);
+            end
         end
 
         function entries = outOfBandEntries(~)
@@ -465,6 +527,10 @@ function plain = plainTextOf(html)
     plain = strrep(plain, '&quot;', '"');
     plain = strrep(plain, '&#39;', '''');
     plain = strrep(plain, '&nbsp;', ' ');
+    % Pandoc's smart typography writes a literal non-breaking space (U+00A0),
+    % not the entity, after an abbreviation such as "et al." A reader sees a
+    % space there, and an assertion typed with one would never match it.
+    plain = strrep(plain, char(160), ' ');
     plain = strrep(plain, '&amp;', '&');   % last, so "&amp;lt;" does not become "<"
 end
 
