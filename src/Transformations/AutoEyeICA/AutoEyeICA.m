@@ -93,17 +93,46 @@ end
 %  Use FastICA automatically when it is installed, so the ICA-algorithm
 %  dialog is skipped; otherwise fall back to pop_runica's own default
 %  (and its dialog), unchanged from before.
+%
+%  A decomposition already computed for exactly this data is reused (see
+%  TransTools.IcaCache), so changing the threshold below re-prunes rather
+%  than re-decomposing, and a recalculation gives the components of the run
+%  before it: nothing seeds ICA, so a fresh run would not. The decomposition
+%  and ICLabel's classification do not depend on the threshold, which is why
+%  they can be kept apart from it. Redecompose = true forces a fresh one.
 eegOnly = pop_select(EEG, 'channel', eegIdx);
 if ~isempty(which('fastica'))
-    % See TransTools.WithRestoredRng: runica leaves the session's random
-    % number generator in legacy mode, where rng() is an error.
-    eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
+    icaType = 'fastica';
 else
-    eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly));
+    icaType = 'runica';
+end
+key = TransTools.DataKey(eegOnly.data, {EEG.chanlocs(eegIdx).labels}, icaType);
+decomposition = [];
+if ~logical(TransTools.FieldOr(opts, 'Redecompose', false))
+    decomposition = TransTools.IcaCache('get', key);
 end
 
-%% Classify
-eegOnly = iclabel(eegOnly, 'beta');
+if isempty(decomposition)
+    if strcmp(icaType, 'fastica')
+        % See TransTools.WithRestoredRng: runica leaves the session's random
+        % number generator in legacy mode, where rng() is an error.
+        eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
+    else
+        eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly));
+    end
+
+    %% Classify
+    eegOnly = iclabel(eegOnly, 'beta');
+
+    decomposition = struct('key', key, 'icatype', icaType, ...
+        'icaweights', eegOnly.icaweights, 'icasphere', eegOnly.icasphere, ...
+        'icawinv', eegOnly.icawinv, 'icachansind', eegOnly.icachansind, ...
+        'etc', pickIcaEtc(eegOnly.etc));
+    TransTools.IcaCache('put', key, decomposition);
+else
+    fprintf('AutoEyeICA: reusing the decomposition already computed for this data.\n');
+    eegOnly = restoreDecomposition(eegOnly, decomposition);
+end
 
 %% Prune every component ICLabel calls 'Eye' above the threshold
 classes = eegOnly.etc.ic_classification.ICLabel.classes;
@@ -125,12 +154,18 @@ fprintf('AutoEyeICA: pruned %d of %d component(s) as eye (threshold %.2f).\n', .
 % confident ICLabel was about them. The data-quality report reads this field
 % to say what the correction actually did, the same way it reads
 % etc.alz.artefactDetectors to say what rejection did.
+%
+% The whole decomposition (weights, sphere, ICLabel's classification: a few
+% kilobytes) is kept here too, before pruning, because the node holds only
+% the pruned one. It is what lets a recalculation in a later session change
+% the threshold without decomposing again (see TransTools.IcaCache).
 eyeRecord = struct( ...
     'threshold',        opts.EyeThreshold, ...
     'removed',          eyeComps(:)', ...
     'nRemoved',         numel(eyeComps), ...
     'nComponents',      size(probs, 1), ...
-    'eyeProbabilities', probs(eyeComps, eyeCol)');
+    'eyeProbabilities', probs(eyeComps, eyeCol)', ...
+    'decomposition',    decomposition);
 
 if ~isempty(eyeComps)
     eegOnly = pop_subcomp(eegOnly, eyeComps, 0);
@@ -154,3 +189,28 @@ merged.etc.ic_classification = eegOnly.etc.ic_classification;
 merged.etc.alz.eyeICA = eyeRecord;
 EEG = merged;
 EEG.id = name;
+
+% ======================================================================= %
+function etc = pickIcaEtc(fullEtc)
+%PICKICAETC  The parts of EEG.etc that the decomposition and its
+%   classification wrote, and nothing of what was already there.
+    etc = struct();
+    for name = {'ic_classification', 'icaweights_beforerms', 'icasphere_beforerms'}
+        if isfield(fullEtc, name{1})
+            etc.(name{1}) = fullEtc.(name{1});
+        end
+    end
+
+function eegOnly = restoreDecomposition(eegOnly, decomposition)
+%RESTOREDECOMPOSITION  Put a stored decomposition and its classification back
+%   on EEGONLY, as pop_runica and iclabel would have left them, so pop_subcomp
+%   can prune it. The activations are not restored: they are weights x sphere x
+%   data, and pop_subcomp computes what it needs from those.
+    eegOnly.icaweights  = decomposition.icaweights;
+    eegOnly.icasphere   = decomposition.icasphere;
+    eegOnly.icawinv     = decomposition.icawinv;
+    eegOnly.icachansind = decomposition.icachansind;
+    eegOnly.icaact      = [];
+    for name = fieldnames(decomposition.etc)'
+        eegOnly.etc.(name{1}) = decomposition.etc.(name{1});
+    end

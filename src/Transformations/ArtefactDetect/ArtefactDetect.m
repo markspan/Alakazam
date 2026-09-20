@@ -168,8 +168,11 @@ detFlags = false(nChan, nTrials, numel(opt.Method));
 for t = 1:nTrials
     for c = scanIdx
         sig = EEG.data(c, lo:hi, t);
+        % The windows of this channel-epoch are cut once, by whichever
+        % moving-window detector asks first, and shared with the others.
+        windows = struct('built', false, 'W', []);
         for m = 1:numel(opt.Method)
-            detFlags(c, t, m) = detectorTrips(opt.Method{m}, sig, opt, winN, stepN);
+            [detFlags(c, t, m), windows] = detectorTrips(opt.Method{m}, sig, opt, winN, stepN, windows);
         end
     end
 end
@@ -309,12 +312,17 @@ function idx = channelsToScan(EEG, opt, nChan)
     idx = find(mask);
 end
 
-function bad = detectorTrips(method, sig, opt, winN, stepN)
+function [bad, windows] = detectorTrips(method, sig, opt, winN, stepN, windows)
 %DETECTORTRIPS  Evaluate one named detector against SIG.
 %   Called once per detector per channel-epoch, so that which detector
 %   tripped is recorded rather than collapsed into "something did" -- see the
 %   note on attribution at the detection loop. The old channelIsBad wrapper,
 %   which OR-ed the detectors and returned on the first trip, is gone with it.
+%
+%   WINDOWS carries the moving windows of SIG between the detectors that use
+%   them (step function and moving-window peak-to-peak), so they are cut once
+%   per channel-epoch rather than once each, and are scored as matrices, not
+%   by a loop over windows.
     sig = sig(:).';
     switch lower(strrep(method, ' ', ''))
         case 'absolutethreshold'
@@ -322,39 +330,61 @@ function bad = detectorTrips(method, sig, opt, winN, stepN)
         case 'sample-to-sample'
             bad = any(abs(diff(sig)) > opt.Threshold);
         case 'stepfunction'
-            bad = movingWindow(sig, winN, stepN, @(w) stepValue(w)) > opt.Threshold;
+            windows = ensureWindows(windows, sig, winN, stepN);
+            bad = largestWindowValue(windows.W, 'step') > opt.Threshold;
         case 'moving-windowpeak-to-peak'
-            bad = movingWindow(sig, winN, stepN, @(w) max(w) - min(w)) > opt.Threshold;
+            windows = ensureWindows(windows, sig, winN, stepN);
+            bad = largestWindowValue(windows.W, 'peak-to-peak') > opt.Threshold;
         otherwise
             bad = any(sig > opt.Maximum) || any(sig < opt.Minimum);
     end
 end
 
-function m = movingWindow(sig, winN, stepN, fcn)
-%MOVINGWINDOW  Largest value of FCN over every WINN-sample window, stepped by
-%   STEPN. Returns 0 if the signal is shorter than one window.
-    n = numel(sig);
-    m = 0;
-    if n < winN; return; end
-    % The last start is forced flush with the end of the signal. Stepping by
-    % stepN alone stops at the last whole window that fits, leaving up to
-    % winN + stepN - 2 samples at the tail that no window ever covers -- for a
-    % -200..800 ms epoch at 256 Hz with ERPLAB's usual 200 ms / 100 ms
-    % settings that is the last 90 ms, i.e. an artefact sitting on the P3 or
-    % the LRP goes unseen. Found by validating against Luck's ch10 LRP data:
-    % ERPLAB's artmwppth flagged trial 222 (FC4, 311 uV peak-to-peak at
-    % 602..797 ms) and this detector did not. See Docs/luck.md.
-    for i = unique([1:stepN:(n - winN + 1), n - winN + 1])
-        v = fcn(sig(i:i + winN - 1));
-        if v > m; m = v; end
+function windows = ensureWindows(windows, sig, winN, stepN)
+%ENSUREWINDOWS  Cut SIG into its moving windows, once: an nWindows x WINN matrix,
+%   empty when the signal is shorter than one window.
+%
+%   The last start is forced flush with the end of the signal. Stepping by
+%   stepN alone stops at the last whole window that fits, leaving up to
+%   winN + stepN - 2 samples at the tail that no window ever covers -- for a
+%   -200..800 ms epoch at 256 Hz with ERPLAB's usual 200 ms / 100 ms
+%   settings that is the last 90 ms, i.e. an artefact sitting on the P3 or
+%   the LRP goes unseen. Found by validating against Luck's ch10 LRP data:
+%   ERPLAB's artmwppth flagged trial 222 (FC4, 311 uV peak-to-peak at
+%   602..797 ms) and this detector did not. See Docs/luck.md.
+    if windows.built
+        return;
     end
+    windows.built = true;
+    n = numel(sig);
+    if n < winN
+        windows.W = zeros(0, winN);
+        return;
+    end
+    starts = unique([1:stepN:(n - winN + 1), n - winN + 1]);
+    windows.W = sig(starts(:) + (0:winN - 1));
 end
 
-function v = stepValue(w)
-%STEPVALUE  |mean(first half) - mean(second half)| of a window (the ERPLAB
-%   step function).
-    half = floor(numel(w) / 2);
-    v = abs(mean(w(1:half)) - mean(w(half + 1:end)));
+function m = largestWindowValue(W, kind)
+%LARGESTWINDOWVALUE  Largest of the per-window scores, 0 if there are none.
+%   A window holding NaN (a sample rejected or blanked upstream) scores NaN for
+%   the step function and is passed over, exactly as the loop this replaces
+%   passed over a NaN by testing "v > m"; max() ignores NaN, and the 0 in front
+%   is the loop's own starting value.
+    if isempty(W)
+        m = 0;
+        return;
+    end
+    switch kind
+        case 'step'
+            % |mean(first half) - mean(second half)| of a window (the ERPLAB
+            % step function).
+            half = floor(size(W, 2) / 2);
+            v = abs(mean(W(:, 1:half), 2) - mean(W(:, half + 1:end), 2));
+        otherwise
+            v = max(W, [], 2) - min(W, [], 2);
+    end
+    m = max([0; v(:)]);
 end
 
 function opt = normaliseOptions(options)

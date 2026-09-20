@@ -364,6 +364,55 @@ classdef ArtefactDetectTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function movingWindowDetectorsAgreeWithAWindowByWindowLoop(testCase)
+        %MOVINGWINDOWDETECTORSAGREEWITHAWINDOWBYWINDOWLOOP  The step and peak-to-peak
+        %   detectors cut each channel-epoch into windows once and score them as
+        %   matrices. They used to loop over the windows one at a time; that loop is
+        %   written out here, from the detectors' definitions, as the reference.
+        %
+        %   Three runs, each with a mix of channel-epochs that trip and that do not,
+        %   so agreement is not agreement on "nothing": noisy data with a threshold
+        %   the noise itself sometimes crosses, for each detector alone; then both
+        %   detectors together on quiet data with planted spikes and level shifts,
+        %   where the second detector reuses the first one's windows. NaN samples
+        %   are planted too, which a window must pass over rather than trip on.
+            geometry = testCase.windowGeometry(256, 200, 100, 256);
+            runs = struct( ...
+                'detectors', {{'Moving-window peak-to-peak'}, {'Step function'}, ...
+                              {'Moving-window peak-to-peak', 'Step function'}}, ...
+                'sigma', {10, 10, 1}, 'threshold', {55, 6, 8});
+            for k = 1:numel(runs)
+                rng(21 + k);
+                EEG = makeTestEEG('nbchan', 3, 'trials', 40, 'srate', 256, 'epochMs', [-200, 796]);
+                EEG.data = runs(k).sigma * randn(size(EEG.data));
+                if k == 3
+                    EEG.data(1, 100, 5:9) = 40;                     % spikes: peak-to-peak only
+                    EEG.data(2, 150:end, 12:16) = EEG.data(2, 150:end, 12:16) + 20;   % shifts: both
+                end
+                EEG.data(1, 40:44, 7) = NaN;
+                EEG.data(2, 200:203, 12) = NaN;
+                opts = struct('Method', {runs(k).detectors}, 'Threshold', runs(k).threshold, ...
+                    'Window', 200, 'Step', 100, 'Scope', 'This channel only');
+
+                result = ArtefactDetect(EEG, opts);
+                rejected = squeeze(all(isnan(result.data), 2));          % channels x trials
+
+                expected = false(EEG.nbchan, EEG.trials);
+                if any(strcmp(runs(k).detectors, 'Moving-window peak-to-peak'))
+                    expected = expected | windowLoopFlags(EEG.data, 'peak-to-peak', runs(k).threshold, geometry);
+                end
+                if any(strcmp(runs(k).detectors, 'Step function'))
+                    expected = expected | windowLoopFlags(EEG.data, 'step', runs(k).threshold, geometry);
+                end
+                label = strjoin(runs(k).detectors, ' + ');
+                testCase.assertGreaterThan(nnz(expected), 0, [label ': something must trip for this to mean anything.']);
+                testCase.assertLessThan(nnz(expected), numel(expected), [label ': something must survive too.']);
+                testCase.verifyEqual(rejected, expected, label);
+            end
+        end
+    end
+
     methods (Access = private)
         function g = windowGeometry(~, srate, windowMs, stepMs, nPts)
         %WINDOWGEOMETRY  Where ArtefactDetect's stepped windows land, by the
@@ -378,3 +427,32 @@ classdef ArtefactDetectTest < matlab.unittest.TestCase
         end
     end
 end
+
+% ======================================================================= %
+function flags = windowLoopFlags(data, kind, threshold, geometry)
+%WINDOWLOOPFLAGS  Channels x trials flags from a loop over every window: the
+%   largest score of a window, stepped by geometry.stepN with the last window
+%   flush with the end, above THRESHOLD. NaN scores never count.
+    [nChan, nPnts, nTrials] = size(data);
+    flags = false(nChan, nTrials);
+    starts = unique([1:geometry.stepN:(nPnts - geometry.winN + 1), nPnts - geometry.winN + 1]);
+    for t = 1:nTrials
+        for c = 1:nChan
+            worst = 0;
+            for i = starts
+                w = data(c, i:i + geometry.winN - 1, t);
+                if strcmp(kind, 'peak-to-peak')
+                    v = max(w) - min(w);
+                else
+                    half = floor(numel(w) / 2);
+                    v = abs(mean(w(1:half)) - mean(w(half + 1:end)));
+                end
+                if v > worst
+                    worst = v;
+                end
+            end
+            flags(c, t) = worst > threshold;
+        end
+    end
+end
+

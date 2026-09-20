@@ -154,15 +154,27 @@ function [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts)
     [coh, refPower] = coherenceOverBins(input, nChan, nF, nFrame, nBins, refIdx, analytic);
 end
 
-function A = stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame)
+function A = stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame) %#ok<INUSD>
 %STFTTRANSFORM  nF x nFrame complex coefficients for one trial's signal.
+%   Every frame is taken in one go: an nFrame x win matrix of segments and a
+%   single fft along its rows, in place of one fft call per frame. On the RIFT
+%   data (24 channels, 99 trials, 62 frames) that is 2,376 calls instead of
+%   about 147,000. Measured on one recording it took the coherence step from
+%   3.3 s to 2.6 s: the rest is the loops over trials and channels around it.
+%
+%   A modest gain, and not free of a difference: single data (which AutoEyeICA
+%   hands on) is still transformed in single precision and widened afterwards,
+%   as before, but the transform of a matrix is rounded differently from that
+%   of each row, so the coefficients agree with the frame-by-frame ones to about
+%   1e-4 in the cells where the signal is smallest (6.5e-5 at worst in the
+%   coherence on that recording). Neither is exact: against a double-precision
+%   transform the frame-by-frame coherence was off by up to 6.5e-5 and this
+%   one by 2.4e-5. On double data the two agree to rounding error.
     sig = sig(:).';
-    A = zeros(nF, nFrame);
-    for k = 1:nFrame
-        seg = sig(starts(k) : starts(k) + win - 1) .* taper;
-        F = fft(seg, nfft);
-        A(:, k) = F(fsel).';
-    end
+    frames = starts(:) + (0:win - 1);        % nFrame x win sample indices
+    seg = sig(frames) .* taper;              % taper is 1 x win
+    F = fft(seg, nfft, 2);                   % nFrame x nfft
+    A = double(F(:, fsel).');                % nF x nFrame, double as before
 end
 
 function w = makeTaper(kind, n)

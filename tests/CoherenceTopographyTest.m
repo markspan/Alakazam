@@ -58,6 +58,36 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             testCase.verifyTrue(isnan(detFreq(2)));
         end
 
+        function theFrequencySearchEqualsTheMeanOfEveryTrialsOwnTransform(testCase)
+        %THEFREQUENCYSEARCHEQUALSTHEMEANOFEVERYTRIALSOWNTRANSFORM  The evoked
+        %   amplitude at each search frequency is |mean over trials of the tapered
+        %   DFT|. It is computed from the trial mean (one column per frequency),
+        %   which is the same number by linearity and about a hundred times less
+        %   arithmetic; here it is compared with the per-trial form written out
+        %   directly, on noisy data with a tone at a fixed phase.
+            rng(3);
+            srate = 250; nT = 250; nTrials = 6;
+            times = (0:nT - 1) / srate * 1000;
+            t = times / 1000;
+            data = randn(3, nT, nTrials);
+            for tr = 1:nTrials
+                data(1, :, tr) = data(1, :, tr) + 3 * sin(2 * pi * 20 * t);
+            end
+            EEG = struct('DataFormat', 'EPOCHED', 'times', times, 'srate', srate, 'data', data, ...
+                'bindesc', struct('index', 1, 'label', 'Bin1', 'trials', 1:nTrials, 'combo', []));
+            opts = defaultOpts();
+
+            [~, ~, refAmp, ampFreqs] = TransTools.ComputeCoherenceTopography(EEG, opts);
+
+            Vref = reshape(data(1, :, :), nT, []);
+            taper = hann(nT);
+            expected = zeros(numel(ampFreqs), 1);
+            for k = 1:numel(ampFreqs)
+                expected(k) = abs(mean(TransTools.Tdft(Vref, ampFreqs(k), t, taper)));
+            end
+            testCase.verifyEqual(refAmp(:, 1), expected, 'AbsTol', 1e-9 * max(expected));
+        end
+
         function coherenceIsLowWithIndependentTrialPhase(testCase)
         %COHERENCEISLOWWITHINDEPENDENTTRIALPHASE  Coherence measures
         %   trial-to-trial CONSISTENCY of phase, not shared frequency --

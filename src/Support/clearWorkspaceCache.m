@@ -96,8 +96,8 @@ function targets = candidateTargets(nodes, cacheDirectory, deep)
         [folder, stem] = fileparts(rootFile);
 
         % The descendants of <id>.mat live in the sibling folder <id>/, and
-        % every cache node in it is written with a "<file>.mat.json"
-        % sidecar that goes with the folder.
+        % every cache node in it is written with "<file>.mat.json" and
+        % "<file>.mat.meta" records that go with the folder.
         targets{end + 1} = fullfile(folder, stem); %#ok<AGROW>
 
         % The recording as loaded from its raw file: a deep clean only.
@@ -107,6 +107,7 @@ function targets = candidateTargets(nodes, cacheDirectory, deep)
         if deep
             targets{end + 1} = rootFile; %#ok<AGROW>
             targets{end + 1} = [rootFile '.json']; %#ok<AGROW>
+            targets{end + 1} = [rootFile '.meta']; %#ok<AGROW>
         end
     end
 
@@ -120,6 +121,7 @@ function targets = candidateTargets(nodes, cacheDirectory, deep)
         if whollyOwned(file, ownedFiles)
             targets{end + 1} = file; %#ok<AGROW>
             targets{end + 1} = [file '.json']; %#ok<AGROW>
+            targets{end + 1} = [file '.meta']; %#ok<AGROW>
         end
     end
 end

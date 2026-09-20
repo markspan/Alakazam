@@ -57,6 +57,16 @@ function [traceFile, mapFile, chosen, referenceFile] = exportCoherenceCSVs(entri
 %     SelectBy      'condition' (each condition its own strongest channels,
 %                   the default) or 'pooled' (the same channels for every
 %                   condition of a dataset, ranked over all of them)
+%     OnlyChannels  labels to restrict BOTH files to           (default [])
+%
+%   ONLYCHANNELS is how the report follows the electrodes an analyst named
+%   in the Spectral Measure rows. Every other channel is left out of the
+%   trace and the map, and the map's channels are chosen among the named ones
+%   alone. It does not touch the tag: that is read off the reference (or, for
+%   a result that has none, off every channel), so naming one electrode does
+%   not change which frequency a condition is tagged at. A dataset that has
+%   none of the named channels is written whole rather than left empty, so a
+%   montage that differs from the analyst's does not silently drop a subject.
 %
 %   A condition whose coherence is entirely missing (a single trial, or none)
 %   contributes no trace or map rows; its reference spectrum is still written.
@@ -67,6 +77,7 @@ function [traceFile, mapFile, chosen, referenceFile] = exportCoherenceCSVs(entri
     end
     maxChannels = TransTools.FieldOr(opts, 'MaxChannels', 8);
     wanted = TransTools.FieldOr(opts, 'Channels', {});
+    only = TransTools.FieldOr(opts, 'OnlyChannels', {});
     selectBy = lower(char(string(TransTools.FieldOr(opts, 'SelectBy', 'condition'))));
     if ~any(strcmp(selectBy, {'condition', 'pooled'}))
         throw(MException('Alakazam:exportCoherenceCSVs', '%s', sprintf( ...
@@ -95,7 +106,7 @@ function [traceFile, mapFile, chosen, referenceFile] = exportCoherenceCSVs(entri
 
     for i = 1:numel(entries)
         picked = writeEntry(traceFid, mapFid, referenceFid, entries(i), ...
-            maxChannels, wanted, selectBy);
+            maxChannels, wanted, selectBy, only);
         chosen = unique([chosen, picked], 'stable');
     end
 end
@@ -109,7 +120,7 @@ function fid = openFile(path)
     end
 end
 
-function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels, wanted, selectBy)
+function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels, wanted, selectBy, only)
 %WRITEENTRY  One dataset's trace, map and reference rows.
     chosen = {};
     EEG = entry.EEG;
@@ -144,6 +155,7 @@ function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels,
     end
 
     labels = channelLabels(EEG, nChan);
+    pool = channelPool(labels, only);
     fields = {csvField(entry.subject), csvField(entry.datasetType), ...
         csvField(entry.group), csvField(entry.person), csvField(entry.session)};
     prefix = [strjoin(fields, ','), ','];
@@ -211,7 +223,7 @@ function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels,
     for b = find(valid)
         binField = csvField(csvBinLabel(EEG, b));
         trace = traces{b};
-        for c = 1:nChan
+        for c = pool
             chField = csvField(labels{c});
             for t = 1:nTime
                 fprintf(traceFid, '%s%s,%s,%s,%s,%s,%s\n', prefix, binField, chField, ...
@@ -221,10 +233,12 @@ function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels,
         end
 
         % And the full plane, for the few channels worth printing.
+        % Ranked among the channels being written alone; pickChannels
+        % numbers them 1..numel(pool), so its answer is mapped back.
         if strcmp(selectBy, 'pooled')
-            picked = pickChannels(pooledPeak, labels, maxChannels, wanted);
+            picked = pool(pickChannels(pooledPeak(pool), labels(pool), maxChannels, wanted));
         else
-            picked = pickChannels(peaks(:, b), labels, maxChannels, wanted);
+            picked = pool(pickChannels(peaks(pool, b), labels(pool), maxChannels, wanted));
         end
         chosen = unique([chosen, labels(picked)], 'stable');
         slab = coh(:, :, :, b);
@@ -283,6 +297,23 @@ function writeReference(fid, prefix, EEG, nBin, nTrials, freqs)
                 numField(nTrials(b)), numField(lo), numField(hi), numField(peakHz(b)), ...
                 numField(specFreqs(k)), numField(spec(k, b)));
         end
+    end
+end
+
+function idx = channelPool(labels, only)
+%CHANNELPOOL  Indices of the channels the trace and the map are written for.
+%   Everything when ONLY is empty, or when none of its labels is in this
+%   dataset (matched case-insensitively, as the Spectral Measure rows are).
+    idx = 1:numel(labels);
+    if isempty(only)
+        return;
+    end
+    hit = false(1, numel(labels));
+    for k = 1:numel(only)
+        hit = hit | strcmpi(labels, char(string(only{k})));
+    end
+    if any(hit)
+        idx = find(hit);
     end
 end
 

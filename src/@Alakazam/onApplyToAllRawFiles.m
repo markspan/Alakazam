@@ -63,6 +63,11 @@ function onApplyToAllRawFiles(this)
     % analyst sees exactly which ones did not at the end.
     failed = strings(1, 0); % row, not column -- cellstr(failed) below must
                              % concatenate horizontally with the other message lines
+
+    % The tree is redrawn once, when the batch ends, not once per node added:
+    % each addNode used to send the whole tree to the page again, so a dozen
+    % recordings of ten nodes each was over a hundred full redraws.
+    releaseTree = this.Workspace.ActiveTree.beginBatch(); %#ok<NASGU>  released by clear below
     for k = 1:numel(targets)
         dlg.Message = sprintf("Applying to %s (%d of %d)...", targets(k).Name, k, numel(targets));
         try
@@ -72,6 +77,7 @@ function onApplyToAllRawFiles(this)
         end
         dlg.Value = k / numel(targets);
     end
+    clear releaseTree;
 
     this.restoreFocus();
     succeeded = numel(targets) - numel(failed);

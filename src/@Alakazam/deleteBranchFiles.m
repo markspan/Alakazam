@@ -27,6 +27,14 @@ function deleteBranchFiles(this, file)
     if exist(file, "file")
         delete(file);
     end
+    % The two records saveEegCache writes beside a node go with it. Only the
+    % descendants' were being removed (with their folder), so the node's own
+    % JSON sidecar was left behind describing a dataset that no longer existed.
+    for sidecar = {[file '.json'], [file '.meta']}
+        if exist(sidecar{1}, "file")
+            delete(sidecar{1});
+        end
+    end
     if exist(childDir, "dir")
         rmdir(childDir, "s");
     end

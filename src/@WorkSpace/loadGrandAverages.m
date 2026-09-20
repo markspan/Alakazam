@@ -45,16 +45,19 @@ function loadGrandAverages(this)
     found = dir(fullfile(gaDir, '*.mat'));
     for i = 1:numel(found)
         file = fullfile(found(i).folder, found(i).name);
-        loaded = load(file, "EEG");
-        if ~belongsHere(loaded.EEG, owned)
+        % From the meta record, not a load of the whole grand average: only
+        % its name, its recorded sources and the flags optsFor reads are
+        % needed here.
+        proxy = eegProxyFromCacheMeta(readEegCacheMeta(file));
+        if ~belongsHere(proxy, owned)
             continue;
         end
         % 'grandAverage', matching Alakazam.saveGrandAverage's own fresh-
         % creation path -- its own dedicated icon regardless of the
         % underlying data's time/frequency domain, not a borrowed
         % time/freq badge (see alakazam-tree.js's ICONS map comment).
-        this.GrandAveragesTree.addNode(loaded.EEG.id, '', 'grandAverage', file, ...
-            WorkSpaceTree.optsFor(loaded.EEG));
+        this.GrandAveragesTree.addNode(proxy.id, '', 'grandAverage', file, ...
+            WorkSpaceTree.optsFor(proxy));
     end
 end
 

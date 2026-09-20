@@ -27,9 +27,11 @@ function nodes = appendBranch(nodes, file, parentIdx)
         throw(MException('Alakazam:collectBranchTree', ...
             'I''m afraid one of this branch''s steps has a cache file that could not be found:\n\n    %s', file));
     end
-    loaded = load(file, "EEG");
-    nodes(end + 1) = struct('transformId', char(string(loaded.EEG.Call)), ...
-        'params', loaded.EEG.params, 'parent', parentIdx);
+    % Only the step's transformation and settings are needed, and each node
+    % holds a full copy of its data, so read the small record instead.
+    meta = readEegCacheMeta(file);
+    nodes(end + 1) = struct('transformId', char(string(meta.Call)), ...
+        'params', meta.params, 'parent', parentIdx);
     myIdx = numel(nodes);
 
     [dirPart, namePart] = fileparts(file);

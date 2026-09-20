@@ -19,13 +19,13 @@ function epochMs = candidateEpochMs(this, candidateFiles) %#ok<INUSL>
     epochMs = [];
     starts = []; stops = [];
     for i = 1:numel(candidateFiles)
-        loaded = load(candidateFiles{i}, 'EEG');
-        if ~isfield(loaded.EEG, 'times') || isempty(loaded.EEG.times)
+        % From the meta record, not a load of the whole node.
+        range = readEegCacheMeta(candidateFiles{i}).timeRange;
+        if isempty(range)
             continue;
         end
-        t = double(loaded.EEG.times);
-        starts(end + 1) = min(t); %#ok<AGROW>
-        stops(end + 1)  = max(t); %#ok<AGROW>
+        starts(end + 1) = range(1); %#ok<AGROW>
+        stops(end + 1)  = range(2); %#ok<AGROW>
     end
     if isempty(starts)
         return;

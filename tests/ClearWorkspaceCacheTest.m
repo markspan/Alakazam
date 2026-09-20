@@ -39,6 +39,8 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
                     sprintf('%s.mat is the recording as loaded and a normal clear keeps it.', id{1}));
                 testCase.verifyTrue(isfile(fullfile(cache, [id{1} '.mat.json'])), ...
                     sprintf('%s.mat.json describes the kept recording.', id{1}));
+                testCase.verifyTrue(isfile(fullfile(cache, [id{1} '.mat.meta'])), ...
+                    sprintf('%s.mat.meta belongs to the kept recording.', id{1}));
                 testCase.verifyFalse(isfolder(fullfile(cache, id{1})), ...
                     sprintf('The analyses folder %s/ should be gone.', id{1}));
             end
@@ -53,6 +55,8 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
                 testCase.verifyFalse(isfile(fullfile(cache, [id{1} '.mat'])));
                 testCase.verifyFalse(isfile(fullfile(cache, [id{1} '.mat.json'])), ...
                     'The sidecar must go with its .mat, not be left describing nothing.');
+                testCase.verifyFalse(isfile(fullfile(cache, [id{1} '.mat.meta'])), ...
+                    'So must the meta record.');
                 testCase.verifyFalse(isfolder(fullfile(cache, id{1})));
             end
         end
@@ -81,6 +85,7 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
                 testCase.verifyFalse(isfile(fullfile(ga, 'ga_own.mat')), ...
                     sprintf('Built only from A and B, so a %s clear removes it.', mode{1}));
                 testCase.verifyFalse(isfile(fullfile(ga, 'ga_own.mat.json')));
+                testCase.verifyFalse(isfile(fullfile(ga, 'ga_own.mat.meta')));
                 testCase.verifyTrue(isfile(fullfile(ga, 'ga_mixed.mat')), ...
                     'Partly built from C, which is somebody else''s: kept.');
                 testCase.verifyTrue(isfile(fullfile(ga, 'ga_bare.mat')), ...
@@ -181,6 +186,7 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
             for id = {'A', 'B', 'C'}
                 touch(fullfile(cache, [id{1} '.mat']));
                 touch(fullfile(cache, [id{1} '.mat.json']));
+                touch(fullfile(cache, [id{1} '.mat.meta']));
                 mkdir(fullfile(cache, id{1}, 'n1'));
                 touch(fullfile(cache, id{1}, 'n1.mat'));
                 touch(fullfile(cache, id{1}, 'n1.mat.json'));
@@ -191,6 +197,7 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
             writeGrandAverage(fullfile(ga, 'ga_own.mat'), ...
                 {fullfile(cache, 'A', 'n1.mat'), fullfile(cache, 'B.mat')});
             touch(fullfile(ga, 'ga_own.mat.json'));
+            touch(fullfile(ga, 'ga_own.mat.meta'));
             writeGrandAverage(fullfile(ga, 'ga_mixed.mat'), ...
                 {fullfile(cache, 'A.mat'), fullfile(cache, 'C.mat')});
             EEG = struct('data', 1);

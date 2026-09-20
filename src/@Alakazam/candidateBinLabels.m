@@ -6,9 +6,8 @@ function bins = candidateBinLabels(this, candidateFiles) %#ok<INUSL>
 %   error naming it, by ClusterStats' own validateCompatibility.
     bins = {};
     for i = 1:numel(candidateFiles)
-        loaded = load(candidateFiles{i}, 'EEG');
-        if isfield(loaded.EEG, 'bindesc')
-            bins = union(bins, {loaded.EEG.bindesc.label});
-        end
+        % From the JSON sidecar: a candidate is a full averaged or epoched
+        % node, and only its bin labels are wanted.
+        bins = union(bins, readEegCacheInfo(candidateFiles{i}).bindescLabels);
     end
 end

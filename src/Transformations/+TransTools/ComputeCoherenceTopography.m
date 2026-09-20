@@ -61,10 +61,17 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
         if fixedF > 0
             fUse = fixedF;
         else
+            % The evoked (phase-locked) magnitude is |mean over trials of the
+            % tapered DFT|. The DFT is linear, so that equals the DFT of the
+            % trial MEAN, so the trials are averaged once and each search
+            % frequency transforms one column instead of every trial: 161
+            % frequencies over about a hundred trials was some 16,000 column
+            % transforms per bin, and is now 161. A NaN in any trial still
+            % makes the result NaN, as it did through the mean of the transforms.
+            evoked = mean(Vref, 2);                    % nwin x 1
             amp = zeros(numel(ampFreqs), 1);
             for k = 1:numel(ampFreqs)
-                Xr = TransTools.Tdft(Vref, ampFreqs(k), t, taper);   % 1 x nTr
-                amp(k) = abs(mean(Xr));                    % evoked (phase-locked) magnitude
+                amp(k) = abs(TransTools.Tdft(evoked, ampFreqs(k), t, taper));
             end
             refAmp(:, b) = amp;
             [~, ix] = max(amp);

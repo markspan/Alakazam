@@ -48,6 +48,7 @@ function recalculateTransformNode(this, node, ownEEG)
     restoreBusy = beginBusy(this.MainFigure, sprintf("Recalculating %s...", transformId));
 
     parentLoaded = load(parentFile, "EEG");
+    primeIcaCache(ownEEG);
     try
         [newEEG, newParams] = TransTools.invoke(transformId, parentLoaded.EEG);
     catch ME
@@ -117,4 +118,21 @@ function recalculateTransformNode(this, node, ownEEG)
     this.Workspace.EEG = newEEG;
     this.Plotter.plotCurrent();
     this.restoreFocus();
+end
+
+function primeIcaCache(ownEEG)
+%PRIMEICACACHE  Hand the decomposition this node was made with to the session's
+%   cache (TransTools.IcaCache), so recalculating AutoEyeICA with a different
+%   threshold prunes the components it already found instead of decomposing
+%   again. The decomposition is kept on the node for exactly this, and is
+%   found again by the hash of the data, so it is used only for the data it was
+%   computed from. Nodes made before it was stored simply have none.
+    try
+        record = ownEEG.etc.alz.eyeICA.decomposition;
+        if isstruct(record) && isfield(record, 'key') && ~isempty(record.key)
+            TransTools.IcaCache('put', record.key, record);
+        end
+    catch
+        % No stored decomposition: the transformation decomposes as usual.
+    end
 end

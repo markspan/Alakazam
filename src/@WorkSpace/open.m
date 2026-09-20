@@ -2,6 +2,12 @@ function open(this,~,~)
     this.Tree.clear();
     this.GrandAveragesTree.clear();
     this.ReportsTree.clear();
+    % Each tree is sent to the page once, when this function returns, not once
+    % per node added: addNode sends the whole tree, so a 550-node workspace was
+    % hundreds of full sends before anything could be clicked.
+    releaseTree    = this.Tree.beginBatch(); %#ok<NASGU>
+    releaseGrand   = this.GrandAveragesTree.beginBatch(); %#ok<NASGU>
+    releaseReports = this.ReportsTree.beginBatch(); %#ok<NASGU>
     %% Read the ROOT directory for datafiles;
     % We opted to let each of the typeloaders traverse into the tree.
     % Make sure the workspace directories exist. A workspace copied from

@@ -63,6 +63,10 @@ classdef WorkSpaceTree < handle
                     % after an ignored drop) -- guarantees the JS side's
                     % DataChanged listener fires every time, not just when
                     % content actually differs.
+        % Batching (see beginBatch): while BatchDepth > 0 a change only marks
+        % the tree dirty, and the one push happens when the last batch ends.
+        BatchDepth = 0
+        BatchDirty = false
     end
 
     properties (Constant)
@@ -300,6 +304,27 @@ classdef WorkSpaceTree < handle
             node = this.nodeStruct(id);
         end
 
+        function release = beginBatch(this)
+        %BEGINBATCH  Hold back redraws until the returned object goes out of
+        %   scope, then send the tree to the page once.
+        %
+        %   Every change (addNode, removeNode, renameNode, selecting) used to
+        %   send the WHOLE tree to the page, icons included, so adding N nodes
+        %   cost N full sends. Opening a workspace of 550 nodes, or applying a
+        %   ten-step template to a dozen recordings, was hundreds of them. Wrap
+        %   a loop in a batch and it costs one:
+        %
+        %       release = tree.beginBatch();
+        %       for ..., tree.addNode(...); end
+        %       clear release;          % or just let it go out of scope
+        %
+        %   Batches nest; the send happens when the outermost one ends, and only
+        %   if something changed inside it. An error thrown in the loop still
+        %   releases the batch, because release is an onCleanup.
+            this.BatchDepth = this.BatchDepth + 1;
+            release = onCleanup(@() this.endBatch());
+        end
+
         function clear(this)
         %CLEAR  Remove every node (used when reopening a workspace).
             this.Nodes = containers.Map('KeyType', 'char', 'ValueType', 'any');
@@ -408,8 +433,21 @@ classdef WorkSpaceTree < handle
         %   JS side (alakazam-tree.js's _onRender) renders any 'data:'-
         %   prefixed icon string as a scaled-down <img> instead of looking
         %   it up in the fixed ICONS badge map.
+            % Kept per session: the icon of a transformation does not change
+            % while the app runs, and a node was re-reading the description,
+            % re-reading the PNG and re-encoding it for every node of that
+            % transformation (hundreds when a workspace opens). Only a
+            % successful encode is kept, so a folder created later is found.
+            persistent iconCache
+            if isempty(iconCache)
+                iconCache = containers.Map('KeyType', 'char', 'ValueType', 'char');
+            end
             uri = '';
             jsonFile = fullfile(transRoot, transformId, [transformId '.json']);
+            if isKey(iconCache, jsonFile)
+                uri = iconCache(jsonFile);
+                return;
+            end
             if exist(jsonFile, 'file') ~= 2
                 return;
             end
@@ -423,6 +461,7 @@ classdef WorkSpaceTree < handle
                 bytes = fread(fid, inf, '*uint8')';
                 fclose(fid);
                 uri = ['data:image/png;base64,' char(matlab.net.base64encode(bytes))];
+                iconCache(jsonFile) = uri;
             catch
                 uri = '';
             end
@@ -434,7 +473,22 @@ classdef WorkSpaceTree < handle
             if isstruct(node); id = node.Id; else; id = char(node); end
         end
 
+        function endBatch(this)
+            if ~isvalid(this)
+                return;
+            end
+            this.BatchDepth = max(0, this.BatchDepth - 1);
+            if this.BatchDepth == 0 && this.BatchDirty
+                this.push();
+            end
+        end
+
         function push(this)
+            if this.BatchDepth > 0
+                this.BatchDirty = true;
+                return;
+            end
+            this.BatchDirty = false;
             this.PushSeq = this.PushSeq + 1;
             data = this.buildData();
             data.seq = this.PushSeq;

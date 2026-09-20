@@ -20,22 +20,25 @@ function plan = planDescendantRecalc(this, parentFile, parentEEG)
     childFiles = dir(fullfile(childDir, '*.mat'));
     for i = 1:numel(childFiles)
         childFile = fullfile(childFiles(i).folder, childFiles(i).name);
-        childLoaded = load(childFile, "EEG");
-        childTransformId = char(string(childLoaded.EEG.Call));
+        % The child's settings come from its meta record, not from loading the
+        % whole node: a child holds a full copy of its data, and its own result
+        % is about to replace it.
+        childMeta = readEegCacheMeta(childFile);
+        childTransformId = char(string(childMeta.Call));
 
         if exist(childTransformId, "file") ~= 2
             throw(MException('Alakazam:planDescendantRecalc', ...
                 ['I''m afraid the stored transformation ''%s'' no longer exists (its .m ' ...
                  'file appears to be missing from the Transformations folder), so I am ' ...
                  'unable to recalculate "%s" and its descendants.'], ...
-                childTransformId, char(string(childLoaded.EEG.id))));
+                childTransformId, char(string(childMeta.id))));
         end
 
-        [newChildEEG, ~] = feval(childTransformId, parentEEG, childLoaded.EEG.params);
-        newChildEEG.Call   = childLoaded.EEG.Call;
-        newChildEEG.params = childLoaded.EEG.params;
+        [newChildEEG, ~] = feval(childTransformId, parentEEG, childMeta.params);
+        newChildEEG.Call   = childMeta.Call;
+        newChildEEG.params = childMeta.params;
         newChildEEG.File   = childFile;
-        newChildEEG.id     = childLoaded.EEG.id;
+        newChildEEG.id     = childMeta.id;
 
         plan(end + 1) = struct('file', childFile, 'EEG', newChildEEG); %#ok<AGROW>
         plan = [plan, this.planDescendantRecalc(childFile, newChildEEG)]; %#ok<AGROW>

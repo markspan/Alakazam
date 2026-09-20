@@ -259,6 +259,56 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
             testCase.verifyEqual(sort(unique(map.channel(map.bin == "B"))), ["E1"; "E2"]);
         end
 
+        function onlyTheNamedChannelsReachTheTraceAndTheMap(testCase)
+        %ONLYTHENAMEDCHANNELSREACHTHETRACEANDTHEMAP  The report follows the
+        %   electrodes the Spectral Measure rows name, so an analyst who
+        %   measured Oz does not get the whole montage. Matched without regard
+        %   to case, as the rows themselves are.
+            [trace, map] = testCase.exportFixture(struct('OnlyChannels', {{'e2', 'E4'}}));
+
+            testCase.verifyEqual(sort(unique(trace.channel)), {'E2'; 'E4'});
+            testCase.verifyEqual(sort(unique(map.channel)), {'E2'; 'E4'});
+            testCase.verifyEqual(height(trace), 2 * 9, ...
+                'Two channels at nine time points, and nothing for the other four.');
+        end
+
+        function theMapIsChosenAmongTheNamedChannelsAlone(testCase)
+        %THEMAPISCHOSENAMONGTHENAMEDCHANNELSALONE  E2 and E5 respond most, but
+        %   they were not named. Asking for two map channels among E1, E3 and
+        %   E4 must give two of those, never the strong ones and never fewer.
+            [~, map] = testCase.exportFixture( ...
+                struct('OnlyChannels', {{'E1', 'E3', 'E4'}}, 'MaxChannels', 2));
+            channels = unique(map.channel);
+
+            testCase.verifyEqual(numel(channels), 2);
+            testCase.verifyTrue(all(ismember(channels, {'E1', 'E3', 'E4'})), ...
+                'A channel that was not named was written to the map.');
+        end
+
+        function aDatasetWithNoneOfTheNamedChannelsIsWrittenWhole(testCase)
+        %ADATASETWITHNONEOFTHENAMEDCHANNELSISWRITTENWHOLE  A montage that
+        %   differs from the analyst's must not silently drop a subject.
+            [trace, ~] = testCase.exportFixture(struct('OnlyChannels', {{'Oz'}}));
+
+            testCase.verifyEqual(numel(unique(trace.channel)), 6);
+        end
+
+        function namingChannelsDoesNotMoveTheTag(testCase)
+        %NAMINGCHANNELSDOESNOTMOVETHETAG  Without a reference spectrum the tag
+        %   is read off the coherence averaged over every channel. Naming one
+        %   electrode must not change which frequency that is: here E1 alone
+        %   peaks at the tag (60 Hz) while the montage as a whole peaks at
+        %   58 Hz, and the condition must stay tagged at 58 Hz.
+            [~, entry] = testCase.fixtureWithMisleadingChannelAverage();
+            entry.EEG = rmfield(entry.EEG, 'cohRefPower');
+            folder = testCase.tempFolder();
+            exportCoherenceCSVs(entry, fullfile(folder, 'x'), struct('OnlyChannels', {{'E1'}}));
+
+            trace = readtable(fullfile(folder, 'x_coherence_trace.csv'), ...
+                'VariableNamingRule', 'preserve');
+            testCase.verifyEqual(unique(trace.tag_hz), testCase.WrongHz, 'AbsTol', 1e-9);
+        end
+
         function anUnknownSelectionRuleIsRefused(testCase)
             [~, entry] = testCase.fixture();
             folder = testCase.tempFolder();

@@ -183,17 +183,19 @@ function gas = collectGrandAverages(this)
         if isempty(file) || exist(file, 'file') ~= 2
             continue;
         end
-        loaded = load(file, 'EEG');
+        % The record, the name and the design cell are all that is read, so use
+        % the meta record rather than loading each grand average whole.
+        gaProxy = eegProxyFromCacheMeta(readEegCacheMeta(file));
         record = struct('sources', {{}}, 'weighted', false);
-        if isfield(loaded.EEG, 'etc') && isfield(loaded.EEG.etc, 'GrandAverage')
-            record = loaded.EEG.etc.GrandAverage;
+        if isfield(gaProxy, 'etc') && isfield(gaProxy.etc, 'GrandAverage')
+            record = gaProxy.etc.GrandAverage;
         end
         sources = getOr(record, 'sources', {});
         gas(end + 1) = struct('name', nodes(i).Name, ...
             'weighted', logical(getOr(record, 'weighted', false)), ...
             'sources', {sources}, ...
             'subjects', {subjectsBehind(this, sources)}, ...
-            'cell', {designCellOf(loaded.EEG)}); %#ok<AGROW>
+            'cell', {designCellOf(gaProxy)}); %#ok<AGROW>
     end
 end
 

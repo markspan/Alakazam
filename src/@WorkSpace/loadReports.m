@@ -16,10 +16,10 @@ function loadReports(this)
         'canApplyToAll', false, 'canExportErpset', false, 'canApplyTemplate', false);
     for i = 1:numel(found)
         file = fullfile(found(i).folder, found(i).name);
-        loaded = load(file, "EEG");
+        label = readEegCacheMeta(file).Label;
         % .Label, not .id ('Report' for every node -- see
         % persistReportNode's own comment, it exists purely to route
         % AlakazamPlotter to ReportView, not to display).
-        this.ReportsTree.addNode(loaded.EEG.Label, '', 'default', file, opts);
+        this.ReportsTree.addNode(label, '', 'default', file, opts);
     end
 end

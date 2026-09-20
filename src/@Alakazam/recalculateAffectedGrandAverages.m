@@ -15,8 +15,10 @@ function recalculateAffectedGrandAverages(this, touchedFiles)
         if isempty(gaFile) || exist(gaFile, "file") ~= 2
             continue;
         end
-        loaded = load(gaFile, "EEG");
-        gaEEG = loaded.EEG;
+        % Its recorded sources and weighting are all that is read, so use the
+        % meta record rather than loading the whole grand average once per
+        % grand average, every time a node is recalculated.
+        gaEEG = eegProxyFromCacheMeta(readEegCacheMeta(gaFile));
         if ~isfield(gaEEG, "etc") || ~isfield(gaEEG.etc, "GrandAverage")
             continue;
         end

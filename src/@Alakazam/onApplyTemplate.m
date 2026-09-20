@@ -63,19 +63,46 @@ function onApplyTemplate(this)
     % -- and a node with several children recreates that fork (each child
     % applied to the same parent result), not just one linear path.
     resultNodes = cell(1, numel(templateNodes));
+    % Each step's result is also kept in memory and handed to its children, so
+    % they need not read back the file it was just saved to. It is dropped as
+    % soon as its last child has taken it (a step with no children never keeps
+    % one), so a long chain holds one or two datasets at a time, not all of them.
+    resultEEGs = cell(1, numel(templateNodes));
+    childrenLeft = zeros(1, numel(templateNodes));
+    for k = 1:numel(templateNodes)
+        if templateNodes(k).parent >= 1
+            childrenLeft(templateNodes(k).parent) = childrenLeft(templateNodes(k).parent) + 1;
+        end
+    end
     applied = 0;
+    % One update of the tree at the end rather than one per step: every added
+    % node used to re-send the whole tree to the page.
+    releaseTree = this.Workspace.ActiveTree.beginBatch(); %#ok<NASGU>  released by clear below
     try
         for k = 1:numel(templateNodes)
-            if templateNodes(k).parent < 1
+            parentIdx = templateNodes(k).parent;
+            if parentIdx < 1
                 parentNode = node;                        % the selected target
+                parentEEG = [];                           % loaded from its file
             else
-                parentNode = resultNodes{templateNodes(k).parent};
+                parentNode = resultNodes{parentIdx};
+                parentEEG = resultEEGs{parentIdx};
             end
-            resultNodes{k} = this.applyStepToTarget( ...
-                templateNodes(k).transformId, templateNodes(k).params, parentNode);
+            [resultNodes{k}, resultEEGs{k}] = this.applyStepToTarget( ...
+                templateNodes(k).transformId, templateNodes(k).params, parentNode, parentEEG);
             applied = applied + 1;
+            if parentIdx >= 1
+                childrenLeft(parentIdx) = childrenLeft(parentIdx) - 1;
+                if childrenLeft(parentIdx) == 0
+                    resultEEGs{parentIdx} = [];
+                end
+            end
+            if childrenLeft(k) == 0
+                resultEEGs{k} = [];
+            end
         end
     catch ME
+        clear releaseTree;   % show the steps that did succeed
         this.restoreFocus();
         uialert(this.MainFigure, sprintf( ...
             ['I''m sorry to say that only %d of %d step(s) were applied before this one failed:\n\n%s\n\n' ...
@@ -83,6 +110,8 @@ function onApplyTemplate(this)
             applied, numel(templateNodes), ME.message), 'Could not apply template', 'Icon', 'warning');
         return;
     end
+
+    clear releaseTree;
 
     % Show the final result. applyStepToTarget only persists each step (it is
     % also used where plotting would be wrong, e.g. batch apply-to-all), so

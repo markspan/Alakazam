@@ -90,21 +90,29 @@ function onExportSpectral(this)
         % entries above: the map lives on its own nodes, and a workspace
         % routinely has one without the other. Best effort, like the
         % spectra: the figures are lost, the report is not.
-        coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '');
+        %
+        % The two coherence figures follow the electrodes named in the
+        % Spectral Measure rows (see spectralMeasureChannels), so an analyst
+        % who measured Oz sees Oz rather than the whole montage. The map
+        % itself still holds every channel; only the export is narrowed.
+        coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '', 'Channels', {{}});
         try
             coherenceEntries = this.collectEntriesWithField('coherence');
             if ~isempty(coherenceEntries)
                 setBusy('Exporting the coherence maps...');
+                named = spectralMeasureChannels(entries, coherenceEntries);
                 [traceFile, mapFile, ~, referenceFile] = exportCoherenceCSVs( ...
-                    coherenceEntries, fullfile(reportsDir, [stem '_' stampTxt]));
+                    coherenceEntries, fullfile(reportsDir, [stem '_' stampTxt]), ...
+                    struct('OnlyChannels', {named}));
                 [~, traceName, traceExt] = fileparts(traceFile);
                 [~, mapName, mapExt] = fileparts(mapFile);
                 [~, refName, refExt] = fileparts(referenceFile);
                 coherenceCsvs = struct('Trace', [traceName traceExt], ...
-                    'Map', [mapName mapExt], 'Reference', [refName refExt]);
+                    'Map', [mapName mapExt], 'Reference', [refName refExt], ...
+                    'Channels', {named});
             end
         catch
-            coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '');
+            coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '', 'Channels', {{}});
         end
 
         qmdText = generateQuartoReport(entries, reportCsvName, '', '', '', ...

@@ -514,7 +514,7 @@ The current library:
 | `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold, or a step, peak-to-peak or sample-to-sample criterion. What happens to a flagged cell is chosen separately: reject the whole epoch, mark that channel only, or interpolate that channel from its neighbours. **Channels to test** defaults to all channels, which is what makes a blink on VEOG reject the trial; set it to scalp EEG only where an eye or heart channel should not be tested against a threshold chosen for the scalp. A channel with no scalp position is never interpolated, since a spherical spline cannot place it. Which detector tripped on which epoch is recorded at compute time, so a branch's right-click **Rejection breakdown...** and the data-quality report can both show what each detector would reject on its own and how many epochs no other detector also caught. |
 | `ManualReject` | The manual counterpart of `ArtefactDetect`: browse one trial at a time and click a channel to flag it faulty, with the same Whole-epoch / This-channel-only scope and, for a single channel, the choice to leave it NaN or reconstruct it from its neighbours. Not recalculable, since the flagged cells are specific to one dataset's own trial count and order. |
 | `RemoveComponents` | Manually subtracts ICA components chosen by hand, from a sortable table showing each component's ICLabel-assigned class and confidence ("Eye 88%") alongside its full per-class probabilities and, where available, its dipole residual variance. Shown in the ribbon as "ICA". |
-| `AutoEyeICA` | Runs ICA, classifies components with ICLabel, and automatically removes eye components above a probability threshold. Shown in the ribbon as "AutoICA". |
+| `AutoEyeICA` | Runs ICA, classifies components with ICLabel, and automatically removes eye components above a probability threshold. Shown in the ribbon as "AutoICA". The decomposition and the classification do not depend on the threshold, so they are kept (in memory, and on the node for a later session): changing the threshold with **Recalculate** re-prunes the components already found instead of decomposing again, and running it again on unchanged data gives the components of the run before, which a fresh ICA would not (nothing seeds it). Set `Redecompose` to `true` in the options to force a new decomposition. |
 | `AutoGEDAI` | Denoises with GEDAI (generalized eigenvalue decomposition against a leadfield reference; Ros et al., 2025). |
 | `Fourier` | FFT-based frequency-domain analysis, with windowing and resolution options. Six output units: the four magnitude forms (`Volt`, `Power`, `VoltDens`, `PowerDens`), which take `abs()` per segment and so discard phase; `Complex`, which keeps the raw coefficients so phase survives (the spectrum plot then answers the **P** key with the phase spectrum); and `PSD`, a calibrated one-sided power spectral density in units^2/Hz whose integral over frequency is the signal's mean square, which is the one to report. On epoched data, `Fourier` with `PSD` followed by `Average` is Welch's method with the trials as its segments. |
 | `Welch` | The same calibrated PSD for a **continuous** recording, which has no trials to average over: overlapping segments, each tapered, their periodograms averaged. Segment length sets the resolution/variance trade-off directly (1/length Hz bins). It refuses epoched input rather than duplicating the `Fourier` + `Average` route, which already averages one periodogram per trial and keeps the whole epoch's frequency resolution while doing it. Shown in the ribbon as "Welch PSD". |
@@ -1823,6 +1823,17 @@ tagging paper prints; that split exists because the whole plane for a
 about 1 MB. Neither carries a test: the inference in a tagging design is on
 the scalar coherence, which the sections above already handle.
 
+Both figures **follow the electrodes named in the Spectral Measure rows**. With
+two rows on Oz, the trace and the map show Oz alone, in colour and with no grey
+field of other channels behind it, and the report says the channel was named in
+advance rather than picked for its response. Rows left on all channels, a
+montage that lacks the named electrodes, or a workspace with no Spectral
+Measure at all leave the figures as described above, with the strongest
+channels drawn over the rest. A pool such as `{Pz POz}` contributes its
+members, because the coherence map is per electrode. Only the export is
+narrowed: the CoherenceMap result still holds every channel, and the
+coherence view in the app is unchanged.
+
 Like any transformation, a whole tagging pipeline can be replayed across a
 study with Apply to All Raw Files or a saved template. The full reference is the
 [`SpectralMeasure.m`](src/Transformations/SpectralMeasure/SpectralMeasure.m)
@@ -1986,6 +1997,21 @@ The Alakazam tab's **Workspace** group provides the following operations.
   removes every other subject's branch, for use when regenerating the
   remaining subjects' pipelines from a revised template while preserving
   the one on which it was developed.
+
+**What is written to the cache.** Every transformation result is a file in the
+cache folder, and each is written with two small records beside it:
+`<node>.mat.json`, which says what kind of node it is (so a scan need not load
+it), and `<node>.mat.meta`, which holds the node's transformation, its exact
+settings and its shape. The second is what lets a branch be applied to another
+recording, recalculated, or saved as a template without loading every step in
+full to read two small fields from it. Both are rewritten if they are missing or
+older than the node, so a cache from before they existed keeps working and is
+brought up to date the first time it is read. ICA activations (`icaact`) are not
+saved: they are weights times data, so EEGLAB recomputes them, and they made an
+ICA node and everything below it about twice as large. Applying a branch to
+several recordings passes each step's result to the next in memory rather than
+reading back the file it has just written, and the tree is redrawn once at the
+end rather than once per node.
 
 ### Specifying the design
 

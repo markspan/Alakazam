@@ -332,12 +332,65 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
             testCase.verifySubstring(text, 'Coherence at the Tagged Frequency');
         end
 
+        function theCoherenceSectionShowsOnlyTheChannelsTheSpectralMeasureRowsName(testCase)
+        %THECOHERENCESECTIONSHOWSONLYTHECHANNELSTHESPECTRALMEASUREROWSNAME
+        %   With two Spectral Measure rows on Oz and newcrossf ticked, the
+        %   report still drew every channel in both coherence figures. It now
+        %   follows the rows: only Oz, in colour and with no grey field behind
+        %   it, and the prose says the channel was named, not picked for its
+        %   response.
+        %
+        %   Oz is channel 4 of ten, in condition A's responding channels
+        %   (0.83) and outside condition B's (0.67 sits at channels 5 to 8).
+        %   B's Peak must therefore read as noise, about 0.06. Had the export
+        %   kept every channel, "the four that responded most" would have
+        %   put 0.670 in the table.
+            [text, html] = testCase.renderCoherence(testCase.perConditionEntries(), {'Oz'});
+
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, ...
+                'Only the channels named in the Spectral Measure rows are drawn (Oz)');
+            testCase.verifySubstring(text, ...
+                'Channels shown: Oz, the channels named in the Spectral Measure rows.');
+            testCase.verifyFalse(contains(text, 'The grey lines are the remaining channels'), ...
+                'Nothing is drawn in grey when the channels were named.');
+            testCase.verifyFalse(contains(text, 'unlike the channels in colour'), ...
+                'The channels in colour were named in advance, so Oz is not being contrasted with them.');
+            testCase.verifySubstring(text, '0.830');
+            testCase.verifyFalse(contains(text, '0.670'), ...
+                'Channels 5 to 8 are not Oz; condition B''s response there must not reach the table.');
+        end
+
+        function theCoherenceSectionDescribesAnUnnarrowedExportAsTheGeneralFigure(testCase)
+        %THECOHERENCESECTIONDESCRIBESANUNNARROWEDEXPORTASTHEGENERALFIGURE
+        %   Named channels that no dataset has (a montage that differs from
+        %   the analyst's) fall back to the whole montage in the export. The
+        %   report must then describe what it drew, not claim it followed
+        %   the rows.
+            [text, html] = testCase.renderCoherence(testCase.coherenceEntries(), {'NoSuchElectrode'});
+
+            testCase.verifyFalse(contains(text, 'Could not be analysed'), ...
+                ['A tryCatch swallowed a genuine R error in the coherence ' ...
+                 'section. See ' html '.']);
+            testCase.verifySubstring(text, 'The grey lines are the remaining channels');
+            testCase.verifyFalse(contains(text, 'the channels named in the Spectral Measure rows'), ...
+                'The export holds every channel, so it did not follow the rows.');
+            testCase.verifySubstring(text, 'the ones with the strongest response in each condition');
+        end
+
     end
 
     methods (Access = private)
-        function [text, html] = renderCoherence(testCase, coherenceData)
+        function [text, html] = renderCoherence(testCase, coherenceData, named)
         %RENDERCOHERENCE  Export the coherence CSVs for COHERENCEDATA, render a
-        %   real report over them, and return its visible text and file.
+        %   real report over them, and return its visible text and file. NAMED
+        %   are the electrodes the Spectral Measure rows name: the export is
+        %   narrowed to them and the report told so, as onExportSpectral does.
+            if nargin < 3
+                named = {};
+            end
             temporary = testCase.applyFixture( ...
                 matlab.unittest.fixtures.TemporaryFolderFixture);
             folder = temporary.Folder;
@@ -347,14 +400,15 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
             [~, csvName, csvExt] = fileparts(csvFile);
 
             [traceFile, mapFile, ~, referenceFile] = exportCoherenceCSVs( ...
-                coherenceData, fullfile(folder, 'coherence'));
+                coherenceData, fullfile(folder, 'coherence'), ...
+                struct('OnlyChannels', {named}));
             [~, traceName, traceExt] = fileparts(traceFile);
             [~, mapName, mapExt] = fileparts(mapFile);
             [~, refName, refExt] = fileparts(referenceFile);
 
             qmd = generateQuartoReport(entries, [csvName csvExt], '', '', '', '', ...
                 struct('Trace', [traceName traceExt], 'Map', [mapName mapExt], ...
-                       'Reference', [refName refExt]));
+                       'Reference', [refName refExt], 'Channels', {named}));
             writeQmdFile(qmdFile, qmd, 'Alakazam:QuartoReportRenderTest');
 
             [html, errorMessage] = renderQuartoReport(qmdFile);

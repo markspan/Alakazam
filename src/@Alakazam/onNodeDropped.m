@@ -30,6 +30,7 @@ function onNodeDropped(this, eventData, sourceTree)
     end
 
     try
+        releaseTree = sourceTree.beginBatch(); %#ok<NASGU>  redraw once, not per node
         this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
     catch ME
         % Without this, any failure here (a missing cache file, a

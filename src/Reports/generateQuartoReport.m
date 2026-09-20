@@ -265,7 +265,11 @@
     % window, and every window in a tagging export reads the same map.
     coherenceParts = {};
     if hasCoherenceExport(coherenceCsvs)
-        coherenceParts = {ReportSections.coherenceSection()};
+        named = {};
+        if isstruct(coherenceCsvs) && isfield(coherenceCsvs, 'Channels')
+            named = coherenceCsvs.Channels;
+        end
+        coherenceParts = {ReportSections.coherenceSection(named)};
     end
 
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, ...
