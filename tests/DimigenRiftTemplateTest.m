@@ -77,6 +77,30 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function templateAsksForTheFrameAveragedCoherenceAndTheReferencesOwnTag(testCase)
+        %TEMPLATEASKSFORTHEFRAMEAVERAGEDCOHERENCEANDTHEREFERENCESOWNTAG  On the same ten
+        %   recordings the frame-averaged coherence agrees with newcrossf (the
+        %   paper's estimator) to 0.001, where the single window this template's
+        %   SpectralMeasure and topography used to use reads 2.4 to 2.9 times higher,
+        %   and newcrossf itself cannot read a row outside its 52-68 Hz band (the 30 Hz
+        %   SSVEP row). The topography's band search drew that condition at its 60 Hz
+        %   harmonic. So the template must ask for the frame estimator and the
+        %   reference's own tag, or it silently returns to numbers that do not compare
+        %   with the paper or with the coherence map.
+            nodes = testCase.readTemplateNodes();
+            ids = string({nodes.transformId});
+
+            sm = nodes(find(ids == "SpectralMeasure", 1)).params;
+            testCase.verifyEqual(string(sm.coherenceMethod), "frames");
+            testCase.verifyFalse(logical(sm.crossf.enabled), 'The older flag means newcrossf and only that.');
+
+            topo = nodes(find(ids == "CoherenceTopography", 1)).params;
+            testCase.verifyEqual(string(topo.Method), "frames");
+            testCase.verifyEqual(string(topo.TagSource), "reference");
+        end
+    end
+
     methods (Test, TestTags = {'Slow'})
         function appliesEndToEndToRealRiftData(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
@@ -127,13 +151,14 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
             % structs via TransTools.invoke instead of tree nodes/cache files.
             nodes = testCase.readTemplateNodes();
             results = cell(1, numel(nodes));
+            used = cell(1, numel(nodes));     % the options each step settled on
             for k = 1:numel(nodes)
                 if nodes(k).parent < 1
                     stepInput = EEG;
                 else
                     stepInput = results{nodes(k).parent};
                 end
-                [results{k}, ~] = TransTools.invoke(nodes(k).transformId, stepInput, nodes(k).params);
+                [results{k}, used{k}] = TransTools.invoke(nodes(k).transformId, stepInput, nodes(k).params);
             end
             final = results{end};
 
@@ -166,12 +191,30 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
             testCase.verifyEqual(string(final.bindesc(4).label), "RIFT 60Hz peripheral");
             testCase.verifyEqual(counts(4), 0);
 
-            testCase.assertTrue(isfield(final, 'spectralMeasures') && numel(final.spectralMeasures) == 2, ...
-                'Expected 2 SpectralMeasure rows (60Hz, 64Hz).');
+            testCase.assertTrue(isfield(final, 'spectralMeasures') && numel(final.spectralMeasures) == 3, ...
+                'Expected 3 SpectralMeasure rows (60Hz, 64Hz, 30Hz).');
             for r = 1:numel(final.spectralMeasures)
                 testCase.verifyTrue(any(isfinite(final.spectralMeasures{r}.coherence(:))), ...
                     sprintf('SpectralMeasure row %d has no finite coherence values.', r));
             end
+
+            % The template asks for the frame-averaged coherence, and the 30 Hz row,
+            % outside any newcrossf band, is read at 30 Hz rather than left at a
+            % band edge: this subject's SSVEP bin is the one that responds to it.
+            testCase.verifyEqual(used{end}.coherenceMethod, 'frames');
+            ssvep = final.spectralMeasures{3}.coherence(:, 2);
+            testCase.verifyGreaterThan(max(ssvep(isfinite(ssvep))), 0.2, ...
+                'The 30 Hz row should read the SSVEP response, not the value at 52 Hz.');
+
+            % The topography takes each bin's frequency from the photodiode's own
+            % spectrum, so the 30 Hz condition is drawn at 30 Hz and not at the 60 Hz
+            % harmonic a 52-68 Hz search band would find.
+            topography = results{8};
+            testCase.verifyEqual(topography.CohTopoMethod, 'frames');
+            testCase.verifyEqual(topography.CohTopoFreqs(strcmp(topography.CohTopoBinLabels, 'SSVEP 30Hz')), ...
+                30, 'AbsTol', 0.5);
+            testCase.verifyEqual(topography.CohTopoFreqs(strcmp(topography.CohTopoBinLabels, 'RIFT 60Hz')), ...
+                60, 'AbsTol', 0.5);
         end
     end
 

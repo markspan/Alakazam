@@ -1,7 +1,7 @@
 {
   "alakazamTemplate": true,
   "version": 2,
-  "name": "RIFT frequency tagging (Dimigen et al. 2025)",
+  "name": "SelectData",
   "nodes": [
     {
       "transformId": "SelectData",
@@ -143,7 +143,10 @@
         "MaxFreq": 68,
         "Frequency": 0,
         "TimeStart": 883,
-        "TimeStop": 8594
+        "TimeStop": 8594,
+        "Method": "frames",
+        "TagSource": "reference",
+        "WindowMs": 510
       },
       "parent": 6
     },
@@ -182,27 +185,32 @@
           {
             "label": "60Hz",
             "freq": "60",
-            "channels": "Oz"
+            "channels": "Oz O1 O2 POz"
           },
           {
             "label": "64Hz",
             "freq": "64",
-            "channels": "Oz"
+            "channels": "Oz O1 O2 POz"
+          },
+          {
+            "label": "30Hz",
+            "freq": "30",
+            "channels": "Oz O1 O2 POz"
           }
         ],
-        "fundamentals": "",
+        "fundamentals": "let f1 = 60",
         "refChannel": "Photodiode",
         "method": "Hann",
         "tapers": 3,
         "snrNeighbours": 10,
         "snrGuard": 1,
+        "coherenceMethod": "frames",
         "crossf": {
-          "enabled": true,
+          "enabled": false,
+          "Method": "frames",
           "WinSize": 510,
-          "PadRatio": 4,
-          "TimesOut": 500,
-          "MinFreq": 52,
-          "MaxFreq": 68
+          "TimeStart": NaN,
+          "TimeStop": NaN
         }
       },
       "parent": 9

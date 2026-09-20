@@ -14,9 +14,11 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
 %   Returns ROWS (a 1xN cell of scalar structs .label/.freq/.channels),
 %   FUNDAMENTALS (the "let f1 = 63" block), REFCHANNEL, METHOD ('Hann' or
 %   'Multitaper'), NTAPERS, SNRN (neighbour bins each side), SNRGUARD
-%   (guard bins) and CROSSF (a struct: .enabled plus, when enabled,
+%   (guard bins) and CROSSF (a struct: .Method, 'frames' / 'window' /
+%   'newcrossf', the older .enabled flag (true for newcrossf), and
 %   .WinSize/.PadRatio/.TimesOut/.MinFreq/.MaxFreq/.TimeStart/.TimeStop --
-%   see SpectralMeasure's own header comment for what each means); or
+%   see SpectralMeasure's own header comment for what each means and which
+%   method uses which); or
 %   [] / '' on Cancel, the same "empty means cancel" contract
 %   MeasureDialog/GrandAverageDialog use.
     METHOD_CHOICES = {'Hann', 'Multitaper'};
@@ -25,7 +27,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
 
     rows = []; fundamentals = ''; refChannel = ''; method = 'Hann';
     nTapers = 3; snrN = 10; snrGuard = 1;               % returned only on OK
-    crossf = struct('enabled', false);
+    crossf = struct('enabled', false, 'Method', 'frames');
     allLabels = string({chanlocs.labels});
     selectedRow = 0;
 
@@ -33,8 +35,11 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
     seedRows = {{'f1', 'f1', ''}};
     seedFund = 'let f1 = 60';
     seedRef = ''; seedMethod = 'Hann'; seedTapers = 3; seedN = 10; seedGuard = 1;
-    seedCrossf = struct('enabled', false, 'WinSize', 510, 'PadRatio', 4, 'TimesOut', 500, ...
-        'MinFreq', [], 'MaxFreq', [], 'TimeStart', [], 'TimeStop', []);
+    % A first run offers the frame-averaged coherence; a stored run keeps the
+    % method it was made with (an older one that has only the enabled flag was
+    % newcrossf when it was on and the single window when it was off).
+    seedCrossf = struct('enabled', false, 'Method', 'frames', 'WinSize', 510, 'PadRatio', 4, ...
+        'TimesOut', 500, 'MinFreq', [], 'MaxFreq', [], 'TimeStart', [], 'TimeStop', []);
     if isstruct(stored) && isfield(stored, 'rows') && ~isempty(stored.rows)
         storedRows = stored.rows;
         if isstruct(storedRows)
@@ -58,7 +63,8 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
         seedN      = getField(stored, 'snrNeighbours', 10);
         seedGuard  = getField(stored, 'snrGuard', 1);
         storedCrossf = getField(stored, 'crossf', struct());
-        seedCrossf.enabled   = logical(getField(storedCrossf, 'enabled', false));
+        seedCrossf.Method    = storedMethod(stored, storedCrossf);
+        seedCrossf.enabled   = strcmp(seedCrossf.Method, 'newcrossf');
         seedCrossf.WinSize   = getField(storedCrossf, 'WinSize', 510);
         seedCrossf.PadRatio  = getField(storedCrossf, 'PadRatio', 4);
         seedCrossf.TimesOut  = getField(storedCrossf, 'TimesOut', 500);
@@ -106,19 +112,21 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
     uilabel(ctrl, 'Text', 'SNR guard bins:');
     guardField = uieditfield(ctrl, 'numeric', 'Value', seedGuard, 'Limits', [0 20], 'RoundFractionalValues', 'on');
 
-    % Coherence via newcrossf: a checkbox plus its own compact strip of
-    % newcrossf parameters, enabled/disabled together with it. Only
-    % coherence/phase-lag are affected -- see SpectralMeasure's own header
-    % comment for why this exists (the default single-window coherence is a
-    % biased estimator) and needs EEGLAB (checked at compute time, not here,
-    % so this dialog itself works without EEGLAB on the path).
+    % Coherence estimator: a dropdown plus its own compact strip of parameters,
+    % each enabled only for the methods that use it. Only coherence/phase-lag
+    % are affected -- see SpectralMeasure's own header comment for the three
+    % methods and why the frame-averaged one is the default (the single-window
+    % coherence is a biased estimator). newcrossf needs EEGLAB, checked at
+    % compute time, not here, so this dialog itself works without it.
     crossfPanel = uigridlayout(outer, [2 1], 'RowHeight', {'fit', 'fit'}, ...
         'Padding', [0 0 0 0], 'RowSpacing', 2);
     crossfPanel.Layout.Row = 3;
-    crossfCheck = uicheckbox(crossfPanel, 'Text', [ ...
-        'Compute coherence / phase-lag via EEGLAB''s newcrossf (sliding-window, trial- and ' ...
-        'frame-averaged) instead of the single-window default; needs EEGLAB.'], ...
-        'Value', seedCrossf.enabled);
+    cohRow = uigridlayout(crossfPanel, [1 2], 'ColumnWidth', {'fit', '1x'}, ...
+        'RowHeight', {'fit'}, 'Padding', [0 0 0 0], 'ColumnSpacing', 6);
+    uilabel(cohRow, 'Text', 'Coherence / phase-lag estimator:');
+    cohDrop = uidropdown(cohRow, ...
+        'Items', {'Frame-averaged (recommended)', 'Single window (biased upwards)', 'EEGLAB newcrossf (reference)'}, ...
+        'ItemsData', {'frames', 'window', 'newcrossf'}, 'Value', seedCrossf.Method);
     crossfFields = uigridlayout(crossfPanel, [2 7], 'ColumnWidth', repmat({'1x'}, 1, 7), ...
         'RowHeight', {'fit', 'fit'}, 'Padding', [24 0 0 0], 'ColumnSpacing', 6);
     crossfLabels = {'Window (samples)', 'Pad ratio', 'Time points', 'Min freq (Hz)', ...
@@ -140,8 +148,8 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
         'AllowEmpty', 'on', 'Placeholder', 'whole epoch');
     timeStopField  = uieditfield(crossfFields, 'numeric', 'Value', seedCrossf.TimeStop, ...
         'AllowEmpty', 'on', 'Placeholder', 'whole epoch');
-    crossfCheck.ValueChangedFcn = @(~, ~) setCrossfFieldsEnabled(crossfCheck.Value);
-    setCrossfFieldsEnabled(seedCrossf.enabled);
+    cohDrop.ValueChangedFcn = @(~, ~) setCrossfFieldsEnabled(cohDrop.Value);
+    setCrossfFieldsEnabled(seedCrossf.Method);
 
     table = uitable(outer, 'ColumnName', COLUMN_NAMES, 'ColumnEditable', true(1, 3), ...
         'ColumnFormat', {'char', 'char', 'char'}, 'ColumnWidth', COLUMN_WIDTHS, 'Data', tableData);
@@ -220,9 +228,11 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
                 uialert(fig, 'Min freq must be less than Max freq for the newcrossf coherence band.', ...
                     'Check the newcrossf settings'); return;
             end
+        end
+        if any(strcmp(newCrossf.Method, {'frames', 'newcrossf'}))
             if ~isempty(newCrossf.TimeStart) && ~isempty(newCrossf.TimeStop) && newCrossf.TimeStart >= newCrossf.TimeStop
-                uialert(fig, 'Window start must be before Window stop for the newcrossf averaging window.', ...
-                    'Check the newcrossf settings'); return;
+                uialert(fig, 'Window start must be before Window stop for the coherence averaging window.', ...
+                    'Check the coherence settings'); return;
             end
         end
 
@@ -246,18 +256,28 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
     %   MinFreq/MaxFreq/TimeStart/TimeStop stay [] ("auto"/"whole epoch")
     %   when their field was left empty, same "empty means unset" contract
     %   SpectralMeasure.m's own numOr expects.
-        c = struct('enabled', logical(crossfCheck.Value), ...
+        c = struct('enabled', strcmp(cohDrop.Value, 'newcrossf'), 'Method', cohDrop.Value, ...
             'WinSize', winSizeField.Value, 'PadRatio', padRatioField.Value, ...
             'TimesOut', timesOutField.Value, 'MinFreq', minFreqField.Value, ...
             'MaxFreq', maxFreqField.Value, 'TimeStart', timeStartField.Value, ...
             'TimeStop', timeStopField.Value);
     end
 
-    function setCrossfFieldsEnabled(tf)
-        state = matlab.lang.OnOffSwitchState(tf);
-        winSizeField.Enable = state; padRatioField.Enable = state; timesOutField.Enable = state;
-        minFreqField.Enable = state; maxFreqField.Enable = state;
-        timeStartField.Enable = state; timeStopField.Enable = state;
+    function setCrossfFieldsEnabled(method)
+    %SETCROSSFFIELDSENABLED  Enable exactly the fields METHOD uses: the frame
+    %   and newcrossf estimators share a window and the averaging range; the pad
+    %   ratio, the number of time points and the band belong to newcrossf alone
+    %   (the frame estimator reads exact frequencies, so has no grid to pad or
+    %   band to set); the single window has none of them.
+        frames = any(strcmp(method, {'frames', 'newcrossf'}));
+        xf = strcmp(method, 'newcrossf');
+        winSizeField.Enable = matlab.lang.OnOffSwitchState(frames);
+        timeStartField.Enable = matlab.lang.OnOffSwitchState(frames);
+        timeStopField.Enable = matlab.lang.OnOffSwitchState(frames);
+        padRatioField.Enable = matlab.lang.OnOffSwitchState(xf);
+        timesOutField.Enable = matlab.lang.OnOffSwitchState(xf);
+        minFreqField.Enable = matlab.lang.OnOffSwitchState(xf);
+        maxFreqField.Enable = matlab.lang.OnOffSwitchState(xf);
     end
 
     function onSave()
@@ -325,7 +345,7 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
         neighField.Value = getField(raw, 'snrNeighbours', 10);
         guardField.Value = getField(raw, 'snrGuard', 1);
         loadedCrossf = getField(raw, 'crossf', struct());
-        crossfCheck.Value  = logical(getField(loadedCrossf, 'enabled', false));
+        cohDrop.Value      = storedMethod(raw, loadedCrossf);
         winSizeField.Value   = getField(loadedCrossf, 'WinSize', 510);
         padRatioField.Value  = getField(loadedCrossf, 'PadRatio', 4);
         timesOutField.Value  = getField(loadedCrossf, 'TimesOut', 500);
@@ -333,7 +353,25 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
         maxFreqField.Value   = getField(loadedCrossf, 'MaxFreq', []);
         timeStartField.Value = getField(loadedCrossf, 'TimeStart', []);
         timeStopField.Value  = getField(loadedCrossf, 'TimeStop', []);
-        setCrossfFieldsEnabled(crossfCheck.Value);
+        setCrossfFieldsEnabled(cohDrop.Value);
+    end
+end
+
+function m = storedMethod(options, crossf)
+%STOREDMETHOD  The coherence method a stored options struct (or a saved settings
+%   file) asks for. The same rule as SpectralMeasure's own: an explicit method
+%   wins, and options from before the method existed mean newcrossf when the
+%   older enabled flag was on and the single window when it was off.
+    m = lower(char(string(getField(options, 'coherenceMethod', ''))));
+    if isempty(m)
+        m = lower(char(string(getField(crossf, 'Method', ''))));
+    end
+    if ~any(strcmp(m, {'frames', 'window', 'newcrossf'}))
+        if logical(getField(crossf, 'enabled', false))
+            m = 'newcrossf';
+        else
+            m = 'window';
+        end
     end
 end
 

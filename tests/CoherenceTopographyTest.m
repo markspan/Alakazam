@@ -88,6 +88,98 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             testCase.verifyEqual(refAmp(:, 1), expected, 'AbsTol', 1e-9 * max(expected));
         end
 
+        function theFrameMethodIsTheFrameCoherenceOfEachChannel(testCase)
+            EEG = noisyFixture();
+            opts = defaultOpts();
+            opts.Method = 'frames';
+            opts.Frequency = 20;
+            opts.WindowMs = 200;
+            opts.TimeStart = 100;
+            opts.TimeStop = 900;
+
+            [coh, detFreq] = TransTools.ComputeCoherenceTopography(EEG, opts);
+
+            R = squeeze(EEG.data(1, :, :));
+            want = TransTools.FrameCoherence(squeeze(EEG.data(2, :, :)), R, EEG.srate, 20, ...
+                struct('WinSize', 50, 'Times', EEG.times, 'TimeStart', 100, 'TimeStop', 900));
+            testCase.verifyEqual(coh(2, 1), want, 'AbsTol', 1e-12);
+            testCase.verifyTrue(isnan(coh(1, 1)), 'The reference row is left NaN.');
+            testCase.verifyEqual(detFreq, 20);
+            testCase.verifyGreaterThan(want, 0.2, 'The comparison must not be between near-zero numbers.');
+        end
+
+        function optionsWithNoMethodOrTagSourceKeepTheirOldMeaning(testCase)
+        %OPTIONSWITHNOMETHODORTAGSOURCEKEEPTHEIROLDMEANING  A stored node has neither
+        %   field. It must give the single-window coherence and the band search it
+        %   always gave, so recalculating it reproduces its numbers.
+            EEG = noisyFixture();
+            legacy = defaultOpts();
+            explicit = legacy;
+            explicit.Method = 'window';
+            explicit.TagSource = 'band';
+
+            [c1, f1] = TransTools.ComputeCoherenceTopography(EEG, legacy);
+            [c2, f2] = TransTools.ComputeCoherenceTopography(EEG, explicit);
+
+            testCase.verifyEqual(c1, c2);
+            testCase.verifyEqual(f1, f2);
+        end
+
+        function theFrameEstimatorReadsLowerThanTheSingleWindowOnTheSameData(testCase)
+            EEG = noisyFixture();
+            opts = defaultOpts();
+            opts.Frequency = 20;
+            window = TransTools.ComputeCoherenceTopography(EEG, opts);
+            opts.Method = 'frames';
+            opts.WindowMs = 200;
+
+            frames = TransTools.ComputeCoherenceTopography(EEG, opts);
+
+            testCase.verifyLessThan(frames(2, 1), window(2, 1));
+        end
+
+        function aTagOutsideTheSearchBandIsFoundFromTheReferenceAndMissedByTheBand(testCase)
+        %ATAGOUTSIDETHESEARCHBANDISFOUNDFROMTHEREFERENCEANDMISSEDBYTHEBAND  The
+        %   reference flickers at 20 Hz and the band searched is 40 to 60 Hz, as a
+        %   30 Hz SSVEP condition was against a 52 to 68 Hz band: the band search
+        %   reports the strongest thing inside the band, the reference source
+        %   reports the tag.
+            EEG = coherenceFixture();
+            opts = defaultOpts();
+            opts.MinFreq = 40;
+            opts.MaxFreq = 60;
+
+            [~, byBand] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            opts.TagSource = 'reference';
+            [~, byReference] = TransTools.ComputeCoherenceTopography(EEG, opts);
+
+            testCase.verifyGreaterThanOrEqual(byBand(1), 40, 'The band search stays inside its band.');
+            testCase.verifyEqual(byReference(1), 20, 'AbsTol', 1.0);
+        end
+
+        function aFixedFrequencyBeatsTheTagSource(testCase)
+            EEG = coherenceFixture();
+            opts = defaultOpts();
+            opts.TagSource = 'reference';
+            opts.Frequency = 33;
+
+            [~, detFreq] = TransTools.ComputeCoherenceTopography(EEG, opts);
+
+            testCase.verifyEqual(detFreq(1), 33);
+        end
+
+        function anUnknownMethodOrTagSourceIsRefused(testCase)
+            EEG = coherenceFixture();
+            opts = defaultOpts();
+            opts.Method = 'wavelet';
+            testCase.verifyError(@() TransTools.ComputeCoherenceTopography(EEG, opts), ...
+                'Alakazam:ComputeCoherenceTopography');
+            opts = defaultOpts();
+            opts.TagSource = 'guess';
+            testCase.verifyError(@() TransTools.ComputeCoherenceTopography(EEG, opts), ...
+                'Alakazam:ComputeCoherenceTopography');
+        end
+
         function coherenceIsLowWithIndependentTrialPhase(testCase)
         %COHERENCEISLOWWITHINDEPENDENTTRIALPHASE  Coherence measures
         %   trial-to-trial CONSISTENCY of phase, not shared frequency --
@@ -150,3 +242,22 @@ function opts = defaultOpts()
     opts = struct('RefIndex', 1, 'MinFreq', 10, 'MaxFreq', 30, 'Frequency', 0, ...
         'TimeStart', 0, 'TimeStop', 0, 'FreqStep', 0.1);
 end
+
+function EEG = noisyFixture()
+%NOISYFIXTURE  Reference (Ch1) and a channel (Ch2) sharing a 20 Hz tone with a random
+%   phase on every one of 10 trials, each with its own noise: real, not perfect,
+%   coherence over a 1 s epoch at 250 Hz, with a time axis that starts before 0.
+    rng(17);
+    srate = 250; nT = 250; nTrials = 10;
+    times = (0:nT - 1) / srate * 1000 - 100;
+    t = (0:nT - 1) / srate;
+    data = zeros(2, nT, nTrials);
+    for tr = 1:nTrials
+        tone = cos(2 * pi * 20 * t + 2 * pi * rand());
+        data(1, :, tr) = tone + 0.6 * randn(1, nT);
+        data(2, :, tr) = tone + 0.6 * randn(1, nT);
+    end
+    EEG = struct('DataFormat', 'EPOCHED', 'times', times, 'srate', srate, 'data', data, ...
+        'bindesc', struct('index', 1, 'label', 'Bin1', 'trials', 1:nTrials, 'combo', []));
+end
+

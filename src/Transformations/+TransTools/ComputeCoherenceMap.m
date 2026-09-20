@@ -134,7 +134,6 @@ function [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts)
 
     win = max(4, round(opts.WindowMs / 1000 * srate));   % window length (samples)
     win = min(win, nT);
-    step = max(1, round(win / 4));                        % 75% overlap
     pad  = max(1, round(opts.PadRatio));
     nfft = 2 ^ nextpow2(win * pad);
     taper = makeTaper(TransTools.FieldOr(opts, 'Taper', 'Hann'), win);
@@ -144,9 +143,7 @@ function [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts)
     freqs = fullFreqs(fsel);
     nF = numel(freqs);
 
-    starts = 1:step:(nT - win + 1);
-    if isempty(starts); starts = 1; end
-    centres = starts + floor(win / 2);
+    [starts, centres] = TransTools.FrameStarts(nT, win);      % 75% overlap; shared with FrameCoherence
     cohTimes = times(min(centres, nT));
     nFrame = numel(starts);
 

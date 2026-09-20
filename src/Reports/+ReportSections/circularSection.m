@@ -145,9 +145,15 @@ function block = circularSection(windowLabel, measureType, binLabels)
     % (__BINLIST__) rather than filling the one/two named slots the paired
     % and single-bin sections use, so BIN1/BIN2 are passed through empty,
     % which fillToken documents as a no-op.
+    %
+    % The block-match diagnostic goes in BEFORE the common tokens are filled: it
+    % carries a __WINDOW_R__ of its own, and filled afterwards that placeholder was
+    % never replaced (the report printed "window: WINDOW_R" and searched the data
+    % for a window of that name). Every other section builder already does it in
+    % this order.
+    block = strrep(block, '__BLOCKMATCHDIAGNOSTIC__', ReportSections.blockMatchDiagnosticText());
     block = ReportSections.fillCommonTokens(block, windowLabel, measureType, '', '');
     block = ReportSections.fillToken(block, 'BINLIST', strjoin(binLabels, ', '));
-    block = strrep(block, '__BLOCKMATCHDIAGNOSTIC__', ReportSections.blockMatchDiagnosticText());
     block = strrep(block, '__CHUNKLABEL__', ...
         ReportSections.chunkLabel('circ', windowLabel, measureType));
 end

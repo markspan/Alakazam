@@ -27,20 +27,33 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %   optional DPSS multitaper (Signal Processing Toolbox) averages over K
 %   tapers to cut variance.
 %
-%   COHERENCE VIA NEWCROSSF (options.crossf.enabled = true). The default
-%   coherence above is ONE Hann-tapered DFT bin per trial (the whole
-%   selected epoch as a single window), then pooled over trials -- cheap and
-%   EEGLAB-free, but a biased estimator: fewer independent samples going
-%   into the average inflates the coherence value. EEGLAB's own newcrossf
-%   (via pop_newcrossf) instead slides a shorter window across each trial
-%   with heavy overlap and averages over every one of those frames as well
-%   as over trials, which is far less biased. Setting options.crossf.enabled
-%   computes coherence/phaselag this way instead (needs EEGLAB's newcrossf
-%   on the path); every other measure (power/amplitude/snr/itc/phase) is
-%   unaffected, since those are single-channel, not cross-channel. See
-%   options.crossf's own fields below for what newcrossf parameters are
-%   exposed, and crossfCoherence (this file) for exactly how they map onto
-%   the newcrossf call.
+%   THREE WAYS TO ESTIMATE COHERENCE (options.coherenceMethod). Only the
+%   coherence and phase-lag depend on it; power, amplitude, SNR, ITC and phase
+%   are single-channel and do not.
+%     'frames'     THE ESTIMATOR OF RECORD, and the default for a new run. The
+%                  signals are cut into frames (crossf.WinSize samples, slid with
+%                  75% overlap), each frame is transformed at the row's EXACT
+%                  frequency, the coherence across trials is taken per frame, and
+%                  the frames are averaged: TransTools.FrameCoherence. It needs
+%                  no EEGLAB, reads a row at the frequency asked for whatever the
+%                  band, and agrees with CoherenceMap and newcrossf, so the
+%                  number in a report, the map beside it and the topography are
+%                  one quantity.
+%     'window'     ONE Hann-tapered DFT bin per trial, the whole selected epoch as
+%                  a single window, pooled over trials. Cheap, but biased upwards:
+%                  far fewer independent samples go into the average, and on ten
+%                  RIFT recordings it read 2.4 to 2.9 times the frame-averaged
+%                  value. Kept as an option, and named as such in the report.
+%     'newcrossf'  EEGLAB's newcrossf (via pop_newcrossf), which slides a shorter
+%                  window across each trial and averages over the frames as well as
+%                  the trials. The estimator the RIFT paper used; kept as the
+%                  reference implementation. Needs EEGLAB, and can only report a
+%                  row inside its band (crossf.MinFreq to crossf.MaxFreq): a row
+%                  outside it is NaN with a warning, not the value at the band edge.
+%   Options saved before the method existed carry only crossf.enabled, and keep
+%   the meaning they had (newcrossf when on, 'window' when off), so replaying or
+%   recalculating an old node reproduces its numbers. See crossfCoherence for how
+%   crossf maps onto the newcrossf call.
 %
 %   The epoched data passes through unchanged; the result adds
 %   EEG.spectralMeasures (1xN cell of scalar structs, mirroring
@@ -125,6 +138,9 @@ snrN         = TransTools.FieldOr(options, 'snrNeighbours', 10);
 snrGuard     = TransTools.FieldOr(options, 'snrGuard', 1);
 crossf       = TransTools.FieldOr(options, 'crossf', struct('enabled', false));
 crossf.enabled = logical(TransTools.FieldOr(crossf, 'enabled', false));
+cohMethod    = coherenceMethodOf(options, crossf);
+crossf.Method  = cohMethod;
+crossf.enabled = strcmp(cohMethod, 'newcrossf');   % the older flag, kept true to the method
 
 if isempty(rows)
     throw(MException('Alakazam:SpectralMeasure', ...
@@ -135,27 +151,34 @@ end
 freqExprs = cellfun(@(r) r.freq, rows, 'UniformOutput', false);
 freqHz = spectralFreqSpecs(freqExprs, fundamentals);
 
-%% Fill in the newcrossf option's own defaults (only matters if enabled).
+%% Fill in the coherence method's own defaults.
+%  The frame and newcrossf estimators share a window (in samples) and the time
+%  range the frames are averaged over. newcrossf alone also needs its band:
 %  MinFreq/MaxFreq default to the rows' own frequency span padded by 8 Hz
 %  either side -- enough room for a coherent bandwidth around each named
 %  frequency without the analyst having to work it out by hand; explicit
 %  values (as the RIFT template sets, matching the paper's own 52-68 Hz
-%  band exactly) always win.
-if crossf.enabled
+%  band exactly) always win. A row outside that band cannot be read from
+%  newcrossf's image, and is reported as missing (see crossfCoherence), not
+%  as the value at the nearest edge.
+if any(strcmp(cohMethod, {'frames', 'newcrossf'}))
+    crossf.WinSize   = TransTools.FieldOr(crossf, 'WinSize', 510);     % samples, matches newcrossf's own 'winsize'
+    crossf.PadRatio  = TransTools.FieldOr(crossf, 'PadRatio', 4);
+    crossf.TimeStart = numOr(TransTools.FieldOr(crossf, 'TimeStart', NaN), NaN);
+    crossf.TimeStop  = numOr(TransTools.FieldOr(crossf, 'TimeStop', NaN), NaN);
+end
+if strcmp(cohMethod, 'newcrossf')
     if exist('newcrossf', 'file') ~= 2
         throw(MException('Alakazam:SpectralMeasure', sprintf([ ...
             'Problem in SpectralMeasure: "coherence via newcrossf" is turned on, but EEGLAB''s ' ...
             'own newcrossf function isn''t on the path here. Would you initialise EEGLAB first ' ...
-            '(eeglab), or turn this option off and use the default single-window coherence?'])));
+            '(eeglab), or choose the frame-averaged coherence, which needs no EEGLAB?'])));
     end
-    crossf.WinSize   = TransTools.FieldOr(crossf, 'WinSize', 510);     % samples, matches newcrossf's own 'winsize'
-    crossf.PadRatio  = TransTools.FieldOr(crossf, 'PadRatio', 4);
     crossf.TimesOut  = TransTools.FieldOr(crossf, 'TimesOut', 500);
     crossf.MinFreq   = numOr(TransTools.FieldOr(crossf, 'MinFreq', NaN), min(freqHz) - 8);
     crossf.MaxFreq   = numOr(TransTools.FieldOr(crossf, 'MaxFreq', NaN), max(freqHz) + 8);
-    crossf.TimeStart = numOr(TransTools.FieldOr(crossf, 'TimeStart', NaN), NaN);
-    crossf.TimeStop  = numOr(TransTools.FieldOr(crossf, 'TimeStop', NaN), NaN);
 end
+options.coherenceMethod = cohMethod;
 options.crossf = crossf;   % normalised form persists onto this node, like options.rows above
 
 %% Build tapers (nsamp x K)
@@ -234,7 +257,14 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
         end
         if ~isempty(refIdx)
             Vref = squeeze(EEG.data(refIdx, :, trials));   % nsamp x nT
-            Xref = TransTools.Tdft(Vref, fUse, t, tapers);            % K x nT (raw)
+            if size(Vref, 1) == 1   % single trial -> keep nsamp x 1
+                Vref = Vref(:);
+            end
+            % Only the single-window coherence uses this transform; the frame and
+            % newcrossf estimators take the signals themselves.
+            if strcmp(crossf.Method, 'window')
+                Xref = TransTools.Tdft(Vref, fUse, t, tapers);        % K x nT (raw)
+            end
         end
         for c = 1:nCh
             Vc = poolWave(EEG, specs(c).members, trials);  % nsamp x nT
@@ -262,16 +292,24 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
             end
 
             if ~isempty(refIdx)
-                if crossf.enabled
-                    [coherence(c, b), phaselag(c, b)] = crossfCoherence( ...
-                        EEG, specs(c).members, refIdx, b, trials, fUse, crossf, crossfCache);
-                else
-                    cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
-                    den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
-                    if den > 0
-                        coherence(c, b) = abs(cross)^2 / den;
-                        phaselag(c, b)  = angle(cross);
-                    end
+                switch crossf.Method
+                    case 'frames'
+                        % The estimator of record: sliding frames, exact frequency,
+                        % see TransTools.FrameCoherence.
+                        [coherence(c, b), phaselag(c, b)] = TransTools.FrameCoherence( ...
+                            Vc, Vref, EEG.srate, fUse, struct('WinSize', crossf.WinSize, ...
+                            'Times', TransTools.FieldOr(EEG, 'times', []), 'TimeStart', crossf.TimeStart, ...
+                            'TimeStop', crossf.TimeStop));
+                    case 'newcrossf'
+                        [coherence(c, b), phaselag(c, b)] = crossfCoherence( ...
+                            EEG, specs(c).members, refIdx, b, trials, fUse, crossf, crossfCache);
+                    otherwise    % 'window': one DFT bin per trial over the whole epoch
+                        cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
+                        den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
+                        if den > 0
+                            coherence(c, b) = abs(cross)^2 / den;
+                            phaselag(c, b)  = angle(cross);
+                        end
                 end
             end
         end
@@ -338,7 +376,25 @@ function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, c
         return;
     end
 
-    [~, fIdx] = min(abs(img.freqs - fUse));
+    % The nearest frequency in the image is only the answer if the image reaches
+    % FUSE. A row outside the band (a 30 Hz row against a 52 to 68 Hz band) used
+    % to be read at the band edge and reported as if it were the row's own
+    % coherence: 0.065 where the true value was about 0.39, on real data. It is
+    % now missing, with a warning, once per frequency.
+    [gap, fIdx] = min(abs(img.freqs - fUse));
+    if gap > median(diff(img.freqs)) / 2 + 1e-9
+        warnKey = sprintf('outside_%.10g', fUse);
+        if ~isKey(cache, warnKey)
+            cache(warnKey) = true; %#ok<NASGU>  cache is a handle: this records that the warning was given
+            warning('Alakazam:SpectralMeasure:outsideCrossfBand', ...
+                ['SpectralMeasure: %g Hz is outside the newcrossf band (%g to %g Hz), so I cannot ' ...
+                 'read its coherence and have left it missing. Would you widen the band, or use ' ...
+                 'the frame-averaged coherence, which has no band?'], ...
+                fUse, img.freqs(1), img.freqs(end));
+        end
+        coh = NaN; phlag = NaN;
+        return;
+    end
     % Magnitude-squared coherence: square EACH time frame's (already real,
     % already trial-pooled) coherence magnitude, THEN average over the
     % chosen time window -- exactly mean(crosscoh(:, window_ix).^2, 2) in
@@ -379,6 +435,35 @@ function tapers = buildTapers(method, nsamp, K)
     else
         n = (0:nsamp - 1)';
         tapers = 0.5 - 0.5 * cos(2 * pi * n / (nsamp - 1));   % Hann, nsamp x 1
+    end
+end
+
+function m = coherenceMethodOf(options, crossf)
+%COHERENCEMETHODOF  Which coherence estimator these options ask for:
+%   'frames' (sliding frames at the exact frequency, TransTools.FrameCoherence),
+%   'window' (one DFT bin per trial over the whole epoch) or 'newcrossf'
+%   (EEGLAB's newcrossf, kept as the reference implementation).
+%
+%   Options saved before the method existed have only the older crossf.enabled
+%   flag, and mean what they always meant: newcrossf when it was on, the
+%   single window when it was off. That is what keeps a recalculated or replayed
+%   node computing the numbers it was made with; the dialog offers 'frames' by
+%   default only to a new run.
+    m = lower(char(string(TransTools.FieldOr(options, 'coherenceMethod', ''))));
+    if isempty(m)
+        m = lower(char(string(TransTools.FieldOr(crossf, 'Method', ''))));
+    end
+    if isempty(m)
+        if crossf.enabled
+            m = 'newcrossf';
+        else
+            m = 'window';
+        end
+    end
+    if ~any(strcmp(m, {'frames', 'window', 'newcrossf'}))
+        throw(MException('Alakazam:SpectralMeasure', ...
+            ['Problem in SpectralMeasure: I''m afraid "%s" is not a coherence method I know. ' ...
+             'Please use frames, window or newcrossf.'], m));
     end
 end
 

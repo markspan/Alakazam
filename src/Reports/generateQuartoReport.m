@@ -272,9 +272,19 @@
         coherenceParts = {ReportSections.coherenceSection(named)};
     end
 
+    % How the coherence values were estimated, right after the orientation and
+    % before any result that quotes one (see coherenceMethodText).
+    methodNote = {};
+    if hasSpectral
+        note = ReportSections.coherenceMethodText(entries);
+        if ~isempty(note)
+            methodNote = {note};
+        end
+    end
+
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, ...
                           grandAverageCsv, trialCsv, spectraCsv, coherenceCsvs)}, {readersGuideText()}, ...
-             sections, {closingText()}];
+             methodNote, sections, {closingText()}];
     parts = uniqueChunkLabels(parts);
 
     % Appended LAST, after the statistical summary, not interleaved with

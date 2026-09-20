@@ -524,11 +524,11 @@ The current library:
 | `CollapseHemispheres` | Contralateral and ipsilateral waveforms for an N2pc or LRP, collapsed across every matched lateral electrode pair at once: mark which bins are left-side and which are right-side, and it adds a Contra and an Ipsi bin (`contra = (left-side bins at right electrodes + right-side bins at left electrodes) / 2`). Electrode pairs come from mirroring channel positions, falling back to 10-20 or L/R-letter labels, so it works on any montage; each pair's waveform is written to both its electrodes, so the montage and any existing `Measure` window keep working unchanged. Needs an Average carrying at least two bins. Shown in the ribbon as "Collapse Hemispheres". |
 | `TimeFrequency` | Wavelet time-frequency analysis: a per-bin, channel-stepped heatmap of event-related spectral power change relative to a pre-stimulus baseline (ERSP, dB). |
 | `SourceEstimate` | Inverts every bin of an averaged dataset onto the template cortical sheet and stores the result on the node, so that a source cluster test reads it instead of computing it again. Reuse is granted only when the settings and the underlying data both match what the analysis needs. Shown in the ribbon as "Source Estimate". See [Computing the source estimates once](#computing-the-source-estimates-once). |
-| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
+| `SpectralMeasure` | Quantifies frequency-tagging / SSVEP / RIFT responses at named frequencies (a fundamental, its harmonics, or intermodulation terms): power, SNR, inter-trial phase-locking, and, against an optional photodiode reference, coherence and phase-lag, per channel and bin; batch-exported via the Export/Report tab's **Spectral & Report** button. The coherence is the frame-averaged estimator by default (the one that agrees with EEGLAB's `newcrossf` and the Coherence Map); the biased single-window estimator and `newcrossf` itself are options, and the report says which was used. Shown in the ribbon as "Spectral Measure". See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `Covariance` | Channel-by-channel covariance or correlation matrix per bin, pooled over a bin's trials within a time window (BrainVision Analyzer's Covariance module, extended): optional Ledoit-Wolf shrinkage toward a scaled identity for a well-conditioned estimate, complete-observation deletion rather than pairwise, and the condition number reported before and after shrinkage. |
 | `CrossCorrelation` | Averaged cross-correlation of each channel to a reference channel: the Pearson correlation at each lag, computed per trial and averaged over a bin's trials, plus the peak correlation and the lag it occurs at. A positive lag means the channel follows the reference. Shown in the ribbon as "Cross Correlation". |
 | `CoherenceMap` | Time-resolved coherence of every channel to a reference (e.g. a photodiode) as a per-channel time x frequency heatmap, via a Morlet wavelet, a fixed-window STFT (Hann or boxcar taper) or a filter-Hilbert band-pass: the RIFT-figure view (Dimigen et al., 2025). The reference can be a recorded channel or a synthetic sine. Shown in the ribbon as "Coherence Map". |
-| `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the reference's auto-detected tagging frequency. Shown in the ribbon as "CohTopo". |
+| `CoherenceTopography` | Scalp head-map of every channel's coherence to a reference (e.g. a photodiode) per bin, at the tagging frequency read from the reference's own spectrum (so a 30 Hz condition is drawn at 30 Hz, not at a harmonic inside a search band). Frame-averaged coherence by default, on the same scale as the Coherence Map. Shown in the ribbon as "CohTopo". |
 
 `TimeFrequency`'s own grid view, one event-related spectral perturbation
 (ERSP) heatmap per bin, channel-stepped and baseline-corrected:
@@ -1822,6 +1822,21 @@ tagging paper prints; that split exists because the whole plane for a
 64-channel montage runs to about 37 MB per recording, where the trace is
 about 1 MB. Neither carries a test: the inference in a tagging design is on
 the scalar coherence, which the sections above already handle.
+
+**How the coherence is estimated.** A coherence to a reference depends heavily on
+how it is estimated, and Alakazam has three estimators that are not interchangeable.
+The default, used by Spectral Measure, Coherence Topography and drawn by the
+Coherence Map, is the **frame-averaged** coherence (`TransTools.FrameCoherence`):
+overlapping frames, each read at the row's exact frequency, the coherence across
+trials taken per frame and averaged. On ten RIFT recordings it agrees with EEGLAB's
+`newcrossf` to 0.001 and needs no EEGLAB. The **single-window** estimator (one
+Fourier coefficient per trial over the whole epoch) reads 2.4 to 2.9 times higher
+because it is biased upwards; it stays as an option. `newcrossf` stays as the
+reference implementation, and reads a row only inside its band (a row outside it is
+missing, with a warning, not read at the band edge). The report states which
+estimator its coherence values used. A node made before the method was recorded
+keeps the estimator it was made with, so recalculating it reproduces its numbers.
+[`Docs/dimigen.md`](Docs/dimigen.md#which-coherence-estimator) has the comparison.
 
 Both figures **follow the electrodes named in the Spectral Measure rows**. With
 two rows on Oz, the trace and the map show Oz alone, in colour and with no grey

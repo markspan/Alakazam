@@ -68,7 +68,7 @@ classdef CoherenceTopographyView < AlakazamView
             % constructor comment for why (a real reported regression when
             % this order was briefly swapped for cross-file consistency).
             TransTools.AddSharedColorbar(this.Grid, axRow, 2, parula, ...
-                [0, this.EEG.CohTopoLimit], sprintf('Coherence to %s', this.EEG.CohTopoRef));
+                [0, this.EEG.CohTopoLimit], sprintf('Coherence to %s (%s)', this.EEG.CohTopoRef, methodLabel(this.EEG)));
         end
 
     end
@@ -134,5 +134,15 @@ classdef CoherenceTopographyView < AlakazamView
                 this.BinDropdown.Value = idx;
             end
         end
+    end
+end
+
+function label = methodLabel(eeg)
+%METHODLABEL  Which estimator made the values, in words for the colour bar.
+%   A topography made before the method was recorded used the single window.
+    if isfield(eeg, 'CohTopoMethod') && strcmpi(eeg.CohTopoMethod, 'frames')
+        label = 'frame-averaged';
+    else
+        label = 'single window';
     end
 end

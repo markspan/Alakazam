@@ -11,11 +11,11 @@ to carry out the same steps here.
 > paper's analysis was done with **EEGLAB** (`newcrossf`, `pop_eegfiltnew`,
 > `runica`, ICLabel), which is mature and validated. Alakazam re-implements the
 > same maths, and [one comparison with the paper's own
-> statistics](#checked-against-the-paper) agrees closely at electrode Oz. That is
-> a comparison with the numbers printed in the preprint, not a run of `newcrossf`
-> on identical input, so before trusting any other Alakazam number, run one
-> subject through both and compare (in particular, the coherence spectrum at Oz
-> against `newcrossf('coher')`).
+> statistics](#checked-against-the-paper) agrees closely at electrode Oz, and
+> [`newcrossf` run on identical input](#which-coherence-estimator) agrees with
+> Alakazam's default coherence to about 0.001. Both are at one electrode, on one
+> study's recordings, so before trusting any other Alakazam number, run one
+> subject through both and compare.
 
 ## The analysis, step by step
 
@@ -33,8 +33,8 @@ the photodiode** that recorded the flicker.
 | ICA + ICLabel, remove **Eye and Muscle** >= 90% | **AutoEyeICA** (Eye, auto) or manual **ICA** (pick any class by hand) | partial, see caveat 1 |
 | No baseline correction | omit the Baseline step | |
 | **Cross-coherence EEG x photodiode**, STFT 510 ms, pad 4, 52-68 Hz @ ~0.49 Hz, magnitude-squared, trial-averaged | **Coherence Map** (STFT: `WindowMs` 510, `PadRatio` 4, band 52-68) | implements the paper's Eq. 1 exactly (trial-averaged cross-spectrum / autospectra) |
-| Mean coherence topography during the steady-state interval (Fig 1C) | **Coherence Topography** (one scalp head-map per bin) | frequency auto-detected from the photodiode per bin (60 vs 64), or fixed; restrict to the steady-state window with its Start/Stop (ms) fields |
-| Per-condition scalar coherence at Oz at the target frequency | **Spectral Measure** (coherence to reference at named frequencies, per channel/bin) -> tidy CSV | one value per subject/condition, ready for stats |
+| Mean coherence topography during the steady-state interval (Fig 1C) | **Coherence Topography** (one scalp head-map per bin) | frequency taken from the photodiode's own spectral peak per bin (60, 64 or 30 Hz), or fixed; frame-averaged coherence, on the same scale as the map; restrict to the steady-state window with its Start/Stop (ms) fields |
+| Per-condition scalar coherence at Oz at the target frequency | **Spectral Measure** (coherence to reference at named frequencies, per channel/bin) -> tidy CSV | one value per subject/condition, ready for stats; the default estimator is the frame-averaged one that matches `newcrossf`, see [Which coherence estimator](#which-coherence-estimator) |
 | Paired one-tailed t-tests + 5000-permutation | tidy CSV (+ auto-generated R: RM-ANOVA / pairwise-t) | the exact one-tailed / permutation tests are a few lines of your own R, see caveat 3 |
 | Dropped-frame / stimulation-fidelity check | -- | out of scope: a photodiode/camera timing analysis, not EEG |
 
@@ -102,11 +102,12 @@ What this supports:
 
 What it does not show:
 
-- **It compares with the numbers printed in the preprint, not with a run of
-  `newcrossf` on identical input.** The preprint's own preprocessing files were not
-  used, and the template's chain differs from the paper's in the ICA (eye components
-  only, where the paper also removed muscle components), the filter design and the
-  960 Hz resampling rate.
+- **It compares with the numbers printed in the preprint, not with the authors'
+  own preprocessed data.** (A run of `newcrossf` on Alakazam's own preprocessed
+  epochs is [below](#which-coherence-estimator).) The preprint's own preprocessing
+  files were not used, and the template's chain differs from the paper's in the ICA
+  (eye components only, where the paper also removed muscle components), the filter
+  design and the 960 Hz resampling rate.
 - **The peripheral condition does not replicate under either reference.** It is the
   weakest effect in the paper and the most sensitive to small differences.
 - **Only Oz was checked**, and only the tagged frequencies.
@@ -115,6 +116,48 @@ To repeat it: export the coherence for Oz alone with
 `exportCoherenceCSVs(entries, stem, struct('Channels', {{'Oz'}}))`, average each
 participant's map over the steady-state frames at the target frequency and at the
 other condition's frequency, and compare the two with a paired test.
+
+## Which coherence estimator
+
+Alakazam can estimate the coherence to the photodiode three ways, and they are not
+interchangeable. Measured on the same ten recordings and the same epochs (Oz, the
+template's steady-state window), mean (SD) across participants:
+
+| Cell | Coherence Map (STFT) | `newcrossf` | **Frame-averaged** (default) | Single window |
+|---|---|---|---|---|
+| 60 Hz, in 60 Hz trials | 0.277 (0.199) | 0.282 (0.201) | **0.283 (0.202)** | 0.677 (0.282) |
+| 64 Hz, in 64 Hz trials | 0.231 (0.165) | 0.238 (0.170) | **0.238 (0.169)** | 0.659 (0.261) |
+| 30 Hz, in 30 Hz trials (n = 3) | 0.388 (0.314) | 0.065 (0.009) | **0.390 (0.315)** | 0.588 (0.299) |
+
+- **Frame-averaged** is the estimator of record (`TransTools.FrameCoherence`). The
+  signals are cut into frames of 510 samples slid with 75% overlap, each frame is
+  read at the row's exact frequency, the coherence across trials is taken per frame
+  and the frames are averaged. Over the 60 cells inside `newcrossf`'s band it
+  differs from `newcrossf` by 0.001 on average (0.004 at most, r = 1.000), and from
+  the Coherence Map by 0.003, where the map can only be read on its FFT grid (64 Hz
+  is read at 64.22 Hz). It needs no EEGLAB. Its group means, 0.283 and 0.238, sit
+  next to the paper's 0.280 and 0.241.
+- **Single window** takes one Fourier coefficient per trial over the whole epoch. It
+  reads 2.4 to 2.9 times higher on the same data, because far fewer independent
+  samples go into the average and coherence is biased upwards by exactly that. It
+  was the Spectral Measure and Coherence Topography default, which is why the
+  topography's colour scale (0.6 to 0.9) never matched the map's (0.13 to 0.3). It
+  stays as an option, named as such in the report.
+- **`newcrossf`** stays as the reference implementation, and needs EEGLAB. It reads
+  a row only inside its band (52 to 68 Hz in the template). A row outside it used to
+  be read at the band edge and reported as the row's own coherence: the 30 Hz value
+  above is 0.065 for that reason, where the true value is about 0.39. It is now
+  missing, with a warning.
+
+The tagging frequency has the same problem in a smaller form. Coherence Topography
+used to search a band (52 to 68 Hz) for the reference's strongest evoked component, so
+the 30 Hz SSVEP condition was drawn at its 60 Hz harmonic; it now takes each bin's
+frequency from the reference's own spectrum, which reads 63.97, 60.01 and 30.00 Hz
+here. The band search is still there as an option.
+
+Nodes made before this keep the estimator they were made with: options with no method
+mean `newcrossf` if that option was on and the single window if it was off, so
+recalculating an old node reproduces its numbers. A new run offers frame-averaged.
 
 ## In short
 
@@ -125,5 +168,6 @@ auto-detected tagging frequency (**Coherence Topography**) -- is directly availa
 in Alakazam, which was in part designed around exactly this analysis. What you
 still handle outside or adapt: the exact `eegfiltnew` filter, the Muscle-removal and
 EOG-in-ICA montage choices, and the specific statistics -- plus a like-for-like
-check against the original EEGLAB scripts before reporting anything (the comparison
-above used only the numbers printed in the preprint).
+check against the original EEGLAB scripts before reporting anything (the comparisons
+above are with the numbers printed in the preprint and with `newcrossf` on Alakazam's
+own epochs, not with the authors' preprocessed data).
