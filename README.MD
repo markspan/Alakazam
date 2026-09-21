@@ -367,7 +367,13 @@ the two plots. It is the fastest way to put two conditions, or two subjects, on
 the same axes.
 
 **Right-click a node and choose Apply to All Raw Files.** The same replay, to
-every recording in the workspace at once.
+every recording in the workspace at once. With the Parallel Computing Toolbox
+installed, several recordings are processed at the same time, each in its own
+MATLAB worker, and their results appear in the tree as each one finishes. How
+many run at once depends on the cores and, usually more, on the free memory,
+since each worker holds a whole recording. The first run starts the workers,
+which takes a little while; later runs reuse them. **Settings > Processing**
+switches this off or sets a maximum.
 
 **Right-click and Save Template**, then **Apply Template** later. This writes
 the pipeline to a file, which is what you want when the next batch of subjects
@@ -2045,8 +2051,8 @@ written to disk via **Save WorkSpace**.
 ### Settings
 
 **Global...**, located in the Alakazam tab's **Settings** group, opens the
-application's preference dialog. These settings govern display behaviour
-uniformly, independent of the active workspace.
+application's preference dialog. These settings govern display and batch
+processing uniformly, independent of the active workspace.
 
 - **Graphics** tab: ERP-plot polarity (positive deflection oriented upward
   or downward), a shared versus per-electrode y-axis, the
@@ -2057,6 +2063,11 @@ uniformly, independent of the active workspace.
 - **Frequency bands** tab: the named frequency ranges (label, lower and
   upper bound, colour) shaded beneath the Fourier plot; bands may be
   added, modified, or removed here.
+- **Processing** tab: whether **Apply to All Raw Files** processes several
+  recordings in parallel (on by default, when the Parallel Computing Toolbox
+  is installed), and the most it runs at once. The automatic choice (0)
+  takes the smallest of the number of recordings, the physical cores, and
+  what the free memory allows for the largest recording.
 
 The epoch image, trials grouped by bin (Prime/Target x related/unrelated):
 

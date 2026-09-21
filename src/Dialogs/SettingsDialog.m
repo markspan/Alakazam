@@ -354,6 +354,15 @@ classdef SettingsDialog < handle
             switch item.type
                 case 'number'
                     handle = uieditfield(grid, 'numeric', 'Value', current);
+                    if ~isempty(item.limits)
+                        % A stored value outside the limits (an edited file)
+                        % is clamped rather than refused by the edit field.
+                        handle.Value = min(max(current, item.limits(1)), item.limits(2));
+                        handle.Limits = item.limits;
+                    end
+                    if isequal(item.step, 1)
+                        handle.RoundFractionalValues = 'on';
+                    end
                 case 'text'
                     handle = uieditfield(grid, 'text', 'Value', char(current));
                 case 'choice'

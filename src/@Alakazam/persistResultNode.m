@@ -22,20 +22,11 @@ function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~
 %   children this way, by re-deriving the same folder name from the
 %   node's own file path rather than storing it anywhere.
 
-    % Timestamped key, e.g. "Fourier051423". The DDhhMMss format is
-    % kept for backwards compatibility with existing cache trees. The
-    % key stays a char array because it is used to build a file name.
-    nodeKey = [transformId datestr(datetime('now'), 'DDhhMMss')]; %#ok<DATST>
-
-    % The result is cached in a folder named after the source dataset,
-    % which is how the tree is later rebuilt from disk.
-    [parentDir, parentName] = fileparts(sourceFile);
-    childDir = fullfile(parentDir, parentName);
-    if ~exist(childDir, "dir")
-        mkdir(childDir);
-    end
-
-    resultEEG.File = fullfile(childDir, [nodeKey '.mat']);
+    % A timestamped file, e.g. "Fourier051423.mat", in a folder named after
+    % the source dataset, which is how the tree is later rebuilt from disk.
+    % resultCacheFile is shared with replayBranch (Apply to All Raw Files on
+    % parallel workers), so both put results in the same place.
+    resultEEG.File = resultCacheFile(sourceFile, transformId);
     resultEEG.id   = transformId;
 
     % Add the node to the data browser and select it, in whichever
