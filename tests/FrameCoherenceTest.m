@@ -156,6 +156,34 @@ classdef FrameCoherenceTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(coh(1), 5 * coh(2));
         end
 
+        function aSingleFrameIsTheCoherenceOfThatFrame(testCase)
+        %ASINGLEFRAMEISTHECOHERENCEOFTHATFRAME  When only one frame fits, the
+        %   frame index is a row vector, and the segment came out as a column: the
+        %   product with the kernel failed, so SpectralMeasure could not run with
+        %   the default 510-sample frame on any epoch shorter than about 640
+        %   samples. Both ways of getting one frame are checked, a window longer
+        %   than the epoch (shortened to it) and one a few samples shorter, against
+        %   the formula written out for that one frame.
+            rng(14);
+            nT = 200;
+            [X, R] = testCase.noisyPair(nT, 15, 20, 0.6);
+            for win = [510 190]
+                [coh, lag, n] = TransTools.FrameCoherence(X, R, 250, [20 33], struct('WinSize', win));
+
+                used = min(win, nT);
+                taper = 0.5 - 0.5 * cos(2 * pi * (0:used - 1).' / (used - 1));
+                kernel = exp(-2i * pi * ((0:used - 1).' * [20 33]) / 250) .* taper;
+                Cx = X(1:used, :).' * kernel;                 % trials x frequencies
+                Cr = R(1:used, :).' * kernel;
+                Sxy = sum(Cx .* conj(Cr), 1);
+                want = abs(Sxy) .^ 2 ./ (sum(abs(Cx) .^ 2, 1) .* sum(abs(Cr) .^ 2, 1));
+
+                testCase.verifyEqual(n, 1, sprintf('A %d-sample window on %d samples fits once.', win, nT));
+                testCase.verifyEqual(coh, want, 'AbsTol', 1e-12);
+                testCase.verifyEqual(lag, angle(Sxy), 'AbsTol', 1e-12);
+            end
+        end
+
         function anUnknownTaperIsRefused(testCase)
             [X, R] = testCase.noisyPair(300, 5, 15, 0.7);
             testCase.verifyError(@() TransTools.FrameCoherence(X, R, 250, 15, ...

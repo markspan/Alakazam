@@ -42,6 +42,13 @@ function txt = testCaption(testId)
                    'repeated-measures ANOVA, a subject missing one condition still ' ...
                    'contributes their other data rather than being dropped entirely.'];
         case 'emmeans_holm'
+            % Unconditional: the within-subjects and mixed designs run these
+            % whatever the model's own test gave (lmmSection's 'bin' and
+            % 'both' post-hoc policies), so the caption must not say otherwise.
+            txt = ['Holm-corrected pairwise comparisons from the fitted model above, ' ...
+                   'corrected among themselves. They are shown whether or not the ' ...
+                   'model''s own test was significant.'];
+        case 'emmeans_holm_gated'
             txt = ['Holm-corrected pairwise follow-up comparisons from the fitted model ' ...
                    'above, run only because the effect they follow up was significant.'];
         case 'circular_bootstrap_ci'

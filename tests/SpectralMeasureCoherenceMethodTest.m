@@ -124,6 +124,68 @@ classdef SpectralMeasureCoherenceMethodTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(result.spectralMeasures{1}.coherence, 0.5);
         end
 
+        function theSavedSettingsKeepABlankWindowBlank(testCase)
+        %THESAVEDSETTINGSKEEPABLANKWINDOWBLANK  The node's settings used to hold
+        %   the resolved values, NaN for a blank window, and recalculating the
+        %   node then failed in the dialog: a numeric edit field refuses NaN.
+        %   The choice is now saved as made, blank as [], and what the estimator
+        %   used is recorded beside it, the frame here shortened to the epoch.
+            EEG = testCase.recording(20, 30);
+            blank = testCase.options(struct('Method', 'frames', 'WinSize', 510));
+            legacy = testCase.options(struct('Method', 'frames', 'WinSize', 510, 'TimeStart', NaN, 'TimeStop', NaN));
+
+            [a, stored] = SpectralMeasure(EEG, blank);
+            [~, storedLegacy] = SpectralMeasure(EEG, legacy);
+            replayed = SpectralMeasure(EEG, stored);
+
+            for s = {stored, storedLegacy}
+                testCase.verifyEmpty(s{1}.crossf.TimeStart);
+                testCase.verifyEmpty(s{1}.crossf.TimeStop);
+                testCase.verifyEmpty(s{1}.crossfUsed.TimeStart, 'The whole epoch is recorded as [], not NaN.');
+                testCase.verifyEmpty(s{1}.crossfUsed.TimeStop);
+            end
+            testCase.verifyEqual(stored.crossf.WinSize, 510, 'The choice is what the analyst asked for.');
+            testCase.verifyEqual(stored.crossfUsed.WinSize, 500, ...
+                'A 510-sample frame on a 500-sample epoch is shortened to the epoch, and the record says so.');
+            testCase.verifyEqual(replayed.spectralMeasures{1}.coherence, a.spectralMeasures{1}.coherence, ...
+                'Replaying the saved choice reproduces the numbers.');
+        end
+
+        function aWindowWithOneEndIsRecordedAsTheWholeEpoch(testCase)
+        %AWINDOWWITHONEENDISRECORDEDASTHEWHOLEEPOCH  Both estimators average every
+        %   frame unless both ends are given, so the record must not claim a range.
+            EEG = testCase.recording(20, 30);
+            [~, stored] = SpectralMeasure(EEG, testCase.options(struct('Method', 'frames', 'WinSize', 100, ...
+                'TimeStart', 200)));
+
+            testCase.verifyEqual(stored.crossf.TimeStart, 200);
+            testCase.verifyEmpty(stored.crossfUsed.TimeStart);
+            testCase.verifyEmpty(stored.crossfUsed.TimeStop);
+        end
+
+        function anAutomaticBandFollowsTheRowsOnRecalculation(testCase)
+        %ANAUTOMATICBANDFOLLOWSTHEROWSONRECALCULATION  A blank newcrossf band is
+        %   worked out from the rows. It used to be saved over the choice, so a
+        %   node recalculated after its row moved kept the old band, and the row,
+        %   now outside it, came back missing.
+            testCase.assumeTrue(testCase.haveNewcrossf(), 'EEGLAB''s newcrossf is not available.');
+            opts = testCase.options(struct('Method', 'newcrossf', 'WinSize', 100, 'PadRatio', 4, 'TimesOut', 60));
+
+            [~, stored] = SpectralMeasure(testCase.recording(20, 30), opts);
+            testCase.verifyEmpty(stored.crossf.MinFreq, 'An automatic band stays automatic.');
+            testCase.verifyEmpty(stored.crossf.MaxFreq);
+            testCase.verifyEqual([stored.crossfUsed.MinFreq stored.crossfUsed.MaxFreq], [12 28]);
+
+            stored.rows{1}.freq = '40';
+            result = [];
+            testCase.verifyWarningFree(@() recalculate());
+            function recalculate()
+                [result, stored] = SpectralMeasure(testCase.recording(40, 30), stored);
+            end
+            testCase.verifyEqual([stored.crossfUsed.MinFreq stored.crossfUsed.MaxFreq], [32 48]);
+            testCase.verifyGreaterThan(result.spectralMeasures{1}.coherence, 0.5);
+        end
+
         function anUnknownMethodIsRefused(testCase)
             EEG = testCase.recording(20, 30);
             opts = testCase.options(struct('Method', 'wavelet'));

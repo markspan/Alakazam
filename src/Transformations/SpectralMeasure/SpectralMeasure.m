@@ -161,6 +161,20 @@ freqHz = spectralFreqSpecs(freqExprs, fundamentals);
 %  band exactly) always win. A row outside that band cannot be read from
 %  newcrossf's image, and is reported as missing (see crossfCoherence), not
 %  as the value at the nearest edge.
+%
+%  What the analyst chose and what the estimator ran with are kept apart.
+%  CHOICE (saved as options.crossf) keeps a band or window left blank as []
+%  ("auto" / "whole epoch"): it used to be overwritten with the resolved
+%  values, so a recalculated node reopened its dialog with NaN in the window
+%  fields (which an edit field refuses), and an automatic band was frozen at
+%  its first value, leaving a row moved outside it missing. An automatic band
+%  depends only on the rows, which are saved too, so replaying the choice
+%  reproduces the numbers. What was actually used is recorded separately, as
+%  options.crossfUsed, for the report's method paragraph.
+choice = crossf;
+for name = {'MinFreq', 'MaxFreq', 'TimeStart', 'TimeStop'}
+    choice.(name{1}) = numOr(TransTools.FieldOr(choice, name{1}, []), []);
+end
 if any(strcmp(cohMethod, {'frames', 'newcrossf'}))
     crossf.WinSize   = TransTools.FieldOr(crossf, 'WinSize', 510);     % samples, matches newcrossf's own 'winsize'
     crossf.PadRatio  = TransTools.FieldOr(crossf, 'PadRatio', 4);
@@ -178,11 +192,17 @@ if strcmp(cohMethod, 'newcrossf')
     crossf.MinFreq   = numOr(TransTools.FieldOr(crossf, 'MinFreq', NaN), min(freqHz) - 8);
     crossf.MaxFreq   = numOr(TransTools.FieldOr(crossf, 'MaxFreq', NaN), max(freqHz) + 8);
 end
+for name = {'WinSize', 'PadRatio', 'TimesOut'}   % no "auto" meaning, so the default is the choice
+    if isfield(crossf, name{1})
+        choice.(name{1}) = crossf.(name{1});
+    end
+end
+[~, nsamp, ~] = size(EEG.data);
 options.coherenceMethod = cohMethod;
-options.crossf = crossf;   % normalised form persists onto this node, like options.rows above
+options.crossf = choice;
+options.crossfUsed = coherenceUsed(crossf, nsamp);
 
 %% Build tapers (nsamp x K)
-[~, nsamp, ~] = size(EEG.data);
 srate = EEG.srate;
 nyq   = srate / 2;
 tapers = buildTapers(method, nsamp, nTapers);
@@ -464,6 +484,35 @@ function m = coherenceMethodOf(options, crossf)
         throw(MException('Alakazam:SpectralMeasure', ...
             ['Problem in SpectralMeasure: I''m afraid "%s" is not a coherence method I know. ' ...
              'Please use frames, window or newcrossf.'], m));
+    end
+end
+
+function used = coherenceUsed(crossf, nsamp)
+%COHERENCEUSED  The settings the coherence estimator actually ran with, for the
+%   record: the frame length it really used (TransTools.FrameCoherence shortens
+%   a window longer than the epoch to the epoch), the averaging range, and
+%   newcrossf's band once it has been worked out. The range is [] for the whole
+%   epoch, including when only one end was given, since both estimators then
+%   average over every frame.
+    used = struct('Method', crossf.Method);
+    if ~any(strcmp(crossf.Method, {'frames', 'newcrossf'}))
+        return;
+    end
+    used.WinSize = crossf.WinSize;
+    if strcmp(crossf.Method, 'frames')
+        used.WinSize = min(max(4, round(double(crossf.WinSize))), nsamp);
+    end
+    used.TimeStart = [];
+    used.TimeStop = [];
+    if ~isnan(crossf.TimeStart) && ~isnan(crossf.TimeStop)
+        used.TimeStart = crossf.TimeStart;
+        used.TimeStop = crossf.TimeStop;
+    end
+    if strcmp(crossf.Method, 'newcrossf')
+        used.PadRatio = crossf.PadRatio;
+        used.TimesOut = crossf.TimesOut;
+        used.MinFreq = crossf.MinFreq;
+        used.MaxFreq = crossf.MaxFreq;
     end
 end
 

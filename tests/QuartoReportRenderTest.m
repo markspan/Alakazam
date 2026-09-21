@@ -187,6 +187,26 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 '"succeeded" while reporting no analysis. See ' testCase.HtmlFile '.']);
         end
 
+        function aBayesFactorIsReportedBesideTheTTest(testCase)
+        %ABAYESFACTORISREPORTEDBESIDETHETTEST  The reading guide promised
+        %   Bayes factors beside every t-test for a long time while no
+        %   section computed one; the BayesFactor package had even dropped
+        %   out of the setup chunk. Parsing proves nothing here, since the
+        %   helpers can parse and still return NA for every channel, so this
+        %   reads the rendered table.
+        %
+        %   The fixture's paired effect is exact, t = 10.00 on 24 df, and for
+        %   a paired design the default JZS Bayes factor depends only on t
+        %   and n. At that t it is in the millions, so the table has to show
+        %   the capped value and the strongest reading, and nothing less.
+            testCase.verifySubstring(testCase.PlainText, 'BF10', ...
+                ['The rendered report has no BF10 column. See ' testCase.HtmlFile '.']);
+            testCase.verifySubstring(testCase.PlainText, '> 1000', ...
+                'A t of 10 on 24 df should give a Bayes factor shown as > 1000.');
+            testCase.verifySubstring(testCase.PlainText, 'extreme for a difference', ...
+                'A Bayes factor above 100 should be read as extreme evidence for a difference.');
+        end
+
         function theCircularSectionComputesRatherThanParses(testCase)
         %THECIRCULARSECTIONCOMPUTESRATHERTHANPARSES  The one section whose R
         %   no other test runs.
@@ -549,8 +569,18 @@ function packages = reportPackages()
 %REPORTPACKAGES  The R packages the generated setup chunk loads, so
 %   rPackagesPresent can be asked about exactly them and the chunk's own
 %   install.packages() branch can never fire during a test run.
-    packages = {'tidyverse', 'rstatix', 'coin', 'ggpubr', 'gt', ...
-        'lme4', 'lmerTest', 'emmeans', 'performance', 'effectsize'};
+%
+%   READ FROM A GENERATED REPORT, NOT TYPED OUT HERE. This used to be a
+%   hand-kept copy of the generator's list, and a copy drifts: BayesFactor
+%   was added to the report when its Bayes factors went in, and a stale copy
+%   here would have let this whole class run against a machine without it,
+%   the setup chunk would then have tried to install it from the network in
+%   the middle of a unit test. Parsing the list out of real output means the
+%   two cannot disagree.
+    qmd = generateQuartoReport(ReportFixtures.erpEntries(), 'x.csv');
+    block = regexp(qmd, 'pkgs <- c\((.*?)\)', 'tokens', 'once');
+    packages = regexp(block{1}, '"([^"]+)"', 'tokens');
+    packages = cellfun(@(c) c{1}, packages, 'UniformOutput', false);
 end
 
 function txt = readWholeFile(path)

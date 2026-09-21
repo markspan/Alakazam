@@ -52,6 +52,23 @@ classdef SpectralMeasureDialogTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(crossf.Method, 'frames');
         end
+
+        function aNodeSavedWithNaNForItsWindowOpens(testCase)
+        %ANODESAVEDWITHNANFORITSWINDOWOPENS  Recalculating a SpectralMeasure node
+        %   failed before the dialog appeared ("'Value' must be a double scalar
+        %   within the range of 'Limits'"): the node had saved its blank window as
+        %   NaN, as the RIFT templates did, and a numeric edit field refuses NaN.
+        %   The window reads as blank ("whole epoch") and comes back as [].
+            crossf = testCase.runDialog(testCase.stored(struct('Method', 'frames', 'WinSize', 510, ...
+                'TimeStart', NaN, 'TimeStop', NaN, 'MinFreq', NaN, 'MaxFreq', NaN), 'frames'));
+
+            testCase.verifyEqual(crossf.Method, 'frames');
+            testCase.verifyEmpty(crossf.TimeStart);
+            testCase.verifyEmpty(crossf.TimeStop);
+            testCase.verifyEmpty(crossf.MinFreq);
+            testCase.verifyEmpty(crossf.MaxFreq);
+            testCase.verifyEqual(crossf.WinSize, 510);
+        end
     end
 
     methods (Access = private)

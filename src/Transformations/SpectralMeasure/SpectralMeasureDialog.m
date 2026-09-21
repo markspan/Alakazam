@@ -230,6 +230,10 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
             end
         end
         if any(strcmp(newCrossf.Method, {'frames', 'newcrossf'}))
+            if isempty(newCrossf.TimeStart) ~= isempty(newCrossf.TimeStop)
+                uialert(fig, ['Give both a window start and a window stop, or leave both blank to ' ...
+                    'average over the whole epoch.'], 'Check the coherence settings'); return;
+            end
             if ~isempty(newCrossf.TimeStart) && ~isempty(newCrossf.TimeStop) && newCrossf.TimeStart >= newCrossf.TimeStop
                 uialert(fig, 'Window start must be before Window stop for the coherence averaging window.', ...
                     'Check the coherence settings'); return;
@@ -385,7 +389,16 @@ function rows = rowsFromData(data)
 end
 
 function v = getField(s, name, default)
-    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)); v = s.(name); else; v = default; end
+%GETFIELD  S.(NAME), or DEFAULT when it is missing, empty or NaN. Nodes made
+%   before SpectralMeasure kept the analyst's choice apart from the values it
+%   resolved hold NaN for a blank window ("whole epoch"), and so did the RIFT
+%   templates; a numeric edit field refuses NaN, so it has to read as unset.
+    if isstruct(s) && isfield(s, name) && ~isempty(s.(name)) ...
+            && ~(isnumeric(s.(name)) && isscalar(s.(name)) && isnan(s.(name)))
+        v = s.(name);
+    else
+        v = default;
+    end
 end
 
 function val = pickChoice(want, choices)

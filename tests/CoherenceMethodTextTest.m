@@ -49,8 +49,68 @@ classdef CoherenceMethodTextTest < matlab.unittest.TestCase
                 struct('crossf', struct('enabled', false))));
 
             testCase.verifySubstring(on, 'newcrossf');
-            testCase.verifySubstring(on, 'between 52 and 68 Hz');
+            testCase.verifySubstring(on, 'band was 52 to 68 Hz');
+            testCase.verifyFalse(contains(on, 'automatically'), ...
+                'A node from before the resolved values were recorded cannot say its band was automatic.');
             testCase.verifySubstring(off, 'a single window');
+        end
+
+        function theNumbersAreTheOnesTheRunUsed(testCase)
+        %THENUMBERSARETHEONESTHERUNUSED  The paragraph once read "(between 52
+        %   and 68 Hz)" whatever the analyst had set, because SpectralMeasure
+        %   wrote its first automatic band over the choice. Every figure now
+        %   comes from what the estimator used: here a frame shortened to 240
+        %   samples, an averaging range, and a band worked out from the rows.
+            frames = ReportSections.coherenceMethodText(testCase.entryWith(struct( ...
+                'coherenceMethod', 'frames', ...
+                'crossf', struct('Method', 'frames', 'WinSize', 510, 'TimeStart', 883, 'TimeStop', 8594), ...
+                'crossfUsed', struct('Method', 'frames', 'WinSize', 240, 'TimeStart', 883, 'TimeStop', 8594))));
+            auto = ReportSections.coherenceMethodText(testCase.entryWith(struct( ...
+                'coherenceMethod', 'newcrossf', ...
+                'crossf', struct('Method', 'newcrossf', 'WinSize', 480, 'MinFreq', [], 'MaxFreq', []), ...
+                'crossfUsed', struct('Method', 'newcrossf', 'WinSize', 480, 'TimeStart', [], 'TimeStop', [], ...
+                    'MinFreq', 55, 'MaxFreq', 79))));
+            chosen = ReportSections.coherenceMethodText(testCase.entryWith(struct( ...
+                'coherenceMethod', 'newcrossf', ...
+                'crossf', struct('Method', 'newcrossf', 'WinSize', 480, 'MinFreq', 40, 'MaxFreq', 90), ...
+                'crossfUsed', struct('Method', 'newcrossf', 'WinSize', 480, 'TimeStart', [], 'TimeStop', [], ...
+                    'MinFreq', 40, 'MaxFreq', 90))));
+
+            testCase.verifySubstring(frames, 'frames of about 250 ms');
+            testCase.verifySubstring(frames, 'the frames centred between 883 and 8594 ms are averaged');
+            testCase.verifySubstring(auto, 'band was 55 to 79 Hz, set automatically');
+            testCase.verifySubstring(auto, 'the positions are averaged over the whole epoch');
+            testCase.verifySubstring(chosen, 'band was 40 to 90 Hz.');
+            testCase.verifyFalse(contains(chosen, 'automatically'));
+            for t = {frames, auto, chosen}
+                testCase.verifyFalse(contains(t{1}, '52'), 'No default band may be written into the prose.');
+                testCase.verifyFalse(contains(t{1}, 'NaN'));
+            end
+        end
+
+        function aNodeSavedWithNaNForTheWindowReadsAsTheWholeEpoch(testCase)
+        %ANODESAVEDWITHNANFORTHEWINDOWREADSASTHEWHOLEEPOCH  What SpectralMeasure
+        %   saved before the choice and the resolved values were kept apart.
+            text = ReportSections.coherenceMethodText(testCase.entryWith(struct( ...
+                'coherenceMethod', 'frames', 'crossf', struct('WinSize', 480, 'TimeStart', NaN, 'TimeStop', NaN))));
+
+            testCase.verifySubstring(text, 'averaged over the whole epoch');
+            testCase.verifyFalse(contains(text, 'NaN'));
+        end
+
+        function oneEstimatorWithDifferentSettingsIsSaidToDiffer(testCase)
+        %ONEESTIMATORWITHDIFFERENTSETTINGSISSAIDTODIFFER  The paragraph used to
+        %   describe only the first recording of each estimator, so a second one
+        %   with another frame length was silently described by the first.
+            entries = [testCase.entryWith(struct('coherenceMethod', 'frames', 'crossf', struct('WinSize', 480))), ...
+                       testCase.entryWith(struct('coherenceMethod', 'frames', 'crossf', struct('WinSize', 960)))];
+
+            text = ReportSections.coherenceMethodText(entries);
+
+            testCase.verifySubstring(text, 'same estimator with different settings');
+            testCase.verifySubstring(text, 'frames of about 500 ms');
+            testCase.verifySubstring(text, 'frames of about 1000 ms');
+            testCase.verifyFalse(contains(text, 'do not share one estimator'));
         end
 
         function recordingsThatDisagreeAreSaidNotToBeComparable(testCase)

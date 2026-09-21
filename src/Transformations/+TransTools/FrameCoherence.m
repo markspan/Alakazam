@@ -82,8 +82,13 @@ function [coh, lag, nFrames] = FrameCoherence(X, R, srate, freqs, opts)
     Cx = zeros(nFrames, nF, nTrials);
     Cr = zeros(nFrames, nF, nTrials);
     for tr = 1:nTrials
-        x = double(X(:, tr));
-        r = double(R(:, tr));
+        % Rows, as ComputeCoherenceMap's own: when only one frame fits, INDEX is
+        % a row vector, and a vector indexed by a vector keeps its own shape, so
+        % a column here gave a win x 1 segment and the product below failed.
+        % That was every epoch less than a quarter window longer than the
+        % window, including any shorter than it (510 samples by default).
+        x = double(X(:, tr)).';
+        r = double(R(:, tr)).';
         Cx(:, :, tr) = x(index) * kernel;
         Cr(:, :, tr) = r(index) * kernel;
     end
