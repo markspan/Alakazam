@@ -394,19 +394,19 @@ classdef SignalView < AlakazamView
         %   on screen is still there afterwards. Stepping by a full window
         %   leaves nothing in common between one view and the next, which is
         %   how you lose your place in a signal that looks alike everywhere.
+            % No column spacing: the buttons sit tight against the slider
+            % they drive, so they read as its ends rather than as separate
+            % controls parked beside it.
             row2 = uigridlayout(this.Grid, [1 4], ...
                 "ColumnWidth", {this.LabelWidthPx, this.StepButtonPx, '1x', this.StepButtonPx}, ...
-                "Padding", [0 0 0 0], "ColumnSpacing", 2);
+                "Padding", [0 0 0 0], "ColumnSpacing", 0);
             row2.Layout.Row = row;
             row2.Layout.Column = [1, 2];
 
             lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);
             lbl.Layout.Column = 1;
 
-            back = uibutton(row2, "Text", "<", "FontSize", 8, ...
-                "Tooltip", "Back three quarters of a window", ...
-                "ButtonPushedFcn", @(~, ~) this.stepTime(-0.75));
-            back.Layout.Column = 2;
+            this.makeStepButton(row2, 2, "<", "Back three quarters of a window", -0.75);
 
             s = uislider(row2, "Limits", [0, 1], "Value", 0, ...
                 "MajorTicks", [], "MinorTicks", [], ...
@@ -415,10 +415,25 @@ classdef SignalView < AlakazamView
                 "ValueChangedFcn", @(~, ~) this.redraw());
             s.Layout.Column = 3;
 
-            forward = uibutton(row2, "Text", ">", "FontSize", 8, ...
-                "Tooltip", "On three quarters of a window", ...
-                "ButtonPushedFcn", @(~, ~) this.stepTime(+0.75));
-            forward.Layout.Column = 4;
+            this.makeStepButton(row2, 4, ">", "On three quarters of a window", +0.75);
+        end
+
+        function makeStepButton(this, parent, column, text, tip, fraction)
+        %MAKESTEPBUTTON  One square step button, centred in its cell.
+        %   A child of a uigridlayout is stretched to fill its cell, and the
+        %   slider rows are taller than the button is wide, so a button put
+        %   straight into one comes out as an upright rectangle. The spacer
+        %   rows above and below hold it to its own width and centre it on
+        %   the slider track beside it.
+            holder = uigridlayout(parent, [3 1], ...
+                "RowHeight", {'1x', this.StepButtonPx, '1x'}, ...
+                "Padding", [0 0 0 0], "RowSpacing", 0);
+            holder.Layout.Column = column;
+
+            button = uibutton(holder, "Text", text, "FontSize", 8, ...
+                "Tooltip", tip, ...
+                "ButtonPushedFcn", @(~, ~) this.stepTime(fraction));
+            button.Layout.Row = 2;
         end
 
         function [lbl, s] = makeSliderRow(this, row, lo, hi, val, tip)
@@ -430,7 +445,7 @@ classdef SignalView < AlakazamView
             % it and the others did not.
             row2 = uigridlayout(this.Grid, [1 4], ...
                 "ColumnWidth", {this.LabelWidthPx, this.StepButtonPx, '1x', this.StepButtonPx}, ...
-                "Padding", [0 0 0 0], "ColumnSpacing", 2);
+                "Padding", [0 0 0 0], "ColumnSpacing", 0);
             row2.Layout.Row = row;
             row2.Layout.Column = [1, 2]; % full width, under both the axes and the channel scrollbar
             lbl = uilabel(row2, "HorizontalAlignment", "right", "FontSize", 8);

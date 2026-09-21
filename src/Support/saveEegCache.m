@@ -5,7 +5,18 @@ function saveEegCache(matfilename, EEG, varargin)
 %   findGrandAverageCandidates can tell what kind of node this is without
 %   loading the .mat, and a MAT record (<matfilename>.meta, see eegCacheMeta)
 %   holding the settings and shape that replaying a branch reads. Extra
-%   arguments are forwarded to save() (e.g. '-v7.3').
+%   arguments are forwarded to save(), EXCEPT the format flags, which this
+%   decides for itself (below).
+%
+%   THE FORMAT IS CHOSEN HERE, NOT BY THE CALLER. Every cache file is now
+%   written uncompressed, as version 7 where it fits and 7.3 where it does
+%   not (see cacheSaveFormat, which has the measurements: ten times faster
+%   to save and thirteen times faster to load, for a tenth more disk). The
+%   importers used to pass '-v7.3' unconditionally, to stay clear of the
+%   version 7 size limit; that is now the size check's job, and a format
+%   flag passed in is dropped rather than added, since save() refuses two
+%   formats at once. Files already on disk load unchanged: load() reads
+%   whichever format a file is in.
 %
 %   Both records are advisory only: readEegCacheInfo and readEegCacheMeta fall
 %   back to a full load, and re-write them, if either is ever missing, stale,
@@ -26,7 +37,14 @@ function saveEegCache(matfilename, EEG, varargin)
     if isfield(EEG, 'icaact') && ~isempty(EEG.icaact)
         EEG.icaact = [];
     end
-    save(matfilename, 'EEG', varargin{:});
+
+    formatFlags = {'-v4', '-v6', '-v7', '-v7.3', '-nocompression', '-compress'};
+    passThrough = varargin(~cellfun(@(a) (ischar(a) || isstring(a)) && ...
+        any(strcmpi(char(a), formatFlags)), varargin));
+
+    sizeInfo = whos('EEG');
+    formatArgs = cacheSaveFormat(sizeInfo.bytes);
+    save(matfilename, 'EEG', formatArgs{:}, passThrough{:});
     writeCacheSidecar(matfilename, eegCacheInfo(EEG));
     writeCacheMeta(matfilename, eegCacheMeta(EEG));
 end

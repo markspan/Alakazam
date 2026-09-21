@@ -55,7 +55,7 @@ function loadSETFile(this, name)
         % -v7.3 on every save, not just the first one -- see loadBVAFile's
         % own comment for why (the same drift was present here too: only
         % the "no cache yet" branch passed it).
-        saveEegCache(matfilename, EEG, '-v7.3');
+        saveEegCache(matfilename, EEG);
     end
     EEG.id = id;
     EEG.File = matfilename;

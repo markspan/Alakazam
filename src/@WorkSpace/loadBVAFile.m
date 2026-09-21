@@ -39,7 +39,7 @@ function loadBVAFile(this, name)
         % to need it would save fine on first import, then fail (or
         % silently hit the default format's 2GB variable limit) the first
         % time its cache went stale and got refreshed.
-        saveEegCache(matfilename, EEG, '-v7.3');
+        saveEegCache(matfilename, EEG);
     end
     EEG.id = id;
     EEG.File = matfilename;

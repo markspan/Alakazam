@@ -57,7 +57,7 @@ function attached = AttachToNode(nodeFile, estimates, maxBytes)
             existing = SourceCache.Attach(existing, keep(k));
         end
         loaded.EEG.sourceEstimate = existing;
-        saveEegCache(nodeFile, loaded.EEG, '-v7.3');
+        saveEegCache(nodeFile, loaded.EEG);
         attached = true;
     catch
         % See the header: the caller's own work stands either way.

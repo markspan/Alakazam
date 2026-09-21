@@ -33,7 +33,7 @@ function loadERPFile(this, name)
         EEG = erpsetToAveraged(loaded.ERP);
         EEG.id   = id;
         EEG.File = matfilename;
-        saveEegCache(matfilename, EEG, '-v7.3');
+        saveEegCache(matfilename, EEG);
         this.EEG = EEG;
     else
         % Cache is at least as new as the raw file: this.EEG only needs to
