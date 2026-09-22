@@ -207,6 +207,37 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
                 'A Bayes factor above 100 should be read as extreme evidence for a difference.');
         end
 
+        function aBayesFactorIsReportedForTheMixedModel(testCase)
+        %ABAYESFACTORISREPORTEDFORTHEMIXEDMODEL  A report of three or more
+        %   conditions is mixed models only, and had no Bayes factor at all
+        %   while its guide promised them. This renders one: 20 people, three
+        %   conditions 2 apart, against small deterministic noise, so the
+        %   Bayes factor for the condition effect has to be overwhelming.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+            n = 20;
+            values = cell(n, 1);
+            for i = 1:n
+                values{i, 1} = i + [0 2 4] + 0.3 * sin(i * [1 2 3]);
+            end
+            entries = ReportFixtures.erpEntries( ...
+                'Bindesc', ReportFixtures.bindesc({'A', 'B', 'C'}), ...
+                'Windows', {ReportFixtures.windowSpec('N400', 'Mean Amplitude', 'Channels', {'Cz'})}, ...
+                'Groups', repmat({''}, 1, n), 'Values', values);
+            qmdFile = ReportFixtures.writeReport(entries, temporary.Folder, 'lmm_bayes');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+            testCase.assertEmpty(errorMessage, sprintf('The mixed-model report did not render:\n%s', errorMessage));
+            text = plainTextOf(readWholeFile(html));
+
+            testCase.verifySubstring(text, 'Bayes Factor for the Condition Effect, by Channel', ...
+                ['The mixed model has no Bayes factor table. See ' html '.']);
+            testCase.verifySubstring(text, 'extreme for a difference', ...
+                'Conditions 2 apart against noise of 0.3 must give extreme evidence for the effect.');
+            testCase.verifySubstring(text, 'Bayes factors appear in each mixed-model section', ...
+                'The guide must say where this report''s Bayes factors are.');
+        end
+
         function theCircularSectionComputesRatherThanParses(testCase)
         %THECIRCULARSECTIONCOMPUTESRATHERTHANPARSES  The one section whose R
         %   no other test runs.
