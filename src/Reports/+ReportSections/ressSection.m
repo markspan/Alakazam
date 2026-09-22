@@ -30,6 +30,10 @@ function text = ressSection(entries)
 %   when a label names none, the bin is only said not to have built the
 %   filter.
 %
+%   A recording with no usable trial of a component's bins has that
+%   component left empty by RESS; the section names those recordings, so a
+%   mean over fewer recordings than the study has is not read as the whole.
+%
 %   See also RESS, TRANSTOOLS.RESSFILTER, REPORTSECTIONS.COHERENCEMETHODTEXT.
     text = '';
     [info, EEG] = firstRessEntry(entries);
@@ -51,13 +55,17 @@ function text = ressSection(entries)
     end
 
     labels = strjoin(cellfun(@ReportSections.mdLit, {info.label}, 'UniformOutput', false), ', ');
-    lines = { ...
+    empty = emptyComponents(entries, {info.label});
+    if ~isempty(empty)
+        empty = [empty {''}];
+    end
+    lines = [{ ...
         '## RESS components and their null' ...
         '' ...
         [labels ' ' plural(numel(info), 'is a RESS component', 'are RESS components') ' (Cohen & Gulbinaite, 2017): ' ...
          describe(info) ' The weights are fitted separately for each recording, so the component, not an ' ...
          'electrode, is what is compared across recordings.'] ...
-        '' ...
+        ''} empty {...
         ['Each filter was fitted to the trials of the bins it was built from and then applied to every ' ...
          'trial. In the other bins the flicker it was built for was absent, so there it shows what the ' ...
          'filter gives on its own: its null. Values in the bins it was built from are measured on the trials ' ...
@@ -93,8 +101,64 @@ function text = ressSection(entries)
         '  cat("\n*No Spectral Measure row reads a RESS component at its own frequency, so there is no null to show.*\n\n")' ...
         '}' ...
         '```' ...
-        ''};
+        ''}];
     text = strjoin(lines, newline);
+end
+
+function sentences = emptyComponents(entries, labels)
+%EMPTYCOMPONENTS  One paragraph per component that some recordings could
+%   not build, naming them. RESS leaves such a component's channel all NaN
+%   (nTrials 0) when a recording has no usable trial of its bins, so its
+%   values there are missing and the table's means leave those recordings
+%   out; a reader has to be told which, and why. {} when every recording
+%   built every component.
+    sentences = {};
+    nRecordings = 0;
+    missing = repmat({{}}, 1, numel(labels));
+    bins = cell(1, numel(labels));
+    for i = 1:numel(entries)
+        E = entries(i).EEG;
+        if ~isfield(E, 'etc') || ~isstruct(E.etc) || ~isfield(E.etc, 'alz') || ...
+                ~isstruct(E.etc.alz) || ~isfield(E.etc.alz, 'ress') || isempty(E.etc.alz.ress)
+            continue;
+        end
+        nRecordings = nRecordings + 1;
+        ress = E.etc.alz.ress;
+        if ~isfield(ress, 'nTrials')
+            continue;
+        end
+        for k = 1:numel(labels)
+            hit = find(strcmp({ress.label}, labels{k}), 1);
+            if ~isempty(hit) && ress(hit).nTrials == 0
+                missing{k}{end + 1} = recordingName(entries(i), i);
+                bins{k} = ress(hit).bins;
+            end
+        end
+    end
+    for k = 1:numel(labels)
+        n = numel(missing{k});
+        if n == 0
+            continue;
+        end
+        names = strjoin(cellfun(@ReportSections.mdLit, missing{k}, 'UniformOutput', false), ', ');
+        sentences{end + 1} = sprintf(['%s could not be built in %d of the %d recordings (%s), which %s ' ...
+            'no usable trial of %s: no filter was fitted there and its channel was left empty, so its ' ...
+            'values in %s are missing rather than zero, and the table below averages over the ' ...
+            'recordings in which it was built.'], ReportSections.mdLit(labels{k}), n, nRecordings, names, ...
+            plural(n, 'has', 'have'), ReportSections.mdLit(strjoin(bins{k}, ' or ')), ...
+            plural(n, 'that recording', 'those recordings')); %#ok<AGROW>
+    end
+end
+
+function name = recordingName(entry, i)
+%RECORDINGNAME  The subject the report knows ENTRY by, else its position.
+    name = '';
+    if isfield(entry, 'subject')
+        name = strtrim(char(string(entry.subject)));
+    end
+    if isempty(name)
+        name = sprintf('recording %d', i);
+    end
 end
 
 function [info, EEG] = firstRessEntry(entries)

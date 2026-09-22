@@ -55,6 +55,25 @@ classdef RessReportTest < matlab.unittest.TestCase
             testCase.verifySubstring(qmd, '"built from"');
         end
 
+        function aComponentARecordingCouldNotBuildIsNamed(testCase)
+        %ACOMPONENTARECORDINGCOULDNOTBUILDISNAMED  The second recording has no
+        %   30 Hz trials, as RIFT subjects 4 to 10 have none: RESS leaves its
+        %   RESS30Hz empty, the Spectral Measure still runs and reads it as
+        %   missing, and the report says which recording and why.
+            entries = RessReportTest.entries(500, true);
+
+            qmd = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(qmd, ['RESS30Hz could not be built in 1 of the 2 recordings (s2), ' ...
+                'which has no usable trial of SSVEP 30Hz']);
+            testCase.verifyFalse(contains(qmd, 'RESS60Hz could not be built'));
+            [coh1, snr1] = RessReportTest.readout(entries(1).EEG, '30Hz', 'RESS30Hz');
+            [coh2, snr2] = RessReportTest.readout(entries(2).EEG, '30Hz', 'RESS30Hz');
+            testCase.verifyTrue(all(isfinite(coh1(1:3))) && all(isfinite(snr1(1:3))), ...
+                'Built in the first recording, it is read in every bin with trials.');
+            testCase.verifyTrue(all(isnan(coh2)) && all(isnan(snr2)), 'Empty in the second: missing.');
+        end
+
         function noComponentMeansNoSection(testCase)
             entries = RessReportTest.entries(100);
             for k = 1:numel(entries)
@@ -85,26 +104,50 @@ classdef RessReportTest < matlab.unittest.TestCase
     end
 
     methods (Static)
-        function entries = entries(winSize)
+        function entries = entries(winSize, secondLacks30Hz)
         %ENTRIES  Two recordings of RESSTest's fixture, each through RESS and a
         %   Spectral Measure reading the components with frame coherence of
-        %   WINSIZE samples to the photodiode.
+        %   WINSIZE samples to the photodiode. With SECONDLACKS30HZ, a third
+        %   component is built from the 30 Hz bin, which the second recording
+        %   has no trials of.
+            if nargin < 2
+                secondLacks30Hz = false;
+            end
             entries = struct('subject', {}, 'datasetType', {}, 'group', {}, 'person', {}, 'session', {}, 'EEG', {});
             opts = RESSTest.options();
-            spec = struct('rows', {{struct('label', '60Hz', 'freq', '60', 'channels', 'Oz RESS60Hz'), ...
-                                    struct('label', '64Hz', 'freq', '64', 'channels', 'Oz RESS64Hz')}}, ...
+            rows = {struct('label', '60Hz', 'freq', '60', 'channels', 'Oz RESS60Hz'), ...
+                    struct('label', '64Hz', 'freq', '64', 'channels', 'Oz RESS64Hz')};
+            if secondLacks30Hz
+                opts.rows{3} = struct('label', 'RESS30Hz', 'freq', 30, 'bins', 'SSVEP 30Hz');
+                rows{3} = struct('label', '30Hz', 'freq', '30', 'channels', 'Oz RESS30Hz');
+            end
+            spec = struct('rows', {rows}, ...
                 'fundamentals', '', 'refChannel', 'PhotoDiode', 'method', 'Hann', 'tapers', 3, ...
                 'snrNeighbours', 10, 'snrGuard', 1, 'coherenceMethod', 'frames', ...
                 'crossf', struct('Method', 'frames', 'WinSize', winSize));
             for s = 1:2
                 EEG = RESSTest.recording();
                 EEG.data = EEG.data + 0.01 * s * randn(size(EEG.data));
+                if secondLacks30Hz && s == 2
+                    EEG.bindesc(4).trials = [];
+                end
+                warned = warning('off', 'Alakazam:RESS:noTrials');
                 R = RESS(EEG, opts);
+                warning(warned);
                 [M, used] = SpectralMeasure(R, spec);
                 M.params = used;
                 entries(end + 1) = struct('subject', sprintf('s%d', s), 'datasetType', 'subject', ...
                     'group', '', 'person', sprintf('s%d', s), 'session', '', 'EEG', M); %#ok<AGROW>
             end
+        end
+
+        function [coh, snr] = readout(M, rowLabel, channel)
+        %READOUT  One channel's coherence and SNR in every bin, from the
+        %   Spectral Measure row ROWLABEL of M.
+            row = M.spectralMeasures{cellfun(@(r) strcmp(r.label, rowLabel), M.spectralMeasures)};
+            c = strcmp(row.channels, channel);
+            coh = row.coherence(c, :);
+            snr = row.snr(c, :);
         end
     end
 end

@@ -140,6 +140,42 @@ classdef RESSTest < matlab.unittest.TestCase
                 'Every trial gets the component, the 64 Hz and 30 Hz trials included.');
         end
 
+        function aRowWithoutTrialsIsLeftEmptyAndNoted(testCase)
+        %AROWWITHOUTTRIALSISLEFTEMPTYANDNOTED  One recording of a study may
+        %   lack a condition another has (the RIFT 30 Hz control, run by
+        %   subjects 1 to 3 only). RESS then adds that component empty and
+        %   notes it, and builds the others as usual, so Apply to All carries
+        %   on and every recording keeps the same channels.
+            EEG = RESSTest.recording();
+            EEG.bindesc(4).trials = [];
+            opts = RESSTest.options();
+            opts.rows{3} = struct('label', 'RESS30Hz', 'freq', 30, 'bins', 'SSVEP 30Hz');
+
+            out = testCase.verifyWarning(@() RESS(EEG, opts), 'Alakazam:RESS:noTrials');
+            full = RESS(EEG, RESSTest.options());
+
+            testCase.verifyEqual({out.chanlocs(end - 2:end).labels}, {'RESS60Hz', 'RESS64Hz', 'RESS30Hz'});
+            testCase.verifyTrue(all(isnan(out.data(end, :, :)), 'all'), 'Missing, not zero.');
+            testCase.verifyEqual(out.data(1:end - 1, :, :), full.data, 'AbsTol', 1e-12, ...
+                'The other components are built as usual.');
+            info = out.etc.alz.ress(3);
+            testCase.verifyEqual(info.nTrials, 0);
+            testCase.verifySubstring(info.note, 'SSVEP 30Hz');
+            testCase.verifyEmpty(out.etc.alz.ress(1).note);
+        end
+
+        function aRowWhoseTrialsAreAllRejectedIsLeftEmpty(testCase)
+            EEG = RESSTest.recording();
+            EEG.data(:, :, EEG.bindesc(3).trials) = NaN;   % how ArtefactDetect rejects a trial
+
+            out = testCase.verifyWarning(@() RESS(EEG, RESSTest.options()), 'Alakazam:RESS:noTrials');
+
+            testCase.verifyEqual(out.etc.alz.ress(2).nTrials, 0);
+            testCase.verifyTrue(all(isnan(out.data(end, :, :)), 'all'));
+            testCase.verifyEqual(out.etc.alz.ress(1).nTrials, 8);
+            testCase.verifyFalse(any(isnan(out.data(end - 1, :, 1:8)), 'all'));
+        end
+
         function eyesPhotodiodeAndMastoidsStayOut(testCase)
             EEG = RESSTest.recording();
 

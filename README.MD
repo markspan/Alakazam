@@ -1875,6 +1875,10 @@ separate them. Eye channels, the photodiode and, unless asked, the mastoids stay
 out of the filter. Alakazam's filter agrees with the authors' own code to a
 correlation of 0.99999, and forces the sign of the weights as well as of the map,
 so a component's phase lag to the photodiode is comparable between recordings.
+A recording without trials for a row (in the RIFT study only subjects 1 to 3 ran
+the 30 Hz control) gets that component as an empty channel with a warning, and
+the rest of the branch runs as usual; the report names those recordings, and
+their values are missing rather than zero.
 
 On the ten RIFT recordings, with the branch's own settings, the component's
 coherence to the photodiode was higher than Oz's in every recording: 0.39

@@ -7,7 +7,8 @@ function plan = RESSPlan(EEG, options)
 %   that says what to change when OPTIONS cannot be applied to EEG, and
 %   otherwise returns
 %     .rows      one per component: .label, .freq (Hz), .bins (cellstr: the
-%                bins whose trials build it) and .trials (their union)
+%                bins whose trials build it) and .trials (their union, empty
+%                when this recording has none of those trials)
 %     .channels  logical, the channels combined (TransTools.RESSChannels)
 %     .window    logical, the samples the covariances use
 %     .filter    the options TransTools.RESSFilter takes
@@ -129,10 +130,12 @@ function plan = RESSPlan(EEG, options)
                 idx(j) = hit;
             end
         end
+        % Possibly empty, and not an error: one recording of a study may not
+        % have a condition another has (in the RIFT study subjects 1 to 3 ran
+        % the 30 Hz control, 4 to 10 the peripheral 60 Hz), and Apply to All
+        % must not lose the rest of the branch over it. RESS leaves that
+        % component's channel empty instead.
         trials = unique([EEG.bindesc(idx).trials]);
-        if isempty(trials)
-            fail('The bins row "%s" is built from (%s) have no trials.', label, strjoin(binLabels(idx), ', '));
-        end
         plan.rows(end + 1) = struct('label', label, 'freq', freq, 'bins', {binLabels(idx)}, 'trials', trials);
     end
 end

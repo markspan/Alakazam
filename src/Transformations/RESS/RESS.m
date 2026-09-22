@@ -35,6 +35,13 @@ function [EEG, options] = RESS(input, varargin)
 %   each filter was built from are kept in EEG.etc.alz.ress, one element per
 %   component, for the report and for inspection.
 %
+%   A RECORDING WITHOUT A ROW'S TRIALS. One recording of a study may lack a
+%   condition another has (in the RIFT study subjects 1 to 3 ran the 30 Hz
+%   control, 4 to 10 the peripheral 60 Hz). Its component is then added all
+%   NaN, with nTrials 0 and a .note saying why, and a warning; the other
+%   components are built as usual, so Apply to All carries on and every
+%   recording keeps the same channels. The report names those recordings.
+%
 %   Options (see TransTools.RESSPlan): rows (label, freq, bins),
 %   includeMastoids, timeStart/timeStop (ms; blank for the whole epoch),
 %   peakFWHM, neighbourDistance, neighbourFWHM (Hz), shrinkage (0 to 1).
@@ -70,26 +77,53 @@ filterOpts = plan.filter;
 filterOpts.Window = plan.window;
 info = struct('label', {}, 'freq', {}, 'bins', {}, 'channels', {}, 'weights', {}, 'map', {}, ...
     'eigenvalues', {}, 'nTrials', {}, 'rank', {}, 'shrinkage', {}, 'window', {}, ...
-    'peakFWHM', {}, 'neighbourDistance', {}, 'neighbourFWHM', {});
+    'peakFWHM', {}, 'neighbourDistance', {}, 'neighbourFWHM', {}, 'note', {});
+window = [];
+if ~all(plan.window)
+    window = [EEG.times(find(plan.window, 1)), EEG.times(find(plan.window, 1, 'last'))];
+end
+notes = {};
 for k = 1:numel(plan.rows)
     row = plan.rows(k);
+    % A row this recording has no usable trial for (none of its bins
+    % occurred here, or every such trial was rejected) is noted, not fatal:
+    % its channel is added all NaN, so every recording of a study keeps the
+    % same channels and a Spectral Measure row naming it still runs (with
+    % a missing value here), and the other components are built as usual.
+    usable = row.trials(reshape(all(all(isfinite(X(:, plan.window, row.trials)), 1), 2), 1, []));
+    if isempty(usable)
+        note = sprintf(['%s has no usable trial of %s in this recording, so no filter was built and ' ...
+            'its channel is left empty (NaN)'], row.label, strjoin(row.bins, ', '));
+        EEG = appendComponent(EEG, row.label, nan(1, EEG.pnts, size(X, 3)));
+        info(k) = struct('label', row.label, 'freq', row.freq, 'bins', {row.bins}, ...
+            'channels', {channelLabels}, 'weights', nan(numel(channelLabels), 1), ...
+            'map', nan(numel(channelLabels), 1), 'eigenvalues', [], 'nTrials', 0, 'rank', 0, ...
+            'shrinkage', plan.filter.Shrinkage, 'window', window, 'peakFWHM', plan.filter.PeakFWHM, ...
+            'neighbourDistance', plan.filter.NeighbourDistance, 'neighbourFWHM', plan.filter.NeighbourFWHM, ...
+            'note', note);
+        notes{end + 1} = note; %#ok<AGROW>
+        continue;
+    end
     result = TransTools.RESSFilter(X(:, :, row.trials), EEG.srate, row.freq, filterOpts);
     component = TransTools.RESSComponent(X, result.weights);
     EEG = appendComponent(EEG, row.label, component);
-    window = [];
-    if ~all(plan.window)
-        window = [EEG.times(find(plan.window, 1)), EEG.times(find(plan.window, 1, 'last'))];
-    end
     info(k) = struct('label', row.label, 'freq', row.freq, 'bins', {row.bins}, ...
         'channels', {channelLabels}, 'weights', result.weights, 'map', result.map, ...
         'eigenvalues', result.eigenvalues, 'nTrials', nnz(result.trialsUsed), 'rank', result.rank, ...
         'shrinkage', result.shrinkage, 'window', window, 'peakFWHM', plan.filter.PeakFWHM, ...
-        'neighbourDistance', plan.filter.NeighbourDistance, 'neighbourFWHM', plan.filter.NeighbourFWHM);
+        'neighbourDistance', plan.filter.NeighbourDistance, 'neighbourFWHM', plan.filter.NeighbourFWHM, ...
+        'note', '');
     [~, peak] = max(abs(result.map));
     fprintf(['RESS: %s from %d trial(s) of %s, %d channels: power at %g Hz %.2f times that beside ' ...
              'it (next component %.2f); its map peaks at %s.\n'], row.label, nnz(result.trialsUsed), ...
         strjoin(row.bins, ', '), numel(channelLabels), row.freq, result.eigenvalues(1), ...
         result.eigenvalues(min(2, end)), channelLabels{peak});
+end
+if ~isempty(notes)
+    % One warning for all of them, in the command window like the other
+    % transformations' notes; the report names the recordings (see
+    % ReportSections.ressSection), from the note kept in EEG.etc.alz.ress.
+    warning('Alakazam:RESS:noTrials', '%s.', strjoin(notes, '; '));
 end
 if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc)
     EEG.etc = struct();
