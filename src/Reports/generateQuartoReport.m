@@ -281,6 +281,12 @@
         if ~isempty(note)
             methodNote = {note};
         end
+        % RESS components, when a Spectral Measure row reads one: how they were
+        % made, and each one's null (see ressSection).
+        ress = ReportSections.ressSection(entries);
+        if ~isempty(ress)
+            methodNote{end + 1} = ress;
+        end
     end
 
     parts = [{preambleText(csvFileName, reportTitle, groupColumn, hasGroups, plan, ...

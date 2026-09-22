@@ -172,12 +172,24 @@ entirely on that component family, not the classic figure/uicontrol one), the
 Signal Processing Toolbox (used by the `Filter` transform and the taper windows in
 `Fourier`) and the Statistics and Machine Learning Toolbox (used by EEGLAB and
 some of its plugins), plus the external toolkits listed in
-[`dependencies.md`](dependencies.md), most importantly EEGLAB. Parallel
-Computing Toolbox is advised (not required) for the AutoGEDAI transformation:
-its GEDAI plugin dependency uses GPU acceleration when a GPU is actually
-detected, and falls back to CPU (via a small compatibility shim,
-`src/Compat/gpuDeviceCount.m`, on a machine without the toolbox at all)
-otherwise, so a machine without a GPU is just slower, not broken.
+[`dependencies.md`](dependencies.md), most importantly EEGLAB.
+
+The Parallel Computing Toolbox is advised but not required. Three things use
+it, and each runs serially without it, only more slowly:
+
+- **Apply to All Raw Files** processes several recordings at once, each in
+  its own local MATLAB worker (see
+  [Settings](#settings), Processing tab). On nine RIFT recordings this took
+  215 s on three workers against 364 s one at a time.
+- **Cluster statistics** split their permutations across workers (see
+  [Parallel permutations](#making-it-finish-this-decade)).
+- **AutoGEDAI**: its GEDAI plugin uses GPU acceleration when a GPU is
+  actually detected, and falls back to the CPU otherwise (through a small
+  compatibility shim, `src/Compat/gpuDeviceCount.m`, on a machine without
+  the toolbox at all).
+
+Only the toolbox itself is needed: the workers are local processes on the
+same machine, so no MATLAB Parallel Server, cluster or GPU is involved.
 [FieldTrip](https://www.fieldtriptoolbox.org/) is an optional, larger
 (~400 MB) dependency needed only for `Brain3D`'s Source-estimate mode (see
 [3D brain view](#3d-brain-view)); it downloads on first use of that mode,
@@ -510,6 +522,7 @@ The current library:
 | `EventEditor` | Corrects the event table: rename or drop trigger codes, retain a subset, shift latencies in milliseconds, or edit a single event. Records the operations rather than the resulting table, so replaying it on another dataset applies the same corrections to that dataset's own events. |
 | `Photodiode` | Measures display delay from a photodiode channel: pairs each light onset with the preceding trigger and reports the lag (median, IQR, range), which can then be corrected with `EventEditor`'s latency shift. Alternatively imports the onsets as events, as EEGLAB's `pop_chanevent` does. Onsets are reported only where the channel is demonstrably bimodal, so that a recording without presented patches returns none rather than responding to mains flicker. |
 | `ReRef` | Re-references the data (wraps `pop_reref`). |
+| `RESS` | Rhythmic entrainment source separation (Cohen & Gulbinaite, 2017): for each stimulation frequency, adds one channel (e.g. `RESS60Hz`) combining the scalp channels with the weights that carry the most power at that frequency relative to the frequencies beside it, instead of choosing electrodes by where the response looks strongest. Each filter is built from the pooled trials of chosen bins and applied to every trial; the spectral report shows each component in the bins it was not built from as its null. Needs epoched data with bins. See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
 | `Interpolate` | Reconstructs bad channels from their neighbours (EEGLAB's `pop_interp`, spherical-spline and related methods), picked in an Alakazam channel-picker dialog. Bad channels are stored as labels, so a stored choice replays on another subject with the same montage. |
 | `Resample` | Changes the sampling rate of continuous data. |
@@ -1843,6 +1856,36 @@ missing, with a warning, not read at the band edge). The report states which
 estimator its coherence values used. A node made before the method was recorded
 keeps the estimator it was made with, so recalculating it reproduces its numbers.
 [`Docs/dimigen.md`](Docs/dimigen.md#which-coherence-estimator) has the comparison.
+
+**A component instead of an electrode: RESS.** Reading the response at Oz, or at
+the channels where it looks strongest, is a choice that differs between people and
+frequencies, and choosing channels by their own response is circular. The
+**RESS** transformation (rhythmic entrainment source separation, Cohen &
+Gulbinaite, 2017) adds, for each stimulation frequency, one channel such as
+`RESS60Hz`: the weighted combination of the scalp channels with the most power at
+that frequency relative to 1 Hz either side, with weights fitted per recording.
+Spectral Measure reads it like an electrode, so a row on `Oz RESS60Hz` gives both.
+Each filter is built from the pooled trials of the bins in its row (the 60 Hz
+filter from the central and the peripheral 60 Hz bins together, as the authors
+advise) and applied to every trial, so the other bins show what it gives without
+its flicker. The report puts those side by side as the component's **null**, and
+names the bins that are not one: a bin a harmonic of whose frequency falls on the
+filter's (30 Hz drives 60 Hz), or lies so close that the coherence frames cannot
+separate them. Eye channels, the photodiode and, unless asked, the mastoids stay
+out of the filter. Alakazam's filter agrees with the authors' own code to a
+correlation of 0.99999, and forces the sign of the weights as well as of the map,
+so a component's phase lag to the photodiode is comparable between recordings.
+
+On the ten RIFT recordings, with the branch's own settings, the component's
+coherence to the photodiode was higher than Oz's in every recording: 0.39
+against 0.16 at 64 Hz, and 0.16 higher on average at 60 Hz, with the same gain
+when the filter was fitted on half the trials and measured on the other half.
+That run also showed a limit of the coherence frames rather than of RESS: at
+2000 Hz, 510-sample frames last 255 ms and cannot separate 60 from 64 Hz, so the
+64 Hz readout in 60 Hz trials was 60 Hz leaking through (0.12 at Oz, down to the
+noise floor of 0.03 with 1 s frames). Resampling to 960 Hz first, as the RIFT
+template does, makes the same frames 531 ms. The full reference is the
+[`RESS.m`](src/Transformations/RESS/RESS.m) header.
 
 Both figures **follow the electrodes named in the Spectral Measure rows**. With
 two rows on Oz, the trace and the map show Oz alone, in colour and with no grey
