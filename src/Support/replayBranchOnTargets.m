@@ -57,6 +57,14 @@ function [results, width] = replayBranchOnTargets(sourceFile, targetFiles, trans
     end
 
     width = min([nWorkers, pool.NumWorkers, n]);
+    % A pool worker computes on one thread by default, where the app uses
+    % every core for filtering and FFTs. With fewer workers than cores the
+    % rest would sit idle, so each worker gets its share of them. On the RIFT
+    % branch it made no measurable difference (213 s against 215 s for nine
+    % recordings on three workers), since that branch is held back by the
+    % disk and by CoherenceMap's FFTs, which the app already runs on all
+    % cores; it is kept for branches that compute more than they write.
+    threads = max(1, floor(feature('numcores') / width));
     clientPath = path;
     here = pwd;
     inFlight = struct('future', {}, 'index', {});
@@ -65,7 +73,7 @@ function [results, width] = replayBranchOnTargets(sourceFile, targetFiles, trans
         while numel(inFlight) < width && next <= n
             callIfGiven(onStart, next);
             inFlight(end + 1) = struct('future', parfeval(pool, @replayOnWorker, 1, ...
-                clientPath, here, sourceFile, targetFiles{next}, transRoot), 'index', next); %#ok<AGROW>
+                clientPath, here, threads, sourceFile, targetFiles{next}, transRoot), 'index', next); %#ok<AGROW>
             next = next + 1;
         end
         % Polled rather than fetchNext: fetchNext cannot say which future
@@ -90,10 +98,11 @@ function [results, width] = replayBranchOnTargets(sourceFile, targetFiles, trans
     end
 end
 
-function r = replayOnWorker(clientPath, here, sourceFile, targetFile, transRoot)
+function r = replayOnWorker(clientPath, here, threads, sourceFile, targetFile, transRoot)
 %REPLAYONWORKER  One target, on a worker set up like the client.
     path(clientPath);
     cd(here);
+    maxNumCompThreads(threads);
     r = replayTimed(sourceFile, targetFile, transRoot);
 end
 

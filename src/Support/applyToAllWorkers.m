@@ -21,6 +21,16 @@ function n = applyToAllWorkers(targetFiles, varargin)
 %   them one at a time. Where free memory cannot be read, two workers are
 %   used.
 %
+%   MEASURED on the RIFT workspace (subject 1's eight-step branch replayed
+%   onto nine recordings of 0.38 to 0.68 GB, 8 cores, 24 GB): one MATLAB
+%   replaying alone took 3.4 GB at its peak, which is what the budget gives
+%   the largest recording (3 x 0.68 GB + 1.5 GB). Nine recordings took 364 s
+%   one at a time, 215 s on three workers (plus 13 s to start the pool the
+%   first time) and 201 s on four, with 5.4 and 3.3 GB left free. The gain
+%   flattens because much of the one-at-a-time run was already parallel:
+%   CoherenceMap's FFTs, the largest step, run on all cores in the app, and
+%   the rest is dominated by writing some 2.3 GB of cache per recording.
+%
 %   Name-value pairs replace what it would otherwise look up, for tests:
 %   'Parallel', 'MaxWorkers', 'HaveToolbox', 'Cores', 'AvailableBytes' and
 %   'FileBytes' (one per target).
