@@ -1,6 +1,6 @@
 function varargout = IcaCache(action, key, value)
 %ICACACHE  Decompositions already computed this session, by the hash of the
-%   data they were computed from (TransTools.DataKey).
+%   data they were computed from (DataKey).
 %
 %       value = TransTools.IcaCache('get', key)      [] when there is none
 %       TransTools.IcaCache('put', key, value)
@@ -25,7 +25,7 @@ function varargout = IcaCache(action, key, value)
 %   Bounded, oldest first, so a long session over many recordings does not
 %   keep every decomposition; each is only a few kilobytes.
 %
-%   See also TRANSTOOLS.DATAKEY, AUTOEYEICA, ALAKAZAM.RECALCULATETRANSFORMNODE.
+%   See also DATAKEY, AUTOEYEICA, ALAKAZAM.RECALCULATETRANSFORMNODE.
     persistent entries order hits
     if isempty(entries)
         entries = containers.Map('KeyType', 'char', 'ValueType', 'any');

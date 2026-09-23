@@ -14,7 +14,7 @@ function [EEG, opts] = CoherenceTopography(varargin)
 %   band; a fixed frequency entered overrides both. Coherence is estimated across
 %   the bin's trials over an optional steady-state window, by default as the
 %   frame-averaged coherence that CoherenceMap draws and SpectralMeasure reports
-%   (see TransTools.ComputeCoherenceTopography for the two estimators).
+%   (see ComputeCoherenceTopography for the two estimators).
 %
 %   Runs on EPOCHED single-trial data. Only channels with a standard 10-5 scalp
 %   position are drawn (the reference and any EOG/ECG have none and are left
@@ -99,7 +99,7 @@ end
 
 computeOpts = opts;
 computeOpts.RefIndex = refIdx;
-[coh, detFreq, refAmp, ampFreqs] = TransTools.ComputeCoherenceTopography(input, computeOpts);
+[coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, computeOpts);
 
 %% Resolve scalp positions (template lookup, exactly as ScalpDistribution does:
 %  a direct readlocs lookup by label, so no eeg_checkset is run on an averaged/

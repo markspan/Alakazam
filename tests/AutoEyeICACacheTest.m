@@ -15,7 +15,7 @@ classdef AutoEyeICACacheTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/AutoEyeICACacheTest.m').
 %
-%   See also AUTOEYEICA, TRANSTOOLS.ICACACHE, TRANSTOOLS.DATAKEY.
+%   See also AUTOEYEICA, TRANSTOOLS.ICACACHE, DATAKEY.
 
     methods (TestClassSetup)
         function addSourceToPathAndCheckTools(testCase)

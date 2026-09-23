@@ -29,10 +29,10 @@ function templates = AvailableElectrodeTemplates()
 %   See also TEMPLATE1005FILE, CHANNELEDITORDIALOG, CHANNELEDITOR.
     templates = struct('name', {}, 'file', {});
 
-    % Three fileparts from +TransTools/AvailableElectrodeTemplates.m: up to
-    % +TransTools, up to Transformations, up to src -- the same pattern
+    % Three fileparts from ChannelEditor/AvailableElectrodeTemplates.m: up to
+    % ChannelEditor, up to Transformations, up to src -- the same pattern
     % Brain3DView.m uses (two fileparts) to find its sibling src/Meshes,
-    % adjusted for the extra +TransTools level this file sits under.
+    % adjusted for the extra transformation-folder level this file sits under.
     srcRoot = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     vendoredDir = fullfile(srcRoot, 'Electrodes');
     vendored1005 = fullfile(vendoredDir, 'standard_1005.elc');

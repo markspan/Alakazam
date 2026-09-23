@@ -6,7 +6,7 @@ function ics = componentsTicked(data)
 %   column 1 the component number, the last column the Remove tick.
 %
 %   READ FROM COLUMN 1, NOT FROM THE ROW POSITION. The table is sortable, so
-%   row 3 is not component 3 once the analyst has sorted by Label to bring
+%   row 3 is not component 3 once the user has sorted by Label to bring
 %   all the eye components together -- which is the main reason to sort at
 %   all. Taking the IC from the row's own first cell is correct either way:
 %   if a sort has reordered the rows, the number travelled with its row; if

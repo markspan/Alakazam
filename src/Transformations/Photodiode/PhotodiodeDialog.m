@@ -1,14 +1,14 @@
 function options = PhotodiodeDialog(EEG)
 %PHOTODIODEDIALOG  Pick the diode channel and confirm the detection by eye.
 %   OPTIONS = PhotodiodeDialog(EEG) returns the settings Photodiode should
-%   record, or [] if the analyst cancelled.
+%   record, or [] if the user cancelled.
 %
 %   THE PLOT IS NOT DECORATION. A photodiode channel can look like almost
 %   anything: on this lab's own recordings it appears as mains flicker at a
 %   baseline of 5000, as a dead channel sitting at zero, and as a live one
 %   stepping fifteen-fold. No default threshold survives that variety, so
 %   the dialog shows the channel with the detected onsets drawn on it and
-%   asks the analyst to agree. A number typed into a box with no picture is
+%   asks the user to agree. A number typed into a box with no picture is
 %   how a detector ends up looking like it works.
 %
 %   It also shows the measured delay as it changes, because that is the
@@ -84,7 +84,7 @@ function options = PhotodiodeDialog(EEG)
 
     % WHICH TRANSITION COUNTS AS AN ONSET. detectDiodeOnsets calls this
     % 'leading'/'trailing' (the edge of the HIGH state); shown here as
-    % Rising/Falling, the terms an analyst actually thinks in when looking at
+    % Rising/Falling, the terms a user actually thinks in when looking at
     % the trace. There was no control for this at all before -- Edge silently
     % defaulted to 'leading' (rising) in detectDiodeOnsets, which is right
     % for a patch that goes bright and wrong for a rig wired so the patch
@@ -248,7 +248,7 @@ function options = PhotodiodeDialog(EEG)
     %   The view is rebuilt only when the channel changes. Every other
     %   control here changes the marks and not the signal, and rebuilding
     %   would rebuild the decimation pyramid over the whole recording and
-    %   throw away the analyst's scroll position mid-comparison.
+    %   throw away the user's scroll position mid-comparison.
         if isempty(view) || ~isvalid(view) || chan ~= viewChannel
             delete(plotHolder.Children);
             view = SignalView(plotHolder, preview.times, preview, ...

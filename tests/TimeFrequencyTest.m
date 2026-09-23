@@ -1,10 +1,9 @@
 classdef TimeFrequencyTest < matlab.unittest.TestCase
-%TIMEFREQUENCYTEST  Unit tests for
-%   src/Transformations/+TransTools/ComputeErsp.m -- the wavelet ERSP
-%   engine TimeFrequency.m's dialog-driven wrapper calls, tested directly
-%   (per its own header comment: "so this can be called and verified
-%   directly, without going through TimeFrequency.m's own blocking
-%   options dialog").
+%TIMEFREQUENCYTEST Unit tests for
+%   src/Transformations/TimeFrequency/ComputeErsp.m -- the wavelet ERSP engine
+%   TimeFrequency.m's dialog-driven wrapper calls, tested directly (per its
+%   own header comment: "so this can be called and verified directly, without
+%   going through TimeFrequency.m's own blocking options dialog").
 %
 %   Exact Morlet-wavelet convolution output is hard to hand-derive
 %   safely, so most tests here lean on two properties that hold
@@ -29,6 +28,8 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'TimeFrequency')));   % ComputeErsp lives there
         end
     end
 
@@ -37,7 +38,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             EEG = erspFixture(3);
             opts = defaultOpts();
 
-            [ersp, freqs] = TransTools.ComputeErsp(EEG, opts);
+            [ersp, freqs] = ComputeErsp(EEG, opts);
 
             % Checked dimension-by-dimension, not via a single size(ersp)
             % comparison: MATLAB always collapses a trailing singleton
@@ -61,7 +62,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             EEG = erspFixture(3);
             opts = defaultOpts();
 
-            [ersp, ~] = TransTools.ComputeErsp(EEG, opts);
+            [ersp, ~] = ComputeErsp(EEG, opts);
 
             baseIdx = EEG.times >= opts.BaselineStart & EEG.times <= opts.BaselineStop;
             meanOverBaseline = mean(ersp(:, :, baseIdx, 1), 3);
@@ -74,7 +75,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
                 'combo', struct('bin', {1, 2}, 'coeff', {1, -1}));
             opts = defaultOpts();
 
-            [ersp, ~] = TransTools.ComputeErsp(EEG, opts);
+            [ersp, ~] = ComputeErsp(EEG, opts);
 
             testCase.verifyEqual(ersp(:, :, :, 3), ersp(:, :, :, 1) - ersp(:, :, :, 2), 'AbsTol', 1e-9);
         end
@@ -84,7 +85,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             EEG.bindesc(2) = struct('index', 2, 'label', 'Empty', 'trials', [], 'combo', []);
             opts = defaultOpts();
 
-            [ersp, ~] = TransTools.ComputeErsp(EEG, opts);
+            [ersp, ~] = ComputeErsp(EEG, opts);
 
             testCase.verifyTrue(all(isnan(ersp(:, :, :, 2)), 'all'));
             testCase.verifyFalse(any(isnan(ersp(:, :, :, 1)), 'all'));
@@ -102,7 +103,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             EEG = erspFixture(3);
             opts = defaultOpts();
 
-            [ersp, freqs] = TransTools.ComputeErsp(EEG, opts);
+            [ersp, freqs] = ComputeErsp(EEG, opts);
 
             [~, fi] = min(abs(freqs - 20));
             burstIdx = EEG.times >= 150 & EEG.times <= 350; % well inside the injected burst
@@ -117,7 +118,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             EEG = erspFixture(3);
             opts = defaultOpts();
             opts.BaselineStart = 10000; opts.BaselineStop = 20000; % nowhere near EEG.times
-            testCase.verifyError(@() TransTools.ComputeErsp(EEG, opts), 'Alakazam:TimeFrequency');
+            testCase.verifyError(@() ComputeErsp(EEG, opts), 'Alakazam:TimeFrequency');
         end
     end
 end

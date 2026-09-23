@@ -7,20 +7,20 @@ function [opts, ok] = CollapseHemispheresDialog(binLabels, chanlocs, stored)
 %   previously used options or [] on a first run. Returns OPTS as
 %   CollapseHemispheres documents it, and OK = false on cancel.
 %
-%   THE SIDE ASSIGNMENT IS THE ONE THING ONLY THE ANALYST KNOWS. Which bin
+%   THE SIDE ASSIGNMENT IS THE ONE THING ONLY THE USER KNOWS. Which bin
 %   holds left-side stimuli, or a left-hand response, is a fact about the
 %   experiment and about the event codes; nothing in the data says it, and
 %   guessing it from a bin label would invert contra and ipsi whenever the
 %   guess was wrong -- an error that produces a plausible-looking waveform
 %   of the opposite sign, which is the worst kind.
 %
-%   THE PAIRING IS SHOWN, NOT ASKED. It is derived (TransTools.LateralPairs)
-%   and the analyst cannot usefully choose the pairs themselves, but they do
+%   THE PAIRING IS SHOWN, NOT ASKED. It is derived (LateralPairs)
+%   and the user cannot usefully choose the pairs themselves, but they do
 %   need to see how many were found and which electrodes were left out
 %   before trusting the result: an equidistant montage with no locations
 %   filled in can silently yield nothing to collapse.
 %
-%   See also COLLAPSEHEMISPHERES, TRANSTOOLS.LATERALPAIRS.
+%   See also COLLAPSEHEMISPHERES, LATERALPAIRS.
     [accentColor, bgColor] = dialogChromeColors();
     opts = [];
     ok = false;
@@ -84,7 +84,7 @@ function [opts, ok] = CollapseHemispheresDialog(binLabels, chanlocs, stored)
 
     function refreshPairs()
         try
-            p = TransTools.LateralPairs(chanlocs, pairing.Value);
+            p = LateralPairs(chanlocs, pairing.Value);
         catch err
             report.Text = sprintf('Could not pair electrodes: %s', err.message);
             return;
@@ -113,7 +113,7 @@ function [opts, ok] = CollapseHemispheresDialog(binLabels, chanlocs, stored)
         sides = d(:, 2);
         left  = binLabels(strcmp(sides, 'Left'));
         right = binLabels(strcmp(sides, 'Right'));
-        % Refused here rather than thrown from the transform, so the analyst
+        % Refused here rather than thrown from the transform, so the user
         % can fix it in the dialog they are already looking at.
         if isempty(left) || isempty(right)
             uialert(fig, ['Mark at least one bin as Left and one as Right: telling ' ...

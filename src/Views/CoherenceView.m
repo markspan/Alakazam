@@ -3,7 +3,7 @@ classdef CoherenceView < AlakazamView
 %   time -- the coherence counterpart of TimeFrequencyView.
 %
 %   Draws every bin's precomputed EEG.coherence (channels x freqs x time x
-%   bins, see TransTools.ComputeCoherenceMap, called from CoherenceMap.m) as
+%   bins, see ComputeCoherenceMap, called from CoherenceMap.m) as
 %   one imagesc tile per bin, up to 3 per row, with a shared sequential [0,1]
 %   colour scale and one shared colorbar. Up/down arrow keys (and the mouse
 %   wheel) step the shown channel; because every channel's coherence was

@@ -1,8 +1,8 @@
 function [coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(input, opts)
-%COMPUTECOHERENCEMAP  Time-resolved magnitude-squared coherence between every
-%   channel and a reference channel (e.g. a photodiode), as an
-%   nChan x nFreqs x nTime x nBins array -- the RIFT / frequency-tagging
-%   read-out drawn by CoherenceView, the coherence counterpart of ComputeErsp.
+%COMPUTECOHERENCEMAP Time-resolved magnitude-squared coherence between every
+%   channel and a reference channel (e.g. a photodiode), as an nChan x nFreqs
+%   x nTime x nBins array -- the RIFT / frequency-tagging read-out drawn by
+%   CoherenceView, the coherence counterpart of ComputeErsp.
 %
 %   For each frequency and time point, the coherence is estimated across the
 %   bin's trials from the complex time-frequency coefficients of the channel
@@ -76,7 +76,7 @@ end
 % ======================================================================= %
 function [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts)
 %WAVELETCOHERENCE  Morlet-wavelet time-frequency coherence, reusing the same
-%   variable-cycle wavelet-FFT precompute as TransTools.ComputeErsp.
+%   variable-cycle wavelet-FFT precompute as ComputeErsp.
     times = input.times;
     nT    = numel(times);
     nChan = input.nbchan;

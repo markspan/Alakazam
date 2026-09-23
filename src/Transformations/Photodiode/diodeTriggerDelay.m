@@ -14,7 +14,7 @@ function report = diodeTriggerDelay(onsets, events, srate, opts)
 %   REPORT fields: n, medianMs, meanMs, sdMs, iqrMs, minMs, maxMs, pairs
 %   (a struct array of onset/event/lagMs), byType (one row per trigger code
 %   with its own n/median/IQR/min/max), unpaired, and summary, a sentence
-%   fit to show an analyst.
+%   fit to show a user.
 %
 %   THIS IS THE POINT OF THE WHOLE TRANSFORMATION. Importing diode onsets as
 %   events is what EEGLAB's pop_chanevent does, and on its own it is not
@@ -120,7 +120,7 @@ function report = diodeTriggerDelay(onsets, events, srate, opts)
     report.medianMs = median(lags);
     report.meanMs   = mean(lags);
     report.sdMs     = std(lags);
-    report.iqrMs    = TransTools.Percentile(lags, 75) - TransTools.Percentile(lags, 25);
+    report.iqrMs    = Percentile(lags, 75) - Percentile(lags, 25);
     report.minMs    = min(lags);
     report.maxMs    = max(lags);
 
@@ -183,7 +183,7 @@ function rows = perType(pairs, events)
         these = lags(owners == kinds(k));
         rows(end + 1) = struct('type', char(kinds(k)), 'n', numel(these), ...
             'medianMs', median(these), ...
-            'iqrMs', TransTools.Percentile(these, 75) - TransTools.Percentile(these, 25), ...
+            'iqrMs', Percentile(these, 75) - Percentile(these, 25), ...
             'minMs', min(these), 'maxMs', max(these)); %#ok<AGROW>
     end
 

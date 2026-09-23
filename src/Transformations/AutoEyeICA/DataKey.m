@@ -2,10 +2,10 @@ function key = DataKey(varargin)
 %DATAKEY  A hash of the content of its arguments, for deciding that a stored
 %   result was computed from exactly this data.
 %
-%   KEY = TransTools.DataKey(DATA, ...) returns a 40-character hex SHA-1 of
-%   every argument in order: numeric and logical arrays by class, size and
-%   bytes, text (char, string, cellstr) by its characters. Two calls agree if
-%   and only if their arguments are identical, to the last bit.
+%   KEY = DataKey(DATA, ...) returns a 40-character hex SHA-1 of every
+%   argument in order: numeric and logical arrays by class, size and bytes,
+%   text (char, string, cellstr) by its characters. Two calls agree if and
+%   only if their arguments are identical, to the last bit.
 %
 %   WHY A HASH RATHER THAN SourceCache.Fingerprint. That is a handful of
 %   sums, good for noticing that a stored estimate no longer belongs to the

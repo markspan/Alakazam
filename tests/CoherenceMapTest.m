@@ -1,7 +1,7 @@
 classdef CoherenceMapTest < matlab.unittest.TestCase
-%COHERENCEMAPTEST  Unit tests for
-%   src/Transformations/+TransTools/ComputeCoherenceMap.m (both its
-%   Wavelet and STFT methods).
+%COHERENCEMAPTEST Unit tests for
+%   src/Transformations/CoherenceMap/ComputeCoherenceMap.m (both its Wavelet
+%   and STFT methods).
 %
 %   Leans on the same exact algebraic identity as SpectralMeasureTest's
 %   own coherence tests: magnitude-squared coherence between a channel
@@ -18,6 +18,8 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'CoherenceMap')));   % ComputeCoherenceMap lives there
         end
     end
 
@@ -25,21 +27,21 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
         function coherenceIsOneForAScalarMultipleWavelet(testCase)
             EEG = coherenceFixture();
             opts = waveletOpts();
-            [coh, ~, ~] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6);
         end
 
         function coherenceIsOneForAScalarMultipleStft(testCase)
             EEG = coherenceFixture();
             opts = stftOpts();
-            [coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, freqs, cohTimes] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
         end
 
         function referenceChannelRowIsNaN(testCase)
             EEG = coherenceFixture();
             opts = waveletOpts();
-            [coh, ~, ~] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyTrue(all(isnan(coh(opts.RefIndex, :, :, :)), 'all'));
         end
 
@@ -58,7 +60,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = waveletOpts();
             opts.MaxFreq = 20;
-            [~, freqs, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [~, freqs, ~, refPower] = ComputeCoherenceMap(EEG, opts);
 
             perFreq = mean(refPower(:, :, 1), 2);
             [~, fIdx] = max(perFreq);
@@ -76,7 +78,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG.bindesc(2) = struct('index', 2, 'label', 'Combo', 'trials', [], ...
                 'combo', struct('bin', 1, 'coeff', 1));
             opts = waveletOpts();
-            [~, ~, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [~, ~, ~, refPower] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyTrue(all(isnan(refPower(:, :, 2)), 'all'));
         end
 
@@ -89,7 +91,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
         %   (it is one trial's spectrum) and is what names the tag.
             EEG = coherenceFixture();
             EEG.bindesc(1).trials = 1;
-            [coh, ~, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, waveletOpts());
+            [coh, ~, ~, refPower] = ComputeCoherenceMap(EEG, waveletOpts());
             testCase.verifyTrue(all(isnan(coh(:, :, :, 1)), 'all'));
             testCase.verifyTrue(all(isfinite(refPower(:, :, 1)), 'all'));
         end
@@ -98,7 +100,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = stftOpts();
             opts.Taper = 'Boxcar';
-            [coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, freqs, cohTimes] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
         end
 
@@ -115,8 +117,8 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             boxcar = hann;
             boxcar.Taper = 'Boxcar';
 
-            [~, freqs, ~, powerHann] = TransTools.ComputeCoherenceMap(EEG, hann);
-            [~, ~, ~, powerBox] = TransTools.ComputeCoherenceMap(EEG, boxcar);
+            [~, freqs, ~, powerHann] = ComputeCoherenceMap(EEG, hann);
+            [~, ~, ~, powerBox] = ComputeCoherenceMap(EEG, boxcar);
 
             far = freqs >= 36;
             testCase.assertTrue(any(far), 'test setup: the grid should reach 36 Hz.');
@@ -128,13 +130,13 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = stftOpts();
             opts.Taper = 'Blackman';
-            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, opts), ...
+            testCase.verifyError(@() ComputeCoherenceMap(EEG, opts), ...
                 'Alakazam:ComputeCoherenceMap');
         end
 
         function filterHilbertCoherenceIsOneForAScalarMultiple(testCase)
             EEG = coherenceFixture();
-            [coh, freqs, cohTimes] = TransTools.ComputeCoherenceMap(EEG, filterHilbertOpts());
+            [coh, freqs, cohTimes] = ComputeCoherenceMap(EEG, filterHilbertOpts());
             testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
         end
 
@@ -144,7 +146,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = filterHilbertOpts();
             opts.MaxFreq = 20;
-            [~, freqs, ~, refPower] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [~, freqs, ~, refPower] = ComputeCoherenceMap(EEG, opts);
             [~, fIdx] = max(mean(refPower(:, :, 1), 2));
             testCase.verifyEqual(freqs(fIdx), 20, 'AbsTol', 1e-9);
         end
@@ -153,7 +155,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = filterHilbertOpts();
             opts.StepMs = 20;
-            [~, ~, cohTimes] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [~, ~, cohTimes] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyGreaterThan(numel(cohTimes), 2);
             testCase.verifyEqual(diff(cohTimes), 20 * ones(1, numel(cohTimes) - 1), 'AbsTol', 1e-9);
         end
@@ -164,9 +166,9 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             badBand.BandwidthHz = 0;
             badStep = filterHilbertOpts();
             badStep.StepMs = -5;
-            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, badBand), ...
+            testCase.verifyError(@() ComputeCoherenceMap(EEG, badBand), ...
                 'Alakazam:ComputeCoherenceMap');
-            testCase.verifyError(@() TransTools.ComputeCoherenceMap(EEG, badStep), ...
+            testCase.verifyError(@() ComputeCoherenceMap(EEG, badStep), ...
                 'Alakazam:ComputeCoherenceMap');
         end
 
@@ -175,7 +177,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG.bindesc(2) = struct('index', 2, 'label', 'Combo', 'trials', [], ...
                 'combo', struct('bin', 1, 'coeff', 1));
             opts = waveletOpts();
-            [coh, ~, ~] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyTrue(all(isnan(coh(:, :, :, 2)), 'all'));
         end
 
@@ -183,7 +185,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             EEG.bindesc(2) = struct('index', 2, 'label', 'Empty', 'trials', [], 'combo', []);
             opts = waveletOpts();
-            [coh, ~, ~] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
             testCase.verifyTrue(all(isnan(coh(:, :, :, 2)), 'all'));
         end
 
@@ -220,7 +222,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             opts = waveletOpts();
             opts.RefIndex = 1;
 
-            [coh, ~, ~] = TransTools.ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
 
             testCase.verifyLessThan(mean(coh(2, :, :, 1), 'all'), 0.5);
         end

@@ -59,14 +59,14 @@ function [traceFile, mapFile, chosen, referenceFile] = exportCoherenceCSVs(entri
 %                   condition of a dataset, ranked over all of them)
 %     OnlyChannels  labels to restrict BOTH files to           (default [])
 %
-%   ONLYCHANNELS is how the report follows the electrodes an analyst named
+%   ONLYCHANNELS is how the report follows the electrodes a user named
 %   in the Spectral Measure rows. Every other channel is left out of the
 %   trace and the map, and the map's channels are chosen among the named ones
 %   alone. It does not touch the tag: that is read off the reference (or, for
 %   a result that has none, off every channel), so naming one electrode does
 %   not change which frequency a condition is tagged at. A dataset that has
 %   none of the named channels is written whole rather than left empty, so a
-%   montage that differs from the analyst's does not silently drop a subject.
+%   montage that differs from the user's does not silently drop a subject.
 %
 %   A condition whose coherence is entirely missing (a single trial, or none)
 %   contributes no trace or map rows; its reference spectrum is still written.
@@ -138,7 +138,7 @@ function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels,
     end
 
     % The reference channel's own power spectrum (see CoherenceMap.m /
-    % TransTools.ComputeCoherenceMap's own header): present from any dataset
+    % ComputeCoherenceMap's own header): present from any dataset
     % processed since cohRefPower was added, absent (and so silently unused
     % below) for an older cached result computed before it existed.
     % size(X), the vector form, drops a trailing singleton dimension (a
@@ -319,7 +319,7 @@ end
 
 function idx = pickChannels(peak, labels, maxChannels, wanted)
 %PICKCHANNELS  Which channels the full map is written for.
-%   An explicit list wins, so an analyst who knows their montage is never
+%   An explicit list wins, so a user who knows their montage is never
 %   overruled by the data. Otherwise the strongest responders, which is
 %   what a figure shows. PEAK is each channel's strongest coherence at the
 %   tagged frequency, nChan x 1.

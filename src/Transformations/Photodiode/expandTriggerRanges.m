@@ -9,7 +9,7 @@ function expanded = expandTriggerRanges(parts)
 %   through unchanged.
 %
 %   HAND-PARSED, NOT EVAL'D. This text reaches here from a UI field the
-%   analyst typed into, and running arbitrary typed text through eval to
+%   user typed into, and running arbitrary typed text through eval to
 %   build an event-type filter is a needless door to leave open for what is
 %   really just a compact way to write a handful of consecutive numbers. A
 %   regexp anchored to exactly N:M or N:STEP:M, all integers, cannot be

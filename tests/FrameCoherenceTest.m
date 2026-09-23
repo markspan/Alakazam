@@ -19,6 +19,8 @@ classdef FrameCoherenceTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'CoherenceMap')));   % ComputeCoherenceMap lives there
         end
     end
 
@@ -38,7 +40,7 @@ classdef FrameCoherenceTest < matlab.unittest.TestCase
             opts = struct('Method', 'STFT', 'RefIndex', 2, 'MinFreq', 10, 'MaxFreq', 40, ...
                 'NumFreqs', 10, 'WindowMs', 200, 'PadRatio', 2, 'Taper', 'Hann');
 
-            [coh, freqs] = TransTools.ComputeCoherenceMap(input, opts);
+            [coh, freqs] = ComputeCoherenceMap(input, opts);
             fi = find(freqs > 15, 1);                              % a grid frequency near 20 Hz
             fromMap = mean(coh(1, fi, :, 1), 3);
 

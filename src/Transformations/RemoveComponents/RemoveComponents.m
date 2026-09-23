@@ -5,7 +5,7 @@ function [EEG, opts] = RemoveComponents(input, varargin)
 %   automatically by an ICLabel threshold, it opens a component selector
 %   (RemoveComponentsDialog) showing every component's ICLabel class
 %   probabilities and a live scalp-topography preview, and subtracts exactly
-%   the components the analyst ticks (pop_subcomp). Use it to remove a
+%   the components the user ticks (pop_subcomp). Use it to remove a
 %   specific non-ocular component -- muscle, heart, line/channel noise, or a
 %   single bad channel's projection -- that automatic eye pruning leaves in.
 %
@@ -45,9 +45,9 @@ if interactive
     % physical criterion independent of ICLabel's classifier, and most
     % informative where the two disagree. Only on the interactive path,
     % because it costs seconds per component and nothing but the selector
-    % reads it. See TransTools.ComponentDipoles for why a dipole fit is the
-    % right question to ask of a component and the wrong one to ask of an ERP.
-    rv = TransTools.ComponentDipoles(EEG);
+    % reads it. See ComponentDipoles for why a dipole fit is the right
+    % question to ask of a component and the wrong one to ask of an ERP.
+    rv = ComponentDipoles(EEG);
 
     [removed, ok] = RemoveComponentsDialog(icl, EEG.icawinv, dispLocs, EEG.icaact, EEG.srate, rv);
     if ~ok

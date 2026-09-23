@@ -54,8 +54,8 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
 
     smoothed = movingMean(signal, max(1, round(o.SmoothMs * srate / 1000)));
 
-    lo = TransTools.Percentile(smoothed, 5);
-    hi = TransTools.Percentile(smoothed, 95);
+    lo = Percentile(smoothed, 5);
+    hi = Percentile(smoothed, 95);
     info.low = lo;
     info.high = hi;
 
@@ -95,7 +95,7 @@ function [onsets, info] = detectDiodeOnsets(signal, srate, opts)
     below = smoothed < level;
     info.separation = separability(smoothed, smoothed < (lo + hi) / 2);
 
-    % A chosen threshold is the analyst overriding this judgement, so the
+    % A chosen threshold is the user overriding this judgement, so the
     % separability test only gates the automatic case.
     if isnan(o.Threshold) && info.separation < o.MinSeparation
         info.reason = sprintf(['The channel does not look like it has two states ' ...

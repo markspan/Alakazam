@@ -15,6 +15,8 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'ChannelEditor')));   % AvailableElectrodeTemplates lives there
         end
     end
 
@@ -24,7 +26,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         %   behaviour: whatever else src/Electrodes grows, 10-5 stays the
         %   default selection rather than falling out of alphabetical order
         %   ("Standard 10-5" would sort after e.g. "Waveguard64...").
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
 
             testCase.assertNotEmpty(templates);
             testCase.verifyEqual(templates(1).name, 'Standard 10-5');
@@ -35,7 +37,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         %   exists at all: an equidistant montage needs a template a 10-5
         %   lookup cannot substitute for, so it must actually appear in the
         %   list, not merely fail to crash it.
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
             names = {templates.name};
 
             testCase.verifyTrue(any(contains(lower(names), 'waveguard')), ...
@@ -47,7 +49,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         %   exists ONLY as a durable backup behind Template1005File's own
         %   resolution; it must not also appear as its own confusingly-named
         %   second "1005" entry when the toolbox copy already covers it.
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
             names = {templates.name};
 
             testCase.verifyEqual(sum(strcmp(names, 'Standard 10-5')), 1, ...
@@ -56,7 +58,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         end
 
         function everyNameIsUnique(testCase)
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
             names = {templates.name};
 
             testCase.verifyEqual(numel(unique(names)), numel(names), ...
@@ -69,7 +71,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         %   not throw on any entry this function hands to the dropdown.
             testCase.assumeTrue(~isempty(which('readlocs')), ...
                 'readlocs (EEGLAB) is not on the path.');
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
 
             for k = 1:numel(templates)
                 t = templates(k);
@@ -88,7 +90,7 @@ classdef AvailableElectrodeTemplatesTest < matlab.unittest.TestCase
         %   "1L" that Standard 10-5 has never heard of.
             testCase.assumeTrue(~isempty(which('readlocs')), ...
                 'readlocs (EEGLAB) is not on the path.');
-            templates = TransTools.AvailableElectrodeTemplates();
+            templates = AvailableElectrodeTemplates();
             k = find(contains(lower({templates.name}), 'waveguard'), 1);
             testCase.assertNotEmpty(k, 'No waveguard entry to check.');
 

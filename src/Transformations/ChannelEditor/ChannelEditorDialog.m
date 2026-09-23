@@ -5,7 +5,7 @@ function chanlocs = ChannelEditorDialog(chanlocs, templates)
 %   EEGLAB's pop_chanedit.
 %
 %   CHANLOCS is the dataset's channels. TEMPLATES is the struct array
-%   TransTools.AvailableElectrodeTemplates returns (.name for the dropdown,
+%   AvailableElectrodeTemplates returns (.name for the dropdown,
 %   .file the path "Look up locations" reads) -- NOT hard-coded to the 10-5
 %   system, because a montage whose labels carry no anatomy (an equidistant
 %   cap) needs a different template entirely, not a fallback. MAY BE EMPTY

@@ -5,7 +5,7 @@ function v = FieldOr(s, name, default)
 %   reimplemented, identically, as a private local function under six
 %   different names (getField/fieldOr/getf) in CoherenceMap.m,
 %   CoherenceTopography.m, Resample.m, SpectralMeasure.m, ArtefactDetect.m
-%   and +TransTools/ComputeCoherenceTopography.m; consolidated here so
+%   and CoherenceTopography/ComputeCoherenceTopography.m; consolidated here so
 %   there is one definition instead of six copies to keep in sync.
     if isstruct(s) && isfield(s, name) && ~isempty(s.(name))
         v = s.(name);

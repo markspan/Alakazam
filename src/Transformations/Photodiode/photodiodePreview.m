@@ -82,7 +82,7 @@ function events = buildEvents(onsets, sourceEvents, pairs, suffix, nSamples)
             'latency', latency, 'duration', 0); %#ok<AGROW>
     end
 
-    % Named exactly as they will be if the analyst chooses to add them,
+    % Named exactly as they will be if the user chooses to add them,
     % so the preview shows the event table they are about to get rather
     % than a placeholder.
     onsetLabels = diodeEventLabels(onsets, sourceEvents, pairs, suffix);
@@ -127,7 +127,7 @@ function style = styleOf(label, suffix)
 %   onset sits a display lag after its trigger, which is tens of
 %   milliseconds: close enough that labels sharing a height overlap, and
 %   the one drawn second covers the first. The trigger code is precisely
-%   what the analyst is reading, so it keeps the bottom. The lag band draws
+%   what the user is reading, so it keeps the bottom. The lag band draws
 %   its own label at the top of the axes (see @label), which is where the
 %   diode label went first and where it was promptly covered. The middle is
 %   the one height left, and it is checked by looking at a render rather

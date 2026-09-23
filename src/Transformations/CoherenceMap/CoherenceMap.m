@@ -5,7 +5,7 @@ function [EEG, opts] = CoherenceMap(varargin)
 %
 %   Runs on EPOCHED single-trial data. For each channel it estimates the
 %   magnitude-squared coherence to the reference across the bin's trials, at
-%   every time point and frequency (see TransTools.ComputeCoherenceMap for the
+%   every time point and frequency (see ComputeCoherenceMap for the
 %   maths -- the same coherence SpectralMeasure computes, but resolved over
 %   time). The reference is typically a photodiode recording the flicker; the
 %   dialog defaults to a photodiode-like channel if one is present.
@@ -23,7 +23,7 @@ function [EEG, opts] = CoherenceMap(varargin)
 %
 %   Also stores, all of them about the reference channel itself:
 %     EEG.cohRefPower     its OWN power in the analysed band (see
-%                         TransTools.ComputeCoherenceMap's own header).
+%                         ComputeCoherenceMap's own header).
 %                         exportCoherenceCSVs.m reads the tagged frequency off
 %                         this, not off an average of every channel's
 %                         coherence, since the reference (typically a
@@ -34,7 +34,7 @@ function [EEG, opts] = CoherenceMap(varargin)
 %                         its amplitude spectrum from 0 Hz to 150 Hz and its
 %                         strongest frequency, per bin (see
 %                         TransTools.ReferenceSpectrum). The band above is
-%                         only what the analyst chose to look at; this shows
+%                         only what the user chose to look at; this shows
 %                         where the flicker actually was, so a condition tagged
 %                         outside the band can be recognised as such.
 %
@@ -150,7 +150,7 @@ end
 
 computeOpts = opts;
 computeOpts.RefIndex = refIdx;
-[coh, freqs, cohTimes, refPower] = TransTools.ComputeCoherenceMap(work, computeOpts);
+[coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(work, computeOpts);
 [refSpectrum, refSpecFreqs, refPeakHz] = TransTools.ReferenceSpectrum(work, refIdx);
 if strcmp(refName, sineLabel)
     coh = coh(1:end - 1, :, :, :);

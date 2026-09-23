@@ -25,11 +25,11 @@ that would mean.
 
 **One caller does read this folder directly**: Channel Editor's "Look up
 locations" offers every template here in a dropdown (10-5 first, the rest
-alphabetically), via `TransTools.AvailableElectrodeTemplates`. That is a
-deliberate, analyst-facing choice made once per edit, not a change to what
+alphabetically), via `AvailableElectrodeTemplates`. That is a
+deliberate, user-facing choice made once per edit, not a change to what
 any transformation resolves positions from automatically -- it is the
 reason this folder exists in the first place: an equidistant montage's
-labels carry no anatomy, so an analyst filling in its locations needs to
+labels carry no anatomy, so a user filling in its locations needs to
 pick THIS file rather than the 10-5 system a 10-5-only lookup would have
 silently failed to match.
 
@@ -66,7 +66,7 @@ plus one `EOG`, 65 positions in all.
   laterality must do it from the coordinates or from the `L`/`R` letter.
 - **Verified on import** (2026-09-13), through `readlocs`, the same reader
   `TransTools.TemplateScalpLocs` uses: 65 channels, all with finite X/Y/Z
-  **and** theta/radius, and `TransTools.LateralPairs` finds 27 lateral
+  **and** theta/radius, and `LateralPairs` finds 27 lateral
   pairs, 10 midline electrodes and 1 unpaired (`EOG`) from the geometry and
   the labels **independently, in exact agreement**.
 - **Coordinates:** mm, `ReferenceLabel avg`, and the axis convention
@@ -81,7 +81,7 @@ plus one `EOG`, 65 positions in all.
   except `3RD`, which precedes `3LD`. Anything pairing adjacent rows would
   swap contralateral for ipsilateral on exactly that pair, in a montage
   where no label would let a reader notice. See
-  `TransTools.LateralPairs`, which pairs by mirrored position or by label
+  `LateralPairs`, which pairs by mirrored position or by label
   and never by channel order, and the test that names this case.
 
 ## If `Template1005File` itself is ever pointed here

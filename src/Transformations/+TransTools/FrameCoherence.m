@@ -48,8 +48,8 @@ function [coh, lag, nFrames] = FrameCoherence(X, R, srate, freqs, opts)
 %     TimeStart, TimeStop   keep frames centred in [TimeStart, TimeStop] ms
 %                 (NaN or empty = every frame)
 %
-%   See also TRANSTOOLS.FRAMESTARTS, TRANSTOOLS.COMPUTECOHERENCEMAP,
-%   SPECTRALMEASURE, TRANSTOOLS.COMPUTECOHERENCETOPOGRAPHY.
+%   See also TRANSTOOLS.FRAMESTARTS, COMPUTECOHERENCEMAP,
+%   SPECTRALMEASURE, COMPUTECOHERENCETOPOGRAPHY.
     if nargin < 5 || isempty(opts)
         opts = struct();
     end

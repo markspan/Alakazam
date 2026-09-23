@@ -5,11 +5,11 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
 %   ICLabel assigned it, that class's probability, the full per-class
 %   probabilities and a "Remove" tick-box, alongside a live scalp-topography,
 %   activation time-course and power-spectrum preview of the currently
-%   selected component, so the analyst can inspect and remove components by
+%   selected component, so the user can inspect and remove components by
 %   hand (the manual counterpart of AutoEyeICA's automatic eye pruning). This
 %   is the EEGLAB pop_selectcomps / pop_subcomp workflow, restyled to the
 %   app -- topography alone often cannot settle a borderline muscle, heart or
-%   line-noise call; the time course and spectrum are what an analyst
+%   line-noise call; the time course and spectrum are what a user
 %   actually reaches for next (pop_prop's own combination), so all three are
 %   shown together rather than topography on its own.
 %
@@ -22,7 +22,7 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
 %   ensureDecomposition), and SRATE is EEG.srate (Hz), used to build the
 %   time axis and the pwelch frequency axis. Returns REMOVED, a row vector of
 %   the component indices to subtract (possibly empty), and OK = true when
-%   the analyst confirmed, or REMOVED = [] and OK = false on cancel.
+%   the user confirmed, or REMOVED = [] and OK = false on cancel.
     [accentColor, bgColor] = dialogChromeColors();
     removed = [];
     ok = false;
@@ -55,10 +55,10 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     % DIPOLE RESIDUAL VARIANCE SITS BESIDE THE ICLABEL PROBABILITIES, not
     % instead of them. It answers a different question -- could ONE dipole
     % have produced this map -- by a physical argument rather than a trained
-    % classifier, so the informative case is the two disagreeing: a
-    % component ICLabel calls brain but no dipole explains is worth a look.
-    % Blank when dipfit could not fit (see TransTools.ComponentDipoles);
-    % componentTableColumns pads a short or absent vector itself.
+    % classifier, so the informative case is the two disagreeing: a component
+    % ICLabel calls brain but no dipole explains is worth a look. Blank when
+    % dipfit could not fit (see ComponentDipoles); componentTableColumns pads
+    % a short or absent vector itself.
     if nargin < 6
         dipoleRv = [];
     end

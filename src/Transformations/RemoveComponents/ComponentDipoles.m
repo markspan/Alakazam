@@ -20,10 +20,10 @@ function [rv, EEG] = ComponentDipoles(EEG)
 %   line noise, a bad channel's projection, or two sources ICA failed to
 %   separate. Residual variance is therefore a physical criterion that is
 %   independent of ICLabel's classifier, and the two disagreeing is worth
-%   the analyst's attention. The convention in the EEGLAB literature is to
+%   the user's attention. The convention in the EEGLAB literature is to
 %   treat components above about 15% residual variance as unlikely to be
 %   single cortical sources; that threshold is a convention, not a law, and
-%   is left to the analyst rather than applied here.
+%   is left to the user rather than applied here.
 %
 %   Uses dipfit's own template BEM head model, which is the model dipfit
 %   ships and is coregistered to its own electrode template. Note this is a

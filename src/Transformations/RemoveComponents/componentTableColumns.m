@@ -27,7 +27,7 @@ function [colNames, colFmt, colEdit, data] = componentTableColumns(classes, prob
 %   tested.
 %
 %   See also REMOVECOMPONENTSDIALOG, COMPONENTSTICKED,
-%   TRANSTOOLS.COMPONENTDIPOLES.
+%   COMPONENTDIPOLES.
     classes = cellfun(@(c) char(string(c)), classes(:)', 'UniformOutput', false);
     nComp   = size(probs, 1);
 

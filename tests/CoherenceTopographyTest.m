@@ -1,6 +1,6 @@
 classdef CoherenceTopographyTest < matlab.unittest.TestCase
-%COHERENCETOPOGRAPHYTEST  Unit tests for
-%   src/Transformations/+TransTools/ComputeCoherenceTopography.m.
+%COHERENCETOPOGRAPHYTEST Unit tests for
+%   src/Transformations/CoherenceTopography/ComputeCoherenceTopography.m.
 %
 %   Uses the same "coherence against a positive real scalar multiple of
 %   the reference is exactly 1" identity as CoherenceMapTest/
@@ -15,6 +15,8 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'CoherenceTopography')));   % ComputeCoherenceTopography lives there
         end
     end
 
@@ -22,14 +24,14 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
         function autoDetectsTheReferencesPeakFrequency(testCase)
             EEG = coherenceFixture();
             opts = defaultOpts();
-            [~, detFreq, ~, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, detFreq, ~, ~] = ComputeCoherenceTopography(EEG, opts);
             testCase.verifyEqual(detFreq(1), 20, 'AbsTol', opts.FreqStep);
         end
 
         function coherenceIsOneForAScalarMultipleAtTheDetectedFrequency(testCase)
             EEG = coherenceFixture();
             opts = defaultOpts();
-            [coh, ~, ~, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [coh, ~, ~, ~] = ComputeCoherenceTopography(EEG, opts);
             testCase.verifyEqual(coh(2, 1), 1, 'AbsTol', 1e-6);
         end
 
@@ -37,7 +39,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = defaultOpts();
             opts.Frequency = 15; % deliberately not the true 20 Hz peak
-            [~, detFreq, refAmp, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, detFreq, refAmp, ~] = ComputeCoherenceTopography(EEG, opts);
             testCase.verifyEqual(detFreq(1), 15);
             testCase.verifyTrue(all(isnan(refAmp(:, 1)))); % search grid not used when Frequency is fixed
         end
@@ -45,7 +47,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
         function referenceChannelRowIsNaN(testCase)
             EEG = coherenceFixture();
             opts = defaultOpts();
-            [coh, ~, ~, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [coh, ~, ~, ~] = ComputeCoherenceTopography(EEG, opts);
             testCase.verifyTrue(all(isnan(coh(opts.RefIndex, :))));
         end
 
@@ -53,7 +55,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             EEG.bindesc(2) = struct('index', 2, 'label', 'Empty', 'trials', [], 'combo', []);
             opts = defaultOpts();
-            [coh, detFreq, ~, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [coh, detFreq, ~, ~] = ComputeCoherenceTopography(EEG, opts);
             testCase.verifyTrue(all(isnan(coh(:, 2))));
             testCase.verifyTrue(isnan(detFreq(2)));
         end
@@ -77,7 +79,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
                 'bindesc', struct('index', 1, 'label', 'Bin1', 'trials', 1:nTrials, 'combo', []));
             opts = defaultOpts();
 
-            [~, ~, refAmp, ampFreqs] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, ~, refAmp, ampFreqs] = ComputeCoherenceTopography(EEG, opts);
 
             Vref = reshape(data(1, :, :), nT, []);
             taper = hann(nT);
@@ -97,7 +99,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             opts.TimeStart = 100;
             opts.TimeStop = 900;
 
-            [coh, detFreq] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [coh, detFreq] = ComputeCoherenceTopography(EEG, opts);
 
             R = squeeze(EEG.data(1, :, :));
             want = TransTools.FrameCoherence(squeeze(EEG.data(2, :, :)), R, EEG.srate, 20, ...
@@ -118,8 +120,8 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             explicit.Method = 'window';
             explicit.TagSource = 'band';
 
-            [c1, f1] = TransTools.ComputeCoherenceTopography(EEG, legacy);
-            [c2, f2] = TransTools.ComputeCoherenceTopography(EEG, explicit);
+            [c1, f1] = ComputeCoherenceTopography(EEG, legacy);
+            [c2, f2] = ComputeCoherenceTopography(EEG, explicit);
 
             testCase.verifyEqual(c1, c2);
             testCase.verifyEqual(f1, f2);
@@ -129,11 +131,11 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             EEG = noisyFixture();
             opts = defaultOpts();
             opts.Frequency = 20;
-            window = TransTools.ComputeCoherenceTopography(EEG, opts);
+            window = ComputeCoherenceTopography(EEG, opts);
             opts.Method = 'frames';
             opts.WindowMs = 200;
 
-            frames = TransTools.ComputeCoherenceTopography(EEG, opts);
+            frames = ComputeCoherenceTopography(EEG, opts);
 
             testCase.verifyLessThan(frames(2, 1), window(2, 1));
         end
@@ -149,9 +151,9 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             opts.MinFreq = 40;
             opts.MaxFreq = 60;
 
-            [~, byBand] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, byBand] = ComputeCoherenceTopography(EEG, opts);
             opts.TagSource = 'reference';
-            [~, byReference] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, byReference] = ComputeCoherenceTopography(EEG, opts);
 
             testCase.verifyGreaterThanOrEqual(byBand(1), 40, 'The band search stays inside its band.');
             testCase.verifyEqual(byReference(1), 20, 'AbsTol', 1.0);
@@ -163,7 +165,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             opts.TagSource = 'reference';
             opts.Frequency = 33;
 
-            [~, detFreq] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [~, detFreq] = ComputeCoherenceTopography(EEG, opts);
 
             testCase.verifyEqual(detFreq(1), 33);
         end
@@ -172,11 +174,11 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             EEG = coherenceFixture();
             opts = defaultOpts();
             opts.Method = 'wavelet';
-            testCase.verifyError(@() TransTools.ComputeCoherenceTopography(EEG, opts), ...
+            testCase.verifyError(@() ComputeCoherenceTopography(EEG, opts), ...
                 'Alakazam:ComputeCoherenceTopography');
             opts = defaultOpts();
             opts.TagSource = 'guess';
-            testCase.verifyError(@() TransTools.ComputeCoherenceTopography(EEG, opts), ...
+            testCase.verifyError(@() ComputeCoherenceTopography(EEG, opts), ...
                 'Alakazam:ComputeCoherenceTopography');
         end
 
@@ -208,7 +210,7 @@ classdef CoherenceTopographyTest < matlab.unittest.TestCase
             opts = defaultOpts();
             opts.RefIndex = 1;
 
-            [coh, ~, ~, ~] = TransTools.ComputeCoherenceTopography(EEG, opts);
+            [coh, ~, ~, ~] = ComputeCoherenceTopography(EEG, opts);
 
             testCase.verifyLessThan(coh(2, 1), 0.5);
         end

@@ -29,13 +29,12 @@ function [EEG, options] = CollapseHemispheres(input, varargin)
 %   contra and ipsi SEPARATELY, or all the lateral pairs at once, which is
 %   what this does.
 %
-%   THE MONTAGE IS NOT ASSUMED. Pairs come from TransTools.LateralPairs,
-%   which mirrors electrode positions through the mid-sagittal plane and
-%   falls back to label conventions (10-20 odd/even, or the L/R letter that
-%   equidistant montages use) when a dataset has no locations yet. So this
-%   works on a 10-20 cap and on an equidistant one, and never pairs by
-%   channel order -- see LateralPairs for the montage where that would
-%   silently invert a pair.
+%   THE MONTAGE IS NOT ASSUMED. Pairs come from LateralPairs, which mirrors
+%   electrode positions through the mid-sagittal plane and falls back to label
+%   conventions (10-20 odd/even, or the L/R letter that equidistant montages
+%   use) when a dataset has no locations yet. So this works on a 10-20 cap and
+%   on an equidistant one, and never pairs by channel order -- see
+%   LateralPairs for the montage where that would silently invert a pair.
 %
 %   THE MONTAGE IS ALSO PRESERVED. Each pair's collapsed waveform is written
 %   to BOTH of its electrodes, so the new bins have the same channels as the
@@ -59,7 +58,7 @@ function [EEG, options] = CollapseHemispheres(input, varargin)
 %   indices, so a stored template survives a bin being added or reordered),
 %   .pairing ('auto', 'geometry' or 'labels'), and .contraLabel/.ipsiLabel.
 %
-%   See also TRANSTOOLS.LATERALPAIRS, COLLAPSEHEMISPHERESDIALOG,
+%   See also LATERALPAIRS, COLLAPSEHEMISPHERESDIALOG,
 %   DERIVECHANNELS, DEFINEBINS, AVERAGE.
 % "chosen" rather than "opts", and that is not a stylistic choice: this
 % function declares its second output as "options", so a bare "opts = ..."
@@ -91,7 +90,7 @@ end
 leftIdx  = binIndicesFor(options.leftBins,  binLabels, 'left');
 rightIdx = binIndicesFor(options.rightBins, binLabels, 'right');
 
-pairing = TransTools.LateralPairs(input.chanlocs, options.pairing);
+pairing = LateralPairs(input.chanlocs, options.pairing);
 if isempty(pairing.pairs)
     throw(MException('Alakazam:CollapseHemispheres', ...
         ['Problem in CollapseHemispheres: I''m afraid I could not match a single ' ...

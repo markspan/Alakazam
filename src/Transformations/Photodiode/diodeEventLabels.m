@@ -26,7 +26,7 @@ function labels = diodeEventLabels(onsets, events, pairs, suffix)
 %
 %   THE PAIRING IS PASSED IN RATHER THAN RECOMPUTED so that the label and
 %   the measured lag cannot disagree: both come from the same run of
-%   diodeTriggerDelay, with the same Types and MaxLagMs the analyst set.
+%   diodeTriggerDelay, with the same Types and MaxLagMs the user set.
 %   Recomputing here with defaults is exactly how a report would come to
 %   say one thing and the event table another.
 %

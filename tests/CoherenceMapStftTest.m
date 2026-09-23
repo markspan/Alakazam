@@ -10,13 +10,15 @@ classdef CoherenceMapStftTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/CoherenceMapStftTest.m').
 %
-%   See also TRANSTOOLS.COMPUTECOHERENCEMAP.
+%   See also COMPUTECOHERENCEMAP.
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'CoherenceMap')));   % ComputeCoherenceMap lives there
         end
     end
 
@@ -25,7 +27,7 @@ classdef CoherenceMapStftTest < matlab.unittest.TestCase
             for taperName = {'Hann', 'Boxcar'}
                 [input, opts] = testCase.fixture(taperName{1});
 
-                [coh, freqs, times, refPower] = TransTools.ComputeCoherenceMap(input, opts);
+                [coh, freqs, times, refPower] = ComputeCoherenceMap(input, opts);
                 [wantCoh, wantFreqs, wantTimes, wantPower] = referenceStft(input, opts);
 
                 label = taperName{1};

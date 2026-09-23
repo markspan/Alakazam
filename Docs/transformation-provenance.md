@@ -49,8 +49,8 @@ from those rather than asked for.
 | `SpectralMeasure` | 295 lines |
 | `Fourier` | 207 lines |
 | `Average` | 182 lines |
-| `TimeFrequency` | 101, plus 175 in `TransTools.ComputeErsp` |
-| `CoherenceMap` | 176, plus 302 in `TransTools.ComputeCoherenceMap` and 76 in `TransTools.ReferenceSpectrum` |
+| `TimeFrequency` | 101, plus 175 in `ComputeErsp` |
+| `CoherenceMap` | 176, plus 302 in `ComputeCoherenceMap` and 76 in `TransTools.ReferenceSpectrum` |
 | `Baseline` | 65 lines |
 | `Brain3D` | scalp-position resolution; the drawing is in `Brain3DView` |
 | `ScalpDistribution` | the distribution; the drawing is in `ScalpDistributionView` |
@@ -59,7 +59,7 @@ Ten of the twenty-two, and they are the substantial ones by volume.
 
 ## Two things worth knowing
 
-**`TimeFrequency` is not a `newtimef` wrapper.** `TransTools.ComputeErsp`
+**`TimeFrequency` is not a `newtimef` wrapper.** `ComputeErsp`
 builds its own Morlet wavelets, `exp(2i*pi*f*t) * exp(-t^2 / 2*sigma^2)`,
 unit-energy normalised and convolved by FFT. `newtimef` appears in that file
 only inside a comment. The same is true of `TransTools.ComputeSourceEstimate`,
@@ -82,7 +82,10 @@ Whole-line comments are stripped before matching, and only whole-line ones.
 Stripping from the first `%` to end of line looks equivalent and is not: it
 truncates format strings such as `'%s'`, which is how an earlier pass lost a
 real `topoplot` call in `TransTools.DrawScalpMap`. Indirect dependencies are
-resolved one hop, through the `+TransTools` helper a transformation calls.
+resolved one hop, through the `+TransTools` helper a transformation calls. A
+helper only one transformation uses lives in that transformation's own folder
+(`CoherenceMap/ComputeCoherenceMap.m`, and so on), so it is already counted
+under "direct": the glob below reads every `.m` in the folder.
 
 Run from `src/Transformations`:
 

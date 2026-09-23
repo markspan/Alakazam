@@ -1,6 +1,6 @@
 function v = Percentile(x, p)
 %PERCENTILE  One percentile of X, without the Statistics Toolbox.
-%   V = TransTools.Percentile(X, P) returns the P-th percentile (P in
+%   V = Percentile(X, P) returns the P-th percentile (P in
 %   0..100) of X, ignoring NaNs. X need not be sorted.
 %
 %   TOOLBOX-FREE ON PURPOSE. prctile lives in the Statistics and Machine

@@ -17,7 +17,7 @@ function [EEG, opts] = TimeFrequency(varargin)
 %   epoched dataset and drawn in its own tab by TimeFrequencyView, the
 %   same way Average/Fourier results are. All the actual per-channel,
 %   per-bin ERSP power is computed here, once, up front, with a progress
-%   bar (see TransTools.ComputeErsp); TimeFrequencyView then only slices
+%   bar (see ComputeErsp); TimeFrequencyView then only slices
 %   the already-computed EEG.ersp array per channel step -- instant,
 %   rather than re-running the wavelet convolution live on every
 %   keypress.
@@ -93,7 +93,7 @@ end
 
 %% Compute every channel x bin's ERSP up front (see TimeFrequencyView.m
 %  for why: instant channel-stepping afterward, not a live recompute).
-[ersp, freqs] = TransTools.ComputeErsp(input, opts);
+[ersp, freqs] = ComputeErsp(input, opts);
 
 %% Build the result dataset. EEG.data/.chanlocs/.times/.bindesc etc. are
 %  all carried over unchanged from the source epoched dataset (still

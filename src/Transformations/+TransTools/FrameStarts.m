@@ -13,7 +13,7 @@ function [starts, centres] = FrameStarts(nSamples, win)
 %
 %   A signal shorter than one window gives one frame at sample 1.
 %
-%   See also TRANSTOOLS.COMPUTECOHERENCEMAP, TRANSTOOLS.FRAMECOHERENCE.
+%   See also COMPUTECOHERENCEMAP, TRANSTOOLS.FRAMECOHERENCE.
     step = max(1, round(win / 4));
     starts = 1:step:(nSamples - win + 1);
     if isempty(starts)

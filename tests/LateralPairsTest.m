@@ -14,6 +14,8 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations', 'CollapseHemispheres')));   % LateralPairs lives there
         end
     end
 
@@ -24,7 +26,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
                 {'A', 'B', 'Mid', 'Bmirror', 'Amirror'}, ...
                 [10 30 0; 20 50 0; 5 0 0; 20 -50 0; 10 -30 0]);
 
-            r = TransTools.LateralPairs(chanlocs);
+            r = LateralPairs(chanlocs);
 
             testCase.verifyEqual(r.method, 'geometry');
             testCase.verifyEqual(testCase.pairLabels(r), {'A/Amirror', 'B/Bmirror'});
@@ -41,7 +43,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             chanlocs = testCase.positioned({'oneL', 'oneR', 'twoR', 'twoL'}, ...
                 [40 20 0; 40 -20 0; 60 -35 0; 60 35 0]);
 
-            r = TransTools.LateralPairs(chanlocs);
+            r = LateralPairs(chanlocs);
 
             byLabel = containers.Map(testCase.pairLabels(r), num2cell(1:numel(r.pairs)));
             testCase.assertTrue(byLabel.isKey('twoL/twoR'), ...
@@ -58,7 +60,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             chanlocs = testCase.positioned({'near', 'far', 'farMirror', 'nearMirror'}, ...
                 [50 20 0; 50 40 0; 50 -40 0; 50 -20 0]);
 
-            r = TransTools.LateralPairs(chanlocs);
+            r = LateralPairs(chanlocs);
 
             testCase.verifyEqual(sort(testCase.pairLabels(r)), ...
                 {'far/farMirror', 'near/nearMirror'});
@@ -71,7 +73,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             chanlocs = testCase.positioned({'L', 'R', 'lonely'}, ...
                 [30 25 0; 30 -25 0; 95 60 -10]);
 
-            r = TransTools.LateralPairs(chanlocs);
+            r = LateralPairs(chanlocs);
 
             testCase.verifyEqual(testCase.pairLabels(r), {'L/R'});
             testCase.verifyEqual(r.unpaired, 3);
@@ -86,7 +88,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             mm = [30 25 0; 30 -25 0; 5 0 0];
 
             for scale = [0.001, 1, 1000]
-                r = TransTools.LateralPairs(testCase.positioned(labels, mm * scale));
+                r = LateralPairs(testCase.positioned(labels, mm * scale));
                 testCase.verifyEqual(testCase.pairLabels(r), {'L/R'}, ...
                     sprintf('Failed at scale %g.', scale));
                 testCase.verifyEqual(r.midline, 3, sprintf('Failed at scale %g.', scale));
@@ -95,7 +97,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
 
         % --- labels ------------------------------------------------------ %
         function tenTwentyLabelsPairOddWithEven(testCase)
-            r = TransTools.LateralPairs(testCase.unpositioned( ...
+            r = LateralPairs(testCase.unpositioned( ...
                 {'F3', 'Fz', 'F4', 'PO7', 'PO8', 'P9', 'P10', 'O1', 'O2'}));
 
             testCase.verifyEqual(r.method, 'labels');
@@ -109,7 +111,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
         %   names electrodes by position in the array, not by anatomy, so
         %   odd/even numbering finds nothing: 1L pairs with 1R, and 2LB with
         %   2RB. Labels from ANT's waveguard64 equidistant montage.
-            r = TransTools.LateralPairs(testCase.unpositioned( ...
+            r = LateralPairs(testCase.unpositioned( ...
                 {'0Z', '1L', '1R', '1LB', '1RB', '10L', '10R', '4Z'}));
 
             testCase.verifyEqual(r.method, 'labels');
@@ -122,7 +124,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
         %APARTNERTHATDOESNOTEXISTISNOTINVENTED  Both label rules predict a
         %   partner and then require it to be present, which is what makes
         %   each safe to try on a montage it was not meant for.
-            r = TransTools.LateralPairs(testCase.unpositioned({'F3', 'PO7', '1L'}));
+            r = LateralPairs(testCase.unpositioned({'F3', 'PO7', '1L'}));
 
             testCase.verifyEmpty(r.pairs);
             testCase.verifyEqual(sort(r.unpaired), [1 2 3]);
@@ -131,32 +133,32 @@ classdef LateralPairsTest < matlab.unittest.TestCase
         % --- choosing between them --------------------------------------- %
         function geometryIsUsedWhenPositionsArePresent(testCase)
             positioned = testCase.positioned({'F3', 'F4'}, [30 25 0; 30 -25 0]);
-            testCase.verifyEqual(TransTools.LateralPairs(positioned).method, 'geometry');
+            testCase.verifyEqual(LateralPairs(positioned).method, 'geometry');
         end
 
         function labelsAreUsedWhenPositionsAreNot(testCase)
             testCase.verifyEqual( ...
-                TransTools.LateralPairs(testCase.unpositioned({'F3', 'F4'})).method, 'labels');
+                LateralPairs(testCase.unpositioned({'F3', 'F4'})).method, 'labels');
         end
 
         function eitherMethodCanBeForced(testCase)
         %EITHERMETHODCANBEFORCED  Positions and labels can disagree (a
         %   mislabelled electrode, a cap fitted the other way round), and an
-        %   analyst who suspects that needs to be able to see both answers.
+        %   user who suspects that needs to be able to see both answers.
             chanlocs = testCase.positioned({'F3', 'F4'}, [30 25 0; 30 -25 0]);
 
-            testCase.verifyEqual(TransTools.LateralPairs(chanlocs, 'labels').method, 'labels');
-            testCase.verifyEqual(TransTools.LateralPairs(chanlocs, 'geometry').method, 'geometry');
+            testCase.verifyEqual(LateralPairs(chanlocs, 'labels').method, 'labels');
+            testCase.verifyEqual(LateralPairs(chanlocs, 'geometry').method, 'geometry');
         end
 
         function anUnknownMethodIsRefusedRatherThanGuessed(testCase)
-            testCase.verifyError(@() TransTools.LateralPairs( ...
+            testCase.verifyError(@() LateralPairs( ...
                 testCase.unpositioned({'F3', 'F4'}), 'nearest'), ...
                 'Alakazam:LateralPairs');
         end
 
         function noChannelsIsNotAnError(testCase)
-            r = TransTools.LateralPairs(struct('labels', {}));
+            r = LateralPairs(struct('labels', {}));
 
             testCase.verifyEmpty(r.pairs);
             testCase.verifyEmpty(r.midline);
@@ -168,7 +170,7 @@ classdef LateralPairsTest < matlab.unittest.TestCase
             chanlocs = testCase.positioned({'front', 'frontR', 'back', 'backR'}, ...
                 [80 30 0; 80 -30 0; -80 10 0; -80 -10 0]);
 
-            r = TransTools.LateralPairs(chanlocs);
+            r = LateralPairs(chanlocs);
 
             testCase.verifyEqual(testCase.pairLabels(r), {'front/frontR', 'back/backR'}, ...
                 'Ordered by the left member''s own place in the channel list.');

@@ -2,7 +2,7 @@ classdef TimeFrequencyView < AlakazamView
 %TIMEFREQUENCYVIEW  Grid of per-bin ERSP heatmaps, one channel at a time.
 %
 %   Draws every bin's precomputed EEG.ersp (channels x freqs x time x
-%   bins, see TransTools.ComputeErsp, called from TimeFrequency.m) as one
+%   bins, see ComputeErsp, called from TimeFrequency.m) as one
 %   imagesc tile per bin, up to 3 per row wrapping to a new row (the same
 %   tiling convention AverageView's tick strip and ScalpDistribution's
 %   subplot grid both use), with a single shared, symmetric diverging

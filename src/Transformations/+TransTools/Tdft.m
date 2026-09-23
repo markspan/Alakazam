@@ -10,7 +10,7 @@ function X = Tdft(V, f, t, tapers)
 %   what makes the zero-sum higher DPSS tapers safe to include here.
 %
 %   Previously reimplemented in SpectralMeasure.m (K tapers) and
-%   TransTools.ComputeCoherenceTopography (one Hann taper, whose own copy
+%   ComputeCoherenceTopography (one Hann taper, whose own copy
 %   said "the same tapered single-frequency DFT SpectralMeasure.m uses");
 %   consolidated here. The single-taper case is just K = 1, returning the
 %   1 x nT row those callers already annotated and expected.
@@ -26,7 +26,7 @@ function X = Tdft(V, f, t, tapers)
 %   meant two code paths inside the function whose whole point is that there
 %   is one.
 %
-%   See also SPECTRALMEASURE, TRANSTOOLS.COMPUTECOHERENCETOPOGRAPHY.
+%   See also SPECTRALMEASURE, COMPUTECOHERENCETOPOGRAPHY.
     if isvector(tapers)
         tapers = tapers(:);
     end

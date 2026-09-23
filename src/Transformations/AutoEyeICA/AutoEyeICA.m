@@ -106,7 +106,7 @@ if ~isempty(which('fastica'))
 else
     icaType = 'runica';
 end
-key = TransTools.DataKey(eegOnly.data, {EEG.chanlocs(eegIdx).labels}, icaType);
+key = DataKey(eegOnly.data, {EEG.chanlocs(eegIdx).labels}, icaType);
 decomposition = [];
 if ~logical(TransTools.FieldOr(opts, 'Redecompose', false))
     decomposition = TransTools.IcaCache('get', key);

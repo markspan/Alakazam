@@ -14,7 +14,8 @@ classdef ComponentDipolesTest < matlab.unittest.TestCase
     methods (TestClassSetup)
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
-            for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations')}
+            for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations'), ...
+                     fullfile(root, 'src', 'Transformations', 'RemoveComponents')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
@@ -26,7 +27,7 @@ classdef ComponentDipolesTest < matlab.unittest.TestCase
         %   guarantees a decomposition before calling this, but the function
         %   is callable on its own and must not punish that.
             EEG = struct('icaweights', [], 'icachansind', []);
-            rv = TransTools.ComponentDipoles(EEG);
+            rv = ComponentDipoles(EEG);
             testCase.verifyEmpty(rv);
         end
 
@@ -38,7 +39,7 @@ classdef ComponentDipolesTest < matlab.unittest.TestCase
                 'icawinv', eye(4), 'icachansind', 1:4, 'nbchan', 4, ...
                 'chanlocs', struct('labels', {'a', 'b', 'c', 'd'}));
 
-            rv = TransTools.ComponentDipoles(EEG);
+            rv = ComponentDipoles(EEG);
 
             testCase.verifyNumElements(rv, 4);
             testCase.verifyTrue(all(isnan(rv)), ...
@@ -55,7 +56,7 @@ classdef ComponentDipolesTest < matlab.unittest.TestCase
                 'chanlocs', struct('labels', arrayfun(@(k) sprintf('E%d', k), ...
                     1:nComp, 'UniformOutput', false)));
 
-            rv = TransTools.ComponentDipoles(EEG);
+            rv = ComponentDipoles(EEG);
 
             testCase.verifyNumElements(rv, nComp);
             testCase.verifySize(rv, [nComp 1]);
@@ -72,7 +73,7 @@ classdef ComponentDipolesTest < matlab.unittest.TestCase
             testCase.assumeNotEmpty(which('pop_runica'), 'EEGLAB is not installed.');
             EEG = testCase.decomposedFixture();
 
-            rv = TransTools.ComponentDipoles(EEG);
+            rv = ComponentDipoles(EEG);
 
             testCase.verifyNumElements(rv, size(EEG.icaweights, 1));
             fitted = rv(isfinite(rv));
