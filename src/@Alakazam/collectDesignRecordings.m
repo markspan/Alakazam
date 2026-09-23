@@ -51,13 +51,14 @@ end
 
 % ----------------------------------------------------------------------- %
 function tf = isAveragedErp(info)
-%ISAVERAGEDERP  Average.m's own output, not a downstream step that merely
-%   requires Averaged input. Mirrors findGrandAverageCandidates' own
-%   isFreshAverage: without it, every Measure or ScalpDistribution node
-%   built on an Average would count as a second recording for the same
-%   subject and double its contribution to every cell.
+%ISAVERAGEDERP  An average of this subject, not a downstream step that
+%   merely requires Averaged input (producesSubjectAverage says which is
+%   which, and why): without that distinction, every Measure or
+%   ScalpDistribution node built on an Average would count as a second
+%   recording for the same subject and double its contribution to every
+%   cell.
     tf = strcmpi(info.DataFormat, "Averaged") ...
-        && (isempty(info.Call) || strcmpi(info.Call, 'Average')) ...
+        && producesSubjectAverage(info.Call) ...
         && ~info.hasErsp && ~info.hasCoherence;
 end
 

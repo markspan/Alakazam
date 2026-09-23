@@ -70,7 +70,7 @@ function [results, width] = replayBranchOnTargets(sourceFile, targetFiles, trans
     inFlight = struct('future', {}, 'index', {});
     next = 1;
     while next <= n || ~isempty(inFlight)
-        while numel(inFlight) < width && next <= n
+        while numel(inFlight) < width && next <= n && memoryAllowsAnother(inFlight)
             callIfGiven(onStart, next);
             inFlight(end + 1) = struct('future', parfeval(pool, @replayOnWorker, 1, ...
                 clientPath, here, threads, sourceFile, targetFiles{next}, transRoot), 'index', next); %#ok<AGROW>
@@ -115,6 +115,34 @@ end
 function callIfGiven(fcn, varargin)
     if ~isempty(fcn)
         fcn(varargin{:});
+    end
+end
+
+function tf = memoryAllowsAnother(inFlight)
+%MEMORYALLOWSANOTHER  Is there room to start one more recording right now?
+%   The width of the batch was decided before it began, from an estimate of
+%   what one replay costs (applyToAllWorkers). That estimate is made from
+%   the recording's file size, which says nothing about a step whose cost is
+%   the model it builds, so it can be badly optimistic: the reported symptom
+%   was a machine stalling in swap on a branch whose steps each wanted
+%   several GB while the budget had allowed 1.55 GB apiece.
+%
+%   This is the check that cannot be fooled by a bad estimate: before
+%   starting each recording, look at what is actually free. Below the floor,
+%   wait for one of the running ones to finish and free its memory instead.
+%
+%   ALWAYS TRUE WHEN NOTHING IS RUNNING, so a batch can never deadlock
+%   waiting for memory that only finishing work would release, and always
+%   true where free memory cannot be read: an unreadable gauge is not a
+%   reason to serialise the whole batch.
+    FLOOR = 4e9;   % bytes free below which another worker is not started
+    tf = true;
+    if isempty(inFlight)
+        return;
+    end
+    free = availableMemory();
+    if isfinite(free)
+        tf = free >= FLOOR;
     end
 end
 

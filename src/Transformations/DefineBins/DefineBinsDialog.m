@@ -1,4 +1,4 @@
-function result = DefineBinsDialog(defaultScript, prevEpoch)
+function result = DefineBinsDialog(defaultScript, prevEpoch, opts)
 %DEFINEBINSDIALOG  Modal editor: epoch start/stop side by side, script below.
 %   Returns a struct with .start, .stop (raw text) and .script, or [] if the
 %   user cancelled or closed the window. Epoch-bounds validation and script
@@ -6,27 +6,56 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
 %   here: Save is a convenience for resuming the same setup later, so it
 %   (like Save elsewhere in this dialog) accepts whatever is currently
 %   typed, valid or not.
+%
+%   OPTS (optional) adapts the same editor for another transformation that
+%   needs bins defined in this language:
+%     .showEpoch  false hides the epoch start/stop row, for a caller that
+%                 does not cut epochs at all (Deconvolve fits a response
+%                 window against continuous data instead). .start and .stop
+%                 then come back empty, which DefineBins reads as "tag the
+%                 events, reshape nothing".
+%     .name       the window's title bar, default 'DefineBins'.
+%     .note       a line of explanation above the editor, for a caller whose
+%                 reason for asking is not simply "define bins".
+%   Reusing this editor rather than putting a second script box in another
+%   dialog is deliberate: Save, Load, Import BDF and the language reference
+%   are most of its value, and a copy would have none of them.
+%
+%   See also DEFINEBINS, DECONVOLVE, DECONVOLVEDIALOG.
     result = [];
+    if nargin < 3 || isempty(opts); opts = struct(); end
+    showEpoch = logical(TransTools.FieldOr(opts, 'showEpoch', true));
+    name      = char(TransTools.FieldOr(opts, 'name', 'DefineBins'));
+    note      = char(TransTools.FieldOr(opts, 'note', ''));
 
     % 780 wide, not the original 640: the button row's fixed widths plus its
     % padding and gaps need 646px before the flexible spacer gets anything,
     % so adding "Syntax..." pushed the last button off the edge. This leaves
     % the spacer real room rather than only just fitting.
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'DefineBins', 'Position', fitOnScreen([100 100 780 520]), 'Color', bgColor);
+    fig = uifigure('Name', name, 'Position', fitOnScreen([100 100 780 520]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Define bins', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
     outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44});
 
-    % Row 1: epoch start/stop fields, side by side.
-    epochRow = uigridlayout(outer, [1 4], ...
-        'ColumnWidth', {'fit', 90, 'fit', 90}, 'Padding', [8 8 8 0]);
-    epochRow.Layout.Row = 1;
-    uilabel(epochRow, 'Text', 'Epoch start (ms):');
-    startField = uieditfield(epochRow, 'text', 'Value', prevEpoch{1});
-    uilabel(epochRow, 'Text', 'Epoch stop (ms):');
-    stopField = uieditfield(epochRow, 'text', 'Value', prevEpoch{2});
+    % Row 1: epoch start/stop fields, side by side; or, for a caller that cuts
+    % no epochs, its reason for asking in their place.
+    if showEpoch
+        epochRow = uigridlayout(outer, [1 4], ...
+            'ColumnWidth', {'fit', 90, 'fit', 90}, 'Padding', [8 8 8 0]);
+        epochRow.Layout.Row = 1;
+        uilabel(epochRow, 'Text', 'Epoch start (ms):');
+        startField = uieditfield(epochRow, 'text', 'Value', prevEpoch{1});
+        uilabel(epochRow, 'Text', 'Epoch stop (ms):');
+        stopField = uieditfield(epochRow, 'text', 'Value', prevEpoch{2});
+    else
+        startField = [];
+        stopField  = [];
+        noteRow = uigridlayout(outer, [1 1], 'Padding', [8 8 8 0]);
+        noteRow.Layout.Row = 1;
+        uilabel(noteRow, 'WordWrap', 'on', 'FontColor', [0.35 0.35 0.35], 'Text', note);
+    end
 
     % Row 2: bin definitions, a multi-line text area.
     scriptArea = uitextarea(outer, 'Value', strsplit(defaultScript, newline), ...
@@ -83,9 +112,22 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
         end
     end
 
+    function [startStr, stopStr] = epochText()
+    %EPOCHTEXT  What is typed in the epoch fields, or nothing when a caller
+    %   asked for them to be hidden. Empty bounds are how DefineBins is told
+    %   to tag the events and reshape nothing.
+        if isempty(startField)
+            startStr = '';
+            stopStr  = '';
+        else
+            startStr = strtrim(startField.Value);
+            stopStr  = strtrim(stopField.Value);
+        end
+    end
+
     function onOK()
-        result = struct('start', strtrim(startField.Value), ...
-            'stop', strtrim(stopField.Value), ...
+        [startStr, stopStr] = epochText();
+        result = struct('start', startStr, 'stop', stopStr, ...
             'script', strjoin(scriptArea.Value, newline));
         uiresume(fig);
         delete(fig);
@@ -99,9 +141,10 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
     function onSave()
         [file, path] = uiextras.uiputfile2('*.binscript', 'Save bin definitions as');
         if isequal(file, 0); return; end
+        [startStr, stopStr] = epochText();
         try
-            writeScriptFile(fullfile(path, file), strtrim(startField.Value), ...
-                strtrim(stopField.Value), strjoin(scriptArea.Value, newline));
+            writeScriptFile(fullfile(path, file), startStr, stopStr, ...
+                strjoin(scriptArea.Value, newline));
         catch err
             uialert(fig, err.message, 'Save failed');
         end
@@ -112,8 +155,10 @@ function result = DefineBinsDialog(defaultScript, prevEpoch)
         if isequal(file, 0); return; end
         try
             [startStr, stopStr, script] = readScriptFile(fullfile(path, file));
-            startField.Value = startStr;
-            stopField.Value  = stopStr;
+            if ~isempty(startField)
+                startField.Value = startStr;
+                stopField.Value  = stopStr;
+            end
             scriptArea.Value = splitlines(script);
         catch err
             uialert(fig, err.message, 'Load failed');

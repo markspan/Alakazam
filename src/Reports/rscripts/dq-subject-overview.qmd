@@ -15,15 +15,35 @@ cat(as_raw_html(apa_gt(
 #| fig-height: 5
 # Ordered by rejection rate rather than alphabetically: the reason to look at
 # this plot at all is to find the tail, and an alphabetical axis hides it.
-sp <- subj %>%
-  mutate(dataset = fct_reorder(dataset, pct_rejected)) %>%
-  ggplot(aes(x = pct_rejected, y = dataset)) +
-  geom_col(fill = alz_blue, width = 0.7) +
-  geom_vline(xintercept = median(subj$pct_rejected, na.rm = TRUE),
-             linetype = "dashed", colour = "grey40") +
-  labs(x = "Trials rejected (%)", y = NULL,
-       subtitle = "Dashed line: median across subjects") +
-  alz_theme()
-print(sp)
+#
+# A subject with no rejection rate at all is left out of the bars and counted
+# in the subtitle instead. That is a deconvolved dataset: it is fitted against
+# the continuous recording rather than averaged over trials, so it has no
+# trials to reject and nothing to draw here. Leaving it in made fct_reorder
+# fail outright (a level whose summary is NA gets no position), and drawing it
+# as a zero-length bar would have been worse than the error: it would have read
+# as the cleanest subject in the study.
+rated <- subj %>% filter(!is.na(pct_rejected))
+unrated <- nrow(subj) - nrow(rated)
+if (nrow(rated) == 0) {
+  cat(paste0("\n\nNo subject here has a trial rejection rate: every dataset in this report ",
+             "was fitted rather than averaged, so there are no trials to reject. The ",
+             "provenance table below reports what each fit excluded instead.\n\n"))
+} else {
+  note <- "Dashed line: median across subjects"
+  if (unrated > 0) {
+    note <- paste0(note, "; ", unrated,
+                   " fitted (deconvolved) subject(s) not shown: no trials to reject")
+  }
+  sp <- rated %>%
+    mutate(dataset = fct_reorder(dataset, pct_rejected)) %>%
+    ggplot(aes(x = pct_rejected, y = dataset)) +
+    geom_col(fill = alz_blue, width = 0.7) +
+    geom_vline(xintercept = median(rated$pct_rejected, na.rm = TRUE),
+               linetype = "dashed", colour = "grey40") +
+    labs(x = "Trials rejected (%)", y = NULL, subtitle = note) +
+    alz_theme()
+  print(sp)
+}
 ```
 

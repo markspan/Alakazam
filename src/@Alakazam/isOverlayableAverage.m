@@ -9,14 +9,17 @@ function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
 %   for one) leaves EEG.data untouched, so its own result looks exactly
 %   like "a second average of the same shape" too -- dropping THAT onto an
 %   existing average must still run the transformation (add Measure to
-%   this subject too), not silently overlay plots and skip it. Only
-%   Average.m (sourceEEG.Call == "Average") and GrandAverage (which never
-%   sets .Call at all, see saveGrandAverage.m) actually PRODUCE a fresh
-%   average from non-Averaged input; anything else reaching here with
-%   Averaged-shaped data is annotating/measuring an existing one, so only
-%   those two are eligible for the overlay reading of a drop.
-    sourceIsFreshAverage = ~isfield(sourceEEG, 'Call') || isempty(sourceEEG.Call) ...
-        || strcmpi(sourceEEG.Call, 'Average');
+%   this subject too), not silently overlay plots and skip it. Which calls
+%   actually PRODUCE an average from non-averaged input is
+%   producesSubjectAverage's answer, shared with the grand-average,
+%   design and data-quality collectors that each need the same one;
+%   anything else reaching here with Averaged-shaped data is
+%   annotating or measuring an existing average, not making one.
+    if isfield(sourceEEG, 'Call')
+        sourceIsFreshAverage = producesSubjectAverage(sourceEEG.Call);
+    else
+        sourceIsFreshAverage = true;    % no call at all: a grand average
+    end
     tf = sourceIsFreshAverage && ...
          strcmpi(targetEEG.DataFormat, "AVERAGED") && ...
          strcmpi(sourceEEG.DataFormat, "AVERAGED") && ...

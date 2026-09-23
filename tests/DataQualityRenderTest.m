@@ -59,6 +59,40 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
     end
 
     methods (Test, TestTags = {'Slow', 'External'})
+        function itRendersWithADeconvolvedSubject(testCase)
+        %ITRENDERSWITHADECONVOLVEDSUBJECT  A deconvolved subject reaches this
+        %   report with every trial-based column empty, because it has no
+        %   trials to measure (deconvolutionQuality says why). Empty columns
+        %   are exactly what breaks an R report: a plot with nothing to draw,
+        %   a summarise over an all-NA group, a model fitted on a subject that
+        %   contributes no rows. The generator's own tests cannot see any of
+        %   that, so this renders the document and requires it to come back.
+            temporary = testCase.applyFixture( ...
+                matlab.unittest.fixtures.TemporaryFolderFixture);
+            folder = temporary.Folder;
+            entries = testCase.qualityEntries(false);
+            entries(end + 1) = struct('subject', 'deconvolved01', 'group', '', ...
+                'session', '', 'quality', ...
+                deconvolutionQuality(DeconvolvedNodesTest.fittedDataset())); %#ok<AGROW>
+
+            stem = fullfile(folder, 'dq');
+            [summaryCsv, trialCsv, smeCsv] = exportDataQualityCSVs(entries, stem);
+            [~, s] = fileparts(summaryCsv);
+            [~, t] = fileparts(trialCsv);
+            [~, m] = fileparts(smeCsv);
+            qmd = generateDataQualityReport(entries, [s '.csv'], [t '.csv'], [m '.csv'], '');
+            qmdFile = fullfile(folder, 'dq.qmd');
+            writeQmdFile(qmdFile, qmd, 'Alakazam:DataQualityRenderTest');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+
+            testCase.verifyEmpty(errorMessage, sprintf( ...
+                'A deconvolved subject stopped the report rendering:\n%s', errorMessage));
+            testCase.verifyNotEmpty(html);
+            testCase.verifySubstring(fileread(html), 'deconvolved01', ...
+                'The subject is named in the report rather than silently dropped.');
+        end
+
         function dependabilityMatchesItsClosedForm(testCase)
             temporary = testCase.applyFixture( ...
                 matlab.unittest.fixtures.TemporaryFolderFixture);

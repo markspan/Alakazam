@@ -21,6 +21,19 @@ function n = applyToAllWorkers(targetFiles, varargin)
 %   them one at a time. Where free memory cannot be read, two workers are
 %   used.
 %
+%   WHY THERE IS A FLOOR (MINPERWORKER) under that budget. The recording's
+%   size predicts the cost of a step that copies the data, and predicts
+%   nothing about a step whose cost is the model it builds: a source
+%   estimate's leadfield, or a deconvolution's time-expanded design, are the
+%   same size whether the recording is 10 MB or 1 GB. A Chapter3 branch
+%   (Filter, Deconvolve, Brain3D, Measure) on 17 MB recordings was budgeted
+%   1.55 GB a worker and observed to peak near 6 GB, so eight cores' worth
+%   of workers asked for some 50 GB on a 24 GB machine and the whole machine
+%   stalled in swap. The floor makes the estimate wrong in the safe
+%   direction; replayBranchOnTargets then checks the free memory again
+%   before it starts each recording, which is what catches the case where
+%   even the floor is optimistic.
+%
 %   MEASURED on the RIFT workspace (subject 1's eight-step branch replayed
 %   onto nine recordings of 0.38 to 0.68 GB, 8 cores, 24 GB): one MATLAB
 %   replaying alone took 3.4 GB at its peak, which is what the budget gives
@@ -39,6 +52,7 @@ function n = applyToAllWorkers(targetFiles, varargin)
     PEAKFACTOR = 3;          % peak memory of one replay, in multiples of its cache file
     WORKEROVERHEAD = 1.5e9;  % bytes: a worker MATLAB with the toolboxes loaded
     RESERVE = 2e9;           % bytes kept free for the app and the system
+    MINPERWORKER = 4e9;      % bytes: the least a worker is ever assumed to need
 
     targetFiles = cellstr(targetFiles);
     p = inputParser;
@@ -77,7 +91,7 @@ function n = applyToAllWorkers(targetFiles, varargin)
     end
 
     if isfinite(o.AvailableBytes)
-        perWorker = PEAKFACTOR * max(o.FileBytes) + WORKEROVERHEAD;
+        perWorker = max(MINPERWORKER, PEAKFACTOR * max(o.FileBytes) + WORKEROVERHEAD);
         byMemory = floor((o.AvailableBytes - RESERVE) / perWorker);
     else
         byMemory = 2;
@@ -95,24 +109,5 @@ function bytes = fileBytes(file)
         bytes = 0;
     else
         bytes = info.bytes;
-    end
-end
-
-function bytes = availableMemory()
-%AVAILABLEMEMORY  Free physical memory in bytes, or NaN when it cannot be read.
-    bytes = NaN;
-    try
-        if ispc
-            [~, sys] = memory;
-            bytes = sys.PhysicalMemory.Available;
-        elseif isfile('/proc/meminfo')
-            txt = fileread('/proc/meminfo');
-            kb = regexp(txt, 'MemAvailable:\s*(\d+)', 'tokens', 'once');
-            if ~isempty(kb)
-                bytes = str2double(kb{1}) * 1024;
-            end
-        end
-    catch
-        bytes = NaN;
     end
 end

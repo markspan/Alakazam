@@ -40,22 +40,31 @@ function entries = collectDataQualityEntries(this)
             continue; % a node can outlive its file -- see loadNodeEEG's own note
         end
         info = readEegCacheInfo(node.UserData);
-        if ~strcmpi(info.DataFormat, 'Averaged') || ~strcmpi(info.Call, 'Average')
+        if ~strcmpi(info.DataFormat, 'Averaged') || ~producesSubjectAverage(info.Call)
             continue;
         end
         epochedFile = nearestEpochedAncestor(this.Workspace.Tree, byFile, node);
-        if isempty(epochedFile)
-            continue; % nothing segmented behind it (e.g. a loaded .erp)
-        end
-
-        epoched  = load(epochedFile, 'EEG');
         averaged = load(node.UserData, 'EEG');
-        windows  = measureWindowsUnder(this.Workspace.Tree, byFile, nodes, node);
-        rejectionRan = rejectionInChain(this.Workspace.Tree, byFile, epochedFile);
-        try
-            quality = dataQualityMetrics(epoched.EEG, averaged.EEG, windows, rejectionRan);
-        catch
-            continue; % single-trial or otherwise undescribable -- see dataQualityMetrics' own guard
+        if isempty(epochedFile)
+            % A deconvolved average has no epoched ancestor and never will:
+            % it is fitted against the continuous recording, which is the
+            % whole point of it. It is described from what it does have
+            % (deconvolutionQuality) rather than left out of the report,
+            % since "this subject has no quality figures" and "this subject
+            % is not in the report" read very differently to whoever checks.
+            if ~isDeconvolved(averaged.EEG)
+                continue; % nothing segmented behind it (e.g. a loaded .erp)
+            end
+            quality = deconvolutionQuality(averaged.EEG);
+        else
+            epoched  = load(epochedFile, 'EEG');
+            windows  = measureWindowsUnder(this.Workspace.Tree, byFile, nodes, node);
+            rejectionRan = rejectionInChain(this.Workspace.Tree, byFile, epochedFile);
+            try
+                quality = dataQualityMetrics(epoched.EEG, averaged.EEG, windows, rejectionRan);
+            catch
+                continue; % single-trial or otherwise undescribable -- see dataQualityMetrics' own guard
+            end
         end
 
         subjectNode = this.Workspace.Tree.rootOf(node.Id);
@@ -72,6 +81,14 @@ function entries = collectDataQualityEntries(this)
 end
 
 % ----------------------------------------------------------------------- %
+function tf = isDeconvolved(EEG)
+%ISDECONVOLVED  Was this average fitted rather than averaged? Asked of the
+%   dataset's own provenance, not of the node's name, so a renamed node or a
+%   later averaging method that writes the same record still answers.
+    tf = isfield(EEG, 'etc') && isstruct(EEG.etc) && isfield(EEG.etc, 'alz') ...
+        && isstruct(EEG.etc.alz) && isfield(EEG.etc.alz, 'unfold');
+end
+
 function tf = rejectionInChain(tree, byFile, epochedFile)
 %REJECTIONINCHAIN  Has an artefact-rejection step actually been run on this
 %   dataset? True when ArtefactDetect or ManualReject appears anywhere from

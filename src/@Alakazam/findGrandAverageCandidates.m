@@ -78,21 +78,10 @@ function tag = candidateKind(info)
         tag = 'TF';
     elseif info.hasCoherence
         tag = 'coherence';
-    elseif strcmpi(info.DataFormat, "Averaged") && isFreshAverage(info)
+    elseif strcmpi(info.DataFormat, "Averaged") && producesSubjectAverage(info.Call)
         tag = 'ERP';
     else
         tag = '';
     end
 end
 
-function tf = isFreshAverage(info)
-%ISFRESHAVERAGE  True when INFO is Average.m's own output (or a loaded
-%   .erp, which never sets .Call either) -- not a downstream step that
-%   merely requires Averaged input (Measure, ScalpDistribution) and leaves
-%   EEG.data/.bindesc untouched, so its own result looks exactly like a
-%   second average of the same subject too. Same distinction, needed for
-%   the same reason, as isOverlayableAverage's own sourceIsFreshAverage --
-%   without it, every Measure/ScalpDistribution node built on a subject's
-%   Average would show up as an extra, duplicate ERP candidate here.
-    tf = isempty(info.Call) || strcmpi(info.Call, 'Average');
-end
