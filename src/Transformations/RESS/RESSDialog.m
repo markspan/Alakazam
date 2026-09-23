@@ -10,11 +10,11 @@ function options = RESSDialog(EEG, stored)
 %   pooled: "RIFT 60Hz" and "RIFT 60Hz peripheral" build one 60 Hz filter.
 %   That is the pooling RESS recommends; see its header.
 %
-%   OK checks the settings with TransTools.RESSPlan, the same function RESS
+%   OK checks the settings with RESSPlan, the same function RESS
 %   applies them with, and says what to change rather than closing on
 %   something RESS would refuse.
 %
-%   See also RESS, TRANSTOOLS.RESSPLAN.
+%   See also RESS, RESSPLAN.
     options = [];
     COLUMN_NAMES = {'Label', 'Frequency (Hz)', 'Build from bins (blank = all)'};
 
@@ -98,7 +98,7 @@ function options = RESSDialog(EEG, stored)
     uiwait(fig);
 
     function showChannels()
-        mask = TransTools.RESSChannels(EEG.chanlocs, mastoidBox.Value);
+        mask = RESSChannels(EEG.chanlocs, mastoidBox.Value);
         channelNote.Text = sprintf('Combines %d channels: %s', nnz(mask), strjoin({EEG.chanlocs(mask).labels}, ' '));
     end
 
@@ -132,7 +132,7 @@ function options = RESSDialog(EEG, stored)
             'peakFWHM', peakField.Value, 'neighbourDistance', distField.Value, ...
             'neighbourFWHM', neighField.Value, 'shrinkage', shrinkField.Value / 100);
         try
-            TransTools.RESSPlan(EEG, candidate);
+            RESSPlan(EEG, candidate);
         catch err
             uialert(fig, err.message, 'Check the RESS settings');
             return;

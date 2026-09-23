@@ -881,7 +881,7 @@ Alakazam believes your design to be before you run anything.
 that recording out of every report, statistic and grand average, with the
 count and the names of what was excluded printed where the design is shown.
 It replaces an older implicit rule, where a recording with no group assigned
-was silently dropped from grouped tests: the decision is now the analyst's,
+was silently dropped from grouped tests: the decision is now the user's,
 and visible, rather than a side effect of leaving a field blank.
 
 ### The signal behind the numbers
@@ -1259,7 +1259,7 @@ themselves it records:
   statement, and only the second one stops a reader treating cluster extent
   as a measurement. It is drawn only when the forward model is already in
   memory, which it is whenever the figure is rendered straight after the
-  test, so the figure never adds a leadfield build to an analyst's click.
+  test, so the figure never adds a leadfield build to a user's click.
 - **Software versions**: MATLAB, FieldTrip and the Alakazam commit, marked
   when the working tree had uncommitted changes, since a report generated
   from a modified tree corresponds to no commit at all.
@@ -1289,7 +1289,7 @@ R run the test: the permutation happens in MATLAB in both cases, because
 FieldTrip is a MATLAB toolbox and R has no equivalent. What differs is the
 **plotting**. The scalp report exports three long-format CSVs and has R draw
 the heatmap, the topographies and the waveforms from them, which also leaves
-the analyst a flat table to plot differently if they wish. The source
+the user a flat table to plot differently if they wish. The source
 report's figures are cortical surfaces, which cannot be drawn from a flat
 CSV without shipping the mesh alongside it, so they are rendered in MATLAB
 and the document is plain markdown. That has the side benefit of rendering
@@ -1684,7 +1684,7 @@ between people, which is the signal any correlation or group difference rests
 on, and within a person from trial to trial, which is noise that averaging
 reduces. Dependability is the first as a fraction of what an average of *n*
 trials actually measures, and the report inverts it to give the number an
-analyst actually wants: how many trials per person a dependability of .70 or
+user actually wants: how many trials per person a dependability of .70 or
 .80 would take for this measure, at this channel, in this condition. The
 variance components come from a random-intercept model rather than from ANOVA
 mean squares, because trial counts differ per person after rejection and the
@@ -1873,17 +1873,26 @@ names the bins that are not one: a bin a harmonic of whose frequency falls on th
 filter's (30 Hz drives 60 Hz), or lies so close that the coherence frames cannot
 separate them. Eye channels, the photodiode and, unless asked, the mastoids stay
 out of the filter. Alakazam's filter agrees with the authors' own code to a
-correlation of 0.99999, and forces the sign of the weights as well as of the map,
-so a component's phase lag to the photodiode is comparable between recordings.
+correlation of 0.9999 or better (weights, maps and components, over the twenty
+filters of the ten RIFT recordings); given his own frequency grid and width
+conversion, which Alakazam corrects, the weights come out identical to ten
+decimals, so those two constants are the whole of the difference. It forces the
+sign of the weights as well as of the map, so a component's phase lag to the
+photodiode is comparable between recordings whose maps agree; the report names
+a recording whose map is inverted, since its phase is then half a cycle from
+the rest, and one where the filter separated nothing.
 A recording without trials for a row (in the RIFT study only subjects 1 to 3 ran
 the 30 Hz control) gets that component as an empty channel with a warning, and
 the rest of the branch runs as usual; the report names those recordings, and
 their values are missing rather than zero.
 
 On the ten RIFT recordings, with the branch's own settings, the component's
-coherence to the photodiode was higher than Oz's in every recording: 0.39
-against 0.16 at 64 Hz, and 0.16 higher on average at 60 Hz, with the same gain
+coherence to the photodiode beat Oz's in all ten at both central frequencies:
+0.39 against 0.16 at 64 Hz, and 0.44 against 0.19 at 60 Hz, with the same gain
 when the filter was fitted on half the trials and measured on the other half.
+The peripheral 60 Hz condition is the exception that says something: there both
+sit on the noise floor (0.039 against 0.031, and in one recording the component
+is the lower of the two), because there is little response to separate.
 That run also showed a limit of the coherence frames rather than of RESS: at
 2000 Hz, 510-sample frames last 255 ms and cannot separate 60 from 64 Hz, so the
 64 Hz readout in 60 Hz trials was 60 Hz leaking through (0.12 at Oz, down to the
@@ -2339,7 +2348,7 @@ steps](https://erpinfo.org/order-of-steps) (see
 [References](#references)). `Filter`'s own choice of a zero-phase FIR
 windowed-sinc design, with the filter order and transition band picked
 automatically from the requested frequency and stopband attenuation rather
-than left for the analyst to guess, follows the practical guidance in
+than left for the user to guess, follows the practical guidance in
 Widmann, Schröger & Maess (2015). Built fresh from an imported raw recording,
 each step's own options dialog on the **Tools** tab would ask for:
 

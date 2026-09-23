@@ -2,10 +2,10 @@ function mask = RESSChannels(chanlocs, includeMastoids)
 %RESSCHANNELS  Which channels a RESS filter combines: scalp EEG, and the
 %   mastoids only when asked.
 %
-%   MASK = TransTools.RESSChannels(CHANLOCS, INCLUDEMASTOIDS) is a logical
-%   row, one value per channel. It starts from eegChannelMask (which leaves
-%   out eye, heart, muscle, trigger and photodiode channels, and earlier RESS
-%   components) and then also leaves out:
+%   MASK = RESSChannels(CHANLOCS, INCLUDEMASTOIDS) is a logical row, one value
+%   per channel. It starts from eegChannelMask (which leaves out eye, heart,
+%   muscle, trigger and photodiode channels, and earlier RESS components) and
+%   then also leaves out:
 %
 %     eye electrodes named by position rather than by type: IO1/IO2
 %     (infra-orbital), LO1/LO2 (lateral orbital), SO1/SO2 (supra-orbital),
@@ -24,7 +24,7 @@ function mask = RESSChannels(chanlocs, includeMastoids)
 %   channels artefact detection, ICA and the displays use for every existing
 %   analysis, which is a decision to make on its own.
 %
-%   See also EEGCHANNELMASK, RESS, TRANSTOOLS.RESSPLAN.
+%   See also EEGCHANNELMASK, RESS, RESSPLAN.
     mask = eegChannelMask(chanlocs);
     if isempty(chanlocs)
         return;

@@ -5,16 +5,15 @@ function [EEG, options] = RESS(input, varargin)
 %
 %   WHAT IT IS FOR. A response to flicker is usually read from one electrode,
 %   or a few, chosen for where the response looks strongest. That choice
-%   differs between people and frequencies, and choosing channels by their
-%   own response is circular. RESS (Cohen & Gulbinaite, 2017, NeuroImage
-%   147, 43-56) replaces it with a spatial filter per recording and
-%   frequency: the combination of all scalp channels whose power at the
-%   stimulation frequency is largest relative to the frequencies beside it.
-%   The component is added as a channel, "RESS60Hz" say, so everything
-%   downstream reads it like an electrode: Spectral Measure's coherence and
-%   phase lag to a photodiode, SNR and phase-locking, the coherence map.
-%   See TransTools.RESSFilter for the method and its fidelity to the
-%   authors' own code.
+%   differs between people and frequencies, and choosing channels by their own
+%   response is circular. RESS (Cohen & Gulbinaite, 2017, NeuroImage 147,
+%   43-56) replaces it with a spatial filter per recording and frequency: the
+%   combination of all scalp channels whose power at the stimulation frequency
+%   is largest relative to the frequencies beside it. The component is added
+%   as a channel, "RESS60Hz" say, so everything downstream reads it like an
+%   electrode: Spectral Measure's coherence and phase lag to a photodiode, SNR
+%   and phase-locking, the coherence map. See RESSFilter for the method and
+%   its fidelity to the authors' own code.
 %
 %   WHICH TRIALS BUILD A FILTER. Each row names the bins whose trials build
 %   it, pooled: for the RIFT design, the 60 Hz filter from the central and
@@ -27,9 +26,9 @@ function [EEG, options] = RESS(input, varargin)
 %   bin whose frequency divides it: 30 Hz flicker drives a 60 Hz harmonic.
 %   The report keeps the two apart; see ReportSections.ressSection.)
 %
-%   WHICH CHANNELS. Scalp EEG only (TransTools.RESSChannels), optionally
-%   with the mastoids; never eye channels, the photodiode or an earlier
-%   component. Running RESS again replaces its earlier channels.
+%   WHICH CHANNELS. Scalp EEG only (RESSChannels), optionally with the
+%   mastoids; never eye channels, the photodiode or an earlier component.
+%   Running RESS again replaces its earlier channels.
 %
 %   The weights, the scalp map (forward model), the eigenvalues and what
 %   each filter was built from are kept in EEG.etc.alz.ress, one element per
@@ -42,16 +41,15 @@ function [EEG, options] = RESS(input, varargin)
 %   components are built as usual, so Apply to All carries on and every
 %   recording keeps the same channels. The report names those recordings.
 %
-%   Options (see TransTools.RESSPlan): rows (label, freq, bins),
-%   includeMastoids, timeStart/timeStop (ms; blank for the whole epoch),
-%   peakFWHM, neighbourDistance, neighbourFWHM (Hz), shrinkage (0 to 1).
+%   Options (see RESSPlan): rows (label, freq, bins), includeMastoids,
+%   timeStart/timeStop (ms; blank for the whole epoch), peakFWHM,
+%   neighbourDistance, neighbourFWHM (Hz), shrinkage (0 to 1).
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = RESS(input)        % interactive dialog
 %     [EEG, options] = RESS(input, opts)  % replay a stored struct
 %
-%   See also TRANSTOOLS.RESSFILTER, TRANSTOOLS.RESSPLAN, RESSDIALOG,
-%   SPECTRALMEASURE.
+%   See also RESSFILTER, RESSPLAN, RESSDIALOG, SPECTRALMEASURE.
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:RESS', varargin{:});
 EEG = input;
 if interactive
@@ -67,7 +65,7 @@ else
 end
 
 EEG = stripComponents(EEG);
-plan = TransTools.RESSPlan(EEG, options);
+plan = RESSPlan(EEG, options);
 options.rows = arrayfun(@(r) struct('label', r.label, 'freq', r.freq, ...
     'bins', strjoin(r.bins, ', ')), plan.rows, 'UniformOutput', false);   % normalised, as stored on the node
 
@@ -90,7 +88,9 @@ for k = 1:numel(plan.rows)
     % its channel is added all NaN, so every recording of a study keeps the
     % same channels and a Spectral Measure row naming it still runs (with
     % a missing value here), and the other components are built as usual.
-    usable = row.trials(reshape(all(all(isfinite(X(:, plan.window, row.trials)), 1), 2), 1, []));
+    % Usable means finite over the whole epoch, which is what RESSFilter
+    % judges on too: the filter runs over the epoch, not over the window.
+    usable = row.trials(reshape(all(all(isfinite(X(:, :, row.trials)), 1), 2), 1, []));
     if isempty(usable)
         note = sprintf(['%s has no usable trial of %s in this recording, so no filter was built and ' ...
             'its channel is left empty (NaN)'], row.label, strjoin(row.bins, ', '));
@@ -104,8 +104,8 @@ for k = 1:numel(plan.rows)
         notes{end + 1} = note; %#ok<AGROW>
         continue;
     end
-    result = TransTools.RESSFilter(X(:, :, row.trials), EEG.srate, row.freq, filterOpts);
-    component = TransTools.RESSComponent(X, result.weights);
+    result = RESSFilter(X(:, :, row.trials), EEG.srate, row.freq, filterOpts);
+    component = RESSComponent(X, result.weights);
     EEG = appendComponent(EEG, row.label, component);
     info(k) = struct('label', row.label, 'freq', row.freq, 'bins', {row.bins}, ...
         'channels', {channelLabels}, 'weights', result.weights, 'map', result.map, ...

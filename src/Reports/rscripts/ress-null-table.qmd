@@ -1,0 +1,22 @@
+ress_tab <- dat %>%
+  filter(measure_type %in% c("coherence", "snr")) %>%
+  inner_join(ress_roles, by = c("channel" = "component", "bin" = "bin")) %>%
+  filter(abs(frequency_hz - freq) < 1e-6) %>%
+  group_by(channel, bin, role, measure_type) %>%
+  summarise(M = mean(value, na.rm = TRUE), SD = sd(value, na.rm = TRUE),
+            n = sum(!is.na(value)), .groups = "drop") %>%
+  pivot_wider(names_from = measure_type, values_from = c(M, SD, n))
+if (nrow(ress_tab) > 0) {
+  for (nm in c("M_coherence", "SD_coherence", "M_snr", "SD_snr", "n_coherence")) {
+    if (!nm %in% names(ress_tab)) ress_tab[[nm]] <- NA_real_
+  }
+  shown <- ress_roles %>% select(channel = component, bin, role) %>%
+    left_join(ress_tab, by = c("channel", "bin", "role")) %>%
+    transmute(Component = channel, Bin = bin, Role = role, Coherence = M_coherence,
+              `Coherence SD` = SD_coherence, SNR = M_snr, `SNR SD` = SD_snr, n = n_coherence)
+  cat(as_raw_html(blank_missing(apa_gt(shown, "Each Component at Its Own Frequency, by Bin"))))
+  cat("\n*Coherence to the reference and SNR of each component at its own frequency: mean and SD over recordings. A blank row is a bin the Spectral Measure did not read at that frequency.*\n\n")
+} else {
+  cat("\n*No Spectral Measure row reads a RESS component at its own frequency, so there is no null to show.*\n\n")
+}
+```

@@ -2,9 +2,9 @@ function result = RESSFilter(X, srate, freq, opts)
 %RESSFILTER  Rhythmic entrainment source separation: the weighted combination
 %   of channels that carries the most power at a stimulation frequency.
 %
-%   RESULT = TransTools.RESSFilter(X, SRATE, FREQ, OPTS) takes X (channels x
-%   samples x trials, the trials that build the filter), the sampling rate
-%   and the stimulation frequency in Hz, and returns
+%   RESULT = RESSFilter(X, SRATE, FREQ, OPTS) takes X (channels x samples x
+%   trials, the trials that build the filter), the sampling rate and the
+%   stimulation frequency in Hz, and returns
 %     .weights      channels x 1 spatial filter, unit length, sign fixed
 %     .map          channels x 1 forward model (the component's scalp map)
 %     .eigenvalues  every generalized eigenvalue, largest first; the first
@@ -13,7 +13,7 @@ function result = RESSFilter(X, srate, freq, opts)
 %     .shrinkage    the shrinkage applied to the reference covariance
 %     .rank         the numerical rank of the reference covariance
 %     .trialsUsed   which pages of X entered the covariances
-%   Apply it with TransTools.RESSComponent.
+%   Apply it with RESSComponent.
 %
 %   THE METHOD (Cohen & Gulbinaite, 2017, NeuroImage 147, 43-56). Two channel
 %   covariance matrices are formed from the same samples: S from the data
@@ -22,7 +22,7 @@ function result = RESSFilter(X, srate, freq, opts)
 %   eigenvector of (S, R) with the largest eigenvalue maximizes the ratio of
 %   power at FREQ to power beside it, which is what a response to flicker has
 %   and ongoing activity mostly does not. The filters are the Gaussians of
-%   TransTools.GaussianBandpass, applied to the whole epoch before the window
+%   GaussianBandpass, applied to the whole epoch before the window
 %   is taken, so the circular filter's wrap-around stays outside it.
 %
 %   AS IN THE REFERENCE CODE (github.com/mikexcohen/RESS), with one fix. The
@@ -47,10 +47,11 @@ function result = RESSFilter(X, srate, freq, opts)
 %     NeighbourFWHM      width of the filters at the neighbours, Hz (1)
 %     Window             logical 1 x samples: the samples used (all)
 %     Shrinkage          g above, 0 to 1                          (0.01)
-%   The defaults are the reference code's. A trial with a NaN in the window
-%   (a rejected epoch is blanked to NaN) is left out of the covariances.
+%   The defaults are the reference code's. A trial with a NaN anywhere in
+%   the epoch (a rejected epoch is blanked to NaN) is left out of the
+%   covariances, the whole epoch because that is what the filter runs over.
 %
-%   See also TRANSTOOLS.RESSCOMPONENT, TRANSTOOLS.GAUSSIANBANDPASS, RESS.
+%   See also RESSCOMPONENT, GAUSSIANBANDPASS, RESS.
     if nargin < 4 || isempty(opts)
         opts = struct();
     end
@@ -75,7 +76,13 @@ function result = RESSFilter(X, srate, freq, opts)
     end
 
     X = double(X);
-    usable = squeeze(all(all(isfinite(X(:, window, :)), 1), 2));
+    % Judged on the WHOLE trial, not only on the window: the Gaussian is
+    % applied to the whole epoch before the window is taken, so a NaN
+    % anywhere in a trial spreads over all of it. Judging it on the window
+    % alone let a trial blanked outside the window into the covariances,
+    % which came back all NaN, and eig then returned NaN weights without
+    % complaining: a component silently missing rather than a trial left out.
+    usable = squeeze(all(all(isfinite(X), 1), 2));
     usable = reshape(usable, 1, []);
     if nnz(usable) < 1
         throw(MException('Alakazam:RESSFilter', ...
@@ -129,7 +136,7 @@ end
 function C = bandCovariance(X, srate, freq, fwhm, window)
 %BANDCOVARIANCE  Channel covariance of X filtered at FREQ, over WINDOW,
 %   pooled across trials.
-    F = TransTools.GaussianBandpass(X, srate, freq, fwhm);
+    F = GaussianBandpass(X, srate, freq, fwhm);
     F = reshape(F(:, window, :), size(F, 1), []);
     F = F - mean(F, 2);
     C = (F * F') / size(F, 2);

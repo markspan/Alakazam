@@ -74,6 +74,77 @@ classdef RessReportTest < matlab.unittest.TestCase
             testCase.verifyTrue(all(isnan(coh2)) && all(isnan(snr2)), 'Empty in the second: missing.');
         end
 
+        function howFarEachFilterSeparatedIsStated(testCase)
+        %HOWFAREACHFILTERSEPARATEDISSTATED  The largest eigenvalue is the
+        %   separation the filter achieved; near 1 it found nothing, which
+        %   the article asks a reader to check and the table of coherences
+        %   cannot show.
+            entries = RessReportTest.entries(500);
+            entries(2).EEG.etc.alz.ress(1).eigenvalues(1) = 0.85;
+
+            qmd = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(qmd, 'RESS60Hz separated 60 Hz from the frequencies beside it');
+            testCase.verifySubstring(qmd, 'A factor near 1 means');
+            testCase.verifySubstring(qmd, 's2 is below 1');
+            testCase.verifyFalse(contains(qmd, 'RESS64Hz separated 64 Hz from the frequencies beside it by a factor of 0'), ...
+                'The other component separated normally, so it gets no warning.');
+        end
+
+        function anInvertedMapIsNamed(testCase)
+        %ANINVERTEDMAPISNAMED  The sign of a component is fixed by the
+        %   largest channel of its own map, so a recording whose map points
+        %   the other way has its phase half a cycle from the rest.
+            entries = RessReportTest.entries(500);
+            entries(3) = entries(1);
+            entries(3).subject = 's3';
+            entries(3).person = 's3';
+            entries(3).EEG.etc.alz.ress(1).map = -entries(1).EEG.etc.alz.ress(1).map;
+
+            qmd = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(qmd, 'The scalp map of s3 is inverted relative to the others');
+            testCase.verifySubstring(qmd, 'half a cycle');
+        end
+
+        function theSnrBiasIsStatedAndMeasuredAgainstTheFilterSOwnBand(testCase)
+        %THESNRBIASISSTATEDANDMEASUREDAGAINSTTHEFILTERSOWNBAND  A component's
+        %   SNR is above 1 by construction (Cohen & Gulbinaite), and most so
+        %   when the SNR neighbours lie inside the band the filter suppressed.
+            entries = RessReportTest.entries(500);
+            wide = generateQuartoReport(entries, 'x.csv');          % neighbours out to 3.7 Hz
+            for k = 1:numel(entries)
+                entries(k).EEG.params.snrNeighbours = 2;            % out to 1 Hz: inside the band
+            end
+            narrow = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(wide, 'partly a biased measure');
+            testCase.verifyFalse(contains(wide, 'inside the band the filter suppressed'), ...
+                'Out there the neighbours are past the reference band, so there is nothing to warn about.');
+            testCase.verifySubstring(narrow, 'inside the band the filter suppressed');
+            testCase.verifySubstring(narrow, 'raising the Spectral Measure''s neighbour count');
+        end
+
+        function aNeighbourOnAnotherConditionSFrequencyIsNamed(testCase)
+        %ANEIGHBOURONANOTHERCONDITIONSFREQUENCYISNAMED  The reference
+        %   covariance is what the filter suppresses, so building it at
+        %   another condition's own frequency suppresses that condition's
+        %   response on purpose. The authors avoided precisely this with
+        %   their 16 and 17 Hz stimuli.
+            entries = RessReportTest.entries(500);
+            for k = 1:numel(entries)   % neighbours 4 Hz either side of 60: one lands on the 64 Hz bin
+                for c = 1:numel(entries(k).EEG.etc.alz.ress)
+                    entries(k).EEG.etc.alz.ress(c).neighbourDistance = 4;
+                end
+            end
+
+            qmd = generateQuartoReport(entries, 'x.csv');
+
+            testCase.verifySubstring(qmd, 'RESS60Hz is built to suppress the frequencies 4 Hz either side of 60 Hz');
+            testCase.verifySubstring(qmd, 'RIFT 64Hz (64 Hz) was tagged at one of them');
+            testCase.verifySubstring(qmd, 'not to be compared through it');
+        end
+
         function noComponentMeansNoSection(testCase)
             entries = RessReportTest.entries(100);
             for k = 1:numel(entries)

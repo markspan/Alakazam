@@ -12,14 +12,18 @@ classdef RESSTest < matlab.unittest.TestCase
 %
 %   The filter's agreement with the authors' own code (github.com/mikexcohen/
 %   RESS) was checked on the RIFT data outside the suite, since that code has
-%   no licence to be vendored: weights, maps and components correlated
-%   0.99999 or better, and the largest eigenvalues differed by 0.5 to 1.7%,
-%   the frequency grid and filter width being corrected here. See
-%   TransTools.RESSFilter.
+%   no licence to be vendored. Over the twenty filters of the ten RIFT
+%   recordings (60 and 64 Hz), weights, maps and components correlated
+%   0.9999 or better with his, and the largest eigenvalue differed by -4.8%
+%   to +0.5%: consistently about 4.5% lower at 64 Hz, within half a per cent
+%   at 60 Hz. Given his own frequency grid and width conversion, which
+%   RESSFilter corrects, the weights come out identical to ten decimals and
+%   the eigenvalues to four, so the difference is those two constants and
+%   nothing else in the procedure. See RESSFilter.
 %
 %   Run with: runtests('tests/RESSTest.m').
 %
-%   See also RESS, TRANSTOOLS.RESSFILTER, TRANSTOOLS.RESSPLAN.
+%   See also RESS, RESSFILTER, RESSPLAN.
 
     properties (Constant)
         Scalp = {'Fz', 'Cz', 'C3', 'C4', 'Pz', 'PO7', 'PO3', 'POz', 'PO4', 'PO8', 'O1', 'Oz'}
@@ -38,8 +42,8 @@ classdef RESSTest < matlab.unittest.TestCase
     methods (Test)
         function theGaussianFilterHasUnitGainAndNoPhaseShift(testCase)
             srate = 500; t = (0:1999) / srate;
-            at = TransTools.GaussianBandpass(sin(2 * pi * 60 * t), srate, 60, 0.5);
-            half = TransTools.GaussianBandpass(sin(2 * pi * 60.25 * t), srate, 60, 0.5);
+            at = GaussianBandpass(sin(2 * pi * 60 * t), srate, 60, 0.5);
+            half = GaussianBandpass(sin(2 * pi * 60.25 * t), srate, 60, 0.5);
 
             mid = 500:1500;
             testCase.verifyEqual(at(mid), sin(2 * pi * 60 * t(mid)), 'AbsTol', 1e-2, ...
@@ -53,7 +57,7 @@ classdef RESSTest < matlab.unittest.TestCase
             scalp = ismember({EEG.chanlocs.labels}, RESSTest.Scalp);
             trials = [EEG.bindesc(1:2).trials];
 
-            r = TransTools.RESSFilter(EEG.data(scalp, :, trials), EEG.srate, 60, struct());
+            r = RESSFilter(EEG.data(scalp, :, trials), EEG.srate, 60, struct());
 
             truth = RESSTest.pattern();
             testCase.verifyGreaterThan(abs(corr(r.map, truth(:))), 0.98);
@@ -73,8 +77,8 @@ classdef RESSTest < matlab.unittest.TestCase
             scalp = ismember({EEG.chanlocs.labels}, RESSTest.Scalp);
             X = EEG.data(scalp, :, [EEG.bindesc(1:2).trials]);
 
-            a = TransTools.RESSFilter(X, EEG.srate, 60, struct());
-            b = TransTools.RESSFilter(-X, EEG.srate, 60, struct());
+            a = RESSFilter(X, EEG.srate, 60, struct());
+            b = RESSFilter(-X, EEG.srate, 60, struct());
 
             testCase.verifyEqual(b.weights, a.weights, 'AbsTol', 1e-10);
         end
@@ -85,9 +89,9 @@ classdef RESSTest < matlab.unittest.TestCase
             X = EEG.data(scalp, :, [EEG.bindesc(1:2).trials]);
             X = X - mean(X, 1);                                   % average reference: rank 11 of 12
 
-            testCase.verifyError(@() TransTools.RESSFilter(X, EEG.srate, 60, struct('Shrinkage', 0)), ...
+            testCase.verifyError(@() RESSFilter(X, EEG.srate, 60, struct('Shrinkage', 0)), ...
                 'Alakazam:RESSFilter');
-            r = TransTools.RESSFilter(X, EEG.srate, 60, struct());
+            r = RESSFilter(X, EEG.srate, 60, struct());
             testCase.verifyEqual(r.rank, 11);
             truth = RESSTest.pattern();
             testCase.verifyGreaterThan(abs(corr(r.map, truth(:) - mean(truth))), 0.98);
@@ -99,12 +103,33 @@ classdef RESSTest < matlab.unittest.TestCase
             X = EEG.data(scalp, :, [EEG.bindesc(1:2).trials]);
             X(:, 10:20, 2) = NaN;
 
-            r = TransTools.RESSFilter(X, EEG.srate, 60, struct());
-            c = TransTools.RESSComponent(X, r.weights);
+            r = RESSFilter(X, EEG.srate, 60, struct());
+            c = RESSComponent(X, r.weights);
 
             testCase.verifyEqual(nnz(r.trialsUsed), size(X, 3) - 1);
             testCase.verifyTrue(any(isnan(c(1, :, 2))));
             testCase.verifyFalse(any(isnan(c(1, :, 1))));
+        end
+
+        function aTrialBlankedOutsideTheWindowIsLeftOut(testCase)
+        %ATRIALBLANKEDOUTSIDETHEWINDOWISLEFTOUT  The Gaussian runs over the
+        %   whole epoch before the window is taken, so a NaN outside the
+        %   window still spreads over the whole trial. Judging usability on
+        %   the window alone let such a trial into the covariances, which
+        %   came back all NaN, and eig returned NaN weights without
+        %   complaining: the component was then silently missing.
+            EEG = RESSTest.recording();
+            scalp = ismember({EEG.chanlocs.labels}, RESSTest.Scalp);
+            X = EEG.data(scalp, :, [EEG.bindesc(1:2).trials]);
+            X(:, 1:5, 2) = NaN;                                   % before the window only
+            window = false(1, EEG.pnts);
+            window(200:1200) = true;
+
+            r = RESSFilter(X, EEG.srate, 60, struct('Window', window));
+
+            testCase.verifyTrue(all(isfinite(r.weights)), 'One blanked trial must not poison the filter.');
+            testCase.verifyFalse(r.trialsUsed(2));
+            testCase.verifyEqual(nnz(r.trialsUsed), size(X, 3) - 1);
         end
 
         function eachRowAddsItsComponentAsAChannel(testCase)
@@ -133,9 +158,9 @@ classdef RESSTest < matlab.unittest.TestCase
             testCase.verifyEqual(info.bins, {'RIFT 60Hz', 'RIFT 60Hz peripheral'});
             testCase.verifyEqual(info.nTrials, numel([EEG.bindesc(1:2).trials]));
             used = ismember({EEG.chanlocs.labels}, info.channels);
-            direct = TransTools.RESSFilter(EEG.data(used, :, [EEG.bindesc(1:2).trials]), EEG.srate, 60, struct());
+            direct = RESSFilter(EEG.data(used, :, [EEG.bindesc(1:2).trials]), EEG.srate, 60, struct());
             testCase.verifyEqual(info.weights, direct.weights, 'AbsTol', 1e-12);
-            component = TransTools.RESSComponent(EEG.data(used, :, :), direct.weights);
+            component = RESSComponent(EEG.data(used, :, :), direct.weights);
             testCase.verifyEqual(out.data(end - 1, :, :), component, 'AbsTol', 1e-12, ...
                 'Every trial gets the component, the 64 Hz and 30 Hz trials included.');
         end

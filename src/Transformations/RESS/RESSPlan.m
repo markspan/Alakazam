@@ -3,15 +3,14 @@ function plan = RESSPlan(EEG, options)
 %   filter is built from. Shared by RESS and its dialog, so the two cannot
 %   accept different things.
 %
-%   PLAN = TransTools.RESSPlan(EEG, OPTIONS) throws an Alakazam:RESS error
-%   that says what to change when OPTIONS cannot be applied to EEG, and
-%   otherwise returns
+%   PLAN = RESSPlan(EEG, OPTIONS) throws an Alakazam:RESS error that says what
+%   to change when OPTIONS cannot be applied to EEG, and otherwise returns
 %     .rows      one per component: .label, .freq (Hz), .bins (cellstr: the
 %                bins whose trials build it) and .trials (their union, empty
 %                when this recording has none of those trials)
-%     .channels  logical, the channels combined (TransTools.RESSChannels)
+%     .channels  logical, the channels combined (RESSChannels)
 %     .window    logical, the samples the covariances use
-%     .filter    the options TransTools.RESSFilter takes
+%     .filter    the options RESSFilter takes
 %
 %   OPTIONS: .rows (a cell array or struct array of .label, .freq, .bins;
 %   bins is a comma-separated list of bin labels, blank for every ordinary
@@ -19,7 +18,7 @@ function plan = RESSPlan(EEG, options)
 %   whole epoch), .peakFWHM, .neighbourDistance, .neighbourFWHM (Hz) and
 %   .shrinkage (0 to 1).
 %
-%   See also RESS, RESSDIALOG, TRANSTOOLS.RESSFILTER.
+%   See also RESS, RESSDIALOG, RESSFILTER.
     if ~isfield(EEG, 'DataFormat') || ~strcmpi(EEG.DataFormat, 'EPOCHED')
         fail(['RESS needs single-trial epoched data (DataFormat "EPOCHED"), because the filter ' ...
               'is built from the trials of chosen bins. Would you run DefineBins with an epoch ' ...
@@ -44,7 +43,7 @@ function plan = RESSPlan(EEG, options)
         fail('The shrinkage must be at least 0 and below 1; 0.01 shrinks the reference by one per cent.');
     end
 
-    plan.channels = TransTools.RESSChannels(EEG.chanlocs, logical(TransTools.FieldOr(options, 'includeMastoids', false)));
+    plan.channels = RESSChannels(EEG.chanlocs, logical(TransTools.FieldOr(options, 'includeMastoids', false)));
     if nnz(plan.channels) < 2
         fail('A RESS filter combines channels, and fewer than two scalp EEG channels are left to combine.');
     end
