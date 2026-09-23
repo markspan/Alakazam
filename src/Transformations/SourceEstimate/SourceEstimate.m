@@ -10,7 +10,7 @@ function [EEG, opts] = SourceEstimate(input, varargin)
 %   and repeatable, which is the definition of something worth storing, and
 %   Alakazam already has a mechanism for exactly that: a node in the tree.
 %   It carries provenance, it is invalidated when anything upstream changes,
-%   the analyst can see it and delete it, and collectEntriesWithField finds
+%   the user can see it and delete it, and collectEntriesWithField finds
 %   it through the JSON sidecar without loading the node. A private cache
 %   beside all that would be a second mechanism doing the same job worse.
 %

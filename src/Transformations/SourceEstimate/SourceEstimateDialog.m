@@ -6,7 +6,7 @@ function opts = SourceEstimateDialog(EEG, previous)
 %
 %   THE SAME SETTINGS AS THE SOURCE CLUSTER TEST, and deliberately worded
 %   the same way, because a stored estimate is reused by that test only when
-%   every one of them matches. An analyst who sets a 200 ms window here and
+%   every one of them matches. A user who sets a 200 ms window here and
 %   a 300 ms window there gets no reuse and no error, so the dialog says
 %   what the choices are for rather than leaving them to be discovered.
 %

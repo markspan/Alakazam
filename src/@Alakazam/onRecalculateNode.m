@@ -5,7 +5,7 @@ function onRecalculateNode(this)
 %   at creation time, see WorkSpaceTree.optsFor):
 %     * a Grand Average node -- reopens GrandAverageDialog
 %       pre-filled with its current sources/weighting (its name is
-%       fixed), lets the analyst add/remove subjects or change the
+%       fixed), lets the user add/remove subjects or change the
 %       weighting, then recomputes and re-saves it in place;
 %     * a node produced by one of WorkSpaceTree.RecalculableTransforms
 %       -- delegates to recalculateTransformNode, see there.

@@ -4,7 +4,7 @@ function [EEG, options] = ManualReject(input, varargin)
 %   The manual counterpart of ArtefactDetect: rather than an automatic
 %   threshold, it opens a per-trial channel browser (ManualRejectDialog)
 %   showing every channel's waveform for one trial at a time, and lets the
-%   analyst click a channel to flag it faulty for that trial while walking
+%   user click a channel to flag it faulty for that trial while walking
 %   through the whole recording. On confirm, flagged data is rejected the
 %   same way ArtefactDetect rejects a detected hit -- set to NaN, which
 %   Average already omits -- with the same Whole-epoch/This-channel-only

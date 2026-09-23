@@ -13,7 +13,7 @@ classdef QuartoReportCsvContractTest < matlab.unittest.TestCase
 %   still succeeds (a CSV has no schema to violate), every dplyr filter
 %   then matches nothing, and the report renders cleanly with every single
 %   section reporting "Skipped: fewer than two subjects ...". That reads
-%   to an analyst as a DATA problem -- a bad export, a mis-assigned group,
+%   to a user as a DATA problem -- a bad export, a mis-assigned group,
 %   too few subjects -- rather than as a code defect, so the real cause
 %   can sit unnoticed for a long time.
 %

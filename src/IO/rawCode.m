@@ -8,7 +8,7 @@ function marker = rawCode(expression)
 %
 %   emits `'script', binScript1` instead of a kilobyte of escaped text. Used
 %   by exportAnalysisScript to keep each DefineBins bin script in its own
-%   .binscript file, in the form the analyst wrote it, rather than inlining
+%   .binscript file, in the form the user wrote it, rather than inlining
 %   it into the generated .m where it can no longer be read or edited as a
 %   bin script.
 %

@@ -119,7 +119,7 @@ classdef DesignRecordsTest < matlab.unittest.TestCase
 
         function bothShapesChooseTheSameModel(testCase)
         %BOTHSHAPESCHOOSETHESAMEMODEL  The consequence of the above, stated
-        %   in the terms an analyst would notice: the same study cannot be
+        %   in the terms a user would notice: the same study cannot be
         %   given one model by the panel's reading and another by the
         %   report's.
             fromPanel = reportDesignPlan(deriveDesign(testCase.twoByTwoAsPanelSeesIt()));

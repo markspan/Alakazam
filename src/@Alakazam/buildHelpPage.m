@@ -7,7 +7,7 @@ function [ok, message] = buildHelpPage(this)
 %   WHY THE APP BUILDS IT AT ALL. The page is not in version control (about
 %   5 MB of embedded screenshots regenerated from README.MD, see
 %   .gitignore), so a fresh clone has no copy. Until now the Help button
-%   could only explain how to build one, which asks an analyst to leave the
+%   could only explain how to build one, which asks a user to leave the
 %   application, find a terminal and run three npm commands in order to
 %   read the documentation.
 %

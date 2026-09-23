@@ -13,7 +13,7 @@ function options = ManualRejectDialog(EEG, prior)
 %   currently shown; a flagged channel turns plain red/bold regardless of
 %   its own colour, and stays flagged when you page away and back. This
 %   is the manual counterpart of ArtefactDetect's own automatic
-%   thresholds -- the analyst's eye instead of a fixed number.
+%   thresholds -- the user's eye instead of a fixed number.
 %
 %   A Scale slider controls the AMPLITUDE GAIN applied to every trace, on
 %   top of one auto-computed starting scale shared by every channel/trial
@@ -38,14 +38,14 @@ function options = ManualRejectDialog(EEG, prior)
 %   different recording's trial count/order would not mean anything here.
 %
 %   Returns a struct with fields:
-%     .flags       nChan x nTrials logical, true where the analyst flagged
+%     .flags       nChan x nTrials logical, true where the user flagged
 %                  that channel as faulty for that trial (possibly all
-%                  false, if the analyst confirmed without flagging anything)
+%                  false, if the user confirmed without flagging anything)
 %     .scope       'Whole epoch' or 'This channel only' -- same two choices,
 %                  and the same wording, as ArtefactDetect's own Scope
 %     .channelMode 'NaN' or 'Interpolate' -- only meaningful when scope is
 %                  'This channel only'
-%   or [] if the analyst cancelled.
+%   or [] if the user cancelled.
     [accentColor, bgColor] = dialogChromeColors();
     options = [];
 

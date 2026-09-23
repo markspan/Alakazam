@@ -110,7 +110,7 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
         end
 
         function anExplicitChannelListOverridesTheData(testCase)
-        %ANEXPLICITCHANNELLISTOVERRIDESTHEDATA  An analyst who names their
+        %ANEXPLICITCHANNELLISTOVERRIDESTHEDATA  A user who names their
         %   montage is never overruled by which channel happened to respond.
             [~, map] = testCase.exportFixture(struct('Channels', {{'E1'}}));
             testCase.verifyEqual(unique(map.channel), {'E1'});
@@ -261,7 +261,7 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
 
         function onlyTheNamedChannelsReachTheTraceAndTheMap(testCase)
         %ONLYTHENAMEDCHANNELSREACHTHETRACEANDTHEMAP  The report follows the
-        %   electrodes the Spectral Measure rows name, so an analyst who
+        %   electrodes the Spectral Measure rows name, so a user who
         %   measured Oz does not get the whole montage. Matched without regard
         %   to case, as the rows themselves are.
             [trace, map] = testCase.exportFixture(struct('OnlyChannels', {{'e2', 'E4'}}));
@@ -287,7 +287,7 @@ classdef ExportCoherenceCSVsTest < matlab.unittest.TestCase
 
         function aDatasetWithNoneOfTheNamedChannelsIsWrittenWhole(testCase)
         %ADATASETWITHNONEOFTHENAMEDCHANNELSISWRITTENWHOLE  A montage that
-        %   differs from the analyst's must not silently drop a subject.
+        %   differs from the user's must not silently drop a subject.
             [trace, ~] = testCase.exportFixture(struct('OnlyChannels', {{'Oz'}}));
 
             testCase.verifyEqual(numel(unique(trace.channel)), 6);

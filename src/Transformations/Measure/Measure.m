@@ -291,13 +291,13 @@ function m = computeWindow(EEG, win, allLabels, nBins)
     localPoints = winLocalPoints(win);
     fraction    = winFraction(win);
     areaMode    = winAreaMode(win);
-    % WHAT THE ANALYST ASKED FOR, AND WHAT THAT MEANS, KEPT APART. Two names
+    % WHAT THE USER ASKED FOR, AND WHAT THAT MEANS, KEPT APART. Two names
     % because they genuinely differ: the pre-unification "Integral" and
     % "Peak Area" both compute an Area, and a single variable rewritten from
     % one to the other loses the only record of what was chosen. That is not
     % hypothetical -- the error message below has to report win.measure
     % rather than the resolved name, precisely because the resolved one
-    % would tell the analyst about a measure they never picked.
+    % would tell the user about a measure they never picked.
     requested = lower(strtrim(char(string(win.measure))));
     [measure, useBand] = resolveMeasureKind(requested, width);
     validateMeasureParameters(measure, useBand, width, fraction, win);
@@ -463,7 +463,7 @@ function validateMeasureParameters(measure, useBand, width, fraction, win)
 %   measured, up front, so a bad one fails with a clear message rather than
 %   a column of NaN discovered later.
 %
-%   Reports win.measure, not the resolved name: an analyst who chose "Peak
+%   Reports win.measure, not the resolved name: a user who chose "Peak
 %   Area" should not be told about "area".
     if strcmp(measure, 'area') && useBand && (isnan(width) || width <= 0)
         throw(MException('Alakazam:Measure', sprintf( ...

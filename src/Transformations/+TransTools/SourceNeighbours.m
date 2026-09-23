@@ -29,7 +29,7 @@ function [neighbours, labels, adjacency] = SourceNeighbours(sourcemodel)
 %
 %   SYNTHETIC LABELS, deliberately. FieldTrip identifies rows by label
 %   string, so the 20484 vertices need names. They carry no meaning and are
-%   never shown to an analyst -- a vertex is reported by its position and
+%   never shown to a user -- a vertex is reported by its position and
 %   its atlas region, not by "v13407" -- but they must be generated the same
 %   way here and in the timelock data, which is why this function returns
 %   them rather than leaving each caller to invent its own scheme.

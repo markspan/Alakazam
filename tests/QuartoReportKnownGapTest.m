@@ -532,7 +532,7 @@ end
 function formats = sprintfFormatStrings(chunks)
 %SPRINTFFORMATSTRINGS  Every sprintf("...") FORMAT literal across CHUNKS
 %   (a cellstr of R chunk bodies), as a cellstr of the literals' inner
-%   text -- so a test can ask whether an analyst's label ended up inside a
+%   text -- so a test can ask whether a user's label ended up inside a
 %   format string rather than being passed as an argument to it.
     formats = {};
     for c = 1:numel(chunks)

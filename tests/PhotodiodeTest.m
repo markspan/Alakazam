@@ -576,7 +576,7 @@ classdef PhotodiodeTest < matlab.unittest.TestCase
         end
 
         function theLabelUsesTheSamePairingAsTheReport(testCase)
-        %THELABELUSESTHESAMEPAIRINGASTHEREPORT  Max lag is the analyst's to
+        %THELABELUSESTHESAMEPAIRINGASTHEREPORT  Max lag is the user's to
         %   set, and it decides which onsets count as answered. If the
         %   labelling recomputed the pairing with its own defaults, the
         %   event table and the measured lag would be describing different

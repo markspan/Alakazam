@@ -1,5 +1,5 @@
 function choice = chooseAction(fig, message, title, options, defaultOption, cancelOption, varargin)
-%CHOOSEACTION  Ask the analyst to pick one of several actions, keyboard-first.
+%CHOOSEACTION  Ask the user to pick one of several actions, keyboard-first.
 %   CHOICE = chooseAction(FIG, MESSAGE, TITLE, OPTIONS, DEFAULTOPTION,
 %   CANCELOPTION) shows a modal dialog over FIG with one button per entry of
 %   the cellstr OPTIONS and returns the text of the button chosen.

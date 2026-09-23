@@ -48,7 +48,7 @@ function offerReadmeInstead(this)
             return;
         end
         % Reported with the manual instructions attached rather than on its
-        % own: the analyst still wants the documentation, and the two ways
+        % own: the user still wants the documentation, and the two ways
         % left to get it are building it by hand or reading the README.
         uialert(this.MainFigure, sprintf('%s\n\n%s', message, buildHint), ...
             'Could not build the help page', 'Icon', 'warning');

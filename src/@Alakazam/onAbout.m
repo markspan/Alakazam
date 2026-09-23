@@ -22,7 +22,7 @@ function onAbout(this)
 %   removed that constraint; this is now a preference, not a workaround.)
 %
 %   Version and attribution come from alakazamVersion, not from anything
-%   read out of git: the copy most analysts run is an unzipped release
+%   read out of git: the copy most users run is an unzipped release
 %   package with no repository in it at all.
 %
 %   See also ALAKAZAMVERSION, ABOUTPAGEHTML, ALAKAZAM/ONHELP.

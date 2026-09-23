@@ -1,6 +1,6 @@
 function rawclear(this, mode, ~)
 %RAWCLEAR  "Clear WorkSpace": delete this workspace's cached analyses, in one
-%   of two strengths the analyst chooses between.
+%   of two strengths the user chooses between.
 %
 %     NORMAL CLEAR removes every transformation result, and the grand
 %     averages built only from this workspace's recordings, but keeps each
@@ -56,7 +56,7 @@ end
 % ======================================================================= %
 function mode = askClearMode(fig, nodes)
 %ASKCLEARMODE  Ask whether to clear normally or deeply. Returns 'normal',
-%   'deep', or '' when the analyst cancels.
+%   'deep', or '' when the user cancels.
     nRecordings = 0;
     for i = 1:numel(nodes)
         if nodes(i).IsRoot && ~isempty(nodes(i).UserData)

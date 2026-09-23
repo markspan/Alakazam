@@ -61,7 +61,7 @@ function onExportSpectral(this)
         % copy the CSV in alongside it (under the same timestamped stem,
         % so it can never collide with a different export's own copy)
         % rather than pointing the report at a relative "../" back to
-        % wherever the analyst happened to save the CSV: that path would
+        % wherever the user happened to save the CSV: that path would
         % break the moment the report is shared/moved on its own, and
         % would silently start reading a DIFFERENT file's contents if a
         % later export overwrote the same CSV name in place. This keeps
@@ -92,7 +92,7 @@ function onExportSpectral(this)
         % spectra: the figures are lost, the report is not.
         %
         % The two coherence figures follow the electrodes named in the
-        % Spectral Measure rows (see spectralMeasureChannels), so an analyst
+        % Spectral Measure rows (see spectralMeasureChannels), so a user
         % who measured Oz sees Oz rather than the whole montage. The map
         % itself still holds every channel; only the export is narrowed.
         coherenceCsvs = struct('Trace', '', 'Map', '', 'Reference', '', 'Channels', {{}});

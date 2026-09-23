@@ -7,7 +7,7 @@ function hz = FrequencyFromLabel(label)
 %   Used where Alakazam has to know which frequency a condition flickered at
 %   and nothing else records it: to propose RESS's rows, and to tell which
 %   conditions can serve as a null for a RESS filter (see RESS). A label is
-%   what the analyst named the bin, so the frequency is only as right as the
+%   what the user named the bin, so the frequency is only as right as the
 %   name; callers treat NaN as "unknown", never as "none".
 %
 %   See also RESS.

@@ -1,6 +1,6 @@
 function onDefineGrandAverage(this)
 %ONDEFINEGRANDAVERAGE  Toolbar callback (Grand Average tab): define
-%   a brand new grand average. Lets the analyst pick which Averaged
+%   a brand new grand average. Lets the user pick which Averaged
 %   subject datasets to combine, name it, and choose weighted/
 %   unweighted combining (GrandAverageDialog), then computes and
 %   saves it as a new top-level node in the Grand Averages tree.

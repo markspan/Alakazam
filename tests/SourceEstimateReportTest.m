@@ -81,7 +81,7 @@ classdef (TestTags = {'Slow'}) SourceEstimateReportTest < matlab.unittest.TestCa
         %IMAGELINKISANGLEBRACKETED  The link destination is wrapped in
         %   <...>, CommonMark's own escape for a destination containing
         %   spaces or parentheses -- see the section builder's own header
-        %   for why ImagePath (built from the analyst's own export file
+        %   for why ImagePath (built from the user's own export file
         %   name) cannot be trusted as bare, unescaped Markdown text.
             assets = SourceEstimateReportTest.twoBinsTwoMethodsAssets();
             text = ReportSections.sourceEstimateSection(assets);
@@ -89,7 +89,7 @@ classdef (TestTags = {'Slow'}) SourceEstimateReportTest < matlab.unittest.TestCa
         end
 
         function specialCharactersInLabelsAreEscaped(testCase)
-        %SPECIALCHARACTERSINLABELSAREESCAPED  A bin label an analyst typed
+        %SPECIALCHARACTERSINLABELSAREESCAPED  A bin label a user typed
         %   with a markdown-special character must not corrupt the
         %   generated heading -- the same hazard ReportSections.mdLit
         %   exists to prevent everywhere else in this package.

@@ -16,7 +16,7 @@ function options = ReRefDialog(chanlocs, stored, elcFile)
 %   always zero, so nothing was ever recorded for it). Re-referencing to
 %   something else is exactly the computation that recovers its true signal
 %   -- see ReRef.m's addImplicitReferenceChannel -- so this dialog lets the
-%   analyst name it: typed freely, or picked from the 10-5 template, since
+%   user name it: typed freely, or picked from the 10-5 template, since
 %   that is commonly what an implicit reference actually is (Cz and the
 %   mastoids are the usual candidates).
 %
@@ -62,7 +62,7 @@ function options = ReRefDialog(chanlocs, stored, elcFile)
     % IMPLICIT-REFERENCE ROW. Items are the 10-5 template's own labels, minus
     % whatever is already a channel in this dataset (picking an existing
     % channel's name would collide, not reconstruct anything); Editable
-    % lets the analyst type a name the template does not carry at all (a lab
+    % lets the user type a name the template does not carry at all (a lab
     % that calls its reference "REF" rather than by an electrode name).
     implicitGrid = uigridlayout(outer, [1 2], 'ColumnWidth', {'fit', '1x'}, 'Padding', [0 0 0 0], ...
         'ColumnSpacing', 8);

@@ -11,7 +11,7 @@ function dir_ = reportsDirectory(this)
 %   GrandAveragesTree (see loadGrandAverages/Alakazam.saveGrandAverage).
 %   Anchored under ExportsDirectory rather than CacheDirectory
 %   specifically so a rendered report -- a final, often slow-to-regenerate
-%   analyst output, not a recomputable intermediate -- survives
+%   user output, not a recomputable intermediate -- survives
 %   WorkSpace.rawclear's "Clear cache" (an rmdir 's' of CacheDirectory
 %   alone).
     dir_ = fullfile(this.ExportsDirectory, 'Reports');

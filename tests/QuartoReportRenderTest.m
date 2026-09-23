@@ -417,7 +417,7 @@ classdef QuartoReportRenderTest < matlab.unittest.TestCase
         function theCoherenceSectionDescribesAnUnnarrowedExportAsTheGeneralFigure(testCase)
         %THECOHERENCESECTIONDESCRIBESANUNNARROWEDEXPORTASTHEGENERALFIGURE
         %   Named channels that no dataset has (a montage that differs from
-        %   the analyst's) fall back to the whole montage in the export. The
+        %   the user's) fall back to the whole montage in the export. The
         %   report must then describe what it drew, not claim it followed
         %   the rows.
             [text, html] = testCase.renderCoherence(testCase.coherenceEntries(), {'NoSuchElectrode'});
@@ -633,7 +633,7 @@ function plain = plainTextOf(html)
 %
 %   Unescaping matters for this report specifically: "*p* < .001" leaves
 %   pandoc as "&lt;", so a naive tag strip alone would leave the APA
-%   sentence unreadable to a regex written the way an analyst reads it.
+%   sentence unreadable to a regex written the way a user reads it.
     plain = regexprep(html, '<script\b.*?</script>', ' ', 'ignorecase', 'dotall');
     plain = regexprep(plain, '<style\b.*?</style>', ' ', 'ignorecase', 'dotall');
     plain = regexprep(plain, '<[^>]*>', '');

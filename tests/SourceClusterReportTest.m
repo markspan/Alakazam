@@ -90,7 +90,7 @@ classdef (TestTags = {'Slow'}) SourceClusterReportTest < matlab.unittest.TestCas
         function theMethodTableReportsWhatActuallyRan(testCase)
         %THEMETHODTABLEREPORTSWHATACTUALLYRAN  Read from summary.opts, not
         %   restated from defaults: resolveNumRandomization can raise the
-        %   permutation count to exhaustive without the analyst asking, and
+        %   permutation count to exhaustive without the user asking, and
         %   the document has to describe the analysis that happened.
             summary = testCase.summaryFixture();
             summary.opts.numrandomization = 4096;
@@ -176,7 +176,7 @@ classdef (TestTags = {'Slow'}) SourceClusterReportTest < matlab.unittest.TestCas
 
         function imageLinksAreAngleBracketed(testCase)
         %IMAGELINKSAREANGLEBRACKETED  The images folder is named after the
-        %   analyst's own export name, which may contain spaces or brackets;
+        %   user's own export name, which may contain spaces or brackets;
         %   an unescaped ")" would silently truncate the link.
             qmd = generateSourceClusterStatsReport(testCase.summaryFixture(), ...
                 testCase.assetFixture());
@@ -249,7 +249,7 @@ classdef (TestTags = {'Slow'}) SourceClusterReportTest < matlab.unittest.TestCas
         function thePointSpreadFigureIsSkippedWithoutAForwardModel(testCase)
         %THEPOINTSPREADFIGUREISSKIPPEDWITHOUTAFORWARDMODEL  The cost decision,
         %   asserted rather than commented. The figure needs the leadfield,
-        %   which takes about 18 s to build, and the analyst clicked "run a
+        %   which takes about 18 s to build, and the user clicked "run a
         %   cluster test", not "spend a further 18 s on an appendix figure".
         %   So it is drawn only when the model is already cached, and the
         %   fixture's channel labels have no model behind them.

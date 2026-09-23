@@ -406,7 +406,7 @@ classdef DataQualityTest < matlab.unittest.TestCase
         %   rule carries n_trials > 20 alongside kept < 20.
         %
         %   The explanation in the criteria table is asserted too: this
-        %   report states each threshold and its reasoning to the analyst,
+        %   report states each threshold and its reasoning to the user,
         %   so a rule that changes without its stated reason changing is a
         %   report that misdescribes itself.
             qmd = generateDataQualityReport(testCase.twoSubjectEntries(), 'q.csv', 't.csv');

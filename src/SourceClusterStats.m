@@ -31,7 +31,7 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
 %   ft_sourcestatistics both implement.
 %
 %   TFCE BY DEFAULT (Smith & Nichols 2009), not a cluster-forming threshold.
-%   Classic cluster permutation makes the analyst choose clusteralpha, an
+%   Classic cluster permutation makes the user choose clusteralpha, an
 %   arbitrary cut that decides which effects survive; TFCE integrates over
 %   all thresholds and removes that free parameter. 'cluster' remains
 %   available via OPTS.correctm for continuity with ClusterStats and with
@@ -196,7 +196,7 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
         % point of randomising the base is that the serial path does not
         % fix its seed either, and a parallel run that silently became
         % reproducible would behave differently from the serial one for no
-        % reason the analyst could see.
+        % reason the user could see.
         cfg.randomseedBase = randi(2^31 - 1024);
         workers = resolveWorkers(opts.Workers, numel(vertexLabels) * nTime, ...
             permutationCount(opts.numrandomization, numel(subjects)));
@@ -331,12 +331,12 @@ function labels = sharedMontage(subjects)
 %   THIS USED TO INTERSECT SILENTLY, and that was the wrong kind of helpful.
 %   One subject with a rejected electrode quietly removed that channel from
 %   the forward model for the whole group: the analysis ran, the report said
-%   nothing, and the source space was not the one the analyst thought they
+%   nothing, and the source space was not the one the user thought they
 %   had asked for. It was unstable too, since adding a subject could change
 %   the model, and so every result, with no setting having changed.
 %
 %   Which channels to drop is a scientific decision, so it belongs to the
-%   analyst rather than to an intersection buried inside a group test.
+%   user rather than to an intersection buried inside a group test.
 %   Making it explicit also makes stored source estimates reusable:
 %   SourceEstimate keys on its own dataset's channels, so only when those
 %   already equal the group's can the estimates on the tree serve the report
@@ -577,7 +577,7 @@ function name = datasetName(EEG)
 %   Used only in error paths, which is exactly why it cannot assume a field
 %   exists: reading a missing EEG.id while building an error message
 %   replaces the real diagnosis with "Unrecognized field name", and the
-%   analyst then debugs the wrong problem. Prefers the source file, since
+%   user then debugs the wrong problem. Prefers the source file, since
 %   EEG.id is the node name and is the same for every subject anyway.
     if isfield(EEG, 'AlakazamSourceFile') && ~isempty(EEG.AlakazamSourceFile)
         % The subject folder, not the whole path: a cache path is a dozen
@@ -740,7 +740,7 @@ end
 
 function name = limitingSubjectName(subjects, sourceFiles)
 %LIMITINGSUBJECTNAME  Whoever has the fewest channels, since they set the
-%   montage for the whole analysis. Named so the analyst can decide whether
+%   montage for the whole analysis. Named so the user can decide whether
 %   that trade is worth it, rather than discovering the channel count and
 %   having no way to act on it.
     name = '';
@@ -800,7 +800,7 @@ end
 
 function n = countReused(diagnostics)
 %COUNTREUSED  How many subject-by-bin inversions came from a stored estimate.
-%   Worth reporting: an analyst who has just run SourceEstimate on every
+%   Worth reporting: a user who has just run SourceEstimate on every
 %   subject and sees zero reuse needs to know the keys did not match, rather
 %   than concluding the step did nothing.
     n = 0;

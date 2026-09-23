@@ -206,7 +206,7 @@ classdef ErplabBdfImportTest < matlab.unittest.TestCase
 
         function nothingIsDroppedWithoutSaying(testCase)
         %NOTHINGISDROPPEDWITHOUTSAYING  Every warning also appears in the
-        %   script as a "% WARNING:" comment, so an analyst who never looks
+        %   script as a "% WARNING:" comment, so a user who never looks
         %   at the return value still sees it.
             [script, warnings] = ErplabBdfImportTest.translate('.{111}{201:f<12>}');
 

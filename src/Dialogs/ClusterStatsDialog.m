@@ -345,7 +345,7 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
             opts.SourceSpace = sourceCtl.space.Value;
             opts.Workers     = sourceCtl.workers.Value;
 
-            % Caught here as well as inside SourceClusterStats, so the analyst
+            % Caught here as well as inside SourceClusterStats, so the user
             % is told while the dialog is still open and can change it, rather
             % than after dismissing it. A magnitude estimate is positive at
             % every vertex, so a "vs zero" test on one would flag essentially

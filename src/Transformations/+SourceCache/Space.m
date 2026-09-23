@@ -8,7 +8,7 @@ function space = Space(EEG, fallback)
 %   WHY A VIEW SHOULD FOLLOW THE STORED SHEET. A stored estimate is a vector
 %   over ITS OWN vertices and can only be drawn on the sheet it was computed
 %   for. A consumer that insisted on the full-resolution sheet would refuse
-%   every estimate stored at a coarser one, which is the size most analysts
+%   every estimate stored at a coarser one, which is the size most users
 %   can actually afford to keep: a whole-epoch estimate is 499 MB per
 %   subject at 20484 vertices and 128 MB at 5124, for a fit that differs by
 %   0.04% (measured, not assumed -- the number of spatial patterns a forward
@@ -37,7 +37,7 @@ function space = Space(EEG, fallback)
         return;
     end
     % A dataset may carry several estimates. They normally share a sheet,
-    % since it is the analyst's setting rather than the method's; when they
+    % since it is the user's setting rather than the method's; when they
     % genuinely disagree there is no right answer, so the fallback is used
     % rather than picking one arbitrarily and rendering at a resolution
     % nobody chose.

@@ -46,7 +46,7 @@ cp dist/AlakazamHelp.html ../AlakazamHelp.html
 `node_modules/`, `dist/` and the built `src/AlakazamHelp.html` are all
 gitignored, so nothing from this step is committed.
 
-If you ship Alakazam to analysts rather than handing them the repository,
+If you ship Alakazam to users rather than handing them the repository,
 build the page first and include it: they will not have Node, and the Help
 button is aimed precisely at people who would never open a README.
 

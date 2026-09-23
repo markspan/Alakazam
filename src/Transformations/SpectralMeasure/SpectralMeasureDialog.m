@@ -390,7 +390,7 @@ end
 
 function v = getField(s, name, default)
 %GETFIELD  S.(NAME), or DEFAULT when it is missing, empty or NaN. Nodes made
-%   before SpectralMeasure kept the analyst's choice apart from the values it
+%   before SpectralMeasure kept the user's choice apart from the values it
 %   resolved hold NaN for a blank window ("whole epoch"), and so did the RIFT
 %   templates; a numeric edit field refuses NaN, so it has to read as unset.
     if isstruct(s) && isfield(s, name) && ~isempty(s.(name)) ...

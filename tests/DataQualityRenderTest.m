@@ -7,7 +7,7 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
 %   section was emitted and which literals it carries, and it is blind to
 %   whether the R inside computes anything, let alone the right thing. The
 %   dependability section fits a mixed model, reads variance components out
-%   of it and turns them into a trial count an analyst may act on. A
+%   of it and turns them into a trial count a user may act on. A
 %   substring check cannot tell a correct decomposition from one that reads
 %   the residual variance where it meant the person variance, and both
 %   render into a table that looks equally authoritative.

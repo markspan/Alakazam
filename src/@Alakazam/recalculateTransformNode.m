@@ -1,7 +1,7 @@
 function recalculateTransformNode(this, node, ownEEG)
 %RECALCULATETRANSFORMNODE  Reopen NODE's own transformation with an
 %   editor pre-filled from its stored parameters (OWNEEG.params);
-%   if the analyst leaves them unchanged, or cancels, nothing
+%   if the user leaves them unchanged, or cancels, nothing
 %   happens. If they change them, NODE and every one of its
 %   descendants are recomputed and overwritten IN PLACE (same node
 %   ids, same files -- unlike a branch drag-drop, which always

@@ -465,7 +465,7 @@ classdef AlakazamRibbon < handle
         function items = helpItems(this, iconsDir)
         %HELPITEMS  In-app help viewer launcher (see Alakazam.onHelp) --
         %   the app's own README.MD, rendered and searchable (Ctrl+F) right
-        %   here, for an analyst who is never going to open a README file
+        %   here, for a user who is never going to open a README file
         %   in a repository.
             icon = this.encodeSvgFile(fullfile(iconsDir, 'Help.svg'));
             items = {struct('id', 'help', 'label', 'Help', ...
@@ -480,7 +480,7 @@ classdef AlakazamRibbon < handle
         %
         %   Its own group rather than sharing Help's. The two are both
         %   "information about the application" in the abstract, but Help
-        %   is a working reference the analyst opens mid-analysis and comes
+        %   is a working reference the user opens mid-analysis and comes
         %   back to, while About/Update are looked at occasionally and
         %   answer a different question entirely -- which version am I
         %   running, who do I tell, is there a newer one. A group of its own
@@ -616,7 +616,7 @@ classdef AlakazamRibbon < handle
         %   (see Alakazam.onExportDataQuality): per-subject rejection
         %   rates, per-trial noise and SME, in the same Reports tree as the
         %   ERP/Spectral/Cluster reports. Its own group rather than a third
-        %   Batch Export button: those two export measurements an analyst
+        %   Batch Export button: those two export measurements a user
         %   then analyses, whereas this one asks whether those measurements
         %   are trustworthy in the first place. Icon: a waveform over a
         %   bar-gauge, one bar red -- the "most of this is fine, some of it

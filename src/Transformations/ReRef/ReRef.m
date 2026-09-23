@@ -13,7 +13,7 @@ function [EEG, options] = ReRef(input, varargin)
 %   single active electrode, e.g. Cz or a mastoid, whose own voltage relative
 %   to itself is by definition always zero, so nothing was recorded for it).
 %   Re-referencing to something else is exactly the computation that recovers
-%   it: options.implicitRef, a channel label the analyst names (typed, or
+%   it: options.implicitRef, a channel label the user names (typed, or
 %   picked from the 10-5 template, in ReRefDialog), adds that channel back to
 %   the result with its true signal relative to the NEW reference. See
 %   addImplicitReferenceChannel below for the maths.
@@ -137,7 +137,7 @@ function EEG = addImplicitReferenceChannel(EEG, input, label, options)
 
     % WHERE IT GOES. Tacking it onto the very end put a scalp channel after
     % every peripheral one (EOG, ECG, ... conventionally last) and told an
-    % analyst nothing about where on the head it actually sits. Instead it
+    % user nothing about where on the head it actually sits. Instead it
     % is inserted right after whichever surviving channel sits closest to it
     % on the standard 10-5 template -- Cz lands next to C3 or C4, whichever
     % is nearer, not after the diode. Only the TEMPLATE'S positions are

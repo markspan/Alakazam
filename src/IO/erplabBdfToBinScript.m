@@ -268,7 +268,7 @@ function [codes, warnings] = expandCodeItem(item)
         if hi < lo
             % Emitted as written rather than silently swapped: guessing at
             % the intent of a malformed descriptor is worse than saying so
-            % and letting the analyst decide. DefineBins refuses a backwards
+            % and letting the user decide. DefineBins refuses a backwards
             % range too, so the script will not run until it is corrected.
             warnings{end + 1} = sprintf(['the code range %d-%d runs backwards, so it ' ...
                 'covers nothing. It has been carried over as written; did the BDF mean ' ...

@@ -83,7 +83,7 @@ classdef ReportDesignPlanTest < matlab.unittest.TestCase
         end
 
         function sessionIsAutomatic(testCase)
-        %SESSIONISAUTOMATIC  No opt-in switch. An analyst who has labelled
+        %SESSIONISAUTOMATIC  No opt-in switch. A user who has labelled
         %   two sessions has already described the design, and a second
         %   declaration is only an opportunity for the two to disagree.
             plan = planFor(repeatedMeasures());

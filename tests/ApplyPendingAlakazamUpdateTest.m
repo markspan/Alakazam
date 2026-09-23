@@ -65,7 +65,7 @@ classdef ApplyPendingAlakazamUpdateTest < matlab.unittest.TestCase
         %DATAANDWORKSPACESSURVIVETHESWAP  Neither is part of a release
         %   package (see .github/workflows/release.yml's own exclusion
         %   check), so the swap has to carry them across by hand or the
-        %   analyst loses their data and saved workspaces on every update.
+        %   user loses their data and saved workspaces on every update.
             install = testCase.makeInstall('V1');
             mkdir(fullfile(install, 'Data'));
             testCase.writeFile(fullfile(install, 'Data', 'mine.txt'), 'my-data');

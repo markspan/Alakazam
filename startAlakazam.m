@@ -23,7 +23,7 @@ function app = startAlakazam(workspaceFile)
 %   group) but not yet applied, this swaps it in first -- see
 %   applyPendingAlakazamUpdate for why that has to happen here, before src/
 %   is even on the path, rather than from inside the running app that
-%   downloaded it. An analyst who used Update sees nothing different: they
+%   downloaded it. A user who used Update sees nothing different: they
 %   quit Alakazam and run startAlakazam again the way they always would, and
 %   the new version is just what starts.
 %

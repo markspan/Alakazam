@@ -107,7 +107,7 @@ opt = normaliseOptions(options);
 % only trace was a console line that scrolls past, the loss then showed up
 % much later as an unexplained rejection rate in the data-quality report.
 % A transformation must never destroy data on the strength of a default the
-% analyst did not ask for; doing nothing is the only reading of an empty
+% user did not ask for; doing nothing is the only reading of an empty
 % selection that cannot cost anyone their trials.
 if isempty(opt.Method)
     % An empty breakdown rather than no breakdown: the field is then always
@@ -269,7 +269,7 @@ function warnCrowdedTrials(flags, nChan)
 %   neighbouring electrodes at once, and reconstructing one of them from the
 %   others reproduces the artefact rather than removing it. A human working
 %   through ManualReject sees that; a threshold does not, so it is said out
-%   loud here. Reported, never enforced -- the analyst chose this scope, and
+%   loud here. Reported, never enforced -- the user chose this scope, and
 %   a transformation that silently overrode that choice would be worse than
 %   one that explains itself.
     CROWDED = 0.25;   % a quarter of the montage flagged in one trial

@@ -54,7 +54,7 @@ function [opts, interactive] = InitGuard(nargin_, errorId, varargin)
     % An interactive call is about to put an options dialog on screen, so
     % take down any "Running <id>..." indicator the app raised before
     % calling us: it would otherwise sit on top of the very settings the
-    % analyst is being asked to fill in (in MATLAB Online it covers them
+    % user is being asked to fill in (in MATLAB Online it covers them
     % outright and has to be dismissed by hand), and it is claiming the app
     % is busy when it is really waiting for input. TransformSettings.set
     % puts it back, which every options dialog reaches once its settings

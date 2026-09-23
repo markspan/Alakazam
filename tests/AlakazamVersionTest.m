@@ -77,7 +77,7 @@ classdef AlakazamVersionTest < matlab.unittest.TestCase
         %THEFALLBACKCONSTANTISSTILLAVALIDTAG  Read out of the source,
         %   because it is unreachable in a checkout: git answers first, so
         %   nothing else would ever notice this being emptied or mistyped.
-        %   It is what an analyst sees if they run an unpacked copy that is
+        %   It is what a user sees if they run an unpacked copy that is
         %   neither a release nor a repository.
             root = fileparts(fileparts(mfilename('fullpath')));
             source = fileread(fullfile(root, 'src', 'alakazamVersion.m'));

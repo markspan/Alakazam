@@ -13,7 +13,7 @@ classdef MergeLetDefinitionsTest < matlab.unittest.TestCase
 %   evaluates the block, so a second definition of the same name raises
 %   "already exists in this dataset" at OK time, in a message that names
 %   the channel and gives no hint that a Load caused it. The merge below
-%   keeps the analyst's definition and reports which of the file's were not
+%   keeps the user's definition and reports which of the file's were not
 %   used.
 %
 %   Run with: runtests('tests/MergeLetDefinitionsTest.m').
@@ -39,7 +39,7 @@ classdef MergeLetDefinitionsTest < matlab.unittest.TestCase
         function aFileWithNoDefinitionsLeavesTheBlockAlone(testCase)
         %AFILEWITHNODEFINITIONSLEAVESTHEBLOCKALONE  The case that made this
         %   worth fixing: every shipped preset has no let block, and
-        %   replacing wiped whatever the analyst had written.
+        %   replacing wiped whatever the user had written.
             existing = 'let LRP = C3 - C4';
             [merged, kept] = mergeLetDefinitions(existing, '');
 

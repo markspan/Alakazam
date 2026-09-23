@@ -2,7 +2,7 @@ function plan = planDescendantRecalc(this, parentFile, parentEEG)
 %PLANDESCENDANTRECALC  Pure (no disk writes): recompute every node
 %   below PARENTFILE against the just-recomputed PARENTEEG, using
 %   each node's own already-recorded transform id and parameters
-%   UNCHANGED (only the node the analyst actually edited gets new
+%   UNCHANGED (only the node the user actually edited gets new
 %   parameters -- everything downstream just re-runs headlessly,
 %   exactly like evaluateDroppedBranch's own replay). Returns a
 %   flat struct array of (file, EEG) pairs in an order safe to

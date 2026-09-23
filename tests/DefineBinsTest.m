@@ -490,7 +490,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
         function cancellingTheDialogIsNotAnError(testCase)
         %CANCELLINGTHEDIALOGISNOTANERROR  Every transformation says "the
-        %   analyst changed their mind" by returning an empty EEG, which
+        %   user changed their mind" by returning an empty EEG, which
         %   Alakazam.onTransformation reads as cancelled: nothing persisted,
         %   nothing shown. DefineBins threw instead, so backing out of the
         %   dialog raised an error that then had to be dismissed -- a second

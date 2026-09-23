@@ -8,7 +8,7 @@ function EEG = loadNodeEEG(this, file, action)
 %   tree event, so an uncaught error would otherwise propagate as
 %   a raw "Unable to find file" stack trace through the uihtml
 %   event bridge (appdesservices...AbstractModel/
-%   executeUserCallback) instead of a message the analyst can
+%   executeUserCallback) instead of a message the user can
 %   actually act on. ACTION is a short present-tense phrase
 %   naming what was being attempted, used only in the alert text
 %   (e.g. 'select this dataset', 'rename this dataset').

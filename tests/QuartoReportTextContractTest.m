@@ -11,7 +11,7 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
 %   leaving every heading, every prose line and every chunk label
 %   byte-identical. Nothing upstream of an actual R render can notice that,
 %   and a render is far too slow (and far too tool-dependent) to be the
-%   only thing standing between an analyst and a wrong number.
+%   only thing standing between a user and a wrong number.
 %
 %   So this file asserts the LITERALS, in four groups:
 %
@@ -31,7 +31,7 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
 %       now was every fixture there was.
 %
 %     - Chunk-label well-formedness. labelPiece must turn anything an
-%       analyst could plausibly type into something knitr accepts, over a
+%       user could plausibly type into something knitr accepts, over a
 %       FIXED hostile corpus (ReportFixtures.hostileLabels), never a
 %       randomised one: a reproducible failure naming the exact offending
 %       label beats broader coverage nobody can reproduce. (Label
@@ -256,7 +256,7 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
         % ================================================================ %
 
         function chunkLabelsAreValidKnitrLabels(testCase, hostileLabel)
-        %CHUNKLABELSAREVALIDKNITRLABELS  Whatever an analyst types as a
+        %CHUNKLABELSAREVALIDKNITRLABELS  Whatever a user types as a
         %   window or combination-bin label, every chunk label the
         %   document ends up with is lowercase alphanumerics separated by
         %   single hyphens, with no leading or trailing hyphen -- which is
@@ -291,7 +291,7 @@ classdef QuartoReportTextContractTest < matlab.unittest.TestCase
         %   still yields a well-formed chunk label (with "x" standing in
         %   for the empty piece, so two different sections cannot collapse
         %   onto the same "--" run), while the HEADING keeps the blank as
-        %   the analyst typed it -- the sanitisation is for knitr, not for
+        %   the user typed it -- the sanitisation is for knitr, not for
         %   the reader. A blank BIN label likewise survives into the R
         %   filter as an ordinary empty string.
             windowTxt = generateQuartoReport(ReportFixtures.erpEntries( ...

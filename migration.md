@@ -2457,7 +2457,7 @@ which of the two trees failed (`Workspace.GrandAveragesTree` vs. the
 data tree, compared via `isequal(sourceTree, ...)`) and prints the real
 message and stack via `warning('Alakazam:treeRenderError', ...)` -- a
 warning rather than a dialog, since this always indicates an actual bug
-in `src/webtree`, not something the analyst did wrong or can act on
+in `src/webtree`, not something the user did wrong or can act on
 beyond reporting it.
 
 Verified end to end against the real bundled JS, not just individual
@@ -2632,7 +2632,7 @@ Verified: `checkcode` clean on both `TimeFrequency.m` and
 channels, two bins) with a real, randomly-phased 10 Hz sinusoidal burst
 injected into one bin only during a post-stimulus window (200-600 ms),
 absent from the pre-stimulus baseline and from the second, deliberately
-empty bin. `TransTools.ComputeErsp` correctly reported +26.9 dB at ~10 Hz
+empty bin. `ComputeErsp` correctly reported +26.9 dB at ~10 Hz
 during the burst window vs. +0.5 dB outside it and +0.4 dB at a
 far-off (~31 Hz) frequency during the same window -- confirming the
 wavelet convolution, trial-averaging, and baseline correction are all
@@ -2667,7 +2667,7 @@ under the epoched dataset it was run on, and opens in its own tab in
 dialog and stores the choice in `TransformSettings`; `TimeFrequency(input,
 opts)` replays with a stored options struct and no dialog -- the form used
 when a branch bearing this transformation is dragged onto another
-dataset). All the validation and the `TransTools.ComputeErsp` call are
+dataset). All the validation and the `ComputeErsp` call are
 unchanged; the returned `EEG` is `input` carried forward (`.data`,
 `.chanlocs`, `.bindesc`, etc. all untouched and still meaningful) plus two
 new fields, `.ersp` and `.freqs`, that the new view draws from -- `.data`
@@ -3944,7 +3944,7 @@ replays when a branch is dragged onto another dataset.
 Generalized so `Recalculate` also works for any node produced by a
 transformation with a genuinely re-seedable options dialog: reopen that
 dialog pre-filled with the NODE's own stored parameters (not the
-workspace's usual "last used" value), and if the analyst changes them,
+workspace's usual "last used" value), and if the user changes them,
 recompute that node AND every one of its descendants, overwriting them
 IN PLACE (same node ids, same files) rather than creating new sibling
 nodes the way a drag-drop replay does -- the point of "recalculate" is
@@ -3991,7 +3991,7 @@ Design, in `Alakazam.m`:
   still stale. Only once the full plan succeeds does a loop `save()` each
   file in parent-then-children order. Each descendant re-`feval`s its
   OWN already-recorded transform id and parameters UNCHANGED (only the
-  node the analyst actually edited gets new parameters -- everything
+  node the user actually edited gets new parameters -- everything
   downstream just re-runs headlessly, exactly like
   `evaluateDroppedBranch`'s own replay).
 - Every file that gets overwritten also has `closeTab(file)` called on
@@ -3999,7 +3999,7 @@ Design, in `Alakazam.m`:
   given file rather than rebuilding it, so a stale open tab would
   otherwise keep showing pre-edit data forever. The edited node itself
   is then replotted immediately (`Workspace.EEG` + `plotCurrent()`), so
-  the analyst sees the fresh result without having to reselect it; a
+  the user sees the fresh result without having to reselect it; a
   descendant's tab, if one was open, is simply left closed -- reselecting
   its tree node shows the (already recomputed) fresh result.
 - A Grand Average built from a node further down an edited branch keeps
@@ -4161,7 +4161,7 @@ Requested alongside the fix above, for the same underlying situation
 reading the repository's `DefaultWorkSpace.wksp`. A bare filename (no
 path separator, e.g. `"p300.wksp"`) resolves next to
 `DefaultWorkSpace.wksp` under the repository root; a relative or
-absolute path is used as given -- letting an analyst always launch
+absolute path is used as given -- letting a user always launch
 straight into a specific project's workspace without going through "Open
 WorkSpace"'s interactive file picker every time.
 

@@ -5,11 +5,11 @@ classdef BuildHelpPageTest < matlab.unittest.TestCase
 %   WHY THIS EXISTS. src/AlakazamHelp.html is about 5 MB of embedded
 %   screenshots regenerated from README.MD, so it is gitignored and a fresh
 %   clone has none. The Help button used to answer that by printing three
-%   npm commands, which asks an analyst to leave the application and find a
+%   npm commands, which asks a user to leave the application and find a
 %   terminal in order to read the documentation.
 %
 %   THE FAILURES MATTER MORE THAN THE SUCCESS HERE. Building needs Node,
-%   which most analysts running this will not have, so the paths that must
+%   which most users running this will not have, so the paths that must
 %   be right are the ones that end in a message rather than a page. Each is
 %   reached with a real directory rather than a mock: an empty folder for
 %   "no builder", a script that exits non-zero for "the build failed", one

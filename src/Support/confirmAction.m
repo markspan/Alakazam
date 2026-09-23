@@ -1,5 +1,5 @@
 function ok = confirmAction(fig, message, title, affirmative, negative, varargin)
-%CONFIRMACTION  Ask the analyst to confirm something, keyboard-first.
+%CONFIRMACTION  Ask the user to confirm something, keyboard-first.
 %   OK = confirmAction(FIG, MESSAGE, TITLE, AFFIRMATIVE, NEGATIVE) shows a
 %   modal two-button confirmation over FIG and returns true only when
 %   AFFIRMATIVE was chosen. Closing the dialog, pressing Escape, or picking

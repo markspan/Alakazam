@@ -319,7 +319,7 @@ end
 function name = displayNameFor(file, subject)
 %DISPLAYNAMEFOR  How a subject is named in the compatibility errors above.
 %
-%   The cache file stem alone is useless to the analyst: every subject's
+%   The cache file stem alone is useless to the user: every subject's
 %   average is called "Average" plus a timestamp, so a mismatch reported
 %   between "Average25225213" and "Average27224649" names two files nobody
 %   can tell apart, in a workspace where they may not even be from the same

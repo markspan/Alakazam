@@ -72,7 +72,7 @@ classdef EEGLabEnvironment
         %   Alakazam update it came with.
         %
         %   Only called from Alakazam.onUpdate, after an Alakazam update has
-        %   been staged and the analyst has said yes to this as well. See
+        %   been staged and the user has said yes to this as well. See
         %   checkForEEGLabUpdate for why EEGLAB is never updated on its own.
             home = getenv('USERPROFILE');
             if isempty(home)

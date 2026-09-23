@@ -33,7 +33,7 @@ function stat = runMontecarlo(cfg, timelocks, workers)
 %   took 31 s serially and 58 s across 8 workers: the broadcast cost more
 %   than the permutations saved. It pays only once the permutation work is
 %   large against that fixed cost, which is why the setting is left to the
-%   analyst with a runtime estimate beside it rather than switched on
+%   user with a runtime estimate beside it rather than switched on
 %   automatically.
 %
 %   See also SOURCECLUSTERSTATS, CLUSTERSTATS.TFCESTATFUN.

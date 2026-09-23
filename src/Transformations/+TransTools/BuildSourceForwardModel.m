@@ -81,7 +81,7 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   cluster test it is a matrix-vector product, and asked for cold it would
 %   silently turn a click into an 18 s leadfield build. A caller in that
 %   position asks with 'cachedonly' and quietly does without on a miss,
-%   rather than deciding on the analyst's behalf that the wait is fine.
+%   rather than deciding on the user's behalf that the wait is fine.
 %
 %   The key is the sorted, lower-cased label list, so ask with the SAME
 %   labels the model was built from. Two label lists that resolve to the
@@ -97,7 +97,7 @@ function [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = BuildSource
 %   per session and reused throughout, so persisting it bought a single
 %   startup's 18 s in exchange for unbounded growth in prefdir, a second
 %   invalidation rule of its own (the FieldTrip version), and cached state
-%   the analyst could neither see nor clear. The tree already holds what is
+%   the user could neither see nor clear. The tree already holds what is
 %   worth keeping between sessions, which is the source estimates
 %   themselves, on their own node.
 %
@@ -280,7 +280,7 @@ function n = validateSourceSpace(sourceSpace)
 %VALIDATESOURCESPACE  Only the sheets FieldTrip actually ships.
 %   Checked here rather than left to a missing-file error, because the
 %   failure would otherwise surface deep inside ft_read_headshape as a path
-%   that means nothing to the analyst who typed the number.
+%   that means nothing to the user who typed the number.
     allowed = [20484, 8196, 5124];
     n = double(sourceSpace);
     if ~isscalar(n) || ~ismember(n, allowed)

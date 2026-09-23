@@ -46,7 +46,7 @@ classdef ComponentSelectorTableTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(colNames(1:3), {'IC', 'Label', 'Brain'});
             testCase.verifyEqual(colFmt{2}, 'char');
-            testCase.verifyFalse(colEdit(2), 'The verdict is ICLabel''s, not the analyst''s.');
+            testCase.verifyFalse(colEdit(2), 'The verdict is ICLabel''s, not the user''s.');
         end
 
         function theProbabilitiesRemainBesideTheVerdict(testCase)
@@ -142,7 +142,7 @@ classdef ComponentSelectorTableTest < matlab.unittest.TestCase
         function onlyTheRemoveColumnIsEditable(testCase)
         %ONLYTHEREMOVECOLUMNISEDITABLE  Everything else is a reported
         %   measurement; a table that let one be typed over would invite an
-        %   edit that changes nothing but what the analyst believes.
+        %   edit that changes nothing but what the user believes.
             [colNames, ~, colEdit] = componentTableColumns( ...
                 testCase.Classes, testCase.probRow('Brain', 0.9));
 
@@ -187,7 +187,7 @@ classdef ComponentSelectorTableTest < matlab.unittest.TestCase
         function anUntouchedTickCellIsNotMistakenForATick(testCase)
         %ANUNTOUCHEDTICKCELLISNOTMISTAKENFORATICK  A uitable can hand back
         %   [] for a cell that was never edited, and [] must not count as
-        %   ticked: it would remove a component the analyst never chose.
+        %   ticked: it would remove a component the user never chose.
             [~, ~, ~, data] = componentTableColumns(testCase.Classes, ...
                 repmat(testCase.probRow('Brain', 0.9), 3, 1));
             data{1, end} = [];

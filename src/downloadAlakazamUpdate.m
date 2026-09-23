@@ -21,7 +21,7 @@ function pendingPath = downloadAlakazamUpdate(info, currentRoot)
 %   instance of one of them. Overwriting those files under a running session
 %   risks leaving MATLAB in a confused state until `clear classes`, which
 %   this call cannot safely do to itself. Staging now and swapping in on the
-%   next ordinary restart costs nothing an analyst was not already doing
+%   next ordinary restart costs nothing a user was not already doing
 %   (quitting and reopening MATLAB) and never touches a file this process
 %   has open.
 %

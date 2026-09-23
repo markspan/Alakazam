@@ -5,7 +5,7 @@ function deps = alakazamDependencies()
 %   .category) of every external toolkit, bundled component and data asset
 %   the running application depends on. Rendered in the About box (see
 %   aboutPageHtml), where it belongs for two reasons: credit, and the fact
-%   that at least one of these carries a licence an analyst genuinely needs
+%   that at least one of these carries a licence a user genuinely needs
 %   to know about before using it in commercial work.
 %
 %   ONE LIST, TWO READERS. dependencies.md is the maintainer's account of

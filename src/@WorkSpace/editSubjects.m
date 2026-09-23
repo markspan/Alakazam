@@ -30,7 +30,7 @@ function editSubjects(this, ~, ~)
 %
 %   OK copies every row into this.Groups (this WorkSpace instance only --
 %   like TransformSettings and the three directories, it does not touch
-%   disk until the analyst explicitly does "Save WorkSpace"). Cancel (or
+%   disk until the user explicitly does "Save WorkSpace"). Cancel (or
 %   closing the window) discards changes.
 %
 %   Person ID/Session are metadata only so far: they reach the exported
@@ -184,7 +184,7 @@ function editSubjects(this, ~, ~)
             % empty entry -- same "blank means unassigned" convention
             % personFor/sessionFor/groupFor already treat a missing row
             % as, so this.Groups never accumulates dead rows for
-            % subjects an analyst looked at but left untouched.
+            % subjects a user looked at but left untouched.
             %
             % An EXCLUDED row is never "nothing set", however blank its
             % other fields: dropping it would read back as included (see
@@ -220,7 +220,7 @@ function suggestions = suggestedPersonIds(subjects)
 %   -- see longestCommonSubstring), on the reasoning that a fragment
 %   shared by every single recording (an experiment name like "N400",
 %   say) cannot possibly help tell one subject apart from another, so
-%   pre-filling it into every row's Person ID just adds noise the analyst
+%   pre-filling it into every row's Person ID just adds noise the user
 %   would otherwise have to notice and remove by hand, in every row,
 %   themselves. What is LEFT after stripping (a subject number, a day
 %   label, ...) is the part that actually varies.

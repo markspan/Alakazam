@@ -3,7 +3,7 @@ function onUpdate(this)
 %   offer to download it.
 %
 %   Click-only, deliberately. There is no startup check and no background
-%   timer anywhere that calls checkForAlakazamUpdate -- an analyst mid-
+%   timer anywhere that calls checkForAlakazamUpdate -- a user mid-
 %   analysis should never see a surprise dialog about a new version; this
 %   only ever runs because they pressed the Update button in the About
 %   group themselves.
@@ -12,7 +12,7 @@ function onUpdate(this)
 %   only stages the new release in a fixed sibling folder. Applying it is
 %   applyPendingAlakazamUpdate's job, run from startAlakazam on the next
 %   ordinary restart -- see that function's own header for why it happens
-%   there and not here. All this callback tells the analyst is to restart
+%   there and not here. All this callback tells the user is to restart
 %   when they are ready; there is nothing to go find or launch by hand.
 %
 %   A GIT CHECKOUT IS NEVER OFFERED THE DOWNLOAD, only told a newer release
@@ -26,7 +26,7 @@ function onUpdate(this)
 %   PATH SHADOWING. alakazamVersion, like everything else this app calls, is
 %   a plain function resolved by the MATLAB path -- not by which install's
 %   window asked. This is a much narrower risk now that an update applies
-%   itself on the next ordinary restart rather than asking the analyst to
+%   itself on the next ordinary restart rather than asking the user to
 %   launch a second, differently-named install folder by hand -- but running
 %   two copies in the same MATLAB session at all (say, a developer comparing
 %   installs deliberately) can still leave two folders' alakazamVersion.m on
@@ -94,7 +94,7 @@ function onUpdate(this)
     % applyPendingAlakazamUpdate), not this call's: this running copy is on
     % the MATLAB path with its classdefs already loaded, and overwriting
     % those files under a live session is what the sibling staging folder
-    % exists to avoid. So the only thing left to tell the analyst is to
+    % exists to avoid. So the only thing left to tell the user is to
     % restart the ordinary way -- there is no folder to go find and launch
     % from any more.
     % EEGLAB rides along with an Alakazam update, and only with one -- see
@@ -124,7 +124,7 @@ function line = offerEEGLabUpdate(this)
 %   had to be redone.
 %
 %   Failure is never fatal here. The Alakazam update is already staged and
-%   the analyst has been told to restart; an EEGLAB check that cannot reach
+%   the user has been told to restart; an EEGLAB check that cannot reach
 %   the network must not turn that into an error dialog.
     line = '';
     eeg = checkForEEGLabUpdate();

@@ -33,7 +33,7 @@ function loadGrandAverages(this)
 %
 %   A grand average that records NO sources (written before that field
 %   existed, or damaged) is shown rather than hidden. Its provenance cannot
-%   be checked either way, and silently hiding an analyst's saved result is
+%   be checked either way, and silently hiding a user's saved result is
 %   the worse of the two errors.
     gaDir = fullfile(this.CacheDirectory, 'GrandAverages');
     if ~exist(gaDir, "dir")

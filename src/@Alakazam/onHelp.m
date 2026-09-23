@@ -4,14 +4,14 @@ function onHelp(this)
 %   see src/help/README.md to rebuild it after editing the README). A
 %   singleton window, like the app's own MainFigure: a second click just
 %   refocuses the one already open rather than stacking up copies, since
-%   this is a read-only reference the analyst dips in and out of alongside
+%   this is a read-only reference the user dips in and out of alongside
 %   their actual work, not a per-dataset window.
 %
 %   Built lazily, on first use, not at Alakazam startup: the page embeds
 %   every screenshot the README references as a base64 data URI (a few MB
 %   once assembled -- see src/help/build.mjs), which would otherwise be
 %   dead weight loaded into memory on every single launch whether or not
-%   the analyst ever opens Help.
+%   the user ever opens Help.
 %
 %   The built page is NOT in version control (see .gitignore): it is ~5 MB
 %   of embedded screenshots regenerated from README.MD, which would put a

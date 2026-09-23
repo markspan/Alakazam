@@ -5,7 +5,7 @@ function recalculateAffectedGrandAverages(this, touchedFiles)
 %   each affected Grand Average's OWN already-recorded sources
 %   and weighting -- no dialog, no membership change -- exactly
 %   what its own "Recalculate" context-menu action would produce
-%   if the analyst reopened it and pressed OK without touching
+%   if the user reopened it and pressed OK without touching
 %   anything. A Grand Average is never itself a valid source of
 %   another (findGrandAverageCandidates excludes them), so this
 %   never needs to cascade further than one level.

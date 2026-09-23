@@ -1,7 +1,7 @@
 function ME = wrapParseError(script, err)
 %WRAPPARSEERROR  Turn a throwParseError (or any other) exception into a
 %   warm, specific, example-rich one that shows exactly where the trouble is
-%   in the analyst's own script -- or, if it is not one of ours (an
+%   in the user's own script -- or, if it is not one of ours (an
 %   unexpected internal error), passes it through untouched.
     tok = regexp(err.identifier, '^Alakazam:DefineBins:ParseAtCol(\d+)$', 'tokens', 'once');
     if isempty(tok)

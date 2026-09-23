@@ -2,7 +2,7 @@ function [events, notes] = applyEventOps(events, ops, srate, pnts)
 %APPLYEVENTOPS  Apply an ordered list of event-table operations.
 %   [EVENTS, NOTES] = applyEventOps(EVENTS, OPS, SRATE, PNTS) returns the
 %   edited event struct array and NOTES, a cellstr of anything worth telling
-%   the analyst (an operation that matched nothing, a per-event edit whose
+%   the user (an operation that matched nothing, a per-event edit whose
 %   target no longer looks like the event it was recorded against).
 %
 %   OPS IS THE WHOLE POINT. This transformation stores an ordered list of
@@ -14,7 +14,7 @@ function [events, notes] = applyEventOps(events, ops, srate, pnts)
 %   with subject 1's, silently, and the tree would record it as a
 %   successful step. Storing "rename 112 to 121, then shift every 121 back
 %   16 ms" means the same CORRECTION is applied to each subject's own
-%   events, which is what an analyst reaching for this actually wants:
+%   events, which is what a user reaching for this actually wants:
 %   trigger faults are properties of the recording setup, so they are
 %   usually wrong the same way in every file.
 %
@@ -104,7 +104,7 @@ end
 
 function [events, notes] = shiftLatency(events, op, srate)
 %SHIFTLATENCY  Move events in time. Milliseconds in the operation, samples
-%   in the data: the correction an analyst knows is "the triggers are 16 ms
+%   in the data: the correction a user knows is "the triggers are 16 ms
 %   late", and that stays true across recordings at different sampling
 %   rates, which a sample count would not.
     notes = {};

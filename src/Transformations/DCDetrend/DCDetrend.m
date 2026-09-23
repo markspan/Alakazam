@@ -222,7 +222,7 @@ function labels = channelLabels(EEG)
 end
 
 function report(order, robust, nChan, nTrials, fitLo, fitHi, input, slopes, nSkipped)
-%REPORT  What was removed, in units an analyst can check against the trace.
+%REPORT  What was removed, in units a user can check against the trace.
 %   The median slope is reported in uV/s rather than per sample, because
 %   that is the number a drifting electrode is described by.
     method = 'least squares';

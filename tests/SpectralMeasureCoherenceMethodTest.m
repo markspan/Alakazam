@@ -144,7 +144,7 @@ classdef SpectralMeasureCoherenceMethodTest < matlab.unittest.TestCase
                 testCase.verifyEmpty(s{1}.crossfUsed.TimeStart, 'The whole epoch is recorded as [], not NaN.');
                 testCase.verifyEmpty(s{1}.crossfUsed.TimeStop);
             end
-            testCase.verifyEqual(stored.crossf.WinSize, 510, 'The choice is what the analyst asked for.');
+            testCase.verifyEqual(stored.crossf.WinSize, 510, 'The choice is what the user asked for.');
             testCase.verifyEqual(stored.crossfUsed.WinSize, 500, ...
                 'A 510-sample frame on a 500-sample epoch is shortened to the epoch, and the record says so.');
             testCase.verifyEqual(replayed.spectralMeasures{1}.coherence, a.spectralMeasures{1}.coherence, ...

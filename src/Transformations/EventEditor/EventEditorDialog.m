@@ -2,14 +2,14 @@ function ops = EventEditorDialog(EEG)
 %EVENTEDITORDIALOG  Build a list of event-table corrections, with a live
 %   preview of what they do.
 %   OPS = EventEditorDialog(EEG) returns the recorded operations, or [] if
-%   the analyst cancelled.
+%   the user cancelled.
 %
 %   THE RECORDED OPERATIONS ARE ON SCREEN, not hidden behind the result.
 %   This dialog edits a list of corrections and shows the table those
 %   corrections produce, rather than editing the table and deriving a list
 %   afterwards. That is deliberate and it is the whole design: what gets
 %   stored, replayed onto other subjects and written into the exported
-%   script is the list, so the list is what the analyst should be looking
+%   script is the list, so the list is what the user should be looking
 %   at while deciding whether it is right.
 %
 %   It also makes the awkward case honest. A rename or a latency shift
@@ -266,7 +266,7 @@ function op = makeOp(name, varargin)
 end
 
 function items = describeOps(ops)
-%DESCRIBEOPS  Each correction in the words an analyst would use, with the
+%DESCRIBEOPS  Each correction in the words a user would use, with the
 %   ones that will not survive replay saying so.
     items = cell(1, numel(ops));
     for k = 1:numel(ops)
@@ -297,18 +297,18 @@ end
 function rows = tableRows(events, srate)
 %TABLEROWS  The event table as the grid shows it. Latency in milliseconds
 %   first: samples are what the file stores, milliseconds are what an
-%   analyst reasons in, and a trigger delay is only ever quoted in ms.
+%   user reasons in, and a trigger delay is only ever quoted in ms.
 %
 %   LATENCIES ARE FORMATTED AS TEXT, not left as numbers. A uitable renders
 %   a large numeric cell in scientific notation, and latencies get large
 %   quickly: half an hour at 500 Hz is 900,000 samples, which shows as
 %   9.0e+05. Nobody reads a trigger time that way, and the column is
-%   editable, so it also has to be something an analyst can sensibly type
+%   editable, so it also has to be something a user can sensibly type
 %   over. sprintf here, str2double on the way back in (see onCellEdited).
 %
 %   BOTH COLUMNS ARE WHOLE NUMBERS. A fraction of a millisecond is below
 %   what any of this can mean, and a fractional sample is not a thing an
-%   analyst reads. Note that this is the DISPLAY only: a shift of 15 ms at
+%   user reads. Note that this is the DISPLAY only: a shift of 15 ms at
 %   250 Hz really is 3.75 samples, and the stored latency keeps that. What
 %   is rounded here is what is shown, never what is applied.
     if isempty(events)

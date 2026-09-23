@@ -19,7 +19,7 @@ classdef RecalculableTransformsTest < matlab.unittest.TestCase
 %     reads TransformSettings.get  ->  must be in RecalculableTransforms
 %     does not                     ->  must NOT be, since its dialog would
 %                                      open at defaults and silently throw
-%                                      away what the analyst chose
+%                                      away what the user chose
 %
 %   There are two kinds of exception, each carrying its reason beside the
 %   property that names it:
@@ -80,7 +80,7 @@ classdef RecalculableTransformsTest < matlab.unittest.TestCase
         %NOTHINGISRECALCULABLETHATCANNOTBERESEEDED  The other direction. A
         %   transform in the list whose dialog ignores stored settings would
         %   open at its defaults on Recalculate and quietly discard the
-        %   analyst's parameters, which is worse than a greyed-out menu item.
+        %   user's parameters, which is worse than a greyed-out menu item.
             [reseedable, all] = testCase.surveyTransformations();
             listed = WorkSpaceTree.RecalculableTransforms;
 

@@ -1,7 +1,7 @@
 classdef MeasurePresetsTest < matlab.unittest.TestCase
 %MEASUREPRESETSTEST  Every shipped .alm preset must load and be usable.
 %
-%   A preset is a file an analyst reaches for through Load..., and a broken
+%   A preset is a file a user reaches for through Load..., and a broken
 %   one fails in a dialog with no way back except editing JSON by hand.
 %   Nothing tested any of them before this file: they were valid because
 %   whoever added one looked at it.

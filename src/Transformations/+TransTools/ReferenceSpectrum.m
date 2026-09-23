@@ -6,7 +6,7 @@ function [spec, specFreqs, peakHz] = ReferenceSpectrum(input, refIdx)
 %   an EPOCHED EEG struct, the amplitude spectrum of channel REFIDX averaged
 %   over each bin's trials.
 %
-%   WHY THIS EXISTS. The coherence map only covers the band the analyst chose
+%   WHY THIS EXISTS. The coherence map only covers the band the user chose
 %   (52 to 68 Hz for the RIFT settings of Dimigen et al. 2025), and its
 %   REFPOWER only that band too. A condition tagged outside the band, a 30 Hz
 %   SSVEP among 60 Hz RIFT conditions, is therefore invisible to it: the

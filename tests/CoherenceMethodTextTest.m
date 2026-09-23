@@ -57,7 +57,7 @@ classdef CoherenceMethodTextTest < matlab.unittest.TestCase
 
         function theNumbersAreTheOnesTheRunUsed(testCase)
         %THENUMBERSARETHEONESTHERUNUSED  The paragraph once read "(between 52
-        %   and 68 Hz)" whatever the analyst had set, because SpectralMeasure
+        %   and 68 Hz)" whatever the user had set, because SpectralMeasure
         %   wrote its first automatic band over the choice. Every figure now
         %   comes from what the estimator used: here a frame shortened to 240
         %   samples, an averaging range, and a band worked out from the rows.

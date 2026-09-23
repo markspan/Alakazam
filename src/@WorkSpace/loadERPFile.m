@@ -37,7 +37,7 @@ function loadERPFile(this, name)
         this.EEG = EEG;
     else
         % Cache is at least as new as the raw file: this.EEG only needs to
-        % be a real, fully-loaded dataset once the analyst actually opens
+        % be a real, fully-loaded dataset once the user actually opens
         % this node (loadAndPlotNode does a fresh load then, overwriting
         % this regardless) -- registerRootNode itself only reads a
         % handful of scalar fields, so a cheap sidecar read is enough here.

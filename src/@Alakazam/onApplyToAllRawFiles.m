@@ -70,7 +70,7 @@ function onApplyToAllRawFiles(this)
     % subject whose recording lacks a channel/event type this
     % branch's chain depends on) should not abort the whole batch --
     % every other target still gets the branch applied, and the
-    % analyst sees exactly which ones did not at the end.
+    % user sees exactly which ones did not at the end.
     failed = strings(1, 0); % row, not column -- cellstr(failed) below must
                              % concatenate horizontally with the other message lines
     done = 0;

@@ -11,7 +11,7 @@ function labels = SourceVertexLabels(nVertex)
 %   exactly the kind of thing that agrees until someone pads a number.
 %
 %   The names are internal and never shown: a vertex is reported to an
-%   analyst by its position and its anatomical region, never as "v13407".
+%   user by its position and its anatomical region, never as "v13407".
 %
 %   See also TRANSTOOLS.SOURCENEIGHBOURS, SOURCECLUSTERSTATS.
     labels = compose('v%d', (1:nVertex)');

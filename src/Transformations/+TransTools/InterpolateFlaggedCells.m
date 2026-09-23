@@ -6,7 +6,7 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
 %   not always how many were flagged: a channel with no scalp position
 %   cannot be placed and is left flagged instead (see the guard below). A
 %   caller that reports nnz(flags) rather than this number tells the
-%   analyst it repaired data it did not touch.
+%   user it repaired data it did not touch.
 %
 %   EEG = TransTools.InterpolateFlaggedCells(EEG, FLAGS) takes a logical
 %   nChan x nTrials FLAGS matrix and replaces each flagged cell's samples
@@ -46,7 +46,7 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
 %   blink. Callers that flag cells automatically (ArtefactDetect) warn when
 %   a trial has so many flagged channels that the survivors are unlikely to
 %   be clean; callers driven by inspection (ManualReject) rely on the
-%   analyst having looked.
+%   user having looked.
 %
 %   See also INTERPOLATE, MANUALREJECT, ARTEFACTDETECT, DATAQUALITYMETRICS.
     nInterpolated = 0;

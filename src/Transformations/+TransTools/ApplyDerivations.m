@@ -19,7 +19,7 @@ function [EEG, added] = ApplyDerivations(EEG, text)
 %       numbers        scalar literals, broadcast over the waveform
 %   It is parsed and evaluated directly (a small recursive-descent parser,
 %   see below), never eval-ed: a saved .alm / template is shared between
-%   analysts and loaded from disk, so running its text as MATLAB would be a
+%   users and loaded from disk, so running its text as MATLAB would be a
 %   code-injection hole. The restricted grammar also guarantees the result
 %   is either a scalar or a single channel-shaped waveform, so a derivation
 %   can never produce a wrongly-sized channel.

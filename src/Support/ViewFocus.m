@@ -1,5 +1,5 @@
 classdef ViewFocus < handle
-%VIEWFOCUS  The channel and bin the analyst last looked at.
+%VIEWFOCUS  The channel and bin the user last looked at.
 %
 %   One instance lives on the application for the length of the session.
 %   When a new plot tab is opened, AlakazamPlotter captures the selection
@@ -20,7 +20,7 @@ classdef ViewFocus < handle
 %   A LABEL THAT IS NOT THERE IS NOT AN ERROR. Moving from a 64-channel
 %   recording to an ICA result that has no "Cz" is ordinary, and the view
 %   simply keeps its own default. Nothing is reported, because there is
-%   nothing the analyst would do about it.
+%   nothing the user would do about it.
 %
 %   NOTHING IS PERSISTED. This is a within-session convenience, not a
 %   setting: it is not written to the workspace file, and a new session

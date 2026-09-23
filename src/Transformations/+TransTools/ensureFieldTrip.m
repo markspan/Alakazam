@@ -29,7 +29,7 @@ function ensureFieldTrip(featureLabel)
 %   deliberately, the same reasoning GEDAI's own version pin uses: a
 %   fixed, once-verified version keeps source-modeling results
 %   reproducible across a project's lifetime rather than silently
-%   shifting under an analyst whenever a new FieldTrip snapshot appears.
+%   shifting under a user whenever a new FieldTrip snapshot appears.
 %   Update FieldTripUrl by hand when a refresh is actually wanted.
     if nargin < 1 || isempty(featureLabel)
         featureLabel = 'Source-estimate mode';

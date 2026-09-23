@@ -136,7 +136,7 @@ function [subjects, sidecars] = extractBinScripts(subjects)
 %EXTRACTBINSCRIPTS  Move every DefineBins bin script out of the generated
 %   code and into its own .binscript file beside it.
 %
-%   A bin script is source text in its own right: the analyst wrote it, it
+%   A bin script is source text in its own right: the user wrote it, it
 %   has its own syntax and its own comments, and Alakazam can load one
 %   directly. Inlining it as an escaped sprintf string (near a kilobyte of
 %   it) makes the generated script unreadable and the bin script itself

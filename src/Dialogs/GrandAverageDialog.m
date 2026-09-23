@@ -17,7 +17,7 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
 %   then fixed; its current sources/weighting are pre-selected).
 %
 %   Returns a struct with .name, .sources (the selected files) and .weighted,
-%   or [] if the analyst cancelled.
+%   or [] if the user cancelled.
 
     spec = [];
     isNew = isempty(prefillSpec);
@@ -36,7 +36,7 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     % never arrive here empty, but onRecalculateNode calls straight through
     % with no guard -- so recalculating an existing grand average in a
     % workspace that no longer offers its sources was a hard error, which
-    % is precisely the moment the analyst most needs an explanation.
+    % is precisely the moment the user most needs an explanation.
     if isempty(presentKinds)
         return;
     end

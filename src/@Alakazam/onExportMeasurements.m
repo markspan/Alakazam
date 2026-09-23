@@ -17,7 +17,7 @@ function onExportMeasurements(this)
 %   (Exploratory)" section (see generateSourceEstimateReportAssets) when
 %   this export includes a Grand Average entry AND FieldTrip is already
 %   installed -- checked, never triggered: this runs as a side effect of
-%   Export Measurements, not because the analyst asked for Source-
+%   Export Measurements, not because the user asked for Source-
 %   estimate mode, so it must never pop FieldTrip's own consent-gated
 %   ~400 MB download. Missing either condition simply omits the section;
 %   it is never an export failure.
@@ -80,7 +80,7 @@ function onExportMeasurements(this)
         % TARGETFILE's -- copy the CSV in alongside it (under the same
         % timestamped stem, so it can never collide with a different
         % export's own copy) rather than pointing the report at a
-        % relative "../" back to wherever the analyst happened to save
+        % relative "../" back to wherever the user happened to save
         % it: that path would break the moment the report is shared/
         % moved on its own, and would silently start reading a DIFFERENT
         % file's contents if a later export overwrote the same CSV name
@@ -95,7 +95,7 @@ function onExportMeasurements(this)
 
         % Best effort, and deliberately its OWN try/catch rather than
         % relying on the block-wide one below: a source-estimate failure
-        % must not cost the analyst the CSV/statistical report that
+        % must not cost the user the CSV/statistical report that
         % already works today, so this degrades to "no Source Estimate
         % section" on ANY problem (FieldTrip not installed -- the common,
         % entirely expected case, see

@@ -3,7 +3,7 @@ function person = personFor(this, subject)
 %   name) belongs to, as assigned via editSubjects -- or SUBJECT itself
 %   if nothing has been entered. That fallback is what makes a multi-
 %   session recording ("day 1" and "day 2" as two separate raw files)
-%   opt-in: until an analyst links them by giving both the same person
+%   opt-in: until a user links them by giving both the same person
 %   ID, every raw file is its own person, exactly today's behaviour.
 %
 %   Feeds collectEntriesWithField's own .person field, which the CSV

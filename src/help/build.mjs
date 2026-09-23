@@ -137,7 +137,7 @@ renderer.heading = function (token) {
 
 // External links open outside the help window. Without this a click
 // navigates the uihtml component itself away from the help page, and the
-// component has no back button to return with -- the analyst would have to
+// component has no back button to return with -- the user would have to
 // close Help and reopen it.
 renderer.link = function (token) {
     const text = this.parser.parseInline(token.tokens)

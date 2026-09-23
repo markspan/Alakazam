@@ -1,7 +1,7 @@
 function [ok, message] = buildHelpPageInto(helpDir, target)
 %BUILDHELPPAGEINTO  Run the help builder in HELPDIR and put its page at
 %   TARGET. [OK, MESSAGE] where MESSAGE explains a failure, for showing to
-%   the analyst.
+%   the user.
 %
 %   A PLAIN FUNCTION SO IT CAN BE TESTED. As a method under @Alakazam this
 %   needed a running application to call at all, so the only thing a test
@@ -39,7 +39,7 @@ function [ok, message] = buildHelpPageInto(helpDir, target)
     if status ~= 0
         % Almost always a missing node_modules, which npm install fixes and
         % which is the one step needing the network. Retried rather than
-        % reported, since the analyst can act on "Cannot find package
+        % reported, since the user can act on "Cannot find package
         % 'marked'" no better than this function can.
         [installStatus, installOutput] = runIn(helpDir, 'npm install');
         if installStatus ~= 0
@@ -95,7 +95,7 @@ end
 function text = firstLines(output, n)
 %FIRSTLINES  The first N lines of OUTPUT, for a dialog.
 %   npm and node are both capable of several hundred lines of stack, and a
-%   uialert showing all of it is one the analyst cannot read or dismiss
+%   uialert showing all of it is one the user cannot read or dismiss
 %   sensibly.
     lines = strsplit(strtrim(char(string(output))), newline);
     if numel(lines) > n

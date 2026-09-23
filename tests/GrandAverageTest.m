@@ -1,6 +1,6 @@
 classdef GrandAverageTest < matlab.unittest.TestCase
 %GRANDAVERAGETEST  Unit tests for src/GrandAverage.m's compatibility
-%   errors, which are the part of it an analyst actually has to act on.
+%   errors, which are the part of it a user actually has to act on.
 %
 %   Every subject's Average is cached under a name made of the
 %   transformation plus a timestamp, so reporting a mismatch as

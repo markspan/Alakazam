@@ -260,7 +260,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         table.Data = [table.Data; loadedData];
 
         % DERIVED CHANNELS ARE MERGED BY NAME, not appended blindly and not
-        % overwritten. Two reasons. Replacing wiped a let block the analyst
+        % overwritten. Two reasons. Replacing wiped a let block the user
         % had written whenever the loaded file had none, which every current
         % preset does. And appending a second definition of the same name
         % would not merely be untidy: TransTools.ApplyDerivations appends each
@@ -276,7 +276,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
 
         % Said out loud, because the consequence is not visible in the
         % table: the loaded rows may name a derived channel whose formula
-        % is now the analyst's rather than the file's, and only they can
+        % is now the user's rather than the file's, and only they can
         % tell whether that is what they want.
         if ~isempty(keptNames)
             uialert(fig, sprintf(['The rows were added. %s already defined in this ' ...
@@ -415,7 +415,7 @@ function [windows, errMsg] = windowsFromRows(data, allLabels)
 %WINDOWSFROMROWS  DATA (a uitable's own row-per-window cell array) parsed
 %   and validated into the 1xN cell-array-of-structs shape Measure.m
 %   expects. ERRMSG is '' if every row is valid, otherwise a single
-%   friendly message naming the first problem found (the analyst fixes
+%   friendly message naming the first problem found (the user fixes
 %   one thing at a time and re-clicks OK, matching TransformOptionsDialog/
 %   GrandAverageDialog's own one-uialert-at-a-time validation style).
     errMsg = '';

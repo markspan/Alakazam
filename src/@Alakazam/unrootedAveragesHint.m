@@ -13,7 +13,7 @@ function hint = unrootedAveragesHint(this)
 %   mismatch, or worse, silently succeeds.
 %
 %   But the consequence is confusing at exactly the wrong moment. An
-%   analyst whose Raw directory has been repointed -- or who opened the
+%   user whose Raw directory has been repointed -- or who opened the
 %   default workspace by habit -- sees "fewer than two were found in this
 %   workspace. Run Average on more subjects first", while ten perfectly
 %   good averages sit in the cache directory. Following that advice means

@@ -7,7 +7,7 @@ function onExportDataQuality(this)
 %   persistReportNode" flow onExportMeasurements/onExportSpectral/
 %   onClusterStats already use, with one difference: there is no
 %   user-facing CSV to save. The two CSVs this writes are intermediate
-%   inputs to the report rather than something an analyst would open
+%   inputs to the report rather than something a user would open
 %   themselves (they are per-trial and per-channel diagnostics, not
 %   measurements), so they go straight into the Reports folder next to the
 %   .qmd, and there is no uiputfile step at all.

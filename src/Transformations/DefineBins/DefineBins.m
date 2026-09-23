@@ -13,7 +13,7 @@ function [EEG, options] = DefineBins(input, varargin)
 %   [EEG, options] = DefineBins(input)        % interactive: prompt for a script
 %   [EEG, options] = DefineBins(input, opts)  % replay: opts is a stored struct
 %
-% The returned OPTIONS struct carries .script (the text the analyst typed) and
+% The returned OPTIONS struct carries .script (the text the user typed) and
 % .bins (the compiled query plan). On replay the compiled plan is evaluated
 % directly against the new dataset's events - no re-parsing, no eval of text.
 %
@@ -166,10 +166,10 @@ function [EEG, options] = DefineBins(input, varargin)
         result = DefineBinsDialog(default, prevEpoch);
         if isempty(result)
             % Cancel is not a failure. Returning an empty EEG is how every
-            % other transformation says "the analyst changed their mind":
+            % other transformation says "the user changed their mind":
             % Alakazam.onTransformation reads it as cancelled, persists
             % nothing and shows nothing. This used to throw instead, so
-            % backing out of the dialog raised an error the analyst then had
+            % backing out of the dialog raised an error the user then had
             % to dismiss -- a second click to undo a decision they had
             % already made.
             EEG = [];

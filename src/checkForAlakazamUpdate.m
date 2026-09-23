@@ -25,7 +25,7 @@ function info = checkForAlakazamUpdate(fetchLatestRelease)
 %
 %   Only called from Alakazam.onUpdate -- a button someone presses by hand.
 %   There is deliberately no startup or timer-driven call anywhere in this
-%   app: checking for an update is something the analyst asks for, not
+%   app: checking for an update is something the user asks for, not
 %   something that happens to them while they are trying to work.
 %
 %   See also ALAKAZAMVERSION, ISALAKAZAMVERSIONNEWER, ALAKAZAM/ONUPDATE,

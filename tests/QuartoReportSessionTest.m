@@ -3,7 +3,7 @@ classdef QuartoReportSessionTest < matlab.unittest.TestCase
 %   the two things that make it safe to turn on automatically.
 %
 %   Session becomes a factor whenever the recordings support one -- no
-%   opt-in switch, because an analyst who has labelled two sessions has
+%   opt-in switch, because a user who has labelled two sessions has
 %   already described the design, and a second declaration would only be
 %   an opportunity for the two to disagree. That makes two properties
 %   load-bearing, and both are pinned here.
@@ -160,8 +160,8 @@ classdef QuartoReportSessionTest < matlab.unittest.TestCase
                 'The session section should offer exactly two mutually exclusive contrast families.');
         end
 
-        function theAnalystIsToldHowToAddMore(testCase)
-        %THEANALYSTISTOLDHOWTOADDMORE  Being strict is only defensible if
+        function theUserIsToldHowToAddMore(testCase)
+        %THEUSERISTOLDHOWTOADDMORE  Being strict is only defensible if
         %   the report says what to do about it.
             txt = QuartoReportSessionTest.withinSessions();
 

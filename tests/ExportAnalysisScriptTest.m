@@ -490,7 +490,7 @@ classdef ExportAnalysisScriptTest < matlab.unittest.TestCase
         %ANATIVELYEMITTEDSTEPHOISTSNOOPTIONS  A step written as a direct
         %   library call takes its arguments as literals, so its options
         %   variable would sit in the settings block looking editable while
-        %   changing nothing. That is worse than clutter: an analyst who
+        %   changing nothing. That is worse than clutter: a user who
         %   edits opt_Resample and re-runs gets the old rate and no warning.
             steps = struct( ...
                 'transformId', {'Resample', 'Baseline'}, ...
@@ -968,7 +968,7 @@ classdef ExportAnalysisScriptTest < matlab.unittest.TestCase
         % ---- bin scripts as their own files -----------------------------
         function aBinScriptGoesToItsOwnFileNotIntoTheCode(testCase)
         %ABINSCRIPTGOESTOITSOWNFILENOTINTOTHECODE  A bin script is source
-        %   text the analyst wrote, with its own syntax and comments.
+        %   text the user wrote, with its own syntax and comments.
         %   Inlining a kilobyte of it as an escaped sprintf string makes
         %   both the script and the .m unreadable.
             script = sprintf('let rare = {11,22}\nbin 1 "Rare" rare\n');

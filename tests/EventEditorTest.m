@@ -73,7 +73,7 @@ classdef EventEditorTest < matlab.unittest.TestCase
         end
 
         function shiftIsInMillisecondsNotSamples(testCase)
-        %SHIFTISINMILLISECONDSNOTSAMPLES  The correction an analyst knows is
+        %SHIFTISINMILLISECONDSNOTSAMPLES  The correction a user knows is
         %   "the triggers are 16 ms late", and that stays true across
         %   recordings at different sampling rates. A sample count would not.
             events = testCase.events({'S'}, 100);

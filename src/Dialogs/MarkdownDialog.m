@@ -10,7 +10,7 @@ function fig = MarkdownDialog(titleText, mdFile, parentFig)
 %   PANDOC, OR NOTHING. There is no built-in fallback renderer, and that is
 %   deliberate: a hand-written Markdown converter is a parser to keep
 %   correct forever, in a project whose subject is EEG. When pandoc is
-%   absent, FIG comes back empty and the analyst is offered the Markdown
+%   absent, FIG comes back empty and the user is offered the Markdown
 %   file itself, which is perfectly readable and is what they would have
 %   been reading anyway -- the same trade Alakazam.offerReadmeInstead makes
 %   when the built help page has not been generated.

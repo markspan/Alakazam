@@ -156,13 +156,13 @@ freqHz = spectralFreqSpecs(freqExprs, fundamentals);
 %  range the frames are averaged over. newcrossf alone also needs its band:
 %  MinFreq/MaxFreq default to the rows' own frequency span padded by 8 Hz
 %  either side -- enough room for a coherent bandwidth around each named
-%  frequency without the analyst having to work it out by hand; explicit
+%  frequency without the user having to work it out by hand; explicit
 %  values (as the RIFT template sets, matching the paper's own 52-68 Hz
 %  band exactly) always win. A row outside that band cannot be read from
 %  newcrossf's image, and is reported as missing (see crossfCoherence), not
 %  as the value at the nearest edge.
 %
-%  What the analyst chose and what the estimator ran with are kept apart.
+%  What the user chose and what the estimator ran with are kept apart.
 %  CHOICE (saved as options.crossf) keeps a band or window left blank as []
 %  ("auto" / "whole epoch"): it used to be overwritten with the resolved
 %  values, so a recalculated node reopened its dialog with NaN in the window

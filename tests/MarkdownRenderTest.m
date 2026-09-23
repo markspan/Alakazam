@@ -6,7 +6,7 @@ classdef MarkdownRenderTest < matlab.unittest.TestCase
 %   version of this feature shipped one as a fallback; it was removed
 %   because a hand-written converter is a parser to keep correct forever, in
 %   a project about EEG. Rendering is pandoc's job, and when pandoc is
-%   absent the analyst is offered the Markdown file itself.
+%   absent the user is offered the Markdown file itself.
 %
 %   What can be checked without a display, and is: that the lookup answers
 %   honestly on any machine, that the viewer refuses a missing document

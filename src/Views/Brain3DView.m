@@ -465,7 +465,7 @@ classdef Brain3DView < AlakazamView
             % A stored estimate is a vector over ITS OWN vertices, so it can
             % only be drawn on the sheet it was computed for; demanding the
             % full-resolution one would refuse every estimate stored at a
-            % coarser mesh, which is the size most analysts can afford. So
+            % coarser mesh, which is the size most users can afford. So
             % this view adopts the stored sheet instead, and rebuilds its
             % model when that differs from the one it is holding.
             %
@@ -530,7 +530,7 @@ classdef Brain3DView < AlakazamView
             % the WHOLE epoch at full rate, because that is what this view
             % scrubs through. A stored estimate windowed for a cluster test
             % is a different fit and is correctly refused, so the two uses do
-            % not share a node unless the analyst asked for the wide one.
+            % not share a node unless the user asked for the wide one.
             %
             % Asked BEFORE the data is reordered and the surface normals are
             % built: both are pure setup for an inverse that may not need to

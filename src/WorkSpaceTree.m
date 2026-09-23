@@ -94,7 +94,7 @@ classdef WorkSpaceTree < handle
         % all recalculateTransformNode does: it stands in for
         % TransformSettings with the node's params and re-runs the transform
         % interactively. A transform whose dialog ignores stored settings
-        % would open at its defaults and silently discard what the analyst
+        % would open at its defaults and silently discard what the user
         % chose, which is why Photodiode and EventEditor are absent --
         % PhotodiodeDialog(EEG) and EventEditorDialog(EEG) take no stored
         % argument and read no TransformSettings. Making either re-seedable

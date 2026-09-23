@@ -11,7 +11,7 @@ function varargout = busyGate(action, varargin)
 %   this went unnoticed. In MATLAB Online the modal uiprogressdlg covers the
 %   figure, and the settings underneath cannot be reached at all until it is
 %   closed by hand. The indicator was always wrong there: it says "working"
-%   while the app is in fact waiting for the analyst to fill a form in.
+%   while the app is in fact waiting for the user to fill a form in.
 %
 %   HOW IT IS DRIVEN. TransTools.InitGuard suspends the indicator whenever a
 %   transformation is entered interactively, i.e. exactly when a dialog is

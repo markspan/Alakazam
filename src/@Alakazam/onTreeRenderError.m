@@ -9,7 +9,7 @@ function onTreeRenderError(this, eventData, sourceTree)
 %   error" console warning with no message or stack at all). Prints
 %   the real message/stack MATLAB would otherwise never see; a
 %   warning rather than a dialog since this always indicates a code
-%   bug in src/webtree, not something the analyst can act on beyond
+%   bug in src/webtree, not something the user can act on beyond
 %   reporting it.
     if isequal(sourceTree, this.Workspace.GrandAveragesTree)
         treeName = 'Grand Averages';

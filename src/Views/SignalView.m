@@ -201,7 +201,7 @@ classdef SignalView < AlakazamView
         %   and only the marks change: the channel underneath is the same.
         %   Rebuilding the whole view each time would rebuild the min/max
         %   pyramid over the entire recording, and would throw away the
-        %   analyst's scroll position and zoom in the middle of the very
+        %   user's scroll position and zoom in the middle of the very
         %   comparison they are making.
             this.Overlay = this.parseOverlays(eeg);
             this.redraw();
@@ -703,7 +703,7 @@ classdef SignalView < AlakazamView
         %   WHY ALIGNMENT AND NOT JUST COLOUR. Two events a few milliseconds
         %   apart put their labels in the same place, and the later one wins:
         %   a diode onset 20 ms after its trigger sits close enough to hide
-        %   the trigger code, which is the value the analyst is checking. So
+        %   the trigger code, which is the value the user is checking. So
         %   a caller can lift one kind of label to the top of the axes and
         %   leave the other at the bottom, and both stay readable however
         %   close together the lines are.

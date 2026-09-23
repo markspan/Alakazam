@@ -3,7 +3,7 @@ function dropdown = BuildChannelDropdown(grid, row, col, channelLabels, valueCha
 %   view that steps a single channel with the arrow keys/mouse wheel
 %   (EpochView, AverageView, TimeFrequencyView, CoherenceView, FourierView,
 %   SpectralMeasureView, the last two via ZoomPanButtons) -- the channel
-%   counterpart of BuildBinDropdown, letting the analyst jump straight to an
+%   counterpart of BuildBinDropdown, letting the user jump straight to an
 %   electrode instead of stepping to it one channel at a time.
 %
 %   Builds into a nested [1,2] uigridlayout inside GRID at ROW/COL

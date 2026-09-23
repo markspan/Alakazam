@@ -220,7 +220,7 @@ function subjects = restrictToScalpChannels(subjects)
 %   cluster is a spatial extent across scalp neighbours, and a peripheral
 %   channel has no scalp position and no neighbours to begin with, so it
 %   was never a meaningful part of that extent -- unlike SelectData (a
-%   general-purpose, manual step the analyst may or may not have run
+%   general-purpose, manual step the user may or may not have run
 %   first), this always applies here, the same way ScalpDistribution/
 %   eegChannelMask already exclude peripherals from a scalp-only display
 %   automatically rather than requiring it to be done by hand upstream.

@@ -8,7 +8,7 @@ function [merged, keptNames] = mergeLetDefinitions(existingText, loadedText)
 %   defined, so a caller can report which of the loaded definitions went
 %   unused.
 %
-%   THE EXISTING DEFINITION WINS, deliberately. It is the one the analyst
+%   THE EXISTING DEFINITION WINS, deliberately. It is the one the user
 %   typed, and every window already in their table was written against it;
 %   replacing it would silently change what those windows measure.
 %

@@ -1,11 +1,11 @@
 function [name, gloss] = SourceMethodName(method)
-%SOURCEMETHODNAME  How an inverse method is named to the analyst.
+%SOURCEMETHODNAME  How an inverse method is named to the user.
 %   [NAME, GLOSS] = SourceMethodName(METHOD) turns an internal method id
 %   into the name the user sees, plus a short expansion of it.
 %
 %   ONE PLACE, BECAUSE THE ID AND THE NAME DISAGREE. FieldTrip's 'mne'
 %   with a scaled identity noise covariance is dSPM, and every surface the
-%   analyst touches says so: the dialog's dropdown, the report's method
+%   user touches says so: the dialog's dropdown, the report's method
 %   table, the on-screen result summary. Printing the raw id in any one of
 %   them would have that surface contradict the other two about which
 %   method just ran, which is exactly the kind of disagreement a reader

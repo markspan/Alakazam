@@ -22,7 +22,7 @@ function newNode = persistReportNode(this, reportName, htmlFile, qmdFile)
 %
 %   Its own .mat (a "_node.mat" file) is saved next to the .qmd/.html it
 %   wraps, in WorkSpace.reportsDirectory (ExportsDirectory/Reports, not
-%   wherever the analyst happened to point the CSV export dialog) -- not
+%   wherever the user happened to point the CSV export dialog) -- not
 %   in the transformation-cache tree WorkSpace.treeTraverse rebuilds from,
 %   but WorkSpace.loadReports scans that same Reports folder for
 %   "_node.mat" files the same way loadGrandAverages scans
