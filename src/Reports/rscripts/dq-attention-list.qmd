@@ -1,0 +1,93 @@
+
+```{r}
+#| label: attention-list
+#| results: asis
+# Median absolute deviation, not SD, for the "unusually noisy" rule: with a
+# handful of subjects the very outliers being looked for would inflate an SD
+# enough to hide themselves inside it.
+notes <- character()
+
+high_rej <- subj %>% filter(pct_rejected > 25)
+if (nrow(high_rej) > 0) {
+  notes <- c(notes, sprintf("- **More than 25%% of trials rejected**: %s.",
+    paste(sprintf("%s (%s%%)", high_rej$dataset, apa_num(high_rej$pct_rejected, 1)), collapse = ", ")))
+}
+
+mad_sd <- mad(subj$median_baseline_sd, na.rm = TRUE)
+med_sd <- median(subj$median_baseline_sd, na.rm = TRUE)
+if (!is.na(mad_sd) && mad_sd > 0) {
+  noisy <- subj %>% filter(median_baseline_sd > med_sd + 3 * mad_sd)
+  if (nrow(noisy) > 0) {
+    notes <- c(notes, sprintf("- **Unusually noisy relative to the rest of the sample** (> 3 MAD above the median): %s.",
+      paste(sprintf("%s (%s uV)", noisy$dataset, apa_num(noisy$median_baseline_sd)), collapse = ", ")))
+  }
+}
+
+# n_trials > 20 as well as kept < 20: a bin that never had 20 trials to
+# begin with cannot end up with 20, and saying so every time describes
+# the design rather than the data quality. The flag is for trials LOST,
+# so it only applies where there were enough to lose.
+low_n <- qual %>% distinct(dataset, bin, n_trials, n_trials_rejected) %>%
+  mutate(kept = n_trials - n_trials_rejected) %>%
+  filter(kept < 20, n_trials > 20)
+if (nrow(low_n) > 0) {
+  notes <- c(notes, sprintf("- **Fewer than 20 surviving trials in a bin that started with more**: %s.",
+    paste(sprintf("%s / %s (%d of %d left)", low_n$dataset, low_n$bin, low_n$kept, low_n$n_trials), collapse = ", ")))
+}
+
+truncated <- subj %>% filter(pct_truncated > 0)
+if (nrow(truncated) > 0) {
+  notes <- c(notes, sprintf(paste0("- **Trials truncated at a recording boundary** (they still ",
+    "enter the average, with less data at the ends): %s. Nothing rejected these; the epoch ",
+    "ran off the start or end of the file."),
+    paste(sprintf("%s (%s%% of trials, worst one missing %s%% of its epoch)", truncated$dataset,
+                  apa_num(truncated$pct_truncated, 1), apa_num(truncated$max_truncated_pct, 1)),
+          collapse = ", ")))
+}
+
+bad_chan <- qual %>% filter(pct_flagged > 20) %>% distinct(dataset, channel)
+if (nrow(bad_chan) > 0) {
+  notes <- c(notes, sprintf("- **Channel flagged in more than 20%% of trials** (a candidate for interpolation): %s.",
+    paste(sprintf("%s / %s", bad_chan$dataset, bad_chan$channel), collapse = ", ")))
+}
+
+# The mirror of the line above: a channel that is mostly RECONSTRUCTED rather than
+# mostly missing. It needs saying separately because nothing else in the report can
+# reveal it -- interpolated samples are real numbers, so they pass every noise and
+# rejection check as ordinary data.
+interp_chan <- qual %>% filter(pct_interpolated > 20) %>% distinct(dataset, channel)
+if (nrow(interp_chan) > 0) {
+  notes <- c(notes, sprintf(paste0("- **Channel interpolated in more than 20%% of trials**: %s. ",
+                                   "More than a fifth of this channel is an estimate from its ",
+                                   "neighbours rather than a measurement. That is a legitimate ",
+                                   "repair for one bad electrode, but it should be reported, and ",
+                                   "and the artefact should be checked against the ",
+                                   "neighbours it was reconstructed from."),
+    paste(sprintf("%s / %s", interp_chan$dataset, interp_chan$channel), collapse = ", ")))
+}
+
+# A CALLOUT, AND FIRST IN THE SECTION. These lines are the only part of
+# this report that names a specific subject or channel to go and look at,
+# and they used to be printed as plain text underneath a long table of
+# threshold justifications, where a reader scanning the document could
+# pass them without noticing. The criteria that produced them are
+# reference material and now sit below.
+if (length(notes) == 0) {
+  cat("\n::: {.callout-tip title=\"Nothing flagged\"}\n")
+  cat("Nothing crossed any of the conventional thresholds checked here. The thresholds\n")
+  cat("themselves are listed below, so that what was looked for is on the record\n")
+  cat("alongside the fact that nothing met it.\n")
+  cat(":::\n\n")
+} else {
+  cat(sprintf("\n::: {.callout-warning title=\"%d item(s) worth a look\"}\n", length(notes)))
+  cat(paste(notes, collapse = "\n"), "\n")
+  cat("\nNothing here has been excluded, and none of these lines is an exclusion\n")
+  cat("decision. The threshold behind each one, and the reasoning for it, is given\n")
+  cat("below.\n")
+  cat(":::\n\n")
+}
+```
+### The criteria, and the reasoning behind each
+
+| Flagged when | Why this value |
+|---|---|

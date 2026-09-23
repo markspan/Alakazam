@@ -1,0 +1,13 @@
+
+```{r}
+#| label: baseline-z
+#| fig-height: 5
+zp <- ggplot(kept, aes(x = baseline_z, y = fct_reorder(dataset, baseline_z, .fun = median))) +
+  geom_vline(xintercept = c(-2, 2), linetype = "dashed", colour = alz_red) +
+  geom_jitter(height = 0.2, alpha = 0.25, size = 0.5, colour = alz_blue) +
+  labs(x = "Pre-stimulus SD (z, within subject)", y = NULL,
+       subtitle = "Dashed lines: the |z| > 2 flagging cutoff") +
+  alz_theme()
+print(zp)
+```
+

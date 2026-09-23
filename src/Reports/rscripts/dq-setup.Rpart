@@ -1,0 +1,12 @@
+
+<!--
+Alakazam: per-subject ERP data-quality report. Every per-subject number was
+computed in MATLAB (see dataQualityMetrics.m, whose own header records where
+the metric set was adapted from); this report narrates and plots them. It
+excludes nothing automatically, see the closing section. Edit freely.
+Render with: quarto render <this file>.qmd
+-->
+
+```{r}
+#| label: setup
+#| include: false

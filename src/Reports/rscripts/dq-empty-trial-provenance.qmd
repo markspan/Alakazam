@@ -1,0 +1,28 @@
+
+```{r}
+#| label: empty-trial-provenance
+#| results: asis
+# A trial counts as "rejected" when every channel of it is NaN, and there are
+# TWO ways to get that: an artefact step removed it, or DefineBins could not
+# cut the epoch at all (an anchor event past the end of the recording). The
+# two are identical in the data, so rather than assert a cause, this says
+# which one applies from whether any artefact step is actually in the chain.
+any_lost <- any(subj$pct_rejected > 0, na.rm = TRUE)
+ran <- subj$rejection_ran
+if (any_lost && all(ran == 0, na.rm = TRUE) && !all(is.na(ran))) {
+  cat(paste0("\n::: {.callout-important}\n## These trials were not rejected by anything\n\n",
+             "No ArtefactDetect or ManualReject step appears in these datasets, so nothing ",
+             "removed the empty trials counted below. They are epochs **DefineBins could not ",
+             "cut**: the anchor event sat past the end of the recording, or had no usable ",
+             "latency, so the epoch was never filled with data. Check the event codes near ",
+             "the end of each recording, and the epoch window against how long the ",
+             "recordings continue ",
+             "on for after the last event.\n:::\n\n"))
+} else if (any_lost && any(ran == 0, na.rm = TRUE)) {
+  mixed <- subj$dataset[!is.na(ran) & ran == 0]
+  cat(sprintf(paste0("\n*No artefact-rejection step is present for %s, so any empty trials ",
+                     "there are epochs DefineBins could not cut rather than rejections.*\n\n"),
+              paste(mixed, collapse = ", ")))
+}
+```
+

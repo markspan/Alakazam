@@ -34,7 +34,7 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
 %   consent-gated ~400 MB download. If FieldTrip is not already installed,
 %   this returns an empty ASSETS, silently -- the rest of the report is
 %   still generated, just without this optional section. A caller that
-%   wants to tell the analyst why can check TransTools.isFieldTripAvailable
+%   wants to tell the user why can check TransTools.isFieldTripAvailable
 %   itself before calling this and word its own message accordingly.
 %
 %   ASSETS is a struct array, one row per (bin, method) pair actually
@@ -67,7 +67,7 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
 %   for one bin (a channel set FieldTrip's template cannot resolve, an
 %   unwritable images folder) is logged with warning() and skipped, so a
 %   single bad combination cannot silently drop every OTHER snapshot the
-%   analyst was expecting, nor abort the CSV export this runs alongside.
+%   user was expecting, nor abort the CSV export this runs alongside.
 %
 %   See also TRANSTOOLS.RENDERSOURCEESTIMATESNAPSHOT,
 %   TRANSTOOLS.BUILDSOURCEFORWARDMODEL, TRANSTOOLS.ISFIELDTRIPAVAILABLE,

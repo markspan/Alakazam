@@ -1,0 +1,14 @@
+
+<!--
+Alakazam: cluster-based permutation statistics report (Maris &
+Oostenveld, 2007), via FieldTrip's ft_timelockstatistics. Unlike the
+ERP/Spectral Measure reports, the test itself already ran in MATLAB (see
+ClusterStats.m); this report narrates and plots that precomputed result,
+it does not run any statistics of its own. Edit freely: this is a
+starting point for these plots and this prose rather than a final version.
+Render with: quarto render <this file>.qmd
+-->
+
+```{r}
+#| label: setup
+#| include: false

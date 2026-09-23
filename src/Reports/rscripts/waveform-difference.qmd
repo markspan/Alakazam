@@ -1,0 +1,46 @@
+
+```{r}
+#| label: __DIFFCHUNKLABEL__
+#| results: asis
+#| fig-height: 3.6
+if (exists("ga") && !is.null(ga) && nrow(ga) > 0) {
+  chans <- dat %>% filter(window == "__WINDOW_R__") %>% distinct(channel) %>% pull(channel)
+  d <- ga %>% filter(bin %in% c("__BIN1_R__", "__BIN2_R__"), channel %in% chans) %>%
+       select(grand_average, channel, time_ms, bin, amplitude) %>%
+       pivot_wider(names_from = bin, values_from = amplitude)
+  if (all(c("__BIN1_R__", "__BIN2_R__") %in% names(d))) {
+    d$diff <- d[["__BIN2_R__"]] - d[["__BIN1_R__"]]
+    # sd() of a single value is NA, so with one grand average -- the
+    # ordinary case -- there is no band to draw at all, and n_ga records
+    # how many there were so the absence is explicable rather than odd.
+    ds <- d %>% group_by(channel, time_ms) %>%
+          summarise(m = mean(diff, na.rm = TRUE),
+                    n_ga = sum(!is.na(diff)),
+                    se = if (sum(!is.na(diff)) > 1)
+                           sd(diff, na.rm = TRUE) / sqrt(sum(!is.na(diff)))
+                         else NA_real_,
+                    .groups = "drop")
+    win <- dat %>% filter(window == "__WINDOW_R__") %>%
+           summarise(lo = suppressWarnings(min(window_start_ms, na.rm = TRUE)),
+                     hi = suppressWarnings(max(window_stop_ms, na.rm = TRUE)))
+    q <- ggplot(ds, aes(x = time_ms, y = m))
+    if (is.finite(win$lo) && is.finite(win$hi)) {
+      q <- q + annotate("rect", xmin = win$lo, xmax = win$hi, ymin = -Inf, ymax = Inf,
+                        alpha = 0.12, fill = "grey30")
+    }
+    q <- q +
+      geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey60") +
+      geom_vline(xintercept = 0, linewidth = 0.3, colour = "grey60") +
+      {if (any(is.finite(ds$se)))
+         geom_ribbon(aes(ymin = m - se, ymax = m + se), alpha = 0.2, fill = "steelblue")
+       else NULL} +
+      geom_line(colour = "steelblue", linewidth = 0.8) +
+      facet_wrap(~ channel) +
+      labs(x = "time (ms)", y = "difference (µV)") +
+      alz_theme()
+    print(q)
+    cat("\n\n")
+  }
+}
+```
+

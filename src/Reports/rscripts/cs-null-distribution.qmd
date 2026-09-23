@@ -1,0 +1,45 @@
+## The permutation null distribution
+
+```{r}
+#| label: null-distribution
+#| results: asis
+#| fig-height: 3.4
+if (is.null(null_df) || nrow(null_df) == 0 || !any(null_df$kind == "null")) {
+  cat(paste("\nThis correction does not produce a cluster-mass distribution, so there is",
+            "nothing to draw here. TFCE scores every point by the support it gathers across",
+            "thresholds rather than forming discrete clusters to sum over.\n\n"))
+} else {
+  nulls <- null_df %>% filter(kind == "null")
+  obs   <- null_df %>% filter(kind == "observed")
+
+  # One panel per tail. A two-tailed test has two distributions and two
+  # sets of observed clusters, and overlaying them would put a negative
+  # cluster mass on the positive null it was never compared against.
+  p <- ggplot(nulls, aes(x = value)) +
+    geom_histogram(bins = 40, fill = "grey70", colour = NA) +
+    facet_wrap(~ tail, scales = "free") +
+    labs(x = "cluster mass under relabelling", y = "permutations") +
+    alz_theme()
+  if (nrow(obs) > 0) {
+    p <- p + geom_vline(data = obs, aes(xintercept = value),
+                        colour = "#c1272d", linewidth = 0.7)
+  }
+  print(p)
+  cat("\n\n")
+
+  # The proportion of the null at least as extreme as the largest
+  # observed cluster, stated per tail. This is the Monte-Carlo p-value
+  # from its own definition, so a reader can check the number in the
+  # table above against the picture rather than trusting the label.
+  for (tl in unique(nulls$tail)) {
+    nd <- nulls$value[nulls$tail == tl]
+    od <- obs$value[obs$tail == tl]
+    if (length(od) == 0) next
+    extreme <- if (identical(tl, "positive")) max(od) else min(od)
+    share <- if (identical(tl, "positive")) mean(nd >= extreme) else mean(nd <= extreme)
+    cat(sprintf("On the %s tail, %s of %d relabellings produced a cluster at least as extreme as the largest observed one (mass %s).\n\n",
+                tl, format(round(share * length(nd))), length(nd), apa_num(extreme)))
+  }
+}
+```
+

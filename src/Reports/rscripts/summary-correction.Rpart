@@ -1,0 +1,87 @@
+omnibus2 <- omnibus %>% filter(!is.na(p)) %>%
+  mutate(role = ifelse(is.na(role) | role == "", "primary", role))
+if (nrow(omnibus2) > 0) {
+  # THE CORRECTION APPLIES TO ONE FAMILY, NOT TO EVERY ROW IN THE
+  # DOCUMENT. Benjamini-Hochberg assumes a family of distinct tests.
+  # The rows here are not all distinct: a two-condition design yields
+  # an omnibus on the conditions, a one-sample test of the difference
+  # bin that re-expresses the same contrast, and a single-trial model
+  # that re-analyses the same data. Correcting across those three does
+  # not control anything -- it inflates the family with rows carrying
+  # no independent information, and makes the correction look more
+  # severe than it is while protecting against nothing.
+  #
+  # So the planned condition comparisons are the PRIMARY family and are
+  # corrected together; derived and re-analysed quantities are reported
+  # as SECONDARY, with their uncorrected p and no adjusted value at
+  # all. That is what a pre-registration would say, and it keeps the
+  # adjusted numbers meaning what they claim to mean.
+  prim <- omnibus2 %>% filter(role == "primary") %>%
+          mutate(p_bh = p.adjust(p, method = "BH"))
+  seco <- omnibus2 %>% filter(role != "primary") %>% mutate(p_bh = NA_real_)
+  omnibus2 <- bind_rows(prim, seco)
+
+  n_of <- function(n, one, many) paste(n, ifelse(n == 1, one, many))
+  if (nrow(prim) == 0) {
+    cat("\nNo primary test produced a result, so there is nothing to correct.\n\n")
+  } else {
+    cat(sprintf("\nThe primary family here holds %s. Before correction, %s significant at *p* < .05; after it, %s.\n\n",
+                n_of(nrow(prim), "test", "tests"),
+                n_of(sum(prim$p < .05, na.rm = TRUE), "was", "were"),
+                n_of(sum(prim$p_bh < .05, na.rm = TRUE), "was", "were")))
+  }
+  if (nrow(seco) > 0) {
+    cat(sprintf("A further %s listed with %s uncorrected *p*.\n\n",
+                n_of(nrow(seco), "secondary test is", "secondary tests are"),
+                ifelse(nrow(seco) == 1, "its", "their")))
+  }
+
+  # Plain words for the codes the sections log, so the table says what
+  # the prose above says. A code missing from these lists is shown as it
+  # is rather than dropped, so a new design cannot vanish from the table.
+  design_label <- function(x) dplyr::recode(x,
+    paired_t = "Two conditions, within subjects",
+    one_sample_vs_0 = "Difference bin against zero",
+    indep_t = "Two groups",
+    between_group_combo = "Difference bin, between groups",
+    single_trial_lmm = "Single-trial mixed model",
+    welch_anova = "Three or more groups",
+    lmm_within = "Mixed model, conditions within subjects",
+    lmm_session = "Mixed model, condition by session",
+    lmm_mixed = "Mixed model, condition by group")
+  test_label <- function(x) dplyr::recode(x,
+    omnibus = "Omnibus", welch_anova = "Welch ANOVA",
+    welch_t_test = "Welch t-test", mann_whitney_u = "Mann-Whitney U",
+    one_sample_t_test = "One-sample t-test", paired_t_test = "Paired t-test",
+    wilcoxon_signed_rank_test = "Wilcoxon signed-rank",
+    bin_x_session = "Condition by session",
+    group_x_bin_interaction = "Condition by group")
+
+  # The glued tag is dropped from the display, not from the tibble: the
+  # forest plot below still labels its points with it.
+  shown <- omnibus2 %>%
+    arrange(role != "primary", p) %>%
+    mutate(contrast = ifelse(is.na(contrast), "all conditions", contrast),
+           design = design_label(design), test = test_label(test),
+           role = ifelse(role == "primary", "Primary", "Secondary")) %>%
+    select(window, measure, channel, contrast, design, test, p, role, p_bh)
+  names(shown) <- c("__UNITHEADING__", "Measure", "Channel", "Comparison", "Design",
+                    "Test", "p", "Role", "p (BH-adjusted)")
+  cat(as_raw_html(blank_missing(apa_gt(shown, "Summary of All Tests"))))
+
+  # A forest plot alongside the table: every test's own point effect-size
+  # estimate, with its CI where the test provides one. The LMM-based
+  # designs (lmmSection) convert their own F-test into a
+  # partial eta-squared WITH a CI (effectsize::F_to_eta2, via the
+  # noncentral F -- Steiger, 2004) specifically so this plot has a real
+  # interval to draw rather than a lone dot; a handful of other omnibus
+  # designs still have no CI-bearing effect size logged at all (e.g. a
+  # 3+-group Welch ANOVA's own omnibus row), so those points show with no
+  # whisker and na.rm=TRUE silences the resulting "removed N rows" warning.
+  # Faceted by effect-size TYPE, not shown on one shared axis -- Cohen's d
+  # and eta-squared are different scales with different meanings of "0", so
+  # plotting them on the same x-axis would visually imply they are
+  # comparable when they are not.
+  if (any(!is.na(omnibus2$estimate))) {
+    omnibus_fp <- omnibus2 %>%
+      mutate(

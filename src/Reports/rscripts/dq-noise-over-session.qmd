@@ -1,0 +1,23 @@
+
+```{r}
+#| label: noise-over-session
+#| fig-height: 6
+if (nrow(kept) == 0) {
+  cat("\n\nNo surviving trials to plot.\n\n")
+} else {
+  n_sub <- n_distinct(kept$dataset)
+  cohort_median <- median(kept$baseline_sd_uv, na.rm = TRUE)
+  op <- ggplot(kept, aes(x = trial, y = baseline_sd_uv)) +
+    geom_point(alpha = 0.3, size = 0.5, colour = alz_blue) +
+    geom_hline(yintercept = cohort_median, linetype = "dashed", colour = "grey40") +
+    geom_smooth(method = "lm", se = FALSE, colour = alz_red, linewidth = 0.7, formula = y ~ x) +
+    facet_wrap(~ dataset, scales = "free_y", ncol = min(4, n_sub)) +
+    labs(x = "Trial number", y = "Pre-stimulus SD (uV)",
+         subtitle = "Free y-axis per subject. Dashed line: median across all subjects (same value in every panel)") +
+    alz_theme() +
+    theme(strip.text = element_text(size = 7),
+          plot.subtitle = element_text(size = 7, colour = "grey30"))
+  print(op)
+}
+```
+

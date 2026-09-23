@@ -1,0 +1,108 @@
+## __WINDOW_MD__ -- __MEASURETYPE_MD__
+
+Two conditions: "__BIN1_MD__" vs. "__BIN2_MD__".
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__",
+                       bin %in% c("__BIN1_R__", "__BIN2_R__")) %>% droplevels()
+__BLOCKMATCHDIAGNOSTIC__
+
+descr_list <- list()
+res_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  # !is.na(value) first: a subject missing ONE of the two bins'
+  # values (e.g. a peak-finding failure) then correctly fails the
+  # n == 2 check below rather than being counted as present with a
+  # value the test below cannot use.
+  d0 <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  counts <- d0 %>% count(dataset)
+  keep <- counts %>% filter(n == 2) %>% pull(dataset)
+  d <- d0 %>% filter(dataset %in% keep) %>% droplevels()
+  if (n_distinct(d$dataset) < 2) {
+    res_list[[ch]] <- tibble(Channel = ch, Test = NA_character_,
+      Note = sprintf("Skipped: only %d of %d subject(s) with any non-missing value have both bins present.",
+                      length(keep), n_distinct(d0$dataset)))
+    next
+  }
+  tag <- str_replace_all(paste("__WINDOW_R__", "__MEASURETYPE_R__", ch, sep = "_"), "[^A-Za-z0-9]+", "_")
+
+  descr_list[[ch]] <- d %>% group_by(bin) %>% summarise(M = mean(value), SD = sd(value), n = n(), .groups = "drop") %>%
+    mutate(channel = ch, .before = 1)
+
+  wide <- d %>% select(dataset, bin, value) %>% pivot_wider(names_from = bin, values_from = value)
+  diffs <- wide[["__BIN2_R__"]] - wide[["__BIN1_R__"]]
+  # Base R's shapiro.test(), not rstatix's shapiro_test(): the latter's
+  # tidied $p column is only reliable for its GROUPED (data %>%
+  # group_by() %>% shapiro_test()) form -- called on a bare vector it can
+  # come back without a $p column at all. Base shapiro.test() has a
+  # stable list return ($statistic, $p.value); tryCatch handles the
+  # genuine edge cases it errors on outright (n < 3, zero variance). Not
+  # narrated -- used only to choose which test below to report.
+  shap <- tryCatch(shapiro.test(diffs), error = function(e) NULL)
+  use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
+
+  # THE EFFECT SIZE MUST BE THE SAME SUBTRACTION AS THE TEST.
+  # t.test/wilcox.test below is bin2 - bin1, in the order EEG.bindesc
+  # gives, but cohens_d(value ~ bin)/wilcox_effsize subtract in the order
+  # of the FACTOR LEVELS, and preambleText builds that factor with
+  # mutate(bin = factor(bin)), whose levels are alphabetical. Re-levelling
+  # here rather than computing the effect size by hand keeps rstatix's
+  # bootstrap CI, which a mean/sd of the difference vector would lose.
+  d_lvl <- d %>% mutate(bin = factor(bin, levels = c("__BIN2_R__", "__BIN1_R__")))
+
+  if (use_parametric) {
+    tt <- t.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE)
+    # The bootstrap CI (bca, nboot=200) can fail on degenerate data (e.g.
+    # a near-constant difference vector) with an R error from inside the
+    # boot package rather than a clean NA -- caught here so that failure
+    # only blanks the CI, not this channel's whole result.
+    eff <- tryCatch(d_lvl %>% rstatix::cohens_d(value ~ bin, paired = TRUE, ci = TRUE, ci.type = "bca", nboot = 200),
+                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+    bf <- bf10_ttest(x = wide[["__BIN2_R__"]], y = wide[["__BIN1_R__"]], paired = TRUE)
+    res <- tibble(Channel = ch, Test = "Paired t-test", Statistic = unname(tt$statistic), df = unname(tt$parameter),
+                  p = apa_p(tt$p.value), Effect = "Cohen's dz", Estimate = eff$effsize,
+                  CI_low = eff$conf.low, CI_high = eff$conf.high,
+                  BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+    p_val <- tt$p.value; test_id <- "paired_t"
+  } else {
+    wt <- wilcox.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE, conf.int = TRUE)
+    eff <- tryCatch(d_lvl %>% rstatix::wilcox_effsize(value ~ bin, paired = TRUE, ci = TRUE),
+                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+    res <- tibble(Channel = ch, Test = "Wilcoxon signed-rank", Statistic = unname(wt$statistic), df = NA_real_,
+                  p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
+                  CI_low = eff$conf.low, CI_high = eff$conf.high)
+    p_val <- wt$p.value; test_id <- "wilcoxon_signed_rank"
+  }
+  res_list[[ch]] <- res
+
+  omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "paired_t", test = paste0(test_id, "_test"), p = p_val,
+                                        estimate = res$Estimate, conf.low = res$CI_low, conf.high = res$CI_high))
+  }, error = function(e) {
+    res_list[[ch]] <<- tibble(Channel = ch, Test = NA_character_, Note = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+descr_all <- bind_rows(descr_list)
+if (nrow(descr_all) > 0) {
+  cat(as_raw_html(apa_gt(descr_all, "Descriptive Statistics by Channel")))
+}
+
+common_layers <- list(
+  geom_line(aes(group = dataset), colour = "grey75", alpha = 0.5),
+  geom_point(colour = "grey40", size = 1.4, alpha = 0.5, position = position_jitter(width = 0.04, height = 0)),
+  stat_summary(fun = mean, geom = "point", size = 2.2, colour = "#4a7fc9"),
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.12, colour = "#4a7fc9"),
+  labs(x = "Bin", y = "__YLABEL__"),
+  facet_wrap(~channel),
+  alz_theme()
+)
+p <- ggplot(grp %>% filter(!is.na(value)), aes(bin, value)) + violin_layers("#4a7fc9") + common_layers
+print(p)
+
+res_all <- bind_rows(res_list)
+if (nrow(res_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(res_all, "Test Result by Channel"))))
+  tests_used <- unique(na.omit(res_all$Test))

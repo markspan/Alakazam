@@ -1,0 +1,22 @@
+__BLOCKMATCHDIAGNOSTIC__
+
+descr_list <- list()
+model_list <- list()
+effects_list <- list()
+coef_list <- list()
+posthoc_list <- list()
+posthocWithin_list <- list()
+posthocBetween_list <- list()
+bf_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  d <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  if (__SKIP_CONDITION__) {
+    model_list[[ch]] <- tibble(Channel = ch, Model = "Skipped: __SKIP_REASON__")
+    next
+  }
+  tag <- str_replace_all(paste("__WINDOW_R__", "__MEASURETYPE_R__", ch, sep = "_"), "[^A-Za-z0-9]+", "_")
+
+  descr_list[[ch]] <- d %>% group_by(__DESCR_GROUPING__) %>% summarise(M = mean(value), SD = sd(value), n = n(), .groups = "drop") %>%
+    mutate(channel = ch, .before = 1)
+

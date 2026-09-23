@@ -1,0 +1,29 @@
+
+  # One-sample-vs-zero, once PER GROUP: with groups present, "does
+  # this effect exist at all" becomes a per-group question -- never
+  # folded into the between-groups comparison below, which asks a
+  # different thing (does the effect DIFFER between groups, not
+  # whether it exists in either one).
+  vs_zero <- d %>% group_by(group) %>% group_modify(~ {
+    shap <- tryCatch(shapiro.test(.x$value), error = function(e) NULL)
+    use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
+    if (use_parametric) {
+      tt <- tryCatch(t.test(.x$value, mu = 0), error = function(e) NULL)
+      eff <- tryCatch(.x %>% rstatix::cohens_d(value ~ 1, mu = 0, ci = TRUE, ci.type = "bca", nboot = 200),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      if (is.null(tt)) return(tibble(M = mean(.x$value), n = nrow(.x), Test = NA_character_, Statistic = NA_real_, df = NA_real_, p = NA_real_, Effect = NA_character_, Estimate = NA_real_, CI_low = NA_real_, CI_high = NA_real_))
+      bf <- bf10_ttest(x = .x$value, mu = 0)
+      tibble(M = mean(.x$value), n = nrow(.x), Test = "One-sample t-test", Statistic = unname(tt$statistic), df = unname(tt$parameter), p = apa_p(tt$p.value),
+             Effect = "Cohen's d", Estimate = eff$effsize, CI_low = eff$conf.low, CI_high = eff$conf.high,
+             BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+    } else {
+      wt <- tryCatch(wilcox.test(.x$value, mu = 0, conf.int = TRUE), error = function(e) NULL)
+      eff <- tryCatch(.x %>% rstatix::wilcox_effsize(value ~ 1, mu = 0, ci = TRUE),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      if (is.null(wt)) return(tibble(M = mean(.x$value), n = nrow(.x), Test = NA_character_, Statistic = NA_real_, df = NA_real_, p = NA_real_, Effect = NA_character_, Estimate = NA_real_, CI_low = NA_real_, CI_high = NA_real_))
+      tibble(M = mean(.x$value), n = nrow(.x), Test = "Wilcoxon signed-rank", Statistic = unname(wt$statistic), df = NA_real_, p = apa_p(wt$p.value),
+             Effect = "Rank-biserial r", Estimate = eff$effsize, CI_low = eff$conf.low, CI_high = eff$conf.high)
+    }
+  }) %>% ungroup()
+  vszero_list[[ch]] <- vs_zero %>% select(-M, -n) %>% mutate(channel = ch, .before = 1)
+

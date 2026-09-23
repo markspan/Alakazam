@@ -1,0 +1,5 @@
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__",
+                       bin %in% c(__BIN_VECTOR_R__)) %>% droplevels()

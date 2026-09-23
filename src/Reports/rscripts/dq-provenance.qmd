@@ -1,0 +1,166 @@
+
+### Epochs rejected, by detector
+
+```{r}
+#| label: provenance-detectors
+#| results: asis
+#| fig-height: 4
+det <- prov %>% filter(step == "ArtefactDetect", item != "any detector")
+if (nrow(det) == 0) {
+  cat("\n\nNo artefact-detection record is present, so there is nothing to attribute here. A node computed before Alakazam recorded this does not carry it; Recalculate it and the breakdown appears.\n\n")
+} else {
+  # n_unique is its own column rather than something read back out of
+  # the detail prose: a regex over a sentence written for a human is a
+  # silent NA the day that sentence is reworded. It is NA on purpose
+  # where only one detector ran, because then "how many did only this
+  # one catch" is every one of them and says nothing.
+  attributable <- any(!is.na(det$n_unique))
+  if (attributable) {
+    cat("\n\n**The detector figures overlap and do not add up.** Each is what that detector would have rejected *on its own*, and one blink usually trips several at once, so summing them double-counts. The column that answers \"what would I lose by switching this one off\" is *only this one*: a detector contributing nothing there is catching only epochs another detector already caught.\n\n")
+  }
+  det <- det %>% mutate(pct_only = 100 * n_unique / n_total)
+  dp <- det %>% group_by(item) %>%
+    summarise(mean_pct = mean(pct, na.rm = TRUE),
+              mean_pct_only = mean(pct_only, na.rm = TRUE), .groups = "drop")
+  gg <- ggplot(dp, aes(x = reorder(item, mean_pct))) +
+    geom_col(aes(y = mean_pct), fill = alz_blue, width = 0.6) +
+    coord_flip() +
+    labs(x = NULL, y = "Epochs rejected (%)",
+         title = "What each detector would reject on its own") +
+    alz_theme()
+  if (attributable) {
+    gg <- gg +
+      geom_col(aes(y = mean_pct_only), fill = alz_red, width = 0.3) +
+      labs(subtitle = "Blue: this detector alone. Red: epochs no other detector caught.")
+  }
+  print(gg)
+}
+```
+
+```{r}
+#| label: provenance-rejection-table
+#| results: asis
+# EVERY HEADING SAYS ITS OWN UNIT, so the table needs no legend beside
+# it. "Epochs rejected" and "of epochs" are unambiguous in a way "n"
+# and "n_total" cannot be once three steps share one table.
+rej <- prov %>% filter(step == "ArtefactDetect")
+if (nrow(rej) > 0) {
+  tab <- rej %>%
+    mutate(detector = ifelse(item == "any detector", "ANY detector (the total)", item),
+           share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct))) %>%
+    select(Subject = dataset, Detector = detector,
+           `Epochs rejected` = n, `of epochs` = n_total, Share = share,
+           `Only this one` = n_unique, `Channel-epochs` = channel_epochs,
+           `Tested over` = scope, `Channels tested` = channels_tested) %>%
+    arrange(Subject, Detector)
+  # Drop what is uniformly inapplicable rather than printing a column of
+  # NA: "only this one" is meaningless with a single detector, and an
+  # all-empty column reads as missing data instead of not applicable.
+  if (all(is.na(tab$`Only this one`))) tab <- tab %>% select(-`Only this one`)
+  if (all(is.na(tab$`Channel-epochs`))) tab <- tab %>% select(-`Channel-epochs`)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "Epochs Rejected, by Detector"))))
+}
+```
+
+```{r}
+#| label: provenance-ica-table
+#| results: asis
+ica <- prov %>% filter(step %in% c("AutoICA", "ICA"))
+if (nrow(ica) > 0) {
+  cat("\n\n### ICA components removed\n\n")
+  cat("Removing a component subtracts it from every channel and every trial at once, so unlike epoch rejection it costs no data and leaves nothing missing. What it costs instead is whatever brain signal shared that component.\n\n")
+  cat("ICLabel scores every component against seven classes (Brain, Muscle, Eye, Heart, Line Noise, Channel Noise, Other) that sum to 1, one probability distribution per component. AutoICA removes a component when its EYE probability ALONE exceeds the threshold below, which is not the same test as Eye being the single most likely class of that component: a component scored 0.35 Eye against 0.40 Brain would still be removed by a 0.30 threshold, even though Brain is the plurality guess there. How eye-like lists the Eye probability of each removed component, in the order Which ones names them, so a comfortable call (0.90 and up) can be told apart from one that barely cleared the threshold.\n\n")
+  tab <- ica %>%
+    mutate(chosen = ifelse(step == "AutoICA", "automatically, by ICLabel", "by hand"),
+           share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct))) %>%
+    select(Subject = dataset, Chosen = chosen,
+           Removed = n, `of components` = n_total, Share = share,
+           `Eye-probability threshold` = threshold,
+           `Which ones` = components, `How eye-like` = detail) %>%
+    arrange(Subject, Chosen)
+  if (all(is.na(tab$`Eye-probability threshold`))) {
+    tab <- tab %>% select(-`Eye-probability threshold`)
+  }
+  if (all(is.na(tab$`How eye-like`))) tab <- tab %>% select(-`How eye-like`)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "ICA Components Removed"))))
+}
+```
+
+```{r}
+#| label: provenance-gedai-table
+#| results: asis
+ged <- prov %>% filter(step == "AutoGEDAI")
+if (nrow(ged) > 0) {
+  cat("\n\n### What AutoGEDAI did\n\n")
+  # THE HEADINGS CARRY THE DIRECTION, because neither score is
+  # interpretable without it and a reader should not have to go and
+  # find out. SENSAI is signal-subspace similarity minus a
+  # noise-subspace similarity, each already scaled 0 to 100, so it
+  # runs -100 to 100 and GEDAI itself picks its cleaning threshold by
+  # maximising it -- CHECKED AGAINST THE SOURCE OF GEDAI-master 1.7
+  # directly (auxiliaries/SENSAI_basic.m): both terms are a mean
+  # cosine-angle product in [0, 1] times 100, and the weight given to
+  # the noise term (noise_multiplier in GEDAI.m, at the point that
+  # produces the score AutoGEDAI reads) is 1 -- so the -100..100
+  # bound is exact, not an approximation, and an earlier draft of
+  # this text that called SENSAI unbounded was wrong. ENOVA runs 0 to
+  # 1 and higher is worse; AutoGEDAI rejects above its own threshold,
+  # 0.9 by default.
+  # WHAT COUNTS AS AN ARTIFACT, AND WHY THAT DIFFERS FROM A PLAIN
+  # VARIANCE THRESHOLD (ASR): checked against the method paper itself
+  # (Ros et al., 2025, bioRxiv preprint 2025.10.04.680449 -- Docs/
+  # 2025.10.04.680449v1.full.pdf in this repository), not only the
+  # code. The paper states plainly: components with a spatial
+  # covariance inconsistent with the leadfield-based brain model are
+  # identified as artifacts (large generalized eigenvalues), while
+  # consistent ones are treated as neural signal (small ones) -- so a
+  # component earns a large eigenvalue by looking spatially wrong for
+  # a brain source, not merely by being large. A genuinely big brain
+  # event whose topography IS brain-like keeps a small eigenvalue and
+  # survives; a plain variance threshold could not tell it apart from
+  # an eyeblink of similar size. The paper also states there is no
+  # separate bad-channel step: a compromised channel is not excluded
+  # outright, its contaminated activity is folded into the same
+  # per-epoch artifact subspace as everything else and subtracted the
+  # same way -- which is why a chronically bad channel shows up here
+  # as a high ENOVA across most epochs rather than as a channel-level
+  # flag, and the paper itself notes this per-channel behaviour was
+  # not separately validated in its own benchmarks. Its main named
+  # limitation is electrode-position accuracy: GEDAI compares each
+  # channel against where the template says that electrode should
+  # be, so a mismatch there degrades the result independently of how
+  # clean the recording actually is.
+  cat("GEDAI treats each roughly one-second epoch as a mix of a brain-like part and a noise-like part, and decides which is which by comparing it against a theoretical reference: not a measurement from this recording, but a leadfield, a physical model of what real cortical sources should look like at the scalp, built once from a 40-brain average head. A component counts as noise when its own spatial pattern looks wrong for a brain source, not simply because it is large -- unlike a plain variance threshold, which cannot tell a genuinely big brain event (a strong P300, say) apart from an eyeblink of similar size. There is no separate bad-channel step: a persistently compromised channel is not excluded outright, its contaminated activity is folded into the same per-epoch correction as any other noise, which is why a chronically bad channel shows up below as a high ENOVA across most epochs rather than as its own flag.\n\n")
+  cat("GEDAI corrects in place rather than discarding: it denoises the scalp channels it can match to its electrode template and splices the rest back untouched, so a channel count below the total is a montage fact (the peripherals) and not a loss. Its own stated main limitation is electrode-position accuracy: it compares each channel against where the template says that electrode should sit, so a poor match there -- not only genuine contamination -- can pull its two quality scores down, and both are worth checking before blaming the recording alone.\n\n")
+  cat("**SENSAI: higher is better, and it runs -100 to 100.** Signal-subspace similarity (0 to 100) is how well the KEPT part of an epoch matches the leadfield reference above; noise-subspace similarity (0 to 100) is how well the DISCARDED part matches it too, which is bad when it happens, because it means what was thrown away looks brain-like rather than like noise. SENSAI is the first minus the second: 100 is a clean split in both directions, 0 is where the two roughly balance, and a NEGATIVE value means the discarded part resembles genuine brain activity more than the kept part does, worth a closer look rather than only a lower score. The method paper itself calls this a RELATIVE, not absolute, measure that depends on the head model used, which is why comparing it across subjects only makes sense within one montage.\n\n")
+  cat("**ENOVA: Explained Noise Variance, 0 to 1, and higher is worse.** For one epoch it is the variance of what GEDAI classified as noise divided by the variance of the original signal there -- literally the share of that epoch's own power judged to be artifact rather than brain activity. Per channel it is the same ratio computed within each epoch for that one channel, then averaged across epochs. AutoGEDAI (off by default) rejects an epoch or channel outright once this share passes 0.9, rather than denoising it. A high worst-epoch figure beside a low median means one bad stretch rather than a bad recording, which is why both are shown.\n\n")
+  tab <- ged %>%
+    mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct))) %>%
+    select(Subject = dataset,
+           `Channels denoised` = n, `of channels` = n_total, Share = share,
+           `Not matched` = n_excluded,
+           `SENSAI (higher better)` = sensai,
+           `Worst epoch ENOVA (>0.9 bad)` = enova_epoch_max,
+           `Median epoch ENOVA` = enova_epoch_median,
+           `Worst channel ENOVA` = enova_channel_max,
+           `Samples rejected` = n_samples_rejected,
+           `of samples` = n_samples) %>%
+    arrange(Subject)
+  # GEDAI discards nothing on the usual path, so these two columns are
+  # a pair of zeroes for most exports and go when they are.
+  if (all(tab$`Samples rejected` == 0 | is.na(tab$`Samples rejected`))) {
+    tab <- tab %>% select(-`Samples rejected`, -`of samples`)
+    cat("*No subject had any samples discarded by GEDAI.*\n\n")
+  }
+  cat(as_raw_html(blank_missing(apa_gt(tab, "AutoGEDAI Denoising and Its Quality Scores"))))
+}
+```
+
+```{r}
+#| label: provenance-nothing
+#| results: asis
+if (nrow(prov) == 0) {
+  cat("\n\nNo cleaning step in this workspace recorded what it did. A node computed before Alakazam recorded this does not carry it; Recalculate it and these tables appear.\n\n")
+}
+```
+

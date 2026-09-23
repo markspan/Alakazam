@@ -1,0 +1,14 @@
+  if (nzchar(caption_txt)) cat(sprintf("\n*%s*\n\n", caption_txt))
+}
+
+anova_all <- bind_rows(anova_list)
+if (nrow(anova_all) > 0) {
+  cat(as_raw_html(apa_gt(anova_all, "Welch One-Way ANOVA by Channel")))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_WELCH_ANOVA__"))
+}
+pw_all <- bind_rows(pw_list)
+if (nrow(pw_all) > 0) {
+  cat(as_raw_html(apa_gt(pw_all, "Pairwise Comparisons (Games-Howell) by Channel")))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_GAMES_HOWELL__"))
+}
+```

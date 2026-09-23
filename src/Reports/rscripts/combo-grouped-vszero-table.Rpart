@@ -1,0 +1,7 @@
+  if (nzchar(caption_txt)) cat(sprintf("\n*%s*\n\n", caption_txt))
+}
+
+betweenRes2_all <- bind_rows(betweenRes2_list)
+if (nrow(betweenRes2_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(betweenRes2_all, "Test Result Between Groups, by Channel"))))
+  tests_used2 <- unique(na.omit(betweenRes2_all$Test))

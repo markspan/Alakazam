@@ -1,0 +1,6 @@
+
+```{r}
+#| label: coherence-trace
+#| results: asis
+#| fig-height: 4
+# The electrodes the Spectral Measure rows name, empty when there are none.

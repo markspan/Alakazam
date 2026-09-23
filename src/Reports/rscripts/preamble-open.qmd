@@ -1,0 +1,14 @@
+
+# person_id and session are what make a subject a subject rather than a
+# recording (see WorkSpace.personFor/sessionFor). Both are written by every
+# current export, but a CSV produced before they existed has neither, and a
+# report should still render against one: person then falls back to the
+# recording itself, which is exactly what personFor does when nobody has
+# said otherwise, so the models below are unchanged for such a file.
+if (!"person_id" %in% names(dat)) dat$person_id <- as.character(dat$dataset)
+if (!"session" %in% names(dat)) dat$session <- ""
+dat <- dat %>%
+  mutate(person_id = as.character(person_id),
+         person_id = factor(ifelse(is.na(person_id) | person_id == "",
+                                   as.character(dataset), person_id)),
+         session = as.character(session),

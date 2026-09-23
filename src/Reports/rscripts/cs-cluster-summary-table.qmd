@@ -1,0 +1,21 @@
+```{r}
+#| label: cluster-summary-table
+#| results: asis
+summary_tbl <- stat_df %>%
+  filter(cluster_rank != "NA") %>%
+  mutate(cluster_rank = as.integer(cluster_rank)) %>%
+  group_by(cluster_rank, sign) %>%
+  summarise(
+    p = first(cluster_p), significant = first(significant),
+    channels = n_distinct(channel), time_from_ms = min(time_ms), time_to_ms = max(time_ms),
+    .groups = "drop"
+  ) %>%
+  arrange(p)
+if (nrow(summary_tbl) > 0) {
+  cat(as_raw_html(apa_gt(summary_tbl, "Clusters Found")))
+} else {
+  cat("\n\nNo clusters were found at all (not even a non-significant one) -- every point fell 
+below the cluster-forming threshold.\n\n")
+}
+```
+

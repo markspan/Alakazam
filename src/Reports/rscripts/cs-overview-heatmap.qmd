@@ -1,0 +1,14 @@
+
+```{r}
+#| label: overview-heatmap
+#| fig-height: 6
+chan_order <- stat_df %>% distinct(channel) %>% pull(channel)
+hp <- ggplot(stat_df, aes(x = time_ms, y = factor(channel, levels = rev(chan_order)), fill = statistic)) +
+  geom_tile() +
+  geom_tile(data = filter(stat_df, cluster_rank != "NA"), colour = "black", linewidth = 0.3, fill = NA) +
+  scale_fill_gradient2(low = "#c0392b", mid = "white", high = "#2980b9", midpoint = 0, name = "statistic") +
+  labs(x = "Time (ms)", y = NULL) +
+  alz_theme_map()
+print(hp)
+```
+

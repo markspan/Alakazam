@@ -1,0 +1,73 @@
+
+```{r}
+#| label: rejection-by-bin
+#| fig-height: 5
+# Channel-invariant: whole-epoch rejection removes every channel at once, so any
+# one channel's row already carries the per-bin trial counts. distinct() rather
+# than a mean over channels, so the value is exact rather than an average of
+# identical numbers.
+by_bin <- qual %>%
+  distinct(dataset, group, bin, n_trials, n_trials_rejected, pct_trials_rejected)
+
+if (n_distinct(by_bin$bin) < 2) {
+  cat("\n\nOnly one bin is present, so there is no between-condition comparison to make here.\n\n")
+} else {
+  bp <- ggplot(by_bin, aes(x = bin, y = pct_trials_rejected, group = dataset)) +
+    geom_line(colour = "grey65", alpha = 0.7) +
+    geom_point(colour = alz_blue, size = 1.6) +
+    stat_summary(aes(group = 1), fun = mean, geom = "line",
+                 colour = alz_red, linewidth = 1.2) +
+    stat_summary(aes(group = 1), fun = mean, geom = "point",
+                 colour = alz_red, size = 3) +
+    labs(x = NULL, y = "Trials rejected (%)",
+         subtitle = "Grey: individual subjects. Red: mean across subjects") +
+    alz_theme()
+  print(bp)
+}
+```
+
+```{r}
+#| label: rejection-by-bin-test
+#| results: asis
+# The one genuinely inferential test in this report (see
+# generateDataQualityReport.m's own header): is the per-bin rejection rate
+# different across bins? Friedman rather than a repeated-measures ANOVA --
+# rejection percentages are bounded, typically skewed towards zero, and often
+# have a floor of exactly 0 for most subjects, none of which suits a normal-theory
+# test. Needs a complete subject x bin table, so subjects missing a bin are
+# dropped here (and counted in the sentence below) rather than silently.
+if (n_distinct(by_bin$bin) >= 2 && n_distinct(by_bin$dataset) >= 2) {
+  wide <- by_bin %>% select(dataset, bin, pct_trials_rejected) %>%
+    pivot_wider(names_from = bin, values_from = pct_trials_rejected)
+  complete_rows <- wide %>% drop_na()
+  n_dropped <- nrow(wide) - nrow(complete_rows)
+  if (nrow(complete_rows) >= 2) {
+    mat <- as.matrix(complete_rows %>% select(-dataset))
+    if (all(apply(mat, 1, function(r) length(unique(r))) == 1)) {
+      cat("\n\nEvery subject has an identical rejection rate in every bin, so there is nothing to test.\n\n")
+    } else {
+      ft <- friedman.test(mat)
+      # One backslash reaches the output, not two: this string is written by
+      # MATLAB into R SOURCE, so R's own parser consumes one level before cat
+      # ever runs. "\\\\chi" here would emit \\chi, which is a LaTeX line break,
+      # and MathJax renders the rest as the literal letters c-h-i.
+      cat(sprintf(paste0("\nA Friedman test across %d subject(s) with a complete set of bins ",
+                         "found %s evidence that rejection rate differs between conditions, ",
+                         "$\\chi^2$(%d) = %s, *p* %s.\n\n"),
+                  nrow(complete_rows),
+                  ifelse(ft$p.value < .05, "**significant**", "no significant"),
+                  ft$parameter, apa_num(ft$statistic), apa_p(ft$p.value)))
+      if (ft$p.value < .05) {
+        cat(paste0("The condition comparison in the main analysis requires care here: the trials ",
+                   "surviving rejection are not an even sample across conditions. Consider ",
+                   "whether the artefact most responsible (eye movement, muscle, drift) is ",
+                   "itself tied to what the conditions asked participants to do.\n\n"))
+      }
+    }
+  }
+  if (n_dropped > 0) {
+    cat(sprintf("*%d subject(s) were left out of that test for having no trials in at least one bin.*\n\n", n_dropped))
+  }
+}
+```
+

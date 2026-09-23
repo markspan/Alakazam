@@ -52,6 +52,36 @@ classdef ReportFixtures
     methods (Static)
 
         % ================================================================ %
+        %  Reading a report generator's own source
+        % ================================================================ %
+
+        function text = sourceWithTemplates(relativePath)
+        %SOURCEWITHTEMPLATES  A report source file, plus the templates it reads.
+        %   TEXT = ReportFixtures.sourceWithTemplates('+ReportSections/pairedSection.m')
+        %   is that file's own source followed by every src/Reports/rscripts
+        %   template it names in a ReportDoc.template call.
+        %
+        %   WHY A TEST NEEDS THIS. Several assertions here ask what a section
+        %   or generator emits by reading its source: "this section computes a
+        %   Bayes factor in this form", "this generator no longer defines its
+        %   own apa_gt". The R those assertions look for used to sit in string
+        %   literals in the .m file and now lives in a template file beside
+        %   it, so reading the .m alone would pass a check that no longer
+        %   looks at the code it is about -- once silently, in whichever
+        %   direction the assertion runs.
+        %
+        %   Templates are read one level deep, which is all they nest: a
+        %   template is text, so it cannot itself ask for another one.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            reports = fullfile(root, 'src', 'Reports');
+            text = fileread(fullfile(reports, relativePath));
+            named = regexp(text, 'ReportDoc\.template\(''([^'']+)''\)', 'tokens');
+            for k = 1:numel(named)
+                text = [text newline fileread(fullfile(reports, 'rscripts', named{k}{1}))]; %#ok<AGROW>
+            end
+        end
+
+        % ================================================================ %
         %  Bin descriptors (EEG.bindesc)
         % ================================================================ %
 
@@ -407,7 +437,7 @@ classdef ReportFixtures
         end
 
         function labels = hostileLabels()
-        %HOSTILELABELS  A FIXED corpus of window/bin labels an analyst
+        %HOSTILELABELS  A FIXED corpus of window/bin labels a user
         %   could plausibly type, each of which stresses a different
         %   escaping or sanitisation boundary: markdown specials, an R
         %   string-literal terminator, a sprintf format directive, an

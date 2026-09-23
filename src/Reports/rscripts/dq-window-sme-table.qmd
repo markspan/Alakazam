@@ -1,0 +1,58 @@
+
+```{r}
+#| label: window-sme-table
+#| results: asis
+if (nrow(wsme) == 0) {
+  cat(paste0("\n\nNo Measure windows were found for these subjects, so there is no ",
+             "per-window SME to report. Run Measure on a subject's Average to get one.\n\n"))
+} else {
+  wtab <- wsme %>%
+    group_by(window, measure, method, bin) %>%
+    summarise(subjects = n_distinct(dataset), channels = n_distinct(channel),
+              median_sme = median(sme_uv, na.rm = TRUE),
+              worst_sme = max(sme_uv, na.rm = TRUE), .groups = "drop") %>%
+    arrange(window, measure, bin)
+  cat(as_raw_html(apa_gt(wtab, "SME by Measurement Window")))
+}
+```
+
+```{r}
+#| label: window-sme-plot
+#| fig-height: 6
+# Faceted by window x measure with a free x scale, never pooled onto one axis:
+# an amplitude SME is in uV and a latency SME is in ms, so a shared axis would
+# invite a comparison between two quantities that have nothing to do with
+# each other. Points, not boxes: with one value per channel the underlying
+# spread is worth seeing directly.
+if (nrow(wsme) > 0) {
+  wp <- wsme %>%
+    mutate(panel = paste0(window, " / ", measure)) %>%
+    ggplot(aes(x = sme_uv, y = fct_reorder(dataset, sme_uv, .fun = median), colour = bin)) +
+    geom_point(alpha = 0.6, size = 1.2) +
+    facet_wrap(~ panel, scales = "free_x") +
+    labs(x = "SME (uV for amplitudes and areas, ms for latencies)", y = NULL, colour = "Bin") +
+    alz_theme() +
+    theme(strip.text = element_text(size = 8))
+  print(wp)
+}
+```
+
+```{r}
+#| label: window-sme-note
+#| results: asis
+# Worth stating explicitly rather than leaving to be inferred from the table:
+# a reader who sees "bootstrap" against a latency needs to know it is the
+# correct choice there, not a fallback taken because something failed.
+if (nrow(wsme) > 0) {
+  used <- wsme %>% distinct(measure, method) %>% arrange(method, measure)
+  cat(sprintf("\n%s\n\n", paste(sprintf("*%s* used the **%s** estimator.", used$measure, used$method),
+                                collapse = " ")))
+  n_boot_rows <- sum(wsme$method == "bootstrap")
+  if (n_boot_rows > 0) {
+    cat(paste0("Bootstrapped values carry their own sampling error: they will shift slightly ",
+               "if this report is regenerated, which is expected and is not a sign of ",
+               "instability in the data.\n\n"))
+  }
+}
+```
+

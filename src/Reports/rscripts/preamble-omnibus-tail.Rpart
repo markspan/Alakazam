@@ -1,0 +1,10 @@
+
+# Between-subjects group (see WorkSpace.editSubjects): every subject with
+# no group assigned is unusable for the group-based tests every section
+# below now runs, so they are set aside here, once, rather than each
+# section re-deriving the same exclusion from scratch.
+ungrouped_subjects <- dat %>% filter(is.na(group) | group == "") %>% distinct(dataset) %>% pull(dataset)
+dat <- dat %>% filter(!is.na(group), group != "") %>% mutate(group = factor(group))
+if (n_distinct(dat$group) < 2) {
+  stop("Need at least two groups with a usable subject for between-subjects/mixed statistics.")
+}

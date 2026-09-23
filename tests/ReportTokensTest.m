@@ -34,12 +34,21 @@ classdef ReportTokensTest < matlab.unittest.TestCase
             ids = ReportFixtures.censusIds();
             for k = 1:numel(ids)
                 entries = ReportFixtures.censusEntries(ids{k});
-                for trialCsv = {'', 'trials.csv'}
-                    qmd = generateQuartoReport(entries, 'x.csv', '', '', trialCsv{1});
+                % Every optional export as well as none: the waveform,
+                % spectrum, single-trial and coherence sections only exist
+                % when their CSV was written, and a token left in one of
+                % those was invisible to this test while it passed '' for
+                % them. That is the same blind spot that let a nested-cell
+                % bug into waveformSection.
+                for optional = {{'', '', ''}, {'ga.csv', 'trials.csv', 'spectra.csv'}}
+                    csvs = optional{1};
+                    qmd = generateQuartoReport(entries, 'x.csv', '', csvs{1}, csvs{2}, csvs{3}, ...
+                        struct('Trace', 'tr.csv', 'Map', 'map.csv', 'Reference', 'ref.csv', ...
+                               'Channels', {{'Oz', 'Cz'}}));
                     left = regexp(qmd, '__[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*__', 'match');
                     testCase.verifyEmpty(unique(left), sprintf( ...
-                        'Design %s (single-trial export: %d) still holds: %s', ids{k}, ...
-                        ~isempty(trialCsv{1}), strjoin(unique(left), ', ')));
+                        'Design %s (with the optional exports: %d) still holds: %s', ids{k}, ...
+                        ~isempty(csvs{1}), strjoin(unique(left), ', ')));
                 end
             end
         end

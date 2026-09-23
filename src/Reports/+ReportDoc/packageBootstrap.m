@@ -4,7 +4,7 @@ function lines = packageBootstrap(packages)
 %   package names and returns the four R lines that bring them in.
 %
 %   Installing on first render rather than demanding a prepared environment
-%   is deliberate: the analyst opening one of these reports is an EEG
+%   is deliberate: the user opening one of these reports is an EEG
 %   researcher, not necessarily an R user, and "install these ten packages
 %   first" is where a report stops being read. The cost is a slow first
 %   render on a fresh machine, once.
@@ -22,7 +22,7 @@ function lines = packageBootstrap(packages)
     quoted = cellfun(@(p) ['"' p '"'], packages(:)', 'UniformOutput', false);
 
     % Wrapped at a readable width rather than emitted as one very long
-    % line: this ends up in a .qmd the analyst may well open and edit.
+    % line: this ends up in a .qmd the user may well open and edit.
     lines = [ ...
         wrappedVector('pkgs <- c(', quoted, ')'), ...
         {'missing <- pkgs[!pkgs %in% rownames(installed.packages())]' ...

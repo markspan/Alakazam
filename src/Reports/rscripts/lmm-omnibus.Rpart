@@ -1,0 +1,20 @@
+  eta_est <- if (is.null(eta_head)) NA_real_ else eta_head$Eta2_partial
+  eta_lo  <- if (is.null(eta_head)) NA_real_ else eta_head$CI_low
+  eta_hi  <- if (is.null(eta_head)) NA_real_ else eta_head$CI_high
+  omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "__DESIGN_TAG__", test = "__TEST_NAME__", p = p_head,
+                                        estimate = eta_est, conf.low = eta_lo, conf.high = eta_hi))
+  }, error = function(e) {
+    model_list[[ch]] <<- tibble(Channel = ch, Model = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+descr_all <- bind_rows(descr_list)
+if (nrow(descr_all) > 0) {
+  cat(as_raw_html(apa_gt(descr_all, "Descriptive Statistics by Channel")))
+}
+
+common_layers <- list(
+  geom_line(aes(group = dataset), colour = "grey75", alpha = 0.5),
+  geom_point(colour = "grey40", size = 1.4, alpha = 0.5, position = position_jitter(width = 0.04, height = 0)),
+  stat_summary(fun = mean, geom = "point", size = 2.2, colour = "#4a7fc9"),
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.12, colour = "#4a7fc9"),

@@ -115,7 +115,7 @@ classdef ReportDocTest < matlab.unittest.TestCase
 
         function theBootstrapWrapsALongList(testCase)
         %THEBOOTSTRAPWRAPSALONGLIST  The statistical report loads nine
-        %   packages, and this ends up in a .qmd an analyst may open.
+        %   packages, and this ends up in a .qmd a user may open.
             lines = ReportDoc.packageBootstrap({'tidyverse', 'rstatix', 'ggpubr', ...
                 'gt', 'lme4', 'lmerTest', 'emmeans', 'performance', ...
                 'effectsize'});
@@ -162,7 +162,9 @@ classdef ReportDocTest < matlab.unittest.TestCase
                 'install.packages(missing'};
 
             for g = ReportDocTest.Generators
-                source = fileread(fullfile(root, 'src', 'Reports', [g{1} '.m']));
+                % Templates included: a generator carrying its own copy in a
+                % template file would otherwise pass this unnoticed.
+                source = ReportFixtures.sourceWithTemplates([g{1} '.m']);
                 for m = markers
                     testCase.verifyEmpty(strfind(source, m{1}), ...
                         sprintf(['%s defines "%s" itself again. That is how apa_gt came ' ...

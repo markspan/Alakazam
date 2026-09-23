@@ -59,7 +59,7 @@ function lines = methodLines(summary)
 %   Read off SUMMARY.opts rather than restated from the dialog's defaults,
 %   so the document describes the analysis that ran and not the one that was
 %   requested -- numrandomization in particular can be raised to exhaustive
-%   by resolveNumRandomization without the analyst asking.
+%   by resolveNumRandomization without the user asking.
     opts = summary.opts;
     lines = { ...
         '## What was tested' ...
@@ -319,7 +319,7 @@ end
 
 function s = regularisationText(summary)
 %REGULARISATIONTEXT  Both the dimensionless knob and the absolute lambda it
-%   produced. The knob is what the analyst set; the absolute value is what
+%   produced. The knob is what the user set; the absolute value is what
 %   the inverse actually used, and only the latter reproduces the result.
     reg = provenanceField(summary, 'regParam', TransTools.FieldOr(summary.opts, 'RegParam', NaN));
     lambda = provenanceField(summary, 'lambda', NaN);

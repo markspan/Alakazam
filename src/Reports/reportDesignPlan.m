@@ -73,7 +73,7 @@ function plan = reportDesignPlan(design)
     end
 
     % Session becomes a factor on its own, whenever the recordings support
-    % one: an analyst who has labelled two sessions has described a design,
+    % one: a user who has labelled two sessions has described a design,
     % and asking them to declare it a second time would only let the two
     % disagree.
     [useSession, reason] = sessionIsUsable(design, sessionLevels);
@@ -138,7 +138,7 @@ function [tf, reason] = sessionIsUsable(design, sessionLevels)
 end
 
 function name = cellName(cell)
-%CELLNAME  A cell named the way the analyst labelled it, with deriveDesign's
+%CELLNAME  A cell named the way the user labelled it, with deriveDesign's
 %   own placeholders dropped: "young / post" where both factors are real,
 %   'session "post"' where only session is.
     if isempty(cell.group) || strcmp(cell.group, '(no group)')

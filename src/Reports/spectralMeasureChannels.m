@@ -3,7 +3,7 @@ function channels = spectralMeasureChannels(entries, montage)
 %   CHANNELS = spectralMeasureChannels(ENTRIES) is the union, in the order
 %   first met, of the channel labels behind every row that measures coherence
 %   (a row with a reference channel) in ENTRIES' EEG.spectralMeasures. It is
-%   how the report's two coherence sections follow the analyst's own choice
+%   how the report's two coherence sections follow the user's own choice
 %   of electrodes instead of drawing all of them.
 %
 %   A pool "{Pz POz CPz}" is stored under the one label "{Pz+POz+CPz}"; the

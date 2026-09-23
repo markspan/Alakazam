@@ -1,0 +1,29 @@
+drop_grand_average <- function(df) {
+  if (is.null(df) || !"dataset_type" %in% names(df)) return(df)
+  dplyr::filter(df, dataset_type != "grand_average")
+}
+if (exists("cohmap") && !is.null(cohmap)) cohmap <- drop_grand_average(cohmap)
+if (!exists("cohmap") || is.null(cohmap) || nrow(cohmap) == 0) {
+  cat("\n*No coherence map accompanied this file.*\n\n")
+} else {
+  mp <- cohmap %>%
+    group_by(bin, channel, time_ms, frequency_hz) %>%
+    summarise(coherence = mean(coherence, na.rm = TRUE), .groups = "drop")
+
+  p <- ggplot(mp, aes(time_ms, frequency_hz, fill = coherence)) +
+    geom_raster(interpolate = TRUE) +
+    facet_grid(channel ~ bin) +
+    scale_fill_viridis_c(option = "magma", name = "coherence") +
+    labs(x = "Time (ms)", y = "Frequency (Hz)") +
+    alz_theme_map()
+  print(p)
+
+  shown <- paste(sort(unique(mp$channel)), collapse = ", ")
+  if (length(coh_named) > 0 && all(tolower(unique(mp$channel)) %in% tolower(coh_named))) {
+    cat(sprintf("\n\nChannels shown: %s, the channels named in the Spectral Measure rows.\n\n", shown))
+  } else {
+    cat(sprintf("\n\nChannels shown: %s, the ones with the strongest response in each condition. Choosing them after seeing the data is a display decision, which is safe here because nothing in this section is tested. A test on these channels would not be safe: choose channels blind to the conditions being compared, for instance from a tagging baseline or pooled over all conditions (Arora et al., 2026).\n\n", shown))
+  }
+}
+```
+

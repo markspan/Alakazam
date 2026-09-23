@@ -1,0 +1,12 @@
+
+```{r}
+#| label: groups-summary
+#| results: asis
+if (length(ungrouped_subjects) > 0) {
+  cat(sprintf("\n\n*Note: %d subject(s) have no group assigned and are excluded from every test below: %s.*\n\n",
+              length(ungrouped_subjects), paste(ungrouped_subjects, collapse = ", ")))
+}
+grp_sizes <- dat %>% distinct(dataset, group) %>% count(group, name = "n_subjects")
+cat(sprintf("\nBetween-subjects groups: %s.\n\n",
+            paste(sprintf("%s (*n* = %d)", grp_sizes$group, grp_sizes$n_subjects), collapse = ", ")))
+```

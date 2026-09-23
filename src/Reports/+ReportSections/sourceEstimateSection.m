@@ -35,7 +35,7 @@ function text = sourceEstimateSection(assets)
 %
 %   THE IMAGE LINK DESTINATION IS WRAPPED IN <...> (CommonMark/Pandoc's
 %   own escape for a link destination containing spaces or parentheses):
-%   ImagePath is built from the analyst's own chosen export file name
+%   ImagePath is built from the user's own chosen export file name
 %   (e.g. "measurements (final).csv" -> a "measurements (final)_..._images"
 %   folder), which is not guaranteed to be safe as a bare, unescaped
 %   Markdown link target -- an unescaped ")" inside one would close the

@@ -1,0 +1,61 @@
+
+  m <- tryCatch(lmerTest::lmer(value ~ __FIXED__ + __RANDOM__, data = d,
+                               control = lme4::lmerControl(optimizer = "bobyqa")), error = function(e) NULL)
+  used_maximal <- !is.null(m) && !lme4::isSingular(m)
+  if (is.null(m) || lme4::isSingular(m)) {
+    m <- tryCatch(lmerTest::lmer(value ~ __FIXED__ + __RANDOM_FALLBACK__, data = d,
+                                 control = lme4::lmerControl(optimizer = "bobyqa")), error = function(e) NULL)
+  }
+
+  p_head <- NA_real_
+  p_bin <- NA_real_
+  r2m <- NA_real_
+  eta_head <- NULL
+  if (is.null(m)) {
+    model_list[[ch]] <- tibble(Channel = ch, Model = "Did not fit", N_subjects = n_distinct(d$person_id), Marginal_R2 = NA_real_)
+  } else {
+    model_desc <- if (used_maximal) "Random intercept + slope" else "Random intercept only (maximal model was singular)"
+    aov_tab <- as.data.frame(anova(m))
+    for (eff in c(__EFFECT_VECTOR__)) {
+      if (eff %in% rownames(aov_tab)) {
+        effRow <- aov_tab[eff, ]
+        eff_p <- effRow[["Pr(>F)"]]
+        # Partial eta-squared, converted from the F-test, not the
+        # marginal R^2 below -- unlike R^2 (a single whole-model number,
+        # so a forest plot of it is one point with no spread to show),
+        # eta-squared carries an actual confidence interval (Steiger,
+        # 2004, via the noncentral F), so it is what feeds the
+        # cross-report forest plot below: something with a real
+        # interval to plot, not a lone dot.
+        eta_eff <- tryCatch(effectsize::F_to_eta2(effRow[["F value"]], effRow[["NumDF"]], effRow[["DenDF"]], ci = 0.95),
+                            error = function(e) NULL)
+        effects_list[[paste(ch, eff)]] <- tibble(Channel = ch, Effect = eff,
+          NumDF = effRow[["NumDF"]], DenDF = effRow[["DenDF"]], F = effRow[["F value"]], p = apa_p(eff_p),
+          Partial_eta2 = if (is.null(eta_eff)) NA_real_ else eta_eff$Eta2_partial,
+          CI_low = if (is.null(eta_eff)) NA_real_ else eta_eff$CI_low,
+          CI_high = if (is.null(eta_eff)) NA_real_ else eta_eff$CI_high)
+        if (eff == "__HEADLINE_EFFECT__") {
+          p_head <- eff_p
+          eta_head <- eta_eff
+        }
+        if (eff == "bin") {
+          p_bin <- eff_p
+        }
+      }
+    }
+    r2_tab <- tryCatch({ invisible(utils::capture.output(res <- performance::r2_nakagawa(m))); res }, error = function(e) NULL)
+    if (!is.null(r2_tab)) {
+      r2m <- as.numeric(r2_tab$R2_marginal)
+    }
+    model_list[[ch]] <- tibble(Channel = ch, Model = model_desc, N_subjects = n_distinct(d$person_id), Marginal_R2 = r2m)
+    # The Bayes factor for the effect this section tests, from the fixed
+    # terms the model actually has (see bf10_effect in the setup chunk).
+    fixed_terms <- attr(stats::terms(lme4::nobars(formula(m))), "term.labels")
+    bf <- bf10_effect(d, fixed_terms, "__HEADLINE_EFFECT__")
+    bf_list[[ch]] <- tibble(Channel = ch, Effect = "__HEADLINE_EFFECT__", BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+    std_params <- tryCatch(as.data.frame(effectsize::standardize_parameters(m, method = "basic")),
+                           error = function(e) NULL)
+    if (!is.null(std_params)) {
+      coef_list[[ch]] <- std_params %>% mutate(channel = ch, .before = 1)
+    }
+

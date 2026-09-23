@@ -1,0 +1,26 @@
+
+# One row per subject: every subject_* column is constant within a dataset
+# (dataQualityMetrics computes them once per subject and exportDataQualityCSVs
+# repeats them onto every bin x channel row), so first() is exact here, not an
+# arbitrary pick among differing values.
+subj <- qual %>%
+  group_by(dataset, group, session) %>%
+  summarise(
+    n_trials = first(subject_n_trials),
+    n_channels = first(subject_n_channels),
+    pct_rejected = first(subject_pct_trials_rejected),
+    pct_flagged = first(subject_pct_channel_epochs_flagged),
+    pct_interpolated = first(subject_pct_channel_epochs_interpolated),
+    pct_outlier = first(subject_pct_baseline_outlier_trials),
+    pct_truncated = first(subject_pct_trials_truncated),
+    max_truncated_pct = first(subject_max_truncated_pct),
+    rejection_ran = first(subject_rejection_ran),
+    n_discarded = first(subject_n_trials_rejected),
+    n_kept = first(subject_n_trials_kept),
+    n_truncated = first(subject_n_trials_truncated),
+    median_baseline_sd = median(baseline_sd_uv, na.rm = TRUE),
+    median_sme = median(sme_uv, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(pct_rejected))
+

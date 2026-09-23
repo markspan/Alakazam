@@ -1,0 +1,107 @@
+## __WINDOW_MD__ -- __MEASURETYPE_MD__ (Between Subjects)
+
+Single condition ("__BIN1_MD__"), compared between the between-subjects groups.
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__BIN1_R__") %>% droplevels()
+__BLOCKMATCHDIAGNOSTIC__
+
+descr_list <- list()
+res2_list <- list()
+anova_list <- list()
+pw_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  d <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  n_groups <- n_distinct(d$group)
+  if (n_groups < 2 || nrow(d) < 2) {
+    res2_list[[ch]] <- tibble(Channel = ch, Test = NA_character_,
+      Note = "Skipped: fewer than two groups have a usable value for this channel.")
+    next
+  }
+  tag <- str_replace_all(paste("__WINDOW_R__", "__MEASURETYPE_R__", ch, sep = "_"), "[^A-Za-z0-9]+", "_")
+
+  descr_list[[ch]] <- d %>% group_by(group) %>% summarise(M = mean(value), SD = sd(value), n = n(), .groups = "drop") %>%
+    mutate(channel = ch, .before = 1)
+
+  if (n_groups == 2) {
+    # Not narrated -- used only to choose which test below to report.
+    shap <- tryCatch(shapiro.test(d$value), error = function(e) NULL)
+    use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
+
+    if (use_parametric) {
+      tt <- t.test(value ~ group, data = d)
+      # The bootstrap CI can fail on degenerate data (e.g. near-constant
+      # values in one group) with an R error rather than a clean NA --
+      # caught here so that failure only blanks the CI, not this
+      # channel's whole result.
+      eff <- tryCatch(d %>% rstatix::cohens_d(value ~ group, ci = TRUE, ci.type = "bca", nboot = 200),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      bf <- bf10_ttest(formula = value ~ group,
+                       data = as.data.frame(d %>% mutate(group = droplevels(factor(group)))))
+      res2_list[[ch]] <- tibble(Channel = ch, Test = "Welch two-sample t-test", Statistic = unname(tt$statistic), df = apa_num(unname(tt$parameter), 1),
+                    p = apa_p(tt$p.value), Effect = "Cohen's d", Estimate = eff$effsize,
+                    CI_low = eff$conf.low, CI_high = eff$conf.high,
+                    BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+      p_grp <- tt$p.value
+      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "indep_t", test = "welch_t_test", p = p_grp,
+                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    } else {
+      wt <- wilcox.test(value ~ group, data = d, conf.int = TRUE)
+      eff <- tryCatch(d %>% rstatix::wilcox_effsize(value ~ group, ci = TRUE),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      res2_list[[ch]] <- tibble(Channel = ch, Test = "Mann-Whitney U", Statistic = unname(wt$statistic), df = "--",
+                    p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
+                    CI_low = eff$conf.low, CI_high = eff$conf.high)
+      p_grp <- wt$p.value
+      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "indep_t", test = "mann_whitney_u", p = p_grp,
+                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    }
+  } else {
+    # Welch's one-way ANOVA, not the classic (Fisher) one -- it does not
+    # assume equal variances across groups, which is routinely violated
+    # and rarely checked; matches the 2-group branch above already using
+    # Welch's t-test rather than Student's for the same reason (Delacre
+    # et al., 2019). Games-Howell is its matching post-hoc, for the same
+    # reason Tukey (which assumes equal variances/group sizes) is not used.
+    aov <- tryCatch(welch_anova_test(data = d, formula = value ~ group), error = function(e) NULL)
+    p_grp <- NA_real_
+    if (!is.null(aov)) {
+      p_grp <- aov$p[1]
+      anova_list[[ch]] <- as.data.frame(aov) %>% mutate(channel = ch, .before = 1)
+    }
+    pw_list[[ch]] <- (d %>% games_howell_test(value ~ group)) %>% mutate(channel = ch, .before = 1)
+
+    omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "welch_anova", test = "omnibus", p = p_grp,
+                                          estimate = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+  }
+  }, error = function(e) {
+    res2_list[[ch]] <<- tibble(Channel = ch, Test = NA_character_, Note = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+descr_all <- bind_rows(descr_list)
+if (nrow(descr_all) > 0) {
+  cat(as_raw_html(apa_gt(descr_all, "Descriptive Statistics by Channel")))
+}
+
+common_layers <- list(
+  geom_jitter(width = 0.06, alpha = 0.6),
+  stat_summary(fun = mean, geom = "point", size = 3),
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1),
+  labs(x = "Group", y = "__YLABEL__"),
+  scale_colour_brewer(palette = "Set2"),
+  scale_fill_brewer(palette = "Set2"),
+  facet_wrap(~channel),
+  alz_theme(),
+  theme(legend.position = "none")
+)
+p <- ggplot(grp %>% filter(!is.na(value)), aes(group, value, colour = group, fill = group)) + violin_layers() + common_layers
+print(p)
+
+res2_all <- bind_rows(res2_list)
+if (nrow(res2_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(res2_all, "Test Result by Channel"))))
+  tests_used <- unique(na.omit(res2_all$Test))

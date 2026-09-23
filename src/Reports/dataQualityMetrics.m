@@ -42,7 +42,7 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 %
 %   Nothing here excludes anything. Mathot & Vilotijevic's own advice is
 %   that exclusion criteria be specified in advance and reported
-%   transparently; this reports, and leaves the decision with the analyst.
+%   transparently; this reports, and leaves the decision with the user.
 %
 %   A NOTE ON WHAT "REJECTED" MEANS HERE. A trial counts as rejected when
 %   every one of its channels is entirely NaN, which is what ArtefactDetect

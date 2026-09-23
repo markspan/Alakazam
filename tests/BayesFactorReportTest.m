@@ -61,12 +61,11 @@ classdef BayesFactorReportTest < matlab.unittest.TestCase
         function everyTTestSectionReportsABayesFactor(testCase)
         %EVERYTTESTSECTIONREPORTSABAYESFACTOR  The guide says "beside the
         %   t-tests", which means all of them, not only the paired one.
-            root = fileparts(fileparts(mfilename('fullpath')));
-            folder = fullfile(root, 'src', 'Reports', '+ReportSections');
-
             for k = 1:size(BayesFactorReportTest.TTestSections, 1)
                 name = BayesFactorReportTest.TTestSections{k, 1};
-                source = fileread(fullfile(folder, [name '.m']));
+                % The section's own source AND the templates it reads: the R
+                % these markers live in moved into src/Reports/rscripts.
+                source = ReportFixtures.sourceWithTemplates(fullfile('+ReportSections', [name '.m']));
 
                 testCase.verifySubstring(source, 'bf10_ttest(', ...
                     sprintf('%s runs a t-test but computes no Bayes factor.', name));
@@ -95,8 +94,9 @@ classdef BayesFactorReportTest < matlab.unittest.TestCase
         %   so it had no Bayes factor at all while its guide promised them.
         %   Each mixed-model section now has one for the effect it tests,
         %   taken from the fixed terms of the model it actually fitted.
-            root = fileparts(fileparts(mfilename('fullpath')));
-            source = fileread(fullfile(root, 'src', 'Reports', '+ReportSections', 'lmmSection.m'));
+            % The section and the templates it reads: the model-fitting R
+            % lives in rscripts/lmm-fit.Rpart now, not in the .m file.
+            source = ReportFixtures.sourceWithTemplates(fullfile('+ReportSections', 'lmmSection.m'));
             within = generateQuartoReport(ReportFixtures.censusEntries('F-SPEC3C'), 'x.csv');
             mixed = generateQuartoReport(ReportFixtures.censusEntries('F-ERP3CG'), 'x.csv');
 

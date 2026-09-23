@@ -1,0 +1,52 @@
+
+  n_groups <- n_distinct(d$group)
+  if (n_groups < 2) {
+    betweenRes2_list[[ch]] <- tibble(Channel = ch, Test = NA_character_,
+      Note = "Only one group has a usable value for this channel; the between-group comparison could not be run.")
+  } else if (n_groups == 2) {
+    # Not narrated -- used only to choose which test below to report.
+    shap <- tryCatch(shapiro.test(d$value), error = function(e) NULL)
+    use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
+
+    if (use_parametric) {
+      tt <- t.test(value ~ group, data = d)
+      # The bootstrap CI can fail on degenerate data with an R error
+      # rather than a clean NA -- caught here so that failure only
+      # blanks the CI, not this channel's whole result.
+      eff <- tryCatch(d %>% rstatix::cohens_d(value ~ group, ci = TRUE, ci.type = "bca", nboot = 200),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      bf <- bf10_ttest(formula = value ~ group,
+                       data = as.data.frame(d %>% mutate(group = droplevels(factor(group)))))
+      betweenRes2_list[[ch]] <- tibble(Channel = ch, Test = "Welch two-sample t-test", Statistic = unname(tt$statistic), df = apa_num(unname(tt$parameter), 1),
+                    p = apa_p(tt$p.value), Effect = "Cohen's d", Estimate = eff$effsize,
+                    CI_low = eff$conf.low, CI_high = eff$conf.high,
+                    BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+      p_grp <- tt$p.value
+      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = "__COMBOLABEL_R__", role = "secondary", design = "between_group_combo", test = "welch_t_test", p = p_grp,
+                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    } else {
+      wt <- wilcox.test(value ~ group, data = d, conf.int = TRUE)
+      eff <- tryCatch(d %>% rstatix::wilcox_effsize(value ~ group, ci = TRUE),
+                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+      betweenRes2_list[[ch]] <- tibble(Channel = ch, Test = "Mann-Whitney U", Statistic = unname(wt$statistic), df = "--",
+                    p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
+                    CI_low = eff$conf.low, CI_high = eff$conf.high)
+      p_grp <- wt$p.value
+      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = "__COMBOLABEL_R__", role = "secondary", design = "between_group_combo", test = "mann_whitney_u", p = p_grp,
+                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    }
+  } else {
+    # Welch ANOVA + Games-Howell, not classic ANOVA + Tukey -- see
+    # betweenSection's own comment on this same choice.
+    aov <- tryCatch(welch_anova_test(data = d, formula = value ~ group), error = function(e) NULL)
+    p_grp <- NA_real_
+    if (!is.null(aov)) {
+      p_grp <- aov$p[1]
+      betweenAnova_list[[ch]] <- as.data.frame(aov) %>% mutate(channel = ch, .before = 1)
+    }
+
+    betweenPw_list[[ch]] <- (d %>% games_howell_test(value ~ group)) %>% mutate(channel = ch, .before = 1)
+
+    omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = "__COMBOLABEL_R__", role = "secondary", design = "between_group_combo", test = "welch_anova", p = p_grp,
+                                          estimate = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+  }

@@ -1,0 +1,4 @@
+## __WINDOW_MD__ -- __MEASURETYPE_MD____HEADING_SUFFIX__
+
+__NBINS__ conditions: __BIN_LIST_MD____INTRO_TAIL__
+

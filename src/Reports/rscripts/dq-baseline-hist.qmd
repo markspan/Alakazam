@@ -1,0 +1,17 @@
+
+```{r}
+#| label: baseline-hist
+#| fig-height: 4
+kept <- trl %>% filter(rejected == 0, !is.na(baseline_sd_uv))
+if (nrow(kept) == 0) {
+  cat("\n\nNo surviving trials to describe.\n\n")
+} else {
+  hp <- ggplot(kept, aes(x = baseline_sd_uv)) +
+    geom_histogram(bins = 50, fill = alz_blue, colour = NA) +
+    labs(x = "Pre-stimulus SD (uV)", y = "Trials",
+         subtitle = "Every surviving trial, all subjects pooled") +
+    alz_theme()
+  print(hp)
+}
+```
+

@@ -1,0 +1,19 @@
+  cat(as_raw_html(apa_gt(coef_all %>% select(-any_of("CI")), "Standardized Fixed-Effect Coefficients (95% CI), by Channel")))
+}
+
+posthoc_all <- bind_rows(posthoc_list)
+if (nrow(posthoc_all) > 0) {
+  cat(as_raw_html(apa_gt(posthoc_all, "Post-Hoc Contrasts (Holm-Corrected, Model-Based), by Channel")))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_POSTHOC__"))
+}
+posthocWithin_all <- bind_rows(posthocWithin_list)
+if (nrow(posthocWithin_all) > 0) {
+  cat(as_raw_html(apa_gt(posthocWithin_all, "Within-Group Pairwise Comparisons (Holm-Corrected, Model-Based), by Channel")))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_EMMEANS__"))
+}
+posthocBetween_all <- bind_rows(posthocBetween_list)
+if (nrow(posthocBetween_all) > 0) {
+  cat(as_raw_html(apa_gt(posthocBetween_all, "Between-Group Pairwise Comparisons (Holm-Corrected, Model-Based), by Channel")))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_EMMEANS__"))
+}
+```

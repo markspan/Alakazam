@@ -1,0 +1,25 @@
+  labs(x = "Bin", y = "__YLABEL__"),
+  alz_theme()
+)
+p <- ggplot(grp %>% filter(!is.na(value)), aes(bin, value)) + violin_layers("#4a7fc9") + common_layers
+print(p)
+
+model_all <- bind_rows(model_list)
+if (nrow(model_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(model_all, "Model Fitted, by Channel"))))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_LMM__"))
+}
+
+effects_all <- bind_rows(effects_list)
+if (nrow(effects_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(effects_all, "__ANOVA_TABLE_TITLE__"))))
+}
+
+bf_all <- bind_rows(bf_list)
+if (nrow(bf_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(bf_all, "__BF_TABLE_TITLE__"))))
+  cat(sprintf("\n*%s*\n\n", "__CAPTION_LMM_BF__"))
+}
+
+coef_all <- bind_rows(coef_list)
+if (nrow(coef_all) > 0) {

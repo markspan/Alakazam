@@ -1,0 +1,42 @@
+
+```{r}
+#| label: coherence-reference
+#| results: asis
+#| fig-height: 4
+drop_grand_average <- function(df) {
+  if (is.null(df) || !"dataset_type" %in% names(df)) return(df)
+  dplyr::filter(df, dataset_type != "grand_average")
+}
+if (exists("cohref") && !is.null(cohref)) cohref <- drop_grand_average(cohref)
+if (!exists("cohref") || is.null(cohref) || nrow(cohref) == 0) {
+  cat("\n*The reference channel's own spectrum was not stored with these results, which were computed before it was kept, so where the flicker actually was cannot be shown. Run CoherenceMap again to add it.*\n\n")
+} else {
+  rs <- cohref %>% filter(is.finite(amplitude), amplitude > 0) %>%
+    group_by(bin, frequency_hz) %>%
+    summarise(amplitude = mean(amplitude), .groups = "drop")
+  bands <- cohref %>% distinct(bin, band_lo_hz, band_hi_hz) %>%
+    group_by(bin) %>%
+    summarise(lo = min(band_lo_hz), hi = max(band_hi_hz), .groups = "drop")
+  marks <- cohref %>% filter(is.finite(peak_hz)) %>%
+    distinct(bin, dataset, peak_hz) %>%
+    group_by(bin) %>% summarise(peak = median(peak_hz), .groups = "drop")
+
+  p <- ggplot(rs, aes(frequency_hz, amplitude)) +
+    # ymin and ymax sit outside aes(): inside it they would pass through the
+    # log scale, log10(-Inf) is NaN, and the rectangle would silently vanish.
+    geom_rect(data = bands, aes(xmin = lo, xmax = hi), ymin = -Inf, ymax = Inf,
+              inherit.aes = FALSE, fill = alz_blue, alpha = 0.2) +
+    geom_line(linewidth = 0.4) +
+    geom_vline(data = marks, aes(xintercept = peak), linetype = "dotted", colour = alz_red) +
+    scale_y_log10(labels = scales::label_number(drop0trailing = TRUE)) +
+    facet_wrap(~ bin) +
+    labs(x = "Frequency (Hz)", y = "Reference amplitude") +
+    alz_theme()
+  print(p)
+  cat(sprintf("\n\nStrongest reference frequency per condition: %s.\n\n",
+      paste(sprintf("%s at %.2f Hz", marks$bin, marks$peak), collapse = "; ")))
+}
+```
+
+## Coherence over time and frequency
+

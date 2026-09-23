@@ -1,0 +1,29 @@
+## Per-Subject Overview
+
+```{r}
+#| label: subject-overview
+#| results: asis
+cat(as_raw_html(apa_gt(
+  subj %>% select(dataset, group, n_channels, n_trials, n_discarded, n_kept,
+                  pct_rejected, n_truncated, pct_flagged, pct_interpolated,
+                  pct_outlier, median_baseline_sd, median_sme),
+  "Data Quality by Subject (worst rejection rate first)")))
+```
+
+```{r}
+#| label: subject-overview-plot
+#| fig-height: 5
+# Ordered by rejection rate rather than alphabetically: the reason to look at
+# this plot at all is to find the tail, and an alphabetical axis hides it.
+sp <- subj %>%
+  mutate(dataset = fct_reorder(dataset, pct_rejected)) %>%
+  ggplot(aes(x = pct_rejected, y = dataset)) +
+  geom_col(fill = alz_blue, width = 0.7) +
+  geom_vline(xintercept = median(subj$pct_rejected, na.rm = TRUE),
+             linetype = "dashed", colour = "grey40") +
+  labs(x = "Trials rejected (%)", y = NULL,
+       subtitle = "Dashed line: median across subjects") +
+  alz_theme()
+print(sp)
+```
+

@@ -1,0 +1,21 @@
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__COMBOLABEL_R__") %>% droplevels()
+__BLOCKMATCHDIAGNOSTIC__
+
+descr_list <- list()
+vszero_list <- list()
+betweenRes2_list <- list()
+betweenAnova_list <- list()
+betweenPw_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  d <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  if (n_distinct(d$dataset) < 2) {
+    descr_list[[ch]] <- tibble(channel = ch,
+      Note = sprintf("Skipped: only %d subject(s) have a non-missing value for this combination bin.", n_distinct(d$dataset)))
+    next
+  }
+  tag <- str_replace_all(paste("__WINDOW_R__", "__MEASURETYPE_R__", "__COMBOLABEL_R__", ch, sep = "_"), "[^A-Za-z0-9]+", "_")

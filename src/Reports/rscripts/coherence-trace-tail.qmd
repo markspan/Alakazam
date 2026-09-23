@@ -1,0 +1,5 @@
+
+```{r}
+#| label: coherence-map
+#| results: asis
+#| fig-height: 6

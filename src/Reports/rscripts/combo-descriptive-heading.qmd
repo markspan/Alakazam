@@ -1,0 +1,9 @@
+## __WINDOW_MD__ -- __MEASURETYPE_MD__: __COMBOLABEL_MD__
+
+Difference/combination bin "__COMBOLABEL_MD__" (__RECIPE_MD__). __REASON_MD__
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__COMBOLABEL_R__") %>% droplevels()
+__BLOCKMATCHDIAGNOSTIC__

@@ -1,0 +1,19 @@
+          str_detect(design, "^lmm_") ~ "Partial eta-sq. (LMM)",
+          TRUE ~ "Other effect size"
+        ),
+        label_short = str_trunc(group, 40)
+      )
+    fp <- ggplot(omnibus_fp, aes(x = estimate, y = reorder(label_short, estimate), xmin = conf.low, xmax = conf.high)) +
+      geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+      geom_pointrange(colour = "#4a7fc9", size = 0.3, na.rm = TRUE) +
+      facet_wrap(~ effect_type, scales = "free", ncol = 1) +
+      labs(x = "Effect size (point estimate, 95% CI where available)", y = NULL) +
+      alz_theme() +
+      theme(axis.text.y = element_text(size = 7),
+            strip.text = element_text(face = "plain"))
+    print(fp)
+  }
+} else {
+  cat("\nNo test produced a result, so there is nothing to summarise or correct.\n\n")
+}
+```

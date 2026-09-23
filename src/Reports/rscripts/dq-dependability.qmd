@@ -1,0 +1,62 @@
+
+```{r}
+#| label: dependability
+#| results: asis
+if (is.null(meas)) {
+  cat("\nThe per-trial measurement file named by this report could not be read, so dependability was not computed.\n\n")
+} else {
+  d <- meas %>% filter(dataset_type == "subject", !is.na(value), !is.na(person_id)) %>%
+       filter(!is.na(bin), bin != "")
+  # One estimate per condition x window x measure x channel: a
+  # dependability pooled across conditions would describe no score anyone
+  # reports, and the trial count needed is exactly what differs between
+  # an easy contrast and a hard one.
+  cells <- d %>% count(window, measure_type, channel, bin, name = "n_rows") %>%
+           filter(n_rows >= 20)
+  if (nrow(cells) == 0) {
+    cat("\nToo few single-trial observations to estimate variance components.\n\n")
+  } else {
+    rows <- list()
+    for (i in seq_len(nrow(cells))) {
+      cell <- cells[i, ]
+      dd <- d %>% filter(window == cell$window, measure_type == cell$measure_type,
+                         channel == cell$channel, bin == cell$bin)
+      if (n_distinct(dd$person_id) < 3) next
+      fit <- tryCatch(lme4::lmer(value ~ 1 + (1 | person_id), data = dd,
+                                 control = lme4::lmerControl(calc.derivs = FALSE)),
+                      error = function(e) NULL, warning = function(w) NULL)
+      if (is.null(fit)) next
+      vc <- as.data.frame(lme4::VarCorr(fit))
+      var_p <- vc$vcov[vc$grp == "person_id"]
+      var_e <- vc$vcov[vc$grp == "Residual"]
+      if (length(var_p) != 1 || length(var_e) != 1 || var_p <= 0) next
+      # Trials per person as the harmonic mean: dependability at "the"
+      # trial count is not defined when people differ, and the harmonic
+      # mean is the one that matches the variance of the average.
+      per_person <- dd %>% count(person_id) %>% pull(n)
+      n_bar <- length(per_person) / sum(1 / per_person)
+      phi <- function(n) var_p / (var_p + var_e / n)
+      needed <- function(target) ceiling((var_e * target) / (var_p * (1 - target)))
+      rows[[length(rows) + 1]] <- tibble(
+        window = cell$window, measure = cell$measure_type, channel = cell$channel,
+        bin = cell$bin, people = n_distinct(dd$person_id),
+        trials_per_person = round(n_bar, 1), dependability = phi(n_bar),
+        trials_for_70 = needed(0.70), trials_for_80 = needed(0.80))
+    }
+    if (length(rows) == 0) {
+      cat("\nNo cell had enough people and trials for a stable variance decomposition.\n\n")
+    } else {
+      tab <- bind_rows(rows) %>% arrange(dependability)
+      cat(as_raw_html(apa_gt(tab, "Dependability and the Trials It Would Take")))
+      worst <- tab[1, ]
+      cat(sprintf(paste0("\nThe least dependable score here is %s at %s in %s (window %s), ",
+        "at %.2f with %.1f trials per person. Reaching .80 would take about %d trials ",
+        "per person for that score. A dependability below about .70 puts a ceiling on ",
+        "any correlation the measure can show, whatever the sample size.\n\n"),
+        worst$measure, worst$channel, worst$bin, worst$window, worst$dependability,
+        worst$trials_per_person, worst$trials_for_80))
+    }
+  }
+}
+```
+

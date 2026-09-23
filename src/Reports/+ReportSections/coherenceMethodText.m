@@ -148,7 +148,7 @@ end
 
 function t = averaged(noun, range)
 %AVERAGED  "the frames are averaged over the whole epoch", or over the range the
-%   analyst set (a frame counts when its centre lies inside it).
+%   user set (a frame counts when its centre lies inside it).
     if isempty(range)
         t = sprintf('the %s are averaged over the whole epoch', noun);
     else

@@ -1,0 +1,17 @@
+
+```{r}
+#| label: sme-plot
+#| fig-height: 5
+sme <- qual %>% filter(!is.na(sme_uv))
+if (nrow(sme) == 0) {
+  cat(paste0("\n\nNo SME values are available. These come from Average.m's own aSME field, ",
+             "so a dataset averaged before that field existed will need re-averaging to ",
+             "report one.\n\n"))
+} else {
+  smp <- ggplot(sme, aes(x = sme_uv, y = fct_reorder(dataset, sme_uv, .fun = median))) +
+    geom_boxplot(outlier.size = 0.5, fill = alz_blue, alpha = 0.25, colour = alz_blue) +
+    labs(x = "SME (uV)", y = NULL, subtitle = "Across every channel and bin, per subject") +
+    alz_theme()
+  print(smp)
+}
+```

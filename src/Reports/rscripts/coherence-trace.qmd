@@ -1,0 +1,184 @@
+# A grand average is the mean of the recordings already in the export, so
+# counting it as one more recording would inflate the count and add nothing.
+drop_grand_average <- function(df) {
+  if (is.null(df) || !"dataset_type" %in% names(df)) return(df)
+  dplyr::filter(df, dataset_type != "grand_average")
+}
+if (exists("cohtrace") && !is.null(cohtrace)) cohtrace <- drop_grand_average(cohtrace)
+if (exists("cohref") && !is.null(cohref)) cohref <- drop_grand_average(cohref)
+if (!exists("cohtrace") || is.null(cohtrace) || nrow(cohtrace) == 0) {
+  cat("\n*No coherence export accompanied this file, so the time course cannot be shown.*\n\n")
+} else {
+  # One tag per recording and condition, then the value most recordings
+  # agree on. Recordings that found a different tag are left out of the
+  # trace rather than averaged into it: coherence at a different frequency
+  # is not the same measurement.
+  tags <- cohtrace %>% distinct(bin, dataset, tag_hz) %>%
+    count(bin, tag_hz) %>%
+    group_by(bin) %>% arrange(desc(n), tag_hz, .by_group = TRUE) %>%
+    summarise(f = first(tag_hz), n_agree = first(n), n_total = sum(n), .groups = "drop")
+  used <- cohtrace %>%
+    inner_join(dplyr::select(tags, bin, f), by = "bin") %>%
+    filter(abs(tag_hz - f) < 1e-6)
+
+  # Averaged over subjects per channel, bin and time. Individual
+  # subjects are not drawn: with more than a handful the panel becomes
+  # unreadable, and the question here is the shape of the response, not
+  # how one person differed.
+  tr <- used %>%
+    group_by(bin, channel, time_ms) %>%
+    summarise(coherence = mean(coherence, na.rm = TRUE),
+              n = n_distinct(dataset), .groups = "drop")
+
+  # Trials behind each condition, when the export says. Older exports do not.
+  counts <- NULL
+  if ("n_trials" %in% names(used) && any(!is.na(used$n_trials))) {
+    counts <- used %>% distinct(bin, dataset, n_trials) %>%
+      group_by(bin) %>%
+      summarise(n_min = suppressWarnings(min(n_trials, na.rm = TRUE)),
+                n_med = suppressWarnings(median(n_trials, na.rm = TRUE)),
+                n_max = suppressWarnings(max(n_trials, na.rm = TRUE)), .groups = "drop") %>%
+      mutate(chance = ifelse(is.finite(n_med) & n_med > 0, 1 / n_med, NA_real_))
+  }
+
+  # The export holds only the named channels when every channel in it is one
+  # of them. A dataset that had none of them is written whole, and then this
+  # is FALSE and the figure is described as the general one.
+  named_only <- length(coh_named) > 0 &&
+    all(tolower(unique(tr$channel)) %in% tolower(coh_named))
+
+  # The strongest channels in EACH condition are drawn over the rest rather
+  # than instead of them: the faint lines are what show that the response is
+  # where it should be and absent where it should not. Chosen per condition:
+  # chosen across all of them at once, the strongest condition decides for the
+  # rest, and the set changes whenever a condition is added or dropped. When
+  # the user named the channels, all of those are drawn and none is a field.
+  n_best <- if (named_only) n_distinct(tr$channel) else 4
+  best <- tr %>% group_by(bin, channel) %>%
+    summarise(peak = suppressWarnings(max(coherence, na.rm = TRUE)), .groups = "drop") %>%
+    group_by(bin) %>% slice_max(peak, n = n_best, with_ties = FALSE) %>% ungroup() %>%
+    dplyr::select(bin, channel)
+
+  p <- ggplot(tr, aes(time_ms, coherence, group = channel))
+  if (!named_only) p <- p + geom_line(colour = "grey80", linewidth = 0.3)
+  p <- p +
+    geom_line(data = inner_join(tr, best, by = c("bin", "channel")),
+              aes(colour = channel), linewidth = 0.8) +
+    facet_wrap(~ bin) +
+    labs(x = "Time (ms)", y = "Coherence to reference", colour = "channel") +
+    alz_theme()
+  if (!is.null(counts) && any(!is.na(counts$chance))) {
+    p <- p + geom_hline(data = filter(counts, !is.na(chance)),
+                        aes(yintercept = chance), linetype = "dashed", colour = "grey30")
+  }
+  print(p)
+
+  # Where the reference itself peaked, when the export carries its spectrum.
+  # A condition whose reference peaks outside the analysed band has no tag
+  # in the band: what is found there is only the strongest of the rest.
+  ref_peak <- NULL
+  if (exists("cohref") && !is.null(cohref) && nrow(cohref) > 0) {
+    ref_peak <- cohref %>% filter(is.finite(peak_hz)) %>%
+      distinct(bin, dataset, peak_hz, band_lo_hz, band_hi_hz) %>%
+      group_by(bin) %>%
+      summarise(ref_hz = median(peak_hz), lo = min(band_lo_hz), hi = max(band_hi_hz), .groups = "drop") %>%
+      mutate(outside = ref_hz < lo - 0.5 | ref_hz > hi + 0.5)
+  }
+  eff <- tags %>% mutate(f_eff = f)
+  if (!is.null(ref_peak) && nrow(ref_peak) > 0) {
+    eff <- tags %>% left_join(ref_peak, by = "bin") %>%
+      mutate(f_eff = if_else(coalesce(outside, FALSE), ref_hz, f))
+  }
+
+  tag_label <- sprintf("%s at %.2f Hz", eff$bin, eff$f)
+  if ("outside" %in% names(eff)) {
+    flagged <- coalesce(eff$outside, FALSE)
+    tag_label[flagged] <- sprintf("%s at %.2f Hz (the strongest inside the band; the reference peaks at %.2f Hz)",
+                                  eff$bin[flagged], eff$f[flagged], eff$ref_hz[flagged])
+  }
+  cat(sprintf("\n\nTagged frequency per condition: %s.\n\n", paste(tag_label, collapse = "; ")))
+  disagree <- filter(tags, n_agree < n_total)
+  if (nrow(disagree) > 0) {
+    cat(sprintf("Recordings did not all find the same tag for %s; only the majority value is drawn and the others are left out of the trace.\n\n",
+        paste(sprintf("%s (%d of %d agreed)", disagree$bin, disagree$n_agree, disagree$n_total), collapse = "; ")))
+  }
+  if ("outside" %in% names(eff) && any(coalesce(eff$outside, FALSE))) {
+    out <- filter(eff, coalesce(outside, FALSE))
+    cat(sprintf("**Outside the analysed band:** %s. For these conditions the tag is not in the band, so the coherence drawn is not at the tag. Run CoherenceMap again over a band that contains the reference's own peak to see the response.\n\n",
+        paste(sprintf("%s (the reference peaks at %.2f Hz, the band covers %.2f to %.2f Hz)", out$bin, out$ref_hz, out$lo, out$hi), collapse = "; ")))
+  }
+  if (nrow(eff) > 1 && diff(range(eff$f_eff)) > 1.5) {
+    cat(sprintf("**Conditions were tagged at different frequencies (%s Hz).** Response amplitude falls as the tagging frequency rises (Minarik et al., 2023), so a difference in coherence between these conditions can reflect frequency rather than condition. Compare conditions tagged at the same frequency, or counterbalance frequency across conditions (Arora et al., 2026).\n\n",
+        paste(sprintf("%.1f", sort(unique(round(eff$f_eff, 1)))), collapse = ", ")))
+  }
+
+  # Descriptives for the channels drawn in colour in each condition. They were
+  # chosen for their response, so these describe the figure and are not a test.
+  win <- tr %>% inner_join(best, by = c("bin", "channel")) %>%
+    group_by(bin, time_ms) %>%
+    summarise(coherence = mean(coherence, na.rm = TRUE), .groups = "drop") %>%
+    mutate(coherence = ifelse(is.nan(coherence), NA_real_, coherence))
+  base <- win %>% filter(time_ms < 0) %>% group_by(bin) %>%
+    summarise(baseline = mean(coherence, na.rm = TRUE), .groups = "drop") %>%
+    mutate(baseline = ifelse(is.nan(baseline), NA_real_, baseline))
+  top <- win %>% filter(!is.na(coherence)) %>% group_by(bin) %>%
+    slice_max(coherence, n = 1, with_ties = FALSE) %>% ungroup() %>%
+    dplyr::select(bin, peak = coherence, peak_ms = time_ms)
+  # Oz is fixed in advance, not chosen by the response, and is the channel
+  # Dimigen et al. (2025) report: its mean over the epoch in each recording,
+  # then the mean and standard deviation across recordings.
+  oz <- NULL
+  if ("Oz" %in% used$channel) {
+    oz <- used %>% filter(channel == "Oz") %>%
+      group_by(bin, dataset) %>%
+      summarise(m = mean(coherence, na.rm = TRUE), .groups = "drop") %>%
+      group_by(bin) %>%
+      summarise(oz_mean = mean(m, na.rm = TRUE), oz_sd = sd(m, na.rm = TRUE), .groups = "drop") %>%
+      mutate(oz_text = ifelse(is.finite(oz_mean),
+                              ifelse(is.finite(oz_sd), sprintf("%.3f (%.3f)", oz_mean, oz_sd),
+                                     sprintf("%.3f", oz_mean)), ""))
+  }
+  summ <- eff %>%
+    left_join(base, by = "bin") %>% left_join(top, by = "bin")
+  summ$oz_text <- ""
+  if (!is.null(oz)) summ <- summ %>% dplyr::select(-oz_text) %>% left_join(dplyr::select(oz, bin, oz_text), by = "bin")
+  if (!is.null(counts)) summ <- left_join(summ, counts, by = "bin")
+  if (is.null(counts)) summ <- mutate(summ, n_min = NA_real_, n_max = NA_real_, chance = NA_real_)
+  if (!"ref_hz" %in% names(summ)) summ$ref_hz <- NA_real_
+  tab <- summ %>% transmute(
+    Condition = bin,
+    `Tag (Hz)` = sprintf("%.2f", f),
+    `Reference peak (Hz)` = ifelse(is.na(ref_hz), "", sprintf("%.2f", ref_hz)),
+    Recordings = n_total,
+    `Trials each` = ifelse(is.finite(n_min),
+                           ifelse(n_min == n_max, sprintf("%.0f", n_min),
+                                  sprintf("%.0f to %.0f", n_min, n_max)), ""),
+    `Chance (1/N)` = chance,
+    `Oz mean (SD)` = coalesce(oz_text, ""),
+    `Before 0 ms` = baseline,
+    Peak = peak,
+    `Peak at (ms)` = round(peak_ms))
+  if (all(tab$`Reference peak (Hz)` == "")) tab$`Reference peak (Hz)` <- NULL
+  if (all(tab$`Oz mean (SD)` == "")) tab$`Oz mean (SD)` <- NULL
+  # Epochs that start at 0 ms hold nothing before the stimulus, so the baseline
+  # column could only ever be empty. Say so instead of printing a blank.
+  no_baseline <- all(is.na(tab$`Before 0 ms`))
+  if (no_baseline) tab$`Before 0 ms` <- NULL
+  cat(as_raw_html(blank_missing(apa_gt(tab, "Coherence at the Tagged Frequency"))))
+  if (named_only) {
+    cat(sprintf("\n\nAveraged over %d recording(s). Only the channels named in the Spectral Measure rows are drawn (%s), and Peak describes their mean. They were chosen in advance, not for their response.\n\n",
+        max(tr$n, na.rm = TRUE), paste(sort(unique(tr$channel)), collapse = ", ")))
+  } else {
+    cat(sprintf("\n\nAveraged over %d recording(s). The grey lines are the remaining channels. In each condition the four in colour are those that responded most, and Peak describes them.\n\n",
+        max(tr$n, na.rm = TRUE)))
+  }
+  if (!is.null(oz)) {
+    cat(sprintf("Oz was fixed in advance as the classic channel for a foveal steady-state response, so its mean over the epoch (with the standard deviation across recordings) is not chosen by the response%s. It is the statistic Dimigen et al. (2025) report.\n\n",
+        if (named_only) "" else ", unlike the channels in colour"))
+  }
+  if (no_baseline) {
+    cat("These epochs contain no time before 0 ms, so there is no baseline period to compare the response with. Arora et al. (2026) recommend a baseline in which nothing is tagged, so that the response can be judged against it; if the recording holds such a period, epoching from before the stimulus would provide one.\n\n")
+  }
+}
+```
+

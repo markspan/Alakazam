@@ -1,0 +1,7 @@
+  }, error = function(e) {
+    descr_list[[ch]] <<- tibble(channel = ch, Note = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+descr_all <- bind_rows(descr_list)
+if (nrow(descr_all) > 0) {

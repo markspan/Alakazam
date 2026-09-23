@@ -1,0 +1,46 @@
+
+```{r}
+#| label: precision-by-trials
+#| results: asis
+#| fig-height: 4
+if (!("sme_uv" %in% names(qual)) || all(is.na(qual$sme_uv))) {
+  cat("\nNo SME was exported for this dataset, so precision against trial count cannot be shown.\n\n")
+} else {
+  d <- qual %>% filter(!is.na(sme_uv), !is.na(n_trials), n_trials > 0)
+  d$n_surviving <- d$n_trials - ifelse(is.na(d$n_trials_rejected), 0, d$n_trials_rejected)
+  d <- d %>% filter(n_surviving > 0)
+  if (nrow(d) == 0) {
+    cat("\nNo subject had both an SME and a surviving trial count.\n\n")
+  } else {
+    # The curve is anchored on the median subject rather than fitted: it is
+    # the shape precision MUST follow if trials are independent, not a
+    # regression through these points, and fitting it would let a noisy
+    # sample bend the reference it is being judged against.
+    ref_n <- median(d$n_surviving, na.rm = TRUE)
+    ref_s <- median(d$sme_uv, na.rm = TRUE)
+    curve <- data.frame(n_surviving = seq(max(1, min(d$n_surviving)), max(d$n_surviving), length.out = 100))
+    curve$sme_uv <- ref_s * sqrt(ref_n) / sqrt(curve$n_surviving)
+
+    p <- ggplot(d, aes(x = n_surviving, y = sme_uv)) +
+      geom_line(data = curve, colour = "grey55", linetype = "dashed") +
+      geom_point(aes(colour = bin), alpha = 0.75, size = 1.8) +
+      labs(x = "surviving trials", y = "SME (uV)", colour = "bin",
+           caption = "dashed line: the 1/sqrt(n) improvement independent trials give") +
+      alz_theme()
+    print(p)
+    cat("\n\n")
+
+    above <- d %>% mutate(expected = ref_s * sqrt(ref_n) / sqrt(n_surviving)) %>%
+             filter(sme_uv > 1.5 * expected)
+    if (nrow(above) > 0) {
+      cat(sprintf(paste("\n%d subject-bin-channel combination(s) sit more than half again above the curve.",
+                        "Those are noisy within their trials rather than short of them, so collecting more",
+                        "trials would not bring them into line.\n\n"), nrow(above)))
+    } else {
+      cat(paste("\nEvery combination sits close to the curve, so precision here is limited by trial",
+                "count rather than by anything unusual within the trials.\n\n"))
+    }
+  }
+}
+```
+

@@ -1,0 +1,42 @@
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+#| fig-height: 4
+if (!exists("ga") || is.null(ga) || nrow(ga) == 0) {
+  cat("\n*No grand-average export accompanied this measurements file, so the waveforms cannot be shown.*\n\n")
+} else {
+  win <- dat %>% filter(window == "__WINDOW_R__") %>%
+         summarise(lo = suppressWarnings(min(window_start_ms, na.rm = TRUE)),
+                   hi = suppressWarnings(max(window_stop_ms, na.rm = TRUE)))
+  gw <- ga %>% filter(bin %in% c(__BINVECTOR_R__))
+
+  # Only the channels this window was actually measured at: a 64-channel
+  # grand average would otherwise bury the one channel under discussion
+  # in a wall of facets nobody reads.
+  chans <- dat %>% filter(window == "__WINDOW_R__") %>% distinct(channel) %>% pull(channel)
+  gw <- gw %>% filter(channel %in% chans)
+
+  if (nrow(gw) == 0) {
+    cat("\n*The grand-average export has no matching channels or bins for this window.*\n\n")
+  } else {
+    p <- ggplot(gw, aes(x = time_ms, y = amplitude, colour = bin, fill = bin))
+    if (is.finite(win$lo) && is.finite(win$hi)) {
+      p <- p + annotate("rect", xmin = win$lo, xmax = win$hi, ymin = -Inf, ymax = Inf,
+                        alpha = 0.12, fill = "grey30")
+    }
+    p <- p +
+      geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey60") +
+      geom_vline(xintercept = 0, linewidth = 0.3, colour = "grey60") +
+      geom_ribbon(aes(ymin = amplitude - sem, ymax = amplitude + sem),
+                  alpha = 0.18, colour = NA) +
+      geom_line(linewidth = 0.7) +
+      facet_wrap(~ channel) +
+      labs(x = "time (ms)", y = "amplitude (µV)", colour = "condition", fill = "condition") +
+      alz_theme()
+    print(p)
+    cat("\n\n")
+  }
+}
+```
+

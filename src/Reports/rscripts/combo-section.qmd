@@ -1,0 +1,84 @@
+Difference/combination bin "__COMBOLABEL_MD__" (__RECIPE_MD__). Tested against zero, not folded
+into any omnibus test over the ordinary bins above, since it is computed from those same
+bins rather than being an independent condition.
+
+```{r}
+#| label: __CHUNKLABEL__
+#| results: asis
+grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__COMBOLABEL_R__") %>% droplevels()
+__BLOCKMATCHDIAGNOSTIC__
+
+descr_list <- list()
+res_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  d <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  if (n_distinct(d$dataset) < 2) {
+    res_list[[ch]] <- tibble(Channel = ch, Test = NA_character_,
+      Note = sprintf("Skipped: only %d subject(s) have a non-missing value for this combination bin.", n_distinct(d$dataset)))
+    next
+  }
+  tag <- str_replace_all(paste("__WINDOW_R__", "__MEASURETYPE_R__", "__COMBOLABEL_R__", ch, sep = "_"), "[^A-Za-z0-9]+", "_")
+
+  descr_list[[ch]] <- d %>% summarise(M = mean(value), SD = sd(value), n = n()) %>% mutate(channel = ch, .before = 1)
+
+  # Base R's shapiro.test(), not rstatix's shapiro_test(): the latter's
+  # tidied $p column is only reliable for its GROUPED (data %>%
+  # group_by() %>% shapiro_test()) form -- called on a bare vector it can
+  # come back without a $p column at all. Base shapiro.test() has a
+  # stable list return ($statistic, $p.value); tryCatch handles the
+  # genuine edge cases it errors on outright (n < 3, zero variance). Not
+  # narrated -- used only to choose which test below to report.
+  shap <- tryCatch(shapiro.test(d$value), error = function(e) NULL)
+  use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
+
+  if (use_parametric) {
+    tt <- t.test(d$value, mu = 0)
+    eff <- tryCatch(d %>% rstatix::cohens_d(value ~ 1, mu = 0, ci = TRUE, ci.type = "bca", nboot = 200),
+                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+    bf <- bf10_ttest(x = d$value, mu = 0)
+    res <- tibble(Channel = ch, Test = "One-sample t-test", Statistic = unname(tt$statistic), df = unname(tt$parameter),
+                  p = apa_p(tt$p.value), Effect = "Cohen's d", Estimate = eff$effsize,
+                  CI_low = eff$conf.low, CI_high = eff$conf.high,
+                  BF10 = fmt_bf(bf), Evidence = bf_word(bf))
+    p_val <- tt$p.value; test_id <- "one_sample_t"
+  } else {
+    wt <- wilcox.test(d$value, mu = 0, conf.int = TRUE)
+    eff <- tryCatch(d %>% rstatix::wilcox_effsize(value ~ 1, mu = 0, ci = TRUE),
+                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
+    res <- tibble(Channel = ch, Test = "Wilcoxon signed-rank", Statistic = unname(wt$statistic), df = NA_real_,
+                  p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
+                  CI_low = eff$conf.low, CI_high = eff$conf.high)
+    p_val <- wt$p.value; test_id <- "wilcoxon_signed_rank"
+  }
+  res_list[[ch]] <- res
+
+  omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = "__COMBOLABEL_R__", role = "secondary", design = "one_sample_vs_0", test = paste0(test_id, "_test"), p = p_val,
+                                        estimate = res$Estimate, conf.low = res$CI_low, conf.high = res$CI_high))
+  }, error = function(e) {
+    res_list[[ch]] <<- tibble(Channel = ch, Test = NA_character_, Note = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+descr_all <- bind_rows(descr_list)
+if (nrow(descr_all) > 0) {
+  cat(as_raw_html(apa_gt(descr_all, "Descriptive Statistics by Channel")))
+}
+
+common_layers <- list(
+  geom_jitter(width = 0.05, colour = "grey40", alpha = 0.6),
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50"),
+  stat_summary(fun = mean, geom = "point", size = 3, colour = "#4a7fc9"),
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.1, colour = "#4a7fc9"),
+  labs(x = NULL, y = "__YLABEL__"),
+  scale_x_continuous(breaks = NULL),
+  facet_wrap(~channel),
+  alz_theme()
+)
+p <- ggplot(grp %>% filter(!is.na(value)), aes(x = 1, y = value, group = 1)) + violin_layers("#4a7fc9") + common_layers
+print(p)
+
+res_all <- bind_rows(res_list)
+if (nrow(res_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(res_all, "Test Result by Channel"))))
+  tests_used <- unique(na.omit(res_all$Test))

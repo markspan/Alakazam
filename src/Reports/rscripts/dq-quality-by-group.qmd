@@ -1,0 +1,34 @@
+
+```{r}
+#| label: quality-by-group
+#| fig-height: 4
+#| results: asis
+gsub_dat <- subj %>% filter(!is.na(group), group != "")
+if (n_distinct(gsub_dat$group) >= 2) {
+  gp <- gsub_dat %>%
+    pivot_longer(c(pct_rejected, median_baseline_sd), names_to = "metric", values_to = "value") %>%
+    mutate(metric = recode(metric, pct_rejected = "Trials rejected (%)",
+                           median_baseline_sd = "Median pre-stimulus SD (uV)")) %>%
+    ggplot(aes(x = group, y = value, colour = group)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.2) +
+    geom_jitter(width = 0.15, size = 1.5, alpha = 0.7) +
+    facet_wrap(~ metric, scales = "free_y") +
+    labs(x = NULL, y = NULL) +
+    alz_theme() + theme(legend.position = "none")
+  print(gp)
+
+  # Two groups: Wilcoxon rank-sum, for the same distributional reasons the
+  # by-bin test uses Friedman. Three or more: Kruskal-Wallis, its extension.
+  grps <- unique(gsub_dat$group)
+  if (length(grps) == 2) {
+    wt <- suppressWarnings(wilcox.test(pct_rejected ~ group, data = gsub_dat))
+    cat(sprintf("\n\nRejection rate did %sdiffer significantly between groups (Wilcoxon rank-sum, *W* = %s, *p* %s).\n\n",
+                ifelse(wt$p.value < .05, "", "not "), apa_num(wt$statistic), apa_p(wt$p.value)))
+  } else {
+    kt <- kruskal.test(pct_rejected ~ factor(group), data = gsub_dat)
+    cat(sprintf("\n\nRejection rate did %sdiffer significantly between groups (Kruskal-Wallis, $\\chi^2$(%d) = %s, *p* %s).\n\n",
+                ifelse(kt$p.value < .05, "", "not "), kt$parameter, apa_num(kt$statistic), apa_p(kt$p.value)))
+  }
+}
+```
+

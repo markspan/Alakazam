@@ -1,0 +1,19 @@
+  }
+
+  results_all <- bind_rows(results_list)
+  if (nrow(results_all) > 0) {
+    cat(as_raw_html(blank_missing(apa_gt(results_all, "Single-Trial Mixed Model (Type III, Satterthwaite), by Channel"))))
+  }
+
+  # Per-person trial distributions: the spread an average hides. Each
+  # person is one row, so an effect carried by two people with wide
+  # distributions looks different here from one shared by everybody.
+  p <- ggplot(grp %>% filter(!is.na(value)), aes(x = value, y = person_id, fill = bin)) +
+    geom_violin(alpha = 0.5, position = position_dodge(width = 0.7), linewidth = 0.2) +
+    labs(x = "__YAXIS_MDR__", y = NULL, fill = "condition") +
+    facet_wrap(~channel) +
+    alz_theme()
+  print(p)
+}
+```
+

@@ -1,0 +1,60 @@
+circ_list <- list()
+for (ch in unique(grp$channel)) {
+  tryCatch({
+  d <- grp %>% filter(channel == ch, !is.na(value)) %>% droplevels()
+  if (nrow(d) < 1) {
+    circ_list[[ch]] <- tibble(channel = ch, Note = "Skipped: no usable observations.")
+    next
+  }
+
+  # First-order circular statistics, in base R. mean_angle is the
+  # direction of the resultant vector; R_bar is its length, which is 1
+  # when every subject agrees and 0 when they are spread evenly, in
+  # which case the mean angle carries no information at all.
+  circ <- d %>% group_by(bin) %>% summarise(
+    mean_angle_rad = atan2(mean(sin(value)), mean(cos(value))),
+    R_bar = sqrt(mean(sin(value))^2 + mean(cos(value))^2),
+    n = n(), .groups = "drop") %>%
+    mutate(mean_angle_deg = mean_angle_rad * 180 / pi)
+
+  # Percentile bootstrap over subjects, on the deviation from the
+  # observed mean rather than on the angles themselves: percentiles of
+  # raw angles put the wrap inside the data whenever the mean sits near
+  # it, and return an interval running the wrong way round the circle.
+  set.seed(20260101)
+  circ_ci <- function(theta, B = 2000, level = 0.95) {
+    n <- length(theta)
+    if (n < 3) return(c(NA_real_, NA_real_, NA_real_))
+    mu <- atan2(mean(sin(theta)), mean(cos(theta)))
+    draws <- vapply(seq_len(B), function(i) {
+      s <- theta[sample.int(n, n, replace = TRUE)]
+      atan2(mean(sin(s)), mean(cos(s)))
+    }, numeric(1))
+    dev <- atan2(sin(draws - mu), cos(draws - mu))
+    q <- unname(quantile(dev, c((1 - level) / 2, 1 - (1 - level) / 2)))
+    c((mu + q) * 180 / pi, diff(q) * 180 / pi)
+  }
+  ci <- d %>% group_by(bin) %>% group_modify(~ {
+    v <- circ_ci(.x$value)
+    tibble(ci_lo_deg = v[1], ci_hi_deg = v[2], ci_width_deg = v[3])
+  }) %>% ungroup()
+  circ <- left_join(circ, ci, by = "bin")
+
+  # A width in degrees beside a mean angle is easy to skim past and is
+  # the one number that decides whether the mean angle should be
+  # quoted at all -- said explicitly as a Note rather than left for
+  # the reader to derive from ci_width_deg themselves.
+  circ <- circ %>% mutate(Note = case_when(
+    is.na(ci_width_deg) ~ "Too few observations for an interval on the mean angle.",
+    ci_width_deg > 180 ~ "Close to uniform: the mean direction should not be quoted.",
+    TRUE ~ NA_character_
+  ))
+  circ_list[[ch]] <- circ %>% mutate(channel = ch, .before = 1)
+  }, error = function(e) {
+    circ_list[[ch]] <<- tibble(channel = ch, Note = sprintf("Could not be analysed: %s", conditionMessage(e)))
+  })
+}
+
+circ_all <- bind_rows(circ_list)
+if (nrow(circ_all) > 0) {
+  cat(as_raw_html(blank_missing(apa_gt(circ_all, "Circular Descriptive Statistics by Channel"))))

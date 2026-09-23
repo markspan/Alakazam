@@ -1,0 +1,14 @@
+Auto-generated and design-aware: unlike a generic report, this one was built
+specifically for this export's own bins/windows, so each section below runs
+the test appropriate to that particular window and measure (a paired
+t-test or Wilcoxon signed-rank test for two conditions, a linear mixed
+model for three or more, a one-sample test against zero for a
+difference/combination bin), rather than
+one generic loop re-discovering the design at runtime. Edit freely: this is
+a starting point for this design rather than a final analysis of it.
+Render with: quarto render <this file>.qmd
+-->
+
+```{r}
+#| label: setup
+#| include: false
