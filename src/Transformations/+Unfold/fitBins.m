@@ -77,6 +77,20 @@ function [EEG, info] = fitBins(input, varargin)
 %                        channel: an EOG channel's range is several times the
 %                        EEG's, so scanning it marks most of the recording bad
 %                        and takes the bins' data with it.
+%     Output             'average' (the default): one waveform per bin, as
+%                        described above. 'trials': one OVERLAP-CORRECTED
+%                        TRIAL per binned event instead, in the epoched shape
+%                        DefineBins cuts (DataFormat 'EPOCHED', EEG.epoch with
+%                        each trial's .bini, bindesc.trials), so EpochView,
+%                        Average and the data-quality report take it like any
+%                        epoch node. Each trial is the recording around its
+%                        event with every other event's fitted response
+%                        subtracted (Unfold.overlapCorrectedTrials, which
+%                        also says why averaging them gives back the fitted
+%                        waveform). A trial whose window touches a stretch
+%                        the model left out, or runs off the recording, is
+%                        dropped, since nothing was subtracted there; the
+%                        count is in the provenance.
 %
 %   WHAT THE RESULT DOES NOT CARRY is a standard error of its own. Average's
 %   .stErr is the spread of the trials that went into a mean, and a
@@ -100,6 +114,8 @@ function [EEG, info] = fitBins(input, varargin)
     parsed.addParameter('ArtifactWindowMs', 2000, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('ArtifactStepMs', 100, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('Channels', [], @(v) isnumeric(v));
+    parsed.addParameter('Output', 'average', ...
+        @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'average', 'trials'})));
     parsed.parse(varargin{:});
     opts = parsed.Results;
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
@@ -177,12 +193,22 @@ function [EEG, info] = fitBins(input, varargin)
     end
     result = uf_condense(work);
 
-    [EEG, info] = package(input, plan, result, opts, excluded, srate);
+    % The waveforms are checked in both cases: a fit that produced no
+    % numbers produces no trials either, and says so the same way.
+    [waveforms, times] = fittedWaveforms(input, plan, result, opts);
+    info = modelInfo(input, plan, opts, excluded, srate);
+    if strcmpi(opts.Output, 'trials')
+        [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times);
+    else
+        EEG = package(input, plan, waveforms, times);
+    end
+    EEG = recordInfo(EEG, info, plan);
 end
 
 % ======================================================================= %
-function [EEG, info] = package(input, plan, result, opts, excluded, srate)
-%PACKAGE  The fitted betas in Average's own output shape.
+function [data, times] = fittedWaveforms(input, plan, result, opts)
+%FITTEDWAVEFORMS  One fitted waveform per bin, baseline-corrected, with the
+%   combination bins computed from them.
     times = reshape(double(result.times) * 1000, 1, []);   % uf_condense reports seconds
     nchan = size(result.beta, 1);
     nbin = numel(input.bindesc);
@@ -201,7 +227,12 @@ function [EEG, info] = package(input, plan, result, opts, excluded, srate)
     requireFiniteBetas(data, fitted, input.bindesc, opts);
     data = applyBaseline(data, fitted, times, opts.BaselineMs);
     data = resolveComboBins(data, input.bindesc);
+end
 
+function EEG = package(input, plan, data, times)
+%PACKAGE  The fitted waveforms in Average's own output shape.
+    nchan = size(data, 1);
+    nbin = size(data, 3);
     EEG = input;
     EEG.data = data;
     EEG.times = times;
@@ -213,11 +244,113 @@ function [EEG, info] = package(input, plan, result, opts, excluded, srate)
     EEG.ntrials = sum(plan.binCounts);
     EEG.stErr = zeros(size(data));      % see this file's header: there is none
     EEG.aSME = nan(nchan, nbin);
+    ordinary = find(~comboMask(input.bindesc));
     for k = 1:numel(ordinary)
         EEG.bindesc(ordinary(k)).n = plan.binCounts(k);
     end
+end
 
-    info = struct('window', opts.WindowMs, 'baseline', opts.BaselineMs, ...
+function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times)
+%PACKAGETRIALS  Overlap-corrected trials in the epoched shape DefineBins
+%   cuts: one trial per binned event (an event in two bins is one trial
+%   carrying both tags, as there), EEG.epoch with each trial's .bini, the
+%   anchor events' .epoch and latencies set as cutEpochs sets them, and
+%   bindesc.trials, so Average, EpochView and the data-quality report read it
+%   without knowing it came from a model.
+    events = unique([plan.membership{:}]);           % one trial per binned event
+    trialOf = zeros(1, numel(input.event));
+    trialOf(events) = 1:numel(events);
+    owner = trialOf(plan.eventSource);               % 0 for a neighbour-only event
+
+    npnts = size(input.data, 2);
+    bad = false(1, npnts);
+    for k = 1:size(excluded, 1)
+        span = max(1, round(excluded(k, 1))):min(npnts, round(excluded(k, 2)));
+        bad(span) = true;
+    end
+    model = struct('Xdc', work.unfold.Xdc, 'X', work.unfold.X, ...
+        'beta_dc', work.unfold.beta_dc, 'timelimits', opts.WindowMs / 1000, 'srate', srate);
+    anchors = double([input.event(events).latency]);
+    [trials, usable] = Unfold.overlapCorrectedTrials(input.data, model, owner, anchors, bad);
+
+    kept = events(usable);
+    if isempty(kept)
+        throw(MException('Alakazam:Unfold:NoTrials', '%s', sprintf([ ...
+            'None of the %d binned events has a whole window of data the model covers, so ' ...
+            'there are no overlap-corrected trials to return. A trial is dropped when its ' ...
+            '%g to %g ms window runs off the recording or touches a stretch left out of the ' ...
+            'model (artefact, or around a cut). Would you lower or switch off the artefact ' ...
+            'threshold, or ask for one waveform per bin instead?'], ...
+            numel(events), opts.WindowMs(1), opts.WindowMs(2))));
+    end
+    trials = trials(:, :, usable);
+    if ~isempty(opts.BaselineMs)
+        inWindow = times >= opts.BaselineMs(1) & times <= opts.BaselineMs(2);
+        trials = trials - mean(trials(:, inWindow, :), 2);
+    end
+
+    EEG = input;
+    EEG.data = trials;
+    EEG.pnts = numel(times);
+    EEG.trials = numel(kept);
+    EEG.times = times;
+    EEG.xmin = times(1) / 1000;
+    EEG.xmax = times(end) / 1000;
+    EEG.DataFormat = 'EPOCHED';
+    EEG.epoch = struct('event', {}, 'eventtype', {}, 'eventlatency', {}, 'bini', {});
+    for k = 1:numel(kept)
+        ei = kept(k);
+        EEG.epoch(k).event = ei;
+        EEG.epoch(k).eventtype = EEG.event(ei).type;
+        EEG.epoch(k).eventlatency = 0;
+        EEG.epoch(k).bini = EEG.event(ei).bini;
+        EEG.event(ei).epoch = k;
+    end
+    % 0 for every other event, not []: see cutEpochs for what an empty
+    % .epoch does to eeg_checkset further down the chain.
+    for ei = setdiff(1:numel(EEG.event), kept)
+        EEG.event(ei).epoch = 0;
+    end
+    EEG = rewriteEpochedEventLatencies(EEG);
+    EEG.bindesc = trialBins(EEG.bindesc, plan, kept);
+
+    info.output = 'trials';
+    info.trialCandidates = numel(events);
+    info.trials = numel(kept);
+    info.trialsDropped = numel(events) - numel(kept);
+end
+
+function bindesc = trialBins(bindesc, plan, kept)
+%TRIALBINS  Each ordinary bin's trials, and its events and reaction times cut
+%   to the ones that became trials, so the three stay aligned element by
+%   element (TransTools.BinTrials reads .trials; a sort by reaction time pairs
+%   .rt with .trials).
+    newTrial = zeros(1, max(kept));
+    newTrial(kept) = 1:numel(kept);
+    ordinary = find(~comboMask(bindesc));
+    for k = 1:numel(ordinary)
+        b = ordinary(k);
+        members = plan.membership{k};
+        members = members(ismember(members, kept));
+        rts = nan(1, numel(members));
+        if isfield(bindesc, 'events') && isfield(bindesc, 'rt') ...
+                && numel(bindesc(b).rt) == numel(bindesc(b).events)
+            [found, at] = ismember(members, bindesc(b).events);
+            rts(found) = bindesc(b).rt(at(found));
+        end
+        bindesc(b).events = members;
+        bindesc(b).rt = rts;
+        bindesc(b).n = numel(members);
+        bindesc(b).trials = newTrial(members);
+    end
+    for b = find(comboMask(bindesc))
+        bindesc(b).trials = [];
+    end
+end
+
+function info = modelInfo(input, plan, opts, excluded, srate)
+%MODELINFO  What was fitted and what was left out, for EEG.etc.alz.unfold.
+    info = struct('output', 'average', 'window', opts.WindowMs, 'baseline', opts.BaselineMs, ...
         'binLabels', {plan.binLabels}, ...
         'binTypes', {plan.binTypes}, 'binCounts', plan.binCounts, ...
         'nuisanceTypes', {plan.nuisanceTypes}, 'covariates', {plan.covariates}, ...
@@ -228,6 +361,10 @@ function [EEG, info] = package(input, plan, result, opts, excluded, srate)
         'artifact', struct('thresholdUv', opts.ArtifactThresholdUv, ...
                            'windowMs', opts.ArtifactWindowMs, 'stepMs', opts.ArtifactStepMs), ...
         'hasStandardError', false);
+end
+
+function EEG = recordInfo(EEG, info, plan)
+%RECORDINFO  The provenance on the dataset, and the model's notes in the log.
     if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc)
         EEG.etc = struct();
     end

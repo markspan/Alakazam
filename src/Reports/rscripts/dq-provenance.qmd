@@ -190,7 +190,7 @@ if (nrow(prov) == 0) {
 dec <- prov %>% filter(step == "Deconvolve")
 if (nrow(dec) > 0) {
   cat("\n\n### What each deconvolution left out\n\n")
-  cat("A deconvolved subject has no trials: its waveforms are fitted against the continuous recording, so the rejection and noise figures above do not exist for it. What it has instead is how much of the recording the model left out, as artefact or around a cut in the recording, which is the direct counterpart of a rejection rate: both say how much of the data did not contribute.\n\n")
+  cat("A subject deconvolved into one waveform per bin has no trials: its waveforms are fitted against the continuous recording, so the rejection and noise figures above do not exist for it. What it has instead is how much of the recording the model left out, as artefact or around a cut in the recording, which is the direct counterpart of a rejection rate: both say how much of the data did not contribute. A subject deconvolved into overlap-corrected trials does have trials, and is in the figures above like any other; its settings below say how many of its events the model could correct, since a trial whose window touches a stretch left out of the model is dropped.\n\n")
   fit <- dec %>% filter(item == "seconds of recording") %>%
     mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct)),
            excluded = sprintf("%.1f", n),

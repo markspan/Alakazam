@@ -29,12 +29,23 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   a setting, and a continuous dataset that already carries tags (DefineBins
 %   run with both epoch fields left blank) is used as it stands.
 %
-%   THE RESULT IS SHAPED LIKE AN AVERAGE: DataFormat "Averaged", channels x
-%   samples x bins, the same EEG.bindesc, so Measure, ScalpDistribution,
-%   GrandAverage and the reports read it without knowing it came from a
-%   regression. A dataset can carry both this and a plain Average result as
-%   sibling nodes: nothing here changes the DefineBins -> Average -> Measure
-%   chain, which is untouched and still the default path.
+%   BY DEFAULT THE RESULT IS SHAPED LIKE AN AVERAGE: DataFormat "Averaged",
+%   channels x samples x bins, the same EEG.bindesc, so Measure,
+%   ScalpDistribution, GrandAverage and the reports read it without knowing
+%   it came from a regression. A dataset can carry both this and a plain
+%   Average result as sibling nodes: nothing here changes the DefineBins ->
+%   Average -> Measure chain, which is untouched and still the default path.
+%
+%   OR IT CAN BE OVERLAP-CORRECTED TRIALS (output 'trials'): one epoch per
+%   binned event, shaped exactly like a DefineBins epoch node, each holding
+%   the recording around its event with every other event's fitted response
+%   subtracted (Unfold tutorial 7's "modelled plus residuals"). Average of
+%   those trials gives back the fitted waveforms, so this does not change
+%   the answer; what it adds is the trials themselves: an ERP image in
+%   EpochView with the overlap gone, and a data-quality report that can
+%   measure trial-to-trial noise (SME, baseline spread) for a deconvolved
+%   subject, which the averaged form cannot. Trials whose window touches a
+%   stretch left out of the model are dropped (see Unfold.fitBins).
 %
 %   COVARIATES ARE NUISANCE REGRESSORS HERE. Any numeric event field can be
 %   added to the model (Unfold.eventCovariates lists what a recording
@@ -46,11 +57,11 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   WHAT IT DOES NOT GIVE YOU. A bin is a set of events, so this inherits
 %   what bins can express: no spline (non-linear) covariate terms, no
 %   main-effect/interaction parameterisation (a 2x2 is four bins and a
-%   difference bin, not four terms), no circular covariates, and no
-%   single-trial output. A covariate's own slope is not reported either: it
-%   is fitted to get it out of the way, and reporting it would need a node
-%   shaped around predictors rather than bins. There is also no standard
-%   error: see Unfold.fitBins.
+%   difference bin, not four terms), and no circular covariates. A
+%   covariate's own slope is not reported either: it is fitted to get it out
+%   of the way, and reporting it would need a node shaped around predictors
+%   rather than bins. The averaged form has no standard error: see
+%   Unfold.fitBins.
 %
 %   Options (all set in DeconvolveDialog, stored per user by
 %   TransformSettings):
@@ -70,6 +81,8 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          default 150 uV (0 skips detection)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100
+%     output               'average' (default): one waveform per bin;
+%                          'trials': overlap-corrected trials, epoched
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Deconvolve(input)        % interactive dialog
@@ -107,7 +120,8 @@ tagged = applyBins(input, options);
     'OtherEvents', otherEventsOption(options), ...
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
-    'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100));
+    'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100), ...
+    'Output', char(string(TransTools.FieldOr(options, 'output', 'average'))));
 
 report(info);
 end
@@ -190,5 +204,13 @@ function report(info)
     fprintf('.\n');
     for k = 1:numel(info.binLabels)
         fprintf('  %-28s %4d event(s)\n', info.binLabels{k}, info.binCounts(k));
+    end
+    if isfield(info, 'output') && strcmpi(info.output, 'trials')
+        fprintf('  Returned as %d overlap-corrected trial(s)', info.trials);
+        if info.trialsDropped > 0
+            fprintf(', %d dropped (window off the recording or on a stretch left out of the model)', ...
+                info.trialsDropped);
+        end
+        fprintf('.\n');
     end
 end

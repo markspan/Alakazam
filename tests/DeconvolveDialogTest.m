@@ -83,12 +83,39 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             testCase.verifyTrue(iscell(options.otherEvents), ...
                 'None is an empty list, which Deconvolve reads as none, not as the default.');
         end
+
+        % ---- the result: waveforms or overlap-corrected trials ---------- %
+        function theResultIsOneWaveformPerBinByDefault(testCase)
+            options = testCase.runDialog(@(f) []);
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.output, 'average');
+        end
+
+        function overlapCorrectedTrialsCanBeChosen(testCase)
+            options = testCase.runDialog(@(f) choose(f, 'output', 'trials'));
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.output, 'trials');
+        end
+
+        function aStoredChoiceOfTrialsIsShownAgain(testCase)
+            options = testCase.runDialog(@(f) [], struct('output', 'trials'));
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.output, 'trials', ...
+                'OK on an unchanged dialog keeps the stored choice.');
+        end
     end
 
     methods (Access = private)
-        function [options, kinds] = runDialog(testCase, act)
+        function [options, kinds] = runDialog(testCase, act, stored)
         %RUNDIALOG  Open the dialog on a recording with a covariate and two
-        %   unbinned codes, let ACT(fig) change the ticks, press OK.
+        %   unbinned codes, seeded from STORED (default none), let ACT(fig)
+        %   change the controls, press OK.
+            if nargin < 3
+                stored = [];
+            end
             try
                 probe = uifigure('Visible', 'off');
                 delete(probe);
@@ -99,7 +126,7 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             timerObj = timer('StartDelay', 6, 'TimerFcn', @(~, ~) drive());
             cleanup = onCleanup(@() cleanupTimer(timerObj));
             start(timerObj);
-            options = DeconvolveDialog(DeconvolveDialogTest.recording(), []);
+            options = DeconvolveDialog(DeconvolveDialogTest.recording(), stored);
             clear cleanup;
 
             function drive()
@@ -170,6 +197,12 @@ end
 function untickAfterTicking(tree)
     tick(tree, 'rt');
     untickAll(tree);
+end
+
+function choose(f, tag, value)
+%CHOOSE  Set the dropdown tagged TAG to the item whose data is VALUE.
+    dropdown = findall(f, 'Type', 'uidropdown', 'Tag', tag);
+    dropdown(1).Value = value;
 end
 
 function cleanupTimer(t)

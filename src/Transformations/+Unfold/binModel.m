@@ -51,9 +51,12 @@ function plan = binModel(EEG, varargin)
 %   waveforms are not identified apart and the reader has to know.
 %
 %   PLAN fields: .binLabels, .binTypes, .binIndex, .binCounts (per ordinary
-%   bin, in bindesc order), .comboBins (indices of combination bins, computed
+%   bin, in bindesc order), .membership (per ordinary bin, the rows of
+%   EEG.event it holds), .comboBins (indices of combination bins, computed
 %   after the fit), .eventTypes and .formulas (what uf_designmat is given),
-%   .nuisanceTypes, .events (the rewritten event list) and .notes.
+%   .nuisanceTypes, .events (the rewritten event list), .eventSource (for
+%   each row of .events, the row of EEG.event it was made from, which is how
+%   an event in two bins is still known to be one trial) and .notes.
 %
 %   THE FORMULAS ARE THE SEAM FOR COVARIATES. Every formula here is 'y ~ 1'
 %   because a bin carries no covariate, but a later extension that wants
@@ -88,9 +91,10 @@ function plan = binModel(EEG, varargin)
     plan.notes = {};
 
     membership = binMembership(EEG, plan.binIndex);
+    plan.membership = membership;
     plan.binCounts = cellfun(@numel, membership);
 
-    [plan.events, plan.nuisanceTypes, plan.unbinnedCodes, otherNotes] = ...
+    [plan.events, plan.nuisanceTypes, plan.unbinnedCodes, otherNotes, plan.eventSource] = ...
         rewriteEvents(EEG, membership, plan.binTypes, otherCodes);
     plan.notes = [plan.notes, otherNotes];
 
@@ -299,7 +303,7 @@ function codes = resolveOtherEvents(parsed)
     end
 end
 
-function [events, nuisanceTypes, unbinned, notes] = rewriteEvents(EEG, membership, binTypes, otherCodes)
+function [events, nuisanceTypes, unbinned, notes, source] = rewriteEvents(EEG, membership, binTypes, otherCodes)
 %REWRITEEVENTS  The event list in the model's own terms.
 %   One row per (event, bin) pair, plus one row per unbinned event whose code
 %   was chosen for modelling. Only .latency and .type are kept: they are what
@@ -318,12 +322,16 @@ function [events, nuisanceTypes, unbinned, notes] = rewriteEvents(EEG, membershi
 %   excepted), with its count and whether it was modelled, in order of first
 %   appearance; NOTES name the codes left out and any code that was asked for
 %   but does not occur here, which is what a replay onto another recording
-%   runs into.
+%   runs into. SOURCE gives, for each row of EVENTS, the row of EEG.event it
+%   came from; it is kept beside the list rather than in it for the reason
+%   above.
     events = struct('latency', {}, 'type', {});
+    source = zeros(1, 0);
     for b = 1:numel(membership)
         for k = reshape(membership{b}, 1, [])
             events(end + 1) = struct('latency', EEG.event(k).latency, ...
                 'type', binTypes{b}); %#ok<AGROW>
+            source(end + 1) = k; %#ok<AGROW>
         end
     end
 
@@ -353,6 +361,7 @@ function [events, nuisanceTypes, unbinned, notes] = rewriteEvents(EEG, membershi
         if any(hit)
             events(end + 1) = struct('latency', EEG.event(others(k)).latency, ...
                 'type', nuisanceTypes{hit}); %#ok<AGROW>
+            source(end + 1) = others(k); %#ok<AGROW>
         end
     end
 
@@ -375,6 +384,7 @@ function [events, nuisanceTypes, unbinned, notes] = rewriteEvents(EEG, membershi
     if ~isempty(events)
         [~, order] = sort([events.latency]);
         events = events(order);
+        source = source(order);
     end
 end
 

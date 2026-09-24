@@ -75,7 +75,7 @@ function options = DeconvolveDialog(EEG, stored)
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([120 120 660 620]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Deconvolve: one waveform per bin, overlap removed', 'FontSize', 14, ...
+    uilabel(root, 'Text', '  Deconvolve: overlapping responses separated', 'FontSize', 14, ...
         'FontWeight', 'bold', 'FontColor', [1 1 1], 'BackgroundColor', accentColor, ...
         'VerticalAlignment', 'center');
     outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 'fit', 44});
@@ -83,16 +83,17 @@ function options = DeconvolveDialog(EEG, stored)
     uilabel(outer, 'WordWrap', 'on', 'Text', [ ...
         'Fits every bin at once against the whole continuous recording, so where two events are ' ...
         'close enough for their responses to overlap, each bin keeps its own and gives up the ' ...
-        'other''s. The result is one waveform per bin, in the same shape Average produces, so ' ...
-        'Measure and the rest read it unchanged.']);
+        'other''s. The result is either one waveform per bin, in the shape Average produces, or ' ...
+        'one overlap-corrected trial per event, in the shape DefineBins cuts, so the rest of ' ...
+        'Alakazam reads either unchanged.']);
 
     binsRow = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 130}, 'Padding', [0 4 0 4]);
     binsLabel = uilabel(binsRow, 'WordWrap', 'on', 'Text', '');
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [4 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 4), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [5 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 5), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1));
     uilabel(settings, 'Text', 'Artefact threshold (uV, 0 = off):');
@@ -120,6 +121,22 @@ function options = DeconvolveDialog(EEG, stored)
     baselineBox.Layout.Row = 4;
     baselineBox.Layout.Column = [3 4];
     onBaselineToggled();
+
+    % What comes out. The waveforms are the same either way (Average of the
+    % trials gives them back); the trials are for looking at them one by one
+    % and for the noise figures only trials can give.
+    outputLabel = uilabel(settings, 'Text', 'Result:');
+    outputLabel.Layout.Row = 5;
+    outputLabel.Layout.Column = 1;
+    outputDropdown = uidropdown(settings, 'Tag', 'output', ...
+        'Items', {'One waveform per bin (as Average gives)', ...
+                  'Overlap-corrected trials (as DefineBins cuts)'}, ...
+        'ItemsData', {'average', 'trials'}, 'Value', outputSeed(seed.output), ...
+        'Tooltip', ['Trials hold each event''s recording with every other event''s fitted ' ...
+         'response subtracted. Run Average on them for the waveforms, and EpochView shows ' ...
+         'them as an ERP image without the overlap.']);
+    outputDropdown.Layout.Row = 5;
+    outputDropdown.Layout.Column = [2 4];
 
     % The model preview and the covariate picker share the stretchy row: the
     % picker is only meaningful next to the model it changes, since what a
@@ -402,7 +419,8 @@ function options = DeconvolveDialog(EEG, stored)
             'otherEvents', {otherSelection}, ...
             'artifactThresholdUv', thresholdField.Value, ...
             'artifactWindowMs', artWindowField.Value, ...
-            'artifactStepMs', artStepField.Value);
+            'artifactStepMs', artStepField.Value, ...
+            'output', outputDropdown.Value);
         if candidate.windowMs(1) >= candidate.windowMs(2)
             uialert(fig, 'Would the window start come before its stop?', 'Check the window');
             return;
@@ -507,5 +525,15 @@ function seed = defaults()
 %   out quietly weakens the correction the transformation exists for.
     seed = struct('binScript', '', 'covariates', {{}}, 'windowMs', [-200 800], ...
         'artifactThresholdUv', 150, ...
-        'artifactWindowMs', 2000, 'artifactStepMs', 100);
+        'artifactWindowMs', 2000, 'artifactStepMs', 100, 'output', 'average');
+end
+
+function value = outputSeed(stored)
+%OUTPUTSEED  A stored output choice the dropdown can show: anything but
+%   'trials' (a hand-edited template, say) falls back to the waveforms, which
+%   is what Deconvolve itself does with it.
+    value = 'average';
+    if strcmpi(char(string(stored)), 'trials')
+        value = 'trials';
+    end
 end

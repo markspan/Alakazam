@@ -476,6 +476,11 @@ function rows = provenanceRows(EEG, nChan, nTrials)
         rows(end + 1) = eye;
     end
 
+    % Overlap-corrected trials come from a model fitted to the continuous
+    % recording, and what that model left out is as much a part of these
+    % trials' history as any rejection after them.
+    rows = [rows, deconvolutionRows(EEG, blankProvenanceRow('', '', NaN, NaN), nChan)];
+
     % --- rejection: which detector cost which trials ------------------- %
     if isfield(alz, 'artefactDetectors')
         d = alz.artefactDetectors;

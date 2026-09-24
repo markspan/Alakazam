@@ -78,68 +78,28 @@ function q = deconvolutionQuality(averaged)
         'method', {}, 'sme_uv', {}, 'score', {});
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
-    q.provenance = provenance(info, nChan);
+    template = blankRow(emptyProvenance(), '', '', NaN, NaN);
+    q.provenance = deconvolutionRows(averaged, template, nChan);
     % A deconvolution often follows an eye-track join (fixation-related
     % potentials are what it is most used for), and that join's quality is
     % as much a fact about this subject's data as what the fit excluded.
-    eye = eyeTrackingRow(averaged, blankRow(q.provenance, '', '', NaN, NaN));
+    eye = eyeTrackingRow(averaged, template);
     if ~isempty(eye)
         q.provenance = [eye, q.provenance];
     end
 end
 
 % ======================================================================= %
-function rows = provenance(info, nChan)
-%PROVENANCE  What the deconvolution did, in the provenance table's columns:
-%   how much of the recording it left out, at what threshold, and anything
-%   the model had to say about itself.
+function rows = emptyProvenance()
+%EMPTYPROVENANCE  The provenance table's columns, as an empty struct array.
+%   The rows themselves come from deconvolutionRows, which the epoched path
+%   (overlap-corrected trials) shares.
     rows = struct('step', {}, 'item', {}, 'n', {}, 'n_total', {}, 'pct', {}, ...
         'n_unique', {}, 'channel_epochs', {}, 'channels_tested', {}, 'scope', {}, ...
         'threshold', {}, 'components', {}, 'n_samples_rejected', {}, 'n_samples', {}, ...
         'sensai', {}, 'enova_epoch_max', {}, 'enova_epoch_median', {}, ...
         'enova_channel_max', {}, 'n_excluded', {}, 'pct_within_one', {}, ...
         'mean_offset_ms', {}, 'detail', {});
-    if isempty(info)
-        return;
-    end
-
-    seconds = fieldOrNaN(info, 'excludedSeconds');
-    total = fieldOrNaN(info, 'recordingSeconds');
-    row = blankRow(rows, 'Deconvolve', 'seconds of recording', seconds, total);
-    row.threshold = fieldOrNaN(info, 'artifact', 'thresholdUv');
-    row.channels_tested = nChan;
-    row.n_samples_rejected = round(seconds * 1000);
-    row.n_samples = round(total * 1000);
-    row.scope = 'excluded from the model, not cut from the data';
-    row.detail = windowDetail(info);
-    rows(end + 1) = row;
-
-    notes = {};
-    if isfield(info, 'notes'); notes = info.notes; end
-    for k = 1:numel(notes)
-        note = blankRow(rows, 'Deconvolve', 'model note', NaN, NaN);
-        note.detail = notes{k};
-        rows(end + 1) = note; %#ok<AGROW>
-    end
-end
-
-function text = windowDetail(info)
-%WINDOWDETAIL  The settings a reader needs to interpret the waveforms.
-    window = fieldOr(info, 'window', []);
-    baseline = fieldOr(info, 'baseline', []);
-    parts = {};
-    if numel(window) == 2
-        parts{end + 1} = sprintf('response window %g to %g ms', window(1), window(2));
-    end
-    if numel(baseline) == 2
-        parts{end + 1} = sprintf('baseline %g to %g ms', baseline(1), baseline(2));
-    else
-        parts{end + 1} = 'not baseline-corrected';
-    end
-    nuisance = fieldOr(info, 'nuisanceTypes', {});
-    parts{end + 1} = sprintf('%d nuisance event type(s) modelled and dropped', numel(nuisance));
-    parts{end + 1} = 'no SME: a regression coefficient has no trials to spread';
-    text = strjoin(parts, '; ');
 end
 
 function row = blankRow(template, step, item, n, nTotal)
@@ -194,26 +154,5 @@ function labels = channelLabels(EEG)
         labels = cellstr(string({EEG.chanlocs.labels}));
     else
         labels = arrayfun(@(k) sprintf('ch%d', k), 1:size(EEG.data, 1), 'UniformOutput', false);
-    end
-end
-
-function value = fieldOr(s, name, default)
-    value = default;
-    if isstruct(s) && isfield(s, name)
-        value = s.(name);
-    end
-end
-
-function value = fieldOrNaN(s, varargin)
-    value = s;
-    for k = 1:numel(varargin)
-        if ~isstruct(value) || ~isfield(value, varargin{k})
-            value = NaN;
-            return;
-        end
-        value = value.(varargin{k});
-    end
-    if isempty(value) || ~isnumeric(value)
-        value = NaN;
     end
 end
