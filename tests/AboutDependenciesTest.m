@@ -78,6 +78,73 @@ classdef AboutDependenciesTest < matlab.unittest.TestCase
             end
         end
 
+        function everyToolkitInDependenciesMdIsCredited(testCase)
+        %EVERYTOOLKITINDEPENDENCIESMDISCREDITED  The drift check in the
+        %   other direction. Only the one above existed, which is how Unfold
+        %   and EYE-EEG came to be documented in dependencies.md and missing
+        %   from the About box: a toolkit added to the document and forgotten
+        %   in the credits passed every test.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            doc = splitlines(fileread(fullfile(root, 'dependencies.md')));
+            first = find(startsWith(doc, '## Core analysis toolkits'), 1);
+            testCase.assertNotEmpty(first, 'dependencies.md has no core-toolkit table.');
+            last = first + find(startsWith(doc(first + 1:end), '## '), 1);
+
+            credited = {alakazamDependencies().name};
+            for k = first + 1:last - 1
+                cells = strsplit(doc{k}, '|');
+                if numel(cells) < 3 || contains(doc{k}, '---') || strcmp(strtrim(cells{2}), 'Toolkit')
+                    continue;
+                end
+                for name = strtrim(strsplit(cells{2}, ','))
+                    testCase.verifyTrue(ismember(name{1}, credited), sprintf( ...
+                        ['"%s" is in dependencies.md but not credited in the About box; ' ...
+                         'the two lists have drifted.'], name{1}));
+                end
+            end
+        end
+
+        % ---- the papers ---------------------------------------------------
+        function everyPaperIsCompleteAndCitedInTheReadme(testCase)
+        %EVERYPAPERISCOMPLETEANDCITEDINTHEREADME  The About box and the
+        %   README must name the same papers; a DOI is the unambiguous key.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            readme = fileread(fullfile(root, 'README.MD'));
+
+            refs = alakazamReferences();
+            testCase.assertNotEmpty(refs);
+            for i = 1:numel(refs)
+                r = refs(i);
+                for field = {'authors', 'title', 'source', 'doi', 'usedFor'}
+                    testCase.verifyNotEmpty(strtrim(r.(field{1})), ...
+                        sprintf('Reference %d has an empty %s.', i, field{1}));
+                end
+                testCase.verifyFalse(startsWith(r.doi, 'http'), 'A DOI is stored bare.');
+                testCase.verifySubstring(readme, r.doi, sprintf( ...
+                    '%s (%d) is in the About box but not in README.MD''s References.', ...
+                    r.authors, r.year));
+            end
+        end
+
+        function theNewMethodsHaveTheirPapers(testCase)
+        %THENEWMETHODSHAVETHEIRPAPERS  RESS, Deconvolve and EyeTracking each
+        %   rest on a paper a user has to be able to find.
+            dois = {alakazamReferences().doi};
+            for doi = {'10.1016/j.neuroimage.2016.11.036', '10.7717/peerj.7838', ...
+                    '10.1167/jov.21.1.3', '10.1037/a0023885'}
+                testCase.verifyTrue(ismember(doi{1}, dois), sprintf('%s is not cited.', doi{1}));
+            end
+        end
+
+        function theAboutPageListsEveryPaper(testCase)
+            html = aboutPageHtml(alakazamVersion(), '');
+
+            testCase.verifySubstring(html, 'Papers to cite');
+            for r = alakazamReferences()
+                testCase.verifySubstring(html, ['https://doi.org/' r.doi]);
+            end
+        end
+
         % ---- the rendered page ------------------------------------------
         function theAboutPageListsEveryDependency(testCase)
             html = aboutPageHtml(alakazamVersion(), '');

@@ -521,6 +521,7 @@ The current library:
 | `ChannelEditor` | Edit channel labels, types and X/Y/Z coordinates in a table; look up positions from a chosen electrode template by label (Standard 10-5 by default, or any montage file dropped into [`src/Electrodes/`](src/Electrodes/README.md), e.g. an equidistant cap whose labels carry no anatomy at all); or load a montage file directly. Only the channel geometry changes -- this is what scalp maps, interpolation, ICA and montage-based references depend on. |
 | `EventEditor` | Corrects the event table: rename or drop trigger codes, retain a subset, shift latencies in milliseconds, or edit a single event. Records the operations rather than the resulting table, so replaying it on another dataset applies the same corrections to that dataset's own events. |
 | `Photodiode` | Measures display delay from a photodiode channel: pairs each light onset with the preceding trigger and reports the lag (median, IQR, range), which can then be corrected with `EventEditor`'s latency shift. Alternatively imports the onsets as events, as EEGLAB's `pop_chanevent` does. Onsets are reported only where the channel is demonstrably bimodal, so that a recording without presented patches returns none rather than responding to mains flicker. |
+| `EyeTracking` | Joins the EyeLink recording of the same session onto the continuous EEG, through EYE-EEG (Dimigen et al., 2011): the `.asc` file with the recording's own base name, beside it (`subject1.set` goes with `subject1.asc`; an `.edf` is converted automatically when SR Research's `edf2asc` is installed). The two clocks are lined up through the triggers both received, and the gaze and pupil signals are added as `EYE` channels, which nothing treats as scalp EEG, with the tracker's own saccades, fixations and blinks as events. A join whose synchronisation is poor (too few shared triggers, or too few within one sample of their partner) is refused rather than made, and its quality is reported in the data-quality report. Shown in the ribbon as "Eye tracking". |
 | `ReRef` | Re-references the data (wraps `pop_reref`). |
 | `RESS` | Rhythmic entrainment source separation (Cohen & Gulbinaite, 2017): for each stimulation frequency, adds one channel (e.g. `RESS60Hz`) combining the scalp channels with the weights that carry the most power at that frequency relative to the frequencies beside it, instead of choosing electrodes by where the response looks strongest. Each filter is built from the pooled trials of chosen bins and applied to every trial; the spectral report shows each component in the bins it was not built from as its null. Needs epoched data with bins. See [Frequency analysis](#frequency-analysis-frequency-tagging--rift). |
 | `SelectData` | Channel and/or time-range selection (wraps `pop_select`). |
@@ -530,6 +531,7 @@ The current library:
 | `DeriveChannels` | Adds channels computed from existing ones with `let <name> = <expression>` statements (e.g. `let LRP = C3 - C4`) -- the channel-arithmetic counterpart to `DefineBins`' bin arithmetic. Runs on continuous, epoched or averaged data alike; derived channels carry no scalp position, so they appear on ERP plots and in grand averages but are dropped from scalp maps. Shown in the ribbon as "Derive Channels". |
 | `Baseline` | Baseline-corrects epoched data. |
 | `Average` | Averages one dataset's epoched trials into an ERP, including bin-difference/interaction contrast bins (see `bin_language.md` §11-12). |
+| `Deconvolve` | The alternative to epoch-and-average where responses overlap (reading, free viewing, fast presentation): fits one waveform per bin against the whole continuous recording with the Unfold toolbox (Ehinger & Dimigen, 2019; Dimigen & Ehinger, 2021), so a response that overlaps the next event's is separated from it rather than averaged together with it. Bins are written in `DefineBins`' own language; event codes in no bin can be modelled as nuisance and dropped, and numeric event fields added as mean-centred covariates. The result has Average's shape, so everything downstream reads it unchanged. Runs on continuous data without a DC offset. |
 | `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold, or a step, peak-to-peak or sample-to-sample criterion. What happens to a flagged cell is chosen separately: reject the whole epoch, mark that channel only, or interpolate that channel from its neighbours. **Channels to test** defaults to all channels, which is what makes a blink on VEOG reject the trial; set it to scalp EEG only where an eye or heart channel should not be tested against a threshold chosen for the scalp. A channel with no scalp position is never interpolated, since a spherical spline cannot place it. Which detector tripped on which epoch is recorded at compute time, so a branch's right-click **Rejection breakdown...** and the data-quality report can both show what each detector would reject on its own and how many epochs no other detector also caught. |
 | `ManualReject` | The manual counterpart of `ArtefactDetect`: browse one trial at a time and click a channel to flag it faulty, with the same Whole-epoch / This-channel-only scope and, for a single channel, the choice to leave it NaN or reconstruct it from its neighbours. Not recalculable, since the flagged cells are specific to one dataset's own trial count and order. |
 | `RemoveComponents` | Manually subtracts ICA components chosen by hand, from a sortable table showing each component's ICLabel-assigned class and confidence ("Eye 88%") alongside its full per-class probabilities and, where available, its dipole residual variance. Shown in the ribbon as "ICA". |
@@ -2647,14 +2649,47 @@ Scientific/methodological:
   cross-coherence read-out `SpectralMeasure` implements: magnitude-squared
   coherence between a photodiode and each EEG channel, from trial-wise cross-
   spectra normalised by the trial-averaged autospectra.
+- Cohen, M. X., & Gulbinaite, R. (2017). Rhythmic entrainment source
+  separation: Optimizing analyses of neural responses to rhythmic sensory
+  stimulation. *NeuroImage*, 147, 43-56. DOI:
+  [10.1016/j.neuroimage.2016.11.036](https://doi.org/10.1016/j.neuroimage.2016.11.036).
+  The method the `RESS` transformation implements, checked against the
+  authors' own code: one spatial filter per stimulation frequency, the
+  channel weights that carry the most power at that frequency relative to the
+  frequencies beside it.
+- Ehinger, B. V., & Dimigen, O. (2019). Unfold: An integrated toolbox for
+  overlap correction, non-linear modeling, and regression-based EEG analysis.
+  *PeerJ*, 7, e7838. DOI:
+  [10.7717/peerj.7838](https://doi.org/10.7717/peerj.7838).
+  [github.com/unfoldtoolbox/unfold](https://github.com/unfoldtoolbox/unfold).
+  The toolbox `Deconvolve` runs: one waveform per bin, fitted against the
+  whole continuous recording so that overlapping responses are separated
+  rather than averaged together.
+- Dimigen, O., & Ehinger, B. V. (2021). Regression-based analysis of combined
+  EEG and eye-tracking data: Theory and applications. *Journal of Vision*,
+  21(1), 3. DOI:
+  [10.1167/jov.21.1.3](https://doi.org/10.1167/jov.21.1.3).
+  Why deconvolution matters for fixation-related potentials, where every
+  fixation's response overlaps the next one's, and the practice `Deconvolve`
+  follows on eye-movement data.
+- Dimigen, O., Sommer, W., Hohlfeld, A., Jacobs, A. M., & Kliegl, R. (2011).
+  Coregistration of eye movements and EEG in natural reading: Analyses and
+  review. *Journal of Experimental Psychology: General*, 140(4), 552-572. DOI:
+  [10.1037/a0023885](https://doi.org/10.1037/a0023885). The paper to cite for
+  EYE-EEG,
+  [github.com/olafdimigen/eye-eeg](https://github.com/olafdimigen/eye-eeg),
+  the toolbox the `EyeTracking` transformation uses to read an EyeLink
+  recording, line its clock up with the EEG's through the shared triggers and
+  add its gaze, pupil and eye-movement events to the dataset.
 - Ros, T., et al. (2025). GEDAI: generalized eigenvalue decomposition for
   automated EEG artefact removal.
   [github.com/neurotuning/GEDAI-master](https://github.com/neurotuning/GEDAI-master).
   Used by the `AutoGEDAI` transformation.
 - Pion-Tonachini, L., Kreutz-Delgado, K., & Makeig, S. (2019). ICLabel: An
   automated electroencephalographic independent component classifier,
-  dataset, and website. *NeuroImage*, 198, 181-197. Used by `AutoEyeICA` to
-  classify and remove eye components.
+  dataset, and website. *NeuroImage*, 198, 181-197. DOI:
+  [10.1016/j.neuroimage.2019.05.026](https://doi.org/10.1016/j.neuroimage.2019.05.026).
+  Used by `AutoEyeICA` to classify and remove eye components.
 - Hyvärinen, A., & Oja, E. (2000). Independent component analysis:
   algorithms and applications. *Neural Networks*, 13(4-5), 411-430. FastICA,
   [research.ics.aalto.fi/ica/fastica](https://research.ics.aalto.fi/ica/fastica/).
@@ -2794,8 +2829,10 @@ Scientific/methodological:
   misreading both cluster reports open by warning against: a cluster
   establishes that an effect exists, not where or when it begins and ends.
 - Delorme, A., & Makeig, S. (2004). EEGLAB: an open source toolbox for
-  analysis of single-trial EEG dynamics. *Journal of Neuroscience Methods*,
-  134(1), 9-21. [sccn.ucsd.edu/eeglab](https://sccn.ucsd.edu/eeglab/index.php).
+  analysis of single-trial EEG dynamics including independent component
+  analysis. *Journal of Neuroscience Methods*, 134(1), 9-21. DOI:
+  [10.1016/j.jneumeth.2003.10.009](https://doi.org/10.1016/j.jneumeth.2003.10.009).
+  [sccn.ucsd.edu/eeglab](https://sccn.ucsd.edu/eeglab/index.php).
   The data structure and plugin ecosystem (including the bva-io BrainVision
   import plugin and ICLabel above) Alakazam is built on.
 - BrainVision Analyzer, the commercial analyser whose interaction model
