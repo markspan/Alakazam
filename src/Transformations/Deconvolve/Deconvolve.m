@@ -66,7 +66,7 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          'all' (default), a list of codes, or empty for
 %                          none; the older modelOtherEvents true/false is
 %                          still read when otherEvents is absent
-%     artifactThresholdUv  absolute voltage limit (+/-), not peak-to-peak,
+%     artifactThresholdUv  peak-to-peak limit within the moving window,
 %                          default 150 uV (0 skips detection)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100

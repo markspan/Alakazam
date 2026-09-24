@@ -102,6 +102,27 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
                 'The report says which bins the covariate was left out of.');
         end
 
+        function aCovariateThatNeverVariesWithinATypeIsLeftOut(testCase)
+        %ACOVARIATETHATNEVERVARIESWITHINATYPEISLEFTOUT  EYE-EEG fills every
+        %   field that does not apply with 0: each fixation carries
+        %   sac_amplitude = 0. Taken as values, that entered saccade
+        %   amplitude into the fixation model as a constant, which cannot be
+        %   told apart from the fixations' own waveform and lets the solver
+        %   split it arbitrarily. A type gets a covariate only where it varies.
+            EEG = UnfoldCovariatesTest.recording();
+            for k = 1:numel(EEG.event)
+                if strcmp(EEG.event(k).type, 'S2')
+                    EEG.event(k).rt = 0;      % present, and the same everywhere
+                end
+            end
+
+            plan = Unfold.binModel(EEG, 'Covariates', {'rt'});
+
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Rare')}, 'y ~ 1');
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Frequent')}, 'y ~ 1 + rt');
+            testCase.verifyTrue(any(contains(plan.notes, 'all carry the same')));
+        end
+
         function anAbsentFieldIsNotedRatherThanThrown(testCase)
             EEG = UnfoldCovariatesTest.recording();
 

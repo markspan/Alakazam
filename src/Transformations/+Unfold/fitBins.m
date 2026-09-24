@@ -63,10 +63,15 @@ function [EEG, info] = fitBins(input, varargin)
 %                        either way, since a window spanning one is fitted
 %                        across a join between moments that were never
 %                        adjacent.
-%                        The threshold is an ABSOLUTE limit (ERPLAB's crap.m,
-%                        which this is: [-lim +lim] is marked), not a
-%                        peak-to-peak range, so it is only meaningful on data
-%                        that sits around zero.
+%                        The threshold is PEAK-TO-PEAK within each moving
+%                        window: uf_continuousArtifactDetect hands it to
+%                        ERPLAB's basicrap without a threshold type, whose
+%                        default is 'peak-to-peak'. Its own header says
+%                        "[-lim +lim] is marked", which reads like an
+%                        absolute limit and is not what the code does
+%                        (checked in basicrap.m, unfold 1.3.1). So a standing
+%                        offset does not trip it; drifts, blinks and, in
+%                        free viewing, eye movements within a window do.
 %     Channels           which channels the artifact scan looks at. The
 %                        default is the scalp EEG (eegChannelMask), not every
 %                        channel: an EOG channel's range is several times the
@@ -374,21 +379,23 @@ end
 
 function requireEnoughDataLeft(excluded, npnts, opts, nchannels)
 %REQUIREENOUGHDATALEFT  Refuse when the artefact scan has taken most of the
-%   recording. The threshold is an absolute limit, so on data with an offset
-%   or a heavy drift it marks nearly everything, and the fit that follows is
-%   a slow way of producing NaN.
+%   recording. The threshold is peak-to-peak within a window that is marked
+%   whole, so frequent large swings (a drift, blinks, or the eye movements a
+%   reading or free-viewing task is made of) can mark nearly everything, and
+%   the fit that follows is a slow way of producing NaN.
     marked = sum(diff(excluded, 1, 2));
     fraction = marked / max(npnts, 1);
     if fraction <= 0.5
         return;
     end
     throw(MException('Alakazam:Unfold:TooMuchExcluded', '%s', sprintf([ ...
-        'The artefact scan marked %.0f%% of this recording as bad (%d segments, at a ' ...
-        '+/-%g uV limit over %d channel(s)), which leaves too little for the model to be ' ...
-        'fitted against. That threshold is an absolute limit on the voltage, not a ' ...
-        'peak-to-peak range, so a recording with a standing offset or a heavy drift trips ' ...
-        'it everywhere. Would you either detrend or high-pass the data first, raise the ' ...
-        'threshold, or set it to 0 to leave artefact rejection out of this step?'], ...
+        'The artefact scan marked %.0f%% of this recording as bad (%d segments, at %g uV ' ...
+        'peak-to-peak over %d channel(s)), which leaves too little for the model to be ' ...
+        'fitted against. The limit is peak-to-peak within each moving window, and the ' ...
+        'whole window is marked, so frequent large swings (a drift, blinks, or the eye ' ...
+        'movements a reading or free-viewing task consists of) trip it almost everywhere. ' ...
+        'Would you either high-pass or detrend the data first, raise the threshold, or set ' ...
+        'it to 0 to leave artefact rejection out of this step?'], ...
         100 * fraction, size(excluded, 1), opts.ArtifactThresholdUv, nchannels)));
 end
 

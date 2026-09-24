@@ -159,8 +159,8 @@ function [events, formulas, applied, notes] = addCovariates(events, formulas, ev
         values = covariateValues(events, EEG, name);
         usableTypes = typesWithEveryValue(types, values, eventTypes);
         if isempty(usableTypes)
-            notes{end + 1} = sprintf(['No event type has "%s" on every one of its events, so ' ...
-                'it could not be used as a covariate anywhere in this model.'], name); %#ok<AGROW>
+            notes{end + 1} = sprintf(['No event type has "%s" varying across all of its events, ' ...
+                'so it could not be used as a covariate anywhere in this model.'], name); %#ok<AGROW>
             continue;
         end
 
@@ -182,7 +182,8 @@ function [events, formulas, applied, notes] = addCovariates(events, formulas, ev
         missing = setdiff(eventTypes, usableTypes, 'stable');
         if ~isempty(missing)
             notes{end + 1} = sprintf(['The covariate "%s" was fitted for %s, but not for %s, ' ...
-                'whose events do not all carry a value for it.'], name, ...
+                'whose events either do not all carry a value for it or all carry the same ' ...
+                'one, which cannot be told apart from their own waveform.'], name, ...
                 listOf(usableTypes), listOf(missing)); %#ok<AGROW>
         end
     end
@@ -215,11 +216,24 @@ function values = covariateValues(events, EEG, name)
 end
 
 function usable = typesWithEveryValue(types, values, eventTypes)
-%TYPESWITHEVERYVALUE  The event types whose every event has a finite value.
+%TYPESWITHEVERYVALUE  The event types a covariate can be fitted for: every
+%   event of the type has a finite value, AND the values differ.
+%
+%   THE SECOND CONDITION IS NOT A NICETY. A covariate that is the same on
+%   every event of a type is, after centring, a constant column beside that
+%   type's own intercept: the two cannot be told apart, and the solver splits
+%   the type's response between them arbitrarily, so the waveform reported
+%   for the bin is no longer its response. It happens in practice because
+%   EYE-EEG fills every event field that does not apply with 0 rather than
+%   leaving it empty: each fixation carries sac_amplitude = 0, each saccade
+%   fix_avgpos_x = 0. Those zeros look like values, and taking them as values
+%   would have entered saccade amplitude into the fixation model as a
+%   constant.
     usable = {};
     for t = 1:numel(eventTypes)
         rows = strcmp(types, eventTypes{t});
-        if any(rows) && all(isfinite(values(rows)))
+        typeValues = values(rows);
+        if any(rows) && all(isfinite(typeValues)) && any(typeValues ~= typeValues(1))
             usable{end + 1} = eventTypes{t}; %#ok<AGROW>
         end
     end

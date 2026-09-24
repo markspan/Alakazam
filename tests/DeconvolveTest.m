@@ -225,7 +225,7 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             end
 
             testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:TooMuchExcluded');
-            testCase.verifySubstring(err.message, 'absolute limit');
+            testCase.verifySubstring(err.message, 'peak-to-peak within each moving window');
         end
 
         function aCutInTheRecordingIsNotModelledAcross(testCase)
