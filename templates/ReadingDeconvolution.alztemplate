@@ -1,0 +1,48 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "Reading: fixation-related potentials, deconvolved",
+  "nodes": [
+    {
+      "transformId": "EyeTracking",
+      "params": {
+        "keyword": "MYKEYWORD",
+        "startEvent": 3,
+        "endEvent": 3,
+        "columns": "all",
+        "importEyeEvents": true,
+        "searchRadius": 4,
+        "filterEyetrack": false,
+        "minSharedEvents": 10,
+        "minPctWithinOne": 90
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "Deconvolve",
+      "params": {
+        "binScript": "% Fixation-related potentials in natural reading (EYE-EEG test data 3), deconvolved.\n% Fixation onsets only: a saccade and the fixation it lands on are about 25 ms\n% apart with little variation, too close to be told apart as two responses, so\n% the saccade's own potentials stay part of the fixation-related potential, as\n% in classic FRP work. One eye only, the right: EyeLink logs each eye's events\n% separately, and modelling both would enter every fixation twice.\nbin 1 \"Fixation\" \"R_fixation\"",
+        "covariates": [],
+        "windowMs": [
+          -200,
+          800
+        ],
+        "baselineMs": [
+          -200,
+          0
+        ],
+        "otherEvents": [
+          "R_blink",
+          "3",
+          "10",
+          "250",
+          "255"
+        ],
+        "artifactThresholdUv": 0,
+        "artifactWindowMs": 2000,
+        "artifactStepMs": 100
+      },
+      "parent": 1
+    }
+  ]
+}
