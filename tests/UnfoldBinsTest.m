@@ -74,6 +74,66 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
                 'A boundary marks an edit in the recording, not a response to model.');
         end
 
+        function everyUnbinnedCodeIsListedWithItsCount(testCase)
+        %EVERYUNBINNEDCODEISLISTEDWITHITSCOUNT  What the dialog shows the user
+        %   to choose from. The count is the point: a code with three events
+        %   costs a whole window of parameters for very little.
+            EEG = UnfoldBinsTest.withProbes(UnfoldBinsTest.recording());
+
+            plan = Unfold.binModel(EEG);
+
+            testCase.verifyEqual({plan.unbinnedCodes.code}, {'response', 'probe'});
+            testCase.verifyEqual([plan.unbinnedCodes.n], [90 3]);
+            testCase.verifyEqual([plan.unbinnedCodes.modelled], [true true], ...
+                'By default every code in no bin is modelled.');
+            testCase.verifyEqual(plan.nuisanceTypes, {'evt_response', 'evt_probe'});
+        end
+
+        function onlyTheChosenCodesAreModelled(testCase)
+            EEG = UnfoldBinsTest.withProbes(UnfoldBinsTest.recording());
+
+            plan = Unfold.binModel(EEG, 'OtherEvents', {'response'});
+
+            testCase.verifyEqual(plan.nuisanceTypes, {'evt_response'});
+            testCase.verifyFalse(any(strcmp({plan.events.type}, 'evt_probe')), ...
+                'An unchosen code contributes no rows to the design.');
+            testCase.verifyEqual([plan.unbinnedCodes.modelled], [true false], ...
+                'It is still listed, so the user can see what was left out.');
+            testCase.verifyTrue(any(contains(plan.notes, 'probe x3')), ...
+                'A code left out is named, because its overlap is still in the result.');
+        end
+
+        function anEmptyChoiceModelsNone(testCase)
+            EEG = UnfoldBinsTest.withProbes(UnfoldBinsTest.recording());
+
+            plan = Unfold.binModel(EEG, 'OtherEvents', {});
+
+            testCase.verifyEmpty(plan.nuisanceTypes);
+            testCase.verifyEqual(numel(plan.unbinnedCodes), 2, 'Still listed, none ticked.');
+        end
+
+        function aChosenCodeAbsentHereIsNoted(testCase)
+        %ACHOSENCODEABSENTHEREISNOTED  What a replay meets on a recording
+        %   that lacks a code chosen on another one.
+            EEG = UnfoldBinsTest.recording();
+
+            plan = Unfold.binModel(EEG, 'OtherEvents', {'response', 'probe'});
+
+            testCase.verifyEqual(plan.nuisanceTypes, {'evt_response'});
+            testCase.verifyTrue(any(contains(plan.notes, 'probe')));
+        end
+
+        function theOlderSwitchStillWorksAndTheNewChoiceWins(testCase)
+            EEG = UnfoldBinsTest.withProbes(UnfoldBinsTest.recording());
+
+            off = Unfold.binModel(EEG, 'ModelOtherEvents', false);
+            both = Unfold.binModel(EEG, 'ModelOtherEvents', false, 'OtherEvents', {'probe'});
+
+            testCase.verifyEmpty(off.nuisanceTypes, 'false still means none.');
+            testCase.verifyEqual(both.nuisanceTypes, {'evt_probe'}, ...
+                'Given both, the per-code choice decides.');
+        end
+
         function combinationBinsAreNotPredictors(testCase)
         %COMBINATIONBINSARENOTPREDICTORS  A difference bin has no events of
         %   its own; asking the model to estimate a response to it would be
@@ -284,6 +344,17 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
                 'times', (0:npnts - 1) / srate * 1000, 'DataFormat', 'CONTINUOUS', ...
                 'chanlocs', struct('labels', {'Cz', 'Pz'}), 'event', event, 'bindesc', bindesc);
             truth = struct('waveform', waveform, 'frequent', frequent, 'rare', rare);
+        end
+
+        function EEG = withProbes(EEG)
+        %WITHPROBES  Three stray events of a second unbinned code, the case
+        %   the per-code choice exists for: a code too rare to be worth a
+        %   window of parameters.
+            for latency = [5003 11007 17011]
+                EEG.event(end + 1) = struct('type', 'probe', 'latency', latency, 'bini', []);
+            end
+            [~, order] = sort([EEG.event.latency]);
+            EEG.event = EEG.event(order);
         end
 
         function data = addResponse(data, latency, waveform)

@@ -40,8 +40,11 @@ function [EEG, info] = fitBins(input, varargin)
 %                        with an average (which Baseline has corrected) means
 %                        correcting this the same way. [] leaves the betas
 %                        exactly as the solver returned them.
-%     ModelOtherEvents   true, see Unfold.binModel: events in no bin are
-%                        fitted as nuisance and dropped from the result.
+%     OtherEvents        which event codes in no bin to fit as nuisance and
+%                        drop from the result: 'all' (default), a cellstr of
+%                        codes, or {} for none. See Unfold.binModel for why
+%                        this is a choice per code. The older
+%                        ModelOtherEvents true/false still works.
 %     Covariates         event fields to fit alongside each bin, mean-centred
 %                        (see Unfold.binModel): their slopes are fitted and
 %                        dropped, so the result is still one waveform per bin,
@@ -86,7 +89,8 @@ function [EEG, info] = fitBins(input, varargin)
     parsed.addParameter('BaselineMs', 'pre-event', ...
         @(v) isempty(v) || (ischar(v) || isstring(v)) || (isnumeric(v) && numel(v) == 2 && v(1) < v(2)));
     parsed.addParameter('ModelOtherEvents', true, @(v) islogical(v) && isscalar(v));
-    parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v)); %#ok<ISCLSTR>
+    parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
+    parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('ArtifactThresholdUv', 150, @(v) isnumeric(v) && isscalar(v) && v >= 0);
     parsed.addParameter('ArtifactWindowMs', 2000, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('ArtifactStepMs', 100, @(v) isnumeric(v) && isscalar(v) && v > 0);
@@ -96,8 +100,14 @@ function [EEG, info] = fitBins(input, varargin)
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
 
     requireCentredData(input);
-    plan = Unfold.binModel(input, 'ModelOtherEvents', opts.ModelOtherEvents, ...
-        'Covariates', opts.Covariates);
+    % OtherEvents is passed only when it was given, so the older
+    % ModelOtherEvents switch keeps meaning what it meant for a caller that
+    % still uses it (binModel lets OtherEvents win when both arrive).
+    modelArgs = {'ModelOtherEvents', opts.ModelOtherEvents, 'Covariates', opts.Covariates};
+    if ~ismember('OtherEvents', parsed.UsingDefaults)
+        modelArgs = [modelArgs, {'OtherEvents', opts.OtherEvents}];
+    end
+    plan = Unfold.binModel(input, modelArgs{:});
     if isempty(plan.eventTypes)
         throw(MException('Alakazam:Unfold:NothingToFit', ...
             ['None of this dataset''s bins hold any events, so there is no model to fit. ' ...

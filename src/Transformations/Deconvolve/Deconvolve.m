@@ -62,9 +62,12 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          or an unticked box leaves them uncorrected
 %     covariates           event fields fitted alongside each bin and then
 %                          dropped, mean-centred, default none
-%     modelOtherEvents     fit events in no bin as nuisance, default true
-%     artifactThresholdUv  peak-to-peak rejection threshold, default 150 uV
-%                          (0 skips detection)
+%     otherEvents          event codes in no bin to fit as nuisance and drop:
+%                          'all' (default), a list of codes, or empty for
+%                          none; the older modelOtherEvents true/false is
+%                          still read when otherEvents is absent
+%     artifactThresholdUv  absolute voltage limit (+/-), not peak-to-peak,
+%                          default 150 uV (0 skips detection)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100
 %
@@ -101,12 +104,34 @@ tagged = applyBins(input, options);
     'WindowMs', TransTools.FieldOr(options, 'windowMs', [-200 800]), ...
     'BaselineMs', baselineOption(options), ...
     'Covariates', TransTools.FieldOr(options, 'covariates', {}), ...
-    'ModelOtherEvents', logical(TransTools.FieldOr(options, 'modelOtherEvents', true)), ...
+    'OtherEvents', otherEventsOption(options), ...
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
     'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100));
 
 report(info);
+end
+
+% ======================================================================= %
+function codes = otherEventsOption(options)
+%OTHEREVENTSOPTION  Which unbinned event codes to model, where an EMPTY list
+%   is a real answer ("none"), just as an empty baseline is. Not
+%   TransTools.FieldOr, which would read it as absent and hand back 'all'.
+%   An options struct saved before the choice was per code carries only
+%   modelOtherEvents, and still means what it meant.
+    codes = 'all';
+    if ~isstruct(options)
+        return;
+    end
+    if isfield(options, 'otherEvents')
+        codes = options.otherEvents;
+        if isempty(codes)
+            codes = {};
+        end
+    elseif isfield(options, 'modelOtherEvents') && ~isempty(options.modelOtherEvents) ...
+            && ~logical(options.modelOtherEvents)
+        codes = {};
+    end
 end
 
 % ======================================================================= %

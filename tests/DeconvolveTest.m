@@ -251,6 +251,24 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             testCase.verifyTrue(all(isfinite(fitted.data), 'all'));
         end
 
+        function theChosenEventCodesSurviveBeingStored(testCase)
+        %THECHOSENEVENTCODESSURVIVEBEINGSTORED  A stored template goes through
+        %   JSON, where an empty list comes back as [] and one code comes
+        %   back as a cell of one. "None" must still mean none after that,
+        %   not quietly revert to modelling everything.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+            none = jsondecode(jsonencode(DeconvolveTest.options('otherEvents', {})));
+            some = jsondecode(jsonencode(DeconvolveTest.options('otherEvents', {'response'})));
+
+            fittedNone = Deconvolve(EEG, none);
+            fittedSome = Deconvolve(EEG, some);
+
+            testCase.verifyEmpty(fittedNone.etc.alz.unfold.nuisanceTypes, ...
+                'An empty choice, stored and restored, still models no unbinned code.');
+            testCase.verifyEqual(fittedSome.etc.alz.unfold.nuisanceTypes, {'evt_response'});
+        end
+
         function theResultCarriesItsOwnProvenance(testCase)
             testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
             EEG = DeconvolveTest.untaggedRecording();

@@ -1,9 +1,10 @@
 function options = DeconvolveDialog(EEG, stored)
 %DECONVOLVEDIALOG  Modal editor for Deconvolve's settings.
 %   OPTIONS = DeconvolveDialog(EEG, STORED) shows the bins to fit, the
-%   response window, the artefact threshold and whether events outside every
-%   bin are modelled, seeded from STORED (a previous run's options, or [] on
-%   first use), and returns the options Deconvolve takes, or [] on Cancel.
+%   response window, the artefact threshold, the covariates, and which event
+%   codes outside every bin are modelled, seeded from STORED (a previous
+%   run's options, or [] on first use), and returns the options Deconvolve
+%   takes, or [] on Cancel.
 %
 %   THE BINS ARE A SETTING HERE, not a property of the dataset. Deconvolve
 %   runs on the continuous recording (see Deconvolve for why it cannot be
@@ -19,8 +20,8 @@ function options = DeconvolveDialog(EEG, stored)
 %   whose timing never varies so their responses cannot be told apart). That
 %   is the one thing a user cannot work out from the dialog's fields, and the
 %   one thing that decides whether the answer will mean anything. It refreshes
-%   when the bins or the nuisance checkbox change, because both change the
-%   model.
+%   when the bins, the covariates or the chosen event codes change, because
+%   all three change the model.
 %
 %   OK checks the settings the way Deconvolve will apply them, so a design
 %   the fit would refuse is reported here rather than after the dialog closes.
@@ -36,6 +37,13 @@ function options = DeconvolveDialog(EEG, stored)
             end
         end
     end
+
+    % Which unbinned codes to model, kept out of the generic seeding loop for
+    % the same reason as the baseline: an empty list is an answer ("none"),
+    % and the loop would read it as absent and restore the default. 'all' is
+    % stored as the word, not as today's list of codes, so a replay on another
+    % recording still means every code that recording has.
+    otherSelection = storedOtherEvents(stored);
 
     % The baseline is stored as the window itself, with [] meaning "leave the
     % betas as the solver returned them", so the checkbox and the two fields
@@ -83,8 +91,8 @@ function options = DeconvolveDialog(EEG, stored)
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [5 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 5), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [4 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 4), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1));
     uilabel(settings, 'Text', 'Artefact threshold (uV, 0 = off):');
@@ -111,10 +119,6 @@ function options = DeconvolveDialog(EEG, stored)
         'Value', baselineOn, 'ValueChangedFcn', @(~, ~) onBaselineToggled());
     baselineBox.Layout.Row = 4;
     baselineBox.Layout.Column = [3 4];
-    otherBox = uicheckbox(settings, 'Text', 'Model events that are in no bin', ...
-        'Value', logical(seed.modelOtherEvents));
-    otherBox.Layout.Row = 5;
-    otherBox.Layout.Column = [1 2];
     onBaselineToggled();
 
     % The model preview and the covariate picker share the stretchy row: the
@@ -124,12 +128,21 @@ function options = DeconvolveDialog(EEG, stored)
     middle = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 220}, ...
         'Padding', [0 0 0 0], 'ColumnSpacing', 8);
     modelList = uitextarea(middle, 'Editable', 'off', 'Value', {''});
-    picker = uigridlayout(middle, [2 1], 'RowHeight', {'fit', '1x'}, 'Padding', [0 0 0 0]);
+    picker = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1x'}, ...
+        'Padding', [0 0 0 0]);
     uilabel(picker, 'WordWrap', 'on', 'Text', 'Covariates (optional):');
-    covariateList = uilistbox(picker, 'Multiselect', 'on', 'Items', {}, 'Value', {}, ...
-        'ValueChangedFcn', @(~, ~) showModel());
+    % Checkbox trees, not multi-select list boxes. A list box deselects only
+    % with Ctrl+click, and a plain click on the one selected item leaves it
+    % selected, so going back to "none" was out of reach in practice: the
+    % reported symptom was a covariate that could not be unselected. A tick
+    % box toggles on a plain click, which is what an optional choice needs.
+    covariateTree = uitree(picker, 'checkbox', 'CheckedNodesChangedFcn', @(~, ~) showModel());
+    uilabel(picker, 'WordWrap', 'on', 'Text', 'Events in no bin, modelled and dropped:');
+    otherTree = uitree(picker, 'checkbox', 'CheckedNodesChangedFcn', @(~, ~) onOtherEventsChanged(), ...
+        'Tooltip', ['Each ticked code gets its own full response, fitted and then dropped, so ' ...
+         'its overlap is taken out of the bins. A code with only a handful of events adds a ' ...
+         'whole window of parameters for very little.']);
     fillCovariates();
-    otherBox.ValueChangedFcn = @(~, ~) showModel();
 
     uilabel(outer, 'WordWrap', 'on', 'FontColor', [0.35 0.35 0.35], 'Text', [ ...
         'The window should cover the whole response, including anything that precedes the event ' ...
@@ -138,6 +151,8 @@ function options = DeconvolveDialog(EEG, stored)
         '2000 ms window, stepped 100 ms) are the toolbox''s own. Events in no bin are worth ' ...
         'modelling: overlap is only removed where it is accounted for, so a response or a ' ...
         'following stimulus left out still overlaps, it just stops being separated out. ' ...
+        'Each code is listed with its count, so a code with one or two events, which adds a ' ...
+        'whole window of parameters for almost nothing, can be left unticked. ' ...
         'The threshold is an absolute limit on the voltage rather than a peak-to-peak range, ' ...
         'so it only means anything on data that sits around zero: run DCDetrend or a ' ...
         'high-pass Filter on the continuous recording first, or this step will refuse it.']);
@@ -153,6 +168,59 @@ function options = DeconvolveDialog(EEG, stored)
     showModel();
     uiwait(fig);
 
+    function onOtherEventsChanged()
+    %ONOTHEREVENTSCHANGED  The ticks become the choice, then the preview.
+        otherSelection = otherTreeSelection();
+        showModel();
+    end
+
+    function selection = otherTreeSelection()
+    %OTHERTREESELECTION  The choice as the ticks show it. Every code ticked is
+    %   kept as 'all' rather than as today's list, so a replay on a recording
+    %   that has a code this one lacks still models it; anything less is kept
+    %   as the codes themselves. Read from the tree, not from a copy, so OK
+    %   returns what is on screen whatever route the ticks took to get there.
+        selection = otherSelection;
+        if strcmpi(otherTree.Enable, 'off')
+            return;          % nothing to choose from: the choice stands
+        end
+        checked = otherTree.CheckedNodes;
+        if isempty(checked)
+            selection = {};
+        elseif numel(checked) == numel(otherTree.Children)
+            selection = 'all';
+        else
+            selection = reshape({checked.NodeData}, 1, []);
+        end
+    end
+
+    function refreshOtherTree(unbinned)
+    %REFRESHOTHERTREE  One tick box per code in no bin, with its count, ticked
+    %   when it is modelled. The count is the point: it is what shows that a
+    %   code with one event is not worth a whole window of parameters. Rebuilt
+    %   only when the codes themselves change, so ticking one does not reset
+    %   the list under the pointer.
+        if isempty(unbinned)
+            delete(otherTree.Children);
+            uitreenode(otherTree, 'Text', '(none: every event is in a bin)');
+            otherTree.Enable = 'off';
+            return;
+        end
+        labels = arrayfun(@(u) sprintf('%s  (%d event(s))', u.code, u.n), ...
+            unbinned, 'UniformOutput', false);
+        current = otherTree.Children;
+        if strcmpi(otherTree.Enable, 'off') || numel(current) ~= numel(labels) ...
+                || ~isequal({current.Text}, reshape(labels, 1, []))
+            delete(current);
+            for k = 1:numel(unbinned)
+                uitreenode(otherTree, 'Text', labels{k}, 'NodeData', unbinned(k).code);
+            end
+        end
+        otherTree.Enable = 'on';
+        nodes = otherTree.Children;
+        setChecked(otherTree, nodes([unbinned.modelled]));
+    end
+
     function fillCovariates()
     %FILLCOVARIATES  What this recording can offer, with the circular ones
     %   left out: an angle cannot be entered as a slope (359 degrees sits
@@ -161,20 +229,21 @@ function options = DeconvolveDialog(EEG, stored)
     %   unavailable rather than quietly offered.
         found = Unfold.eventCovariates(EEG);
         linear = found(strcmpi({found.kind}, 'linear'));
-        items = cell(1, numel(linear));
-        for k = 1:numel(linear)
-            items{k} = covariateItem(linear(k));
+        delete(covariateTree.Children);
+        if isempty(linear)
+            uitreenode(covariateTree, 'Text', '(no numeric event fields)');
+            covariateTree.Enable = 'off';
+            return;
         end
-        covariateList.Items = items;
-        covariateList.ItemsData = {linear.name};
-        keep = intersect(seed.covariates, {linear.name}, 'stable');
-        covariateList.Value = keep;
+        stored = cellstr(string(seed.covariates));
+        for k = 1:numel(linear)
+            uitreenode(covariateTree, 'Text', covariateItem(linear(k)), 'NodeData', linear(k).name);
+        end
+        nodes = covariateTree.Children;
+        setChecked(covariateTree, nodes(ismember({linear.name}, stored)));
         circular = found(~strcmpi({found.kind}, 'linear'));
-        if isempty(items)
-            covariateList.Enable = 'off';
-            covariateList.Items = {'(no numeric event fields)'};
-        elseif ~isempty(circular)
-            covariateList.Tooltip = sprintf(['Not offered, being circular: %s. An angle ' ...
+        if ~isempty(circular)
+            covariateTree.Tooltip = sprintf(['Not offered, being circular: %s. An angle ' ...
                 'needs a sine/cosine pair, not a slope.'], strjoin({circular.name}, ', '));
         end
     end
@@ -188,9 +257,15 @@ function options = DeconvolveDialog(EEG, stored)
     end
 
     function names = chosenCovariates()
-        names = covariateList.Value;
-        if ischar(names); names = {names}; end
-        if isempty(names) || strcmpi(covariateList.Enable, 'off'); names = {}; end
+    %CHOSENCOVARIATES  The ticked covariates, read from the tree itself.
+        names = {};
+        if strcmpi(covariateTree.Enable, 'off')
+            return;
+        end
+        checked = covariateTree.CheckedNodes;
+        if ~isempty(checked)
+            names = reshape({checked.NodeData}, 1, []);
+        end
     end
 
     function onBaselineToggled()
@@ -245,15 +320,29 @@ function options = DeconvolveDialog(EEG, stored)
         binsLabel.Text = binSourceText();
         if isempty(tagged)
             modelList.Value = [{'No model yet:'}, {''}, {why}];
+            refreshOtherTree([]);
             return;
         end
         try
-            plan = Unfold.binModel(tagged, 'ModelOtherEvents', otherBox.Value, ...
+            plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
                 'Covariates', chosenCovariates());
+            % A code chosen earlier can stop being "in no bin" when the bins
+            % change, and would then only produce a note saying it is absent.
+            % The list is the user's view of the choice, so the choice follows
+            % it: forget codes that are no longer on offer and ask again.
+            if iscell(otherSelection)
+                available = {plan.unbinnedCodes.code};
+                if ~all(ismember(otherSelection, available))
+                    otherSelection = intersect(otherSelection, available, 'stable');
+                    plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
+                        'Covariates', chosenCovariates());
+                end
+            end
         catch err
             modelList.Value = [{'This design cannot be fitted:'}, {''}, {err.message}];
             return;
         end
+        refreshOtherTree(plan.unbinnedCodes);
         lines = {sprintf('%d bin(s) will be fitted:', numel(plan.binLabels))};
         for k = 1:numel(plan.binLabels)
             lines{end + 1} = sprintf('   %-30s %5d event(s)', plan.binLabels{k}, plan.binCounts(k)); %#ok<AGROW>
@@ -265,14 +354,14 @@ function options = DeconvolveDialog(EEG, stored)
                 'else has to be run for them.'], numel(plan.comboBins));
         end
         if ~isempty(plan.covariates)
-            lines{end + 1} = ''; %#ok<AGROW>
+            lines{end + 1} = '';
             for k = 1:numel(plan.covariates)
                 cov = plan.covariates(k);
                 lines{end + 1} = sprintf(['Covariate "%s": fitted on %d event(s) in %d type(s), ' ...
                     'centred on %.4g, then dropped.'], cov.name, cov.n, numel(cov.types), ...
                     cov.centre); %#ok<AGROW>
             end
-            lines{end + 1} = sprintf('Each bin is fitted as: %s', plan.formulas{1}); %#ok<AGROW>
+            lines{end + 1} = sprintf('Each bin is fitted as: %s', plan.formulas{1});
         end
         if isempty(plan.nuisanceTypes)
             lines{end + 1} = '';
@@ -305,11 +394,12 @@ function options = DeconvolveDialog(EEG, stored)
     end
 
     function onOK()
+        otherSelection = otherTreeSelection();
         candidate = struct('binScript', binScript, ...
             'covariates', {chosenCovariates()}, ...
             'windowMs', [startField.Value stopField.Value], ...
             'baselineMs', [], ...
-            'modelOtherEvents', otherBox.Value, ...
+            'otherEvents', {otherSelection}, ...
             'artifactThresholdUv', thresholdField.Value, ...
             'artifactWindowMs', artWindowField.Value, ...
             'artifactStepMs', artStepField.Value);
@@ -338,7 +428,8 @@ function options = DeconvolveDialog(EEG, stored)
             return;
         end
         try
-            Unfold.binModel(tagged, 'ModelOtherEvents', candidate.modelOtherEvents);
+            Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
+                'Covariates', candidate.covariates);
         catch err
             uialert(fig, err.message, 'Check the design');
             return;
@@ -351,6 +442,44 @@ function options = DeconvolveDialog(EEG, stored)
     function onCancel()
         uiresume(fig);
         delete(fig);
+    end
+end
+
+% ======================================================================= %
+function setChecked(tree, nodes)
+%SETCHECKED  Tick exactly NODES in a checkbox tree. "Nothing ticked" has to
+%   be the plain [] rather than an empty array of tree nodes: CheckBoxTree
+%   rejects the latter as not being children of the tree, and indexing the
+%   children with a mask that matches nothing produces exactly that, so the
+%   dialog failed to open whenever no covariate was stored.
+    if isempty(nodes)
+        tree.CheckedNodes = [];
+    else
+        tree.CheckedNodes = nodes;
+    end
+end
+
+% ======================================================================= %
+function selection = storedOtherEvents(stored)
+%STOREDOTHEREVENTS  The stored choice of unbinned codes: 'all', or a cellstr
+%   (empty meaning none). Options saved before the choice was per code carry
+%   only modelOtherEvents, and false there still means none.
+    selection = 'all';
+    if ~isstruct(stored)
+        return;
+    end
+    if isfield(stored, 'otherEvents')
+        value = stored.otherEvents;
+        if isempty(value)
+            selection = {};
+        elseif ischar(value) && strcmpi(value, 'all')
+            selection = 'all';
+        else
+            selection = reshape(cellstr(string(value)), 1, []);
+        end
+    elseif isfield(stored, 'modelOtherEvents') && ~isempty(stored.modelOtherEvents) ...
+            && ~logical(stored.modelOtherEvents)
+        selection = {};
     end
 end
 
@@ -377,6 +506,6 @@ function seed = defaults()
 %   artefact parameters, with nuisance events modelled because leaving them
 %   out quietly weakens the correction the transformation exists for.
     seed = struct('binScript', '', 'covariates', {{}}, 'windowMs', [-200 800], ...
-        'modelOtherEvents', true, 'artifactThresholdUv', 150, ...
+        'artifactThresholdUv', 150, ...
         'artifactWindowMs', 2000, 'artifactStepMs', 100);
 end
