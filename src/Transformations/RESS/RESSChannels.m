@@ -10,19 +10,24 @@ function mask = RESSChannels(chanlocs, includeMastoids)
 %     eye electrodes named by position rather than by type: IO1/IO2
 %     (infra-orbital), LO1/LO2 (lateral orbital), SO1/SO2 (supra-orbital),
 %     LOC/ROC (outer canthi). The RIFT recordings carry IO1, IO2, LO1 and
-%     LO2, and eegChannelMask counts them as scalp EEG, since its label
-%     rules only know EOG/HEOG/VEOG. A spatial filter built to find a
-%     visual response must not be handed the eyes.
+%     LO2. A spatial filter built to find a visual response must not be
+%     handed the eyes. eegChannelMask now also counts these as EOG when a
+%     channel has no recorded type (channelTypeFromLabel); the rule is kept
+%     here as well because this one applies whatever type a channel was
+%     given, and a cap that labels its orbital electrodes EEG is still
+%     handing the filter the eyes.
 %
 %     mastoid and earlobe electrodes (M1, M2, A1, A2, LM, RM, or a label
 %     containing MAST), unless INCLUDEMASTOIDS. They are often the
 %     reference, and whether they belong in a combination of scalp channels
 %     depends on the study.
 %
-%   The label rules live here rather than in eegChannelMask on purpose:
-%   changing what that function counts as scalp EEG would change the
-%   channels artefact detection, ICA and the displays use for every existing
-%   analysis, which is a decision to make on its own.
+%   The mastoid rule lives here rather than in eegChannelMask on purpose:
+%   whether a reference electrode belongs with the scalp channels depends on
+%   the analysis, and changing it there would change artefact detection, ICA
+%   and the displays for every existing one. The eye electrodes were moved
+%   there (2026-09-24), that being a decision taken on its own, as it should
+%   have been.
 %
 %   See also EEGCHANNELMASK, RESS, RESSPLAN.
     mask = eegChannelMask(chanlocs);

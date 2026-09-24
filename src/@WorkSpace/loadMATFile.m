@@ -15,6 +15,7 @@ function loadMATFile(this, name)
     load(rawfilename, 'EEG');
     EEG.File = matfilename;
     EEG.FileName = rawfilename;
+    EEG = recordRawFile(EEG, rawfilename);   % for steps that need files beside it
     EEG.id = id;
 
     if ~exist(matfilename, 'file')

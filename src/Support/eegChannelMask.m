@@ -35,7 +35,10 @@ function mask = eegChannelMask(chanlocs)
               "EDA", "SCR", "RESP", "RESPIRATION", "PLETH", "TEMP", "TRIG", ...
               "TRIGGER", "STIM", "STATUS", "MISC", "REF", "AUDIO", "PHOTO", ...
               "PHOTODIODE", "DIODE", "BIP", "BIPOLAR", ...
-              "RESS"];   % a RESS component (see RESS.m): a combination of channels, not an electrode
+              "RESS", ...  % a RESS component (see RESS.m): a combination of channels, not an electrode
+              "EYE"];      % eye-tracker gaze and pupil, typed so by EYE-EEG's own import: screen
+                           % pixels and pupil units, not microvolts, so counting them as EEG put them
+                           % in every display scale, artefact scan and ICA the scalp channels get
     hasType = isfield(chanlocs, 'type');
     hasLabel = isfield(chanlocs, 'labels');
     for i = 1:n

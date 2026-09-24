@@ -32,4 +32,15 @@ function t = channelTypeFromLabel(label)
             return;
         end
     end
+
+    % Eye electrodes named by POSITION rather than by type: infra-, lateral-
+    % and supra-orbital (IO1, LO2, SO1, ...) and the outer canthi (LOC, ROC).
+    % Matched as WHOLE labels, not substrings, because unlike the tokens above
+    % these letters do occur inside other names. Counting them as scalp EEG
+    % put a reading or free-viewing recording's largest swings into every
+    % display scale, artefact scan and ICA meant for the scalp; EYE-EEG's
+    % reading data carries exactly LO1, LO2, IO1 and IO2.
+    if ~isempty(regexp(s, '^((IO|LO|SO|UO)\d*|LOC|ROC)$', 'once'))
+        t = 'EOG';
+    end
 end

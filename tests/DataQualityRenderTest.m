@@ -74,13 +74,22 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
             entries(end + 1) = struct('subject', 'deconvolved01', 'group', '', ...
                 'session', '', 'quality', ...
                 deconvolutionQuality(DeconvolvedNodesTest.fittedDataset())); %#ok<AGROW>
+            % And one averaged subject whose EEG had an eye track joined onto
+            % it, so the synchronisation table has a row to draw as well.
+            tracked = makeTestEEG('trials', 8, 'nbchan', 2);
+            tracked.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:4, 5:8});
+            tracked.etc.alz.eyeTracking = EyeTrackingTest.joinRecord();
+            entries(end + 1) = struct('subject', 'tracked01', 'group', '', ...
+                'session', '', 'quality', dataQualityMetrics(tracked));
 
             stem = fullfile(folder, 'dq');
-            [summaryCsv, trialCsv, smeCsv] = exportDataQualityCSVs(entries, stem);
+            [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(entries, stem);
             [~, s] = fileparts(summaryCsv);
             [~, t] = fileparts(trialCsv);
             [~, m] = fileparts(smeCsv);
-            qmd = generateDataQualityReport(entries, [s '.csv'], [t '.csv'], [m '.csv'], '');
+            [~, p] = fileparts(provenanceCsv);
+            qmd = generateDataQualityReport(entries, [s '.csv'], [t '.csv'], [m '.csv'], '', ...
+                [p '.csv']);   % the provenance CSV, as onExportDataQuality passes it
             qmdFile = fullfile(folder, 'dq.qmd');
             writeQmdFile(qmdFile, qmd, 'Alakazam:DataQualityRenderTest');
 
@@ -89,8 +98,14 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
             testCase.verifyEmpty(errorMessage, sprintf( ...
                 'A deconvolved subject stopped the report rendering:\n%s', errorMessage));
             testCase.verifyNotEmpty(html);
-            testCase.verifySubstring(fileread(html), 'deconvolved01', ...
+            page = fileread(html);
+            testCase.verifySubstring(page, 'deconvolved01', ...
                 'The subject is named in the report rather than silently dropped.');
+            testCase.verifySubstring(page, 'Deconvolution: Data Left Out of the Model', ...
+                ['What the fit left out is drawn, not only written to the CSV: the report only ' ...
+                 'draws provenance steps it knows by name.']);
+            testCase.verifySubstring(page, 'Eye-Tracking Synchronisation', ...
+                'How well the eye track was joined is drawn for the subject that has one.');
         end
 
         function dependabilityMatchesItsClosedForm(testCase)

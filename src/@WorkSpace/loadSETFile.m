@@ -26,6 +26,7 @@ function loadSETFile(this, name)
         % No cache yet, or the raw file is newer: (re)read it.
         EEG = pop_loadset(name, this.RawDirectory);
         EEG = eeg_checkset(EEG);
+        EEG = recordRawFile(EEG, setfilename);   % for steps that need files beside it
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = inferDataFormat(EEG);
         if strcmpi(EEG.DataFormat, 'CONTINUOUS')

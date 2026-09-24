@@ -470,6 +470,12 @@ function rows = provenanceRows(EEG, nChan, nTrials)
     rows = emptyProvenanceRows();
     alz = alzStruct(EEG);
 
+    % The eye track is joined first in any chain, so it is reported first.
+    eye = eyeTrackingRow(EEG, blankProvenanceRow('', '', NaN, NaN));
+    if ~isempty(eye)
+        rows(end + 1) = eye;
+    end
+
     % --- rejection: which detector cost which trials ------------------- %
     if isfield(alz, 'artefactDetectors')
         d = alz.artefactDetectors;
@@ -587,6 +593,7 @@ function row = blankProvenanceRow(step, item, n, nTotal)
         'n_samples_rejected', NaN, 'n_samples', NaN, 'sensai', NaN, ...
         'enova_epoch_max', NaN, 'enova_epoch_median', NaN, ...
         'enova_channel_max', NaN, 'n_excluded', NaN, ...
+        'pct_within_one', NaN, 'mean_offset_ms', NaN, ...
         'detail', '');
 end
 

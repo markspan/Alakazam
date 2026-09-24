@@ -29,6 +29,7 @@ function loadBVAFile(this, name)
         % freshly-imported recording silently skipped EEGLAB's structure
         % validation/fixup that a re-imported (stale-cache) one got.
         EEG = eeg_checkset(EEG);
+        EEG = recordRawFile(EEG, bvafilename);   % for steps that need files beside it
         EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = 'CONTINUOUS';

@@ -79,6 +79,13 @@ function q = deconvolutionQuality(averaged)
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
     q.provenance = provenance(info, nChan);
+    % A deconvolution often follows an eye-track join (fixation-related
+    % potentials are what it is most used for), and that join's quality is
+    % as much a fact about this subject's data as what the fit excluded.
+    eye = eyeTrackingRow(averaged, blankRow(q.provenance, '', '', NaN, NaN));
+    if ~isempty(eye)
+        q.provenance = [eye, q.provenance];
+    end
 end
 
 % ======================================================================= %
@@ -90,7 +97,8 @@ function rows = provenance(info, nChan)
         'n_unique', {}, 'channel_epochs', {}, 'channels_tested', {}, 'scope', {}, ...
         'threshold', {}, 'components', {}, 'n_samples_rejected', {}, 'n_samples', {}, ...
         'sensai', {}, 'enova_epoch_max', {}, 'enova_epoch_median', {}, ...
-        'enova_channel_max', {}, 'n_excluded', {}, 'detail', {});
+        'enova_channel_max', {}, 'n_excluded', {}, 'pct_within_one', {}, ...
+        'mean_offset_ms', {}, 'detail', {});
     if isempty(info)
         return;
     end

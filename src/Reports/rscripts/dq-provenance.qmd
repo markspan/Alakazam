@@ -1,4 +1,24 @@
 
+```{r}
+#| label: provenance-eyetracking-table
+#| results: asis
+eyt <- prov %>% filter(step == "EyeTracking")
+if (nrow(eyt) > 0) {
+  cat("\n\n### Eye track joined onto the EEG\n\n")
+  cat("The eye tracker records on its own clock, so its data are lined up with the EEG through the numbered triggers both received, with a line fitted through every shared one (EYE-EEG; Dimigen et al., 2011). How well that worked decides whether anything built on the join can be trusted: a shared trigger that ends up a sample or more from its EEG partner means every gaze sample and eye-movement event near it is out by the same amount. A join below its limit is refused rather than made, so every subject listed here passed it; the numbers say by how much.\n\n")
+  tab <- eyt %>%
+    mutate(matched = ifelse(is.na(pct), NA_character_, sprintf("%.0f%%", pct)),
+           within = ifelse(is.na(pct_within_one), NA_character_, sprintf("%.1f%%", pct_within_one)),
+           offset = ifelse(is.na(mean_offset_ms), NA_character_, sprintf("%.2f", mean_offset_ms)),
+           limit = ifelse(is.na(threshold), NA_character_, sprintf("%g%%", threshold))) %>%
+    select(Subject = dataset, `Shared triggers` = n, `of EEG triggers` = n_total,
+           Matched = matched, `Within one sample` = within, Limit = limit,
+           `Mean offset (ms)` = offset, Details = detail) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "Eye-Tracking Synchronisation"))))
+}
+```
+
 ### Epochs rejected, by detector
 
 ```{r}
@@ -164,3 +184,30 @@ if (nrow(prov) == 0) {
 }
 ```
 
+```{r}
+#| label: provenance-deconvolve-table
+#| results: asis
+dec <- prov %>% filter(step == "Deconvolve")
+if (nrow(dec) > 0) {
+  cat("\n\n### What each deconvolution left out\n\n")
+  cat("A deconvolved subject has no trials: its waveforms are fitted against the continuous recording, so the rejection and noise figures above do not exist for it. What it has instead is how much of the recording the model left out, as artefact or around a cut in the recording, which is the direct counterpart of a rejection rate: both say how much of the data did not contribute.\n\n")
+  fit <- dec %>% filter(item == "seconds of recording") %>%
+    mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct)),
+           excluded = sprintf("%.1f", n),
+           total = sprintf("%.1f", n_total),
+           limit = ifelse(is.na(threshold), NA_character_,
+                          ifelse(threshold == 0, "off", sprintf("%g uV", threshold)))) %>%
+    select(Subject = dataset, `Excluded (s)` = excluded, `of (s)` = total, Share = share,
+           `Artefact limit` = limit, Settings = detail) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(fit, "Deconvolution: Data Left Out of the Model"))))
+  notes <- dec %>% filter(item == "model note")
+  if (nrow(notes) > 0) {
+    cat("\n\n**Model notes.**\n\n")
+    for (i in seq_len(nrow(notes))) {
+      cat(sprintf("- %s: %s\n", notes$dataset[i], notes$detail[i]))
+    }
+    cat("\n")
+  }
+}
+```
