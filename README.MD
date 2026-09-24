@@ -165,6 +165,25 @@ exactly, the decimated envelope never hides a spike or a brief artefact.
 The view provides pan, zoom, and y-axis magnify controls, mouse-wheel
 scrolling, channel stacking, and overlays for events and marked artefacts.
 
+## ERP images and sorting
+
+Epoched data opens in `EpochView` as an ERP image: one row per trial, time
+across, colour for amplitude, with the trial average underneath. **Sort by**
+puts the rows in order of a value each trial carries: the reaction time
+`DefineBins` captured for its bin (the delay to the neighbour a bin's
+definition names going forward, which is also how to sort by the time to the
+next event of any kind), or any numeric field of the trial's own event, such as
+a fixation's duration, a saccade's amplitude or a pupil size from `EyeTracking`.
+Trials without a value go last, and with **group trials by bin** on (Settings,
+Graphics tab) the sort happens within each bin. When the value is a time after
+the event, reaction time or duration, it is drawn across the image as a line.
+
+That line is what tells overlap from a response. Activity locked to the event
+runs straight down the image; activity that belongs to the next event bends
+with the line. Sorting fixation-locked epochs by fixation duration shows the
+next fixation's response following the line, and on `Deconvolve`'s
+overlap-corrected trials it should be gone.
+
 ## Installation
 
 Requirements: MATLAB (with `uifigure`/App Designer support: the UI is built
@@ -531,7 +550,7 @@ The current library:
 | `DeriveChannels` | Adds channels computed from existing ones with `let <name> = <expression>` statements (e.g. `let LRP = C3 - C4`) -- the channel-arithmetic counterpart to `DefineBins`' bin arithmetic. Runs on continuous, epoched or averaged data alike; derived channels carry no scalp position, so they appear on ERP plots and in grand averages but are dropped from scalp maps. Shown in the ribbon as "Derive Channels". |
 | `Baseline` | Baseline-corrects epoched data. |
 | `Average` | Averages one dataset's epoched trials into an ERP, including bin-difference/interaction contrast bins (see `bin_language.md` §11-12). |
-| `Deconvolve` | The alternative to epoch-and-average where responses overlap (reading, free viewing, fast presentation): fits one waveform per bin against the whole continuous recording with the Unfold toolbox (Ehinger & Dimigen, 2019; Dimigen & Ehinger, 2021), so a response that overlaps the next event's is separated from it rather than averaged together with it. Bins are written in `DefineBins`' own language; event codes in no bin can be modelled as nuisance and dropped, and numeric event fields added as mean-centred covariates. The result has Average's shape, so everything downstream reads it unchanged. Runs on continuous data without a DC offset. |
+| `Deconvolve` | The alternative to epoch-and-average where responses overlap (reading, free viewing, fast presentation): fits one waveform per bin against the whole continuous recording with the Unfold toolbox (Ehinger & Dimigen, 2019; Dimigen & Ehinger, 2021), so a response that overlaps the next event's is separated from it rather than averaged together with it. Bins are written in `DefineBins`' own language; event codes in no bin can be modelled as nuisance and dropped, and numeric event fields added as mean-centred covariates. The result has Average's shape, so everything downstream reads it unchanged. It can instead return one **overlap-corrected trial** per event, shaped like a `DefineBins` epoch node: each event's recording with every other event's fitted response subtracted (Unfold's "modelled plus residuals"), so the [ERP image](#erp-images-and-sorting) shows single trials without the overlap and the data-quality report can measure their noise. Average of those trials gives the fitted waveforms back; a trial whose window touches a stretch left out of the model is dropped, and counted. Runs on continuous data without a DC offset. |
 | `ArtefactDetect` | Flags epochs exceeding an absolute amplitude threshold, or a step, peak-to-peak or sample-to-sample criterion. What happens to a flagged cell is chosen separately: reject the whole epoch, mark that channel only, or interpolate that channel from its neighbours. **Channels to test** defaults to all channels, which is what makes a blink on VEOG reject the trial; set it to scalp EEG only where an eye or heart channel should not be tested against a threshold chosen for the scalp. A channel with no scalp position is never interpolated, since a spherical spline cannot place it. Which detector tripped on which epoch is recorded at compute time, so a branch's right-click **Rejection breakdown...** and the data-quality report can both show what each detector would reject on its own and how many epochs no other detector also caught. |
 | `ManualReject` | The manual counterpart of `ArtefactDetect`: browse one trial at a time and click a channel to flag it faulty, with the same Whole-epoch / This-channel-only scope and, for a single channel, the choice to leave it NaN or reconstruct it from its neighbours. Not recalculable, since the flagged cells are specific to one dataset's own trial count and order. |
 | `RemoveComponents` | Manually subtracts ICA components chosen by hand, from a sortable table showing each component's ICLabel-assigned class and confidence ("Eye 88%") alongside its full per-class probabilities and, where available, its dipole residual variance. Shown in the ribbon as "ICA". |

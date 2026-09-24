@@ -37,6 +37,19 @@ classdef EpochView < AlakazamView
 %   "look at the single-trial detail AND the summary at once" idea an
 %   ERP-image conventionally pairs with.
 %
+%   "Sort by" puts the rows in order of a per-trial value (epochSortKeys
+%   lists what a dataset offers: DefineBins' reaction time, and any numeric
+%   field of the time-locking event, such as a fixation's duration or a
+%   saccade's amplitude), ascending from the top, trials without a value
+%   last. With "group by bin" on, the sort happens within each bin, so the
+%   groups stay whole (the split the Unfold ERP-image tutorial uses). When
+%   the value is a time after the event (reaction time, duration) it is
+%   drawn across the image as a line, so activity that moves with it (a
+%   response, the next saccade) shows as a band following the line, and
+%   activity locked to the event as a vertical one. That is the picture
+%   that tells overlap from a response: on Deconvolve's overlap-corrected
+%   trials the band following the line should be gone.
+%
 %   One shared, symmetric colour scale PER CHANNEL GROUP (EEG/EOG/OTHER,
 %   see channelGroup), computed once in the constructor -- so paging
 %   through channels with the arrow keys is an eye-to-eye comparison
@@ -82,6 +95,9 @@ classdef EpochView < AlakazamView
         TrialOrder      % 1 x nRows, trial index per row (bin-grouped if HasBins, else 1:nTrials);
                          % may repeat a trial index when grouped by bin, so nRows can exceed nTrials
         RowBinKey       % 1 x nRows, each row's bin key (0 = no bin), parallel to TrialOrder
+        SortKeys        % what the trials can be sorted by (epochSortKeys)
+        SortDropdown    % "Sort by:" uidropdown, row 1; its value indexes SortKeys, 0 = recording order
+        SortLine        % the sort value drawn across the heatmap when it is a time (else NaN data)
     end
 
     methods
@@ -150,8 +166,15 @@ classdef EpochView < AlakazamView
             % spans every column, above the brace margin/heatmap/colorbar
             % row, so it is unaffected by the brace column's own width
             % (collapsed to 0 except while "group by bin" is active).
-            this.ChannelDropdown = TransTools.BuildChannelDropdown(this.Grid, 1, [1, 3], ...
+            % The row is shared with "Sort by", half each.
+            controls = uigridlayout(this.Grid, [1 2], "ColumnWidth", {'1x', '1x'}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 12);
+            controls.Layout.Row = 1;
+            controls.Layout.Column = [1, 3];
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(controls, 1, 1, ...
                 this.Labels, @(idx) this.onChannelSelected(idx));
+            this.SortKeys = epochSortKeys(eeg);
+            this.SortDropdown = this.buildSortDropdown(controls);
 
             this.BraceAxes = uiaxes(this.Grid);
             this.BraceAxes.Layout.Row = 2;
@@ -195,6 +218,9 @@ classdef EpochView < AlakazamView
             colormap(this.HeatAxes, TransTools.DivergingColormap());
             this.HeatImage = imagesc(this.HeatAxes, this.Times, 1, zeros(1, numel(this.Times)));
             this.HeatImage.ButtonDownFcn = @(~, ~) this.notifyActivated();
+            hold(this.HeatAxes, "on");
+            this.SortLine = plot(this.HeatAxes, NaN, NaN, "k-", "LineWidth", 1.5, "HitTest", "off");
+            hold(this.HeatAxes, "off");
             xlabel(this.HeatAxes, "Time (ms)");
 
             % The shared colorbar itself is built by redraw() below (it
@@ -266,9 +292,15 @@ classdef EpochView < AlakazamView
             end
             xlim(this.HeatAxes, [this.Times(1), this.Times(end)]);
             ylim(this.HeatAxes, [0.5, nRows + 0.5]);
-            title(this.HeatAxes, "Channel: " + this.Labels{this.Channel});
+            key = this.currentSortKey();
+            if isempty(key)
+                title(this.HeatAxes, "Channel: " + this.Labels{this.Channel});
+            else
+                title(this.HeatAxes, "Channel: " + this.Labels{this.Channel} + ", sorted by " + key.label);
+            end
             this.ChannelDropdown.Value = this.Channel;
             this.drawBinGroupLines(nRows);
+            this.drawSortLine(key);
 
             this.TraceLine.YData = mean(data, 1, "omitnan");
         end
@@ -494,13 +526,65 @@ classdef EpochView < AlakazamView
         %       can exceed the trial count. Trials with no bin
         %       membership trail last (key 0 sorts before any real bin
         %       index).
+        %   Either way, a "Sort by" choice then orders the rows within each
+        %   run of equal RowBinKey (the whole image when not grouped), so
+        %   RowBinKey itself is unchanged by it.
             nTrials = size(this.EEG.data, 3);
             if ~this.HasBins || ~AlakazamSettings.get("graphics", "epochImage", "groupByBin")
                 order = 1:nTrials;
                 this.RowBinKey = zeros(1, nTrials);
+            else
+                [order, this.RowBinKey] = this.computeTrialOrderByBin();
+            end
+            key = this.currentSortKey();
+            if ~isempty(key)
+                order = EpochView.sortWithinGroups(order, this.RowBinKey, key.values);
+            end
+        end
+
+        function dropdown = buildSortDropdown(this, parent)
+        %BUILDSORTDROPDOWN  "Sort by:" beside the channel control. Always
+        %   shown, so its place does not jump between datasets; disabled,
+        %   with the reason as its tooltip, when the trials offer nothing to
+        %   sort by.
+            box = uigridlayout(parent, [1, 2], "ColumnWidth", {70, '1x'}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 4);
+            box.Layout.Row = 1;
+            box.Layout.Column = 2;
+            uilabel(box, "Text", "Sort by:", "HorizontalAlignment", "right");
+            dropdown = uidropdown(box, "Tag", "sortBy", ...
+                "Items", [{'Recording order'}, {this.SortKeys.label}], ...
+                "ItemsData", 0:numel(this.SortKeys), "Value", 0, ...
+                "ValueChangedFcn", @(~, ~) this.redraw());
+            if isempty(this.SortKeys)
+                dropdown.Enable = "off";
+                dropdown.Tooltip = ['These trials carry nothing to sort by: no reaction time ' ...
+                    'from DefineBins and no numeric field on their events that varies.'];
+            end
+        end
+
+        function key = currentSortKey(this)
+        %CURRENTSORTKEY  The chosen entry of SortKeys, or [] for recording order.
+            key = [];
+            if isempty(this.SortDropdown) || ~isvalid(this.SortDropdown)
                 return;
             end
-            [order, this.RowBinKey] = this.computeTrialOrderByBin();
+            index = this.SortDropdown.Value;
+            if index >= 1 && index <= numel(this.SortKeys)
+                key = this.SortKeys(index);
+            end
+        end
+
+        function drawSortLine(this, key)
+        %DRAWSORTLINE  Each row's sort value across the image, when it is a
+        %   time after the event; nothing otherwise, since a pupil size or a
+        %   position has no place on a time axis.
+            if isempty(key) || ~key.timeMs
+                set(this.SortLine, "XData", NaN, "YData", NaN);
+                return;
+            end
+            x = key.values(this.TrialOrder);
+            set(this.SortLine, "XData", x, "YData", 1:numel(x));
         end
 
         function [order, keys] = computeTrialOrderByBin(this)
@@ -549,6 +633,26 @@ classdef EpochView < AlakazamView
             end
             this.Channel = idx;
             this.redraw();
+        end
+    end
+
+    methods (Static)
+        function order = sortWithinGroups(order, keys, values)
+        %SORTWITHINGROUPS  ORDER (trial per row) sorted by VALUES(trial),
+        %   ascending, within each run of equal KEYS (bin per row), so a
+        %   grouped image keeps its groups. Stable, so ties keep recording
+        %   order, and NaN last, so trials without a value collect at the
+        %   bottom of their group instead of scattering through it.
+            if isempty(order)
+                return;
+            end
+            starts = [1, find(diff(keys) ~= 0) + 1];
+            stops = [starts(2:end) - 1, numel(keys)];
+            for g = 1:numel(starts)
+                span = starts(g):stops(g);
+                [~, at] = sort(values(order(span)));
+                order(span) = order(span(at));
+            end
         end
     end
 end
