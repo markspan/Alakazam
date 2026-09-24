@@ -14,14 +14,27 @@ function plan = binModel(EEG, varargin)
 %   which is why the answer packages into the same shape; the difference is
 %   that averaging assumes the epochs do not overlap and this does not.
 %
-%   EVENTS IN NO BIN ARE MODELLED TOO, by default, one type per event type
-%   found ('ModelOtherEvents', false to turn that off). This is not a detail:
-%   overlap correction only removes the overlap you model. A response, a
-%   button press or the next stimulus that is left out of the design does not
-%   stop overlapping the bins, it just stops being accounted for, and its
-%   response leaks into whichever bin happens to precede it. Those types are
-%   fitted and then dropped from the output, which is what a nuisance
-%   regressor is.
+%   EVENTS IN NO BIN CAN BE MODELLED TOO, one type per event code, each with
+%   its own full response that is fitted and then dropped from the output.
+%   'OtherEvents' says which codes: 'all' (the default) models every code
+%   that occurs outside the bins, a cellstr models just those, and {} models
+%   none. This is not a detail: overlap correction only removes the overlap
+%   you model. A response, a button press or the next stimulus that is left
+%   out of the design does not stop overlapping the bins, it just stops being
+%   accounted for, and its response leaks into whichever bin happens to
+%   precede it.
+%
+%   IT IS A CHOICE PER CODE rather than all-or-nothing because the codes are
+%   not alike. A response with a hundred events overlapping every target is
+%   the thing this exists to remove; a code with one stray event contributes
+%   a whole window of free parameters fitted from a single occurrence, which
+%   buys almost nothing and costs the fit conditioning. PLAN.UNBINNEDCODES
+%   lists every code in no bin with its count and whether it was modelled, so
+%   the user can see which is which, and a code left out is named in the
+%   notes, because its overlap is still in the result.
+%
+%   The older 'ModelOtherEvents' switch still works (true is 'all', false is
+%   none); 'OtherEvents' wins when both are given.
 %
 %   COMBINATION BINS ARE NOT PREDICTORS. A difference bin ("bin 3 = bin 1 -
 %   bin 2") has no events of its own; Average computes it afterwards from the
@@ -52,9 +65,10 @@ function plan = binModel(EEG, varargin)
 %   See also UNFOLD.FITBINS, UNFOLD.EYEEEGCOVARIATES, DEFINEBINS, AVERAGE.
     parsed = inputParser();
     parsed.addParameter('ModelOtherEvents', true, @(v) islogical(v) && isscalar(v));
-    parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v)); %#ok<ISCLSTR>
+    parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
+    parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
     parsed.parse(varargin{:});
-    modelOther = parsed.Results.ModelOtherEvents;
+    otherCodes = resolveOtherEvents(parsed);
     wanted = cellstr(string(parsed.Results.Covariates));
 
     validateInput(EEG);
@@ -76,7 +90,9 @@ function plan = binModel(EEG, varargin)
     membership = binMembership(EEG, plan.binIndex);
     plan.binCounts = cellfun(@numel, membership);
 
-    [plan.events, plan.nuisanceTypes] = rewriteEvents(EEG, membership, plan.binTypes, modelOther);
+    [plan.events, plan.nuisanceTypes, plan.unbinnedCodes, otherNotes] = ...
+        rewriteEvents(EEG, membership, plan.binTypes, otherCodes);
+    plan.notes = [plan.notes, otherNotes];
 
     empty = plan.binCounts == 0;
     if any(empty)
@@ -160,8 +176,8 @@ function [events, formulas, applied, notes] = addCovariates(events, formulas, ev
                 formulas{t} = [formulas{t} ' + ' name];
             end
         end
-        applied(end + 1) = struct('name', name, 'types', {usableTypes}, ... %#ok<AGROW>
-            'centre', centre, 'n', nnz(inModel));
+        applied(end + 1) = struct('name', name, 'types', {usableTypes}, ...
+            'centre', centre, 'n', nnz(inModel)); %#ok<AGROW>
 
         missing = setdiff(eventTypes, usableTypes, 'stable');
         if ~isempty(missing)
@@ -249,12 +265,46 @@ function membership = binMembership(EEG, binIndex)
     end
 end
 
-function [events, nuisanceTypes] = rewriteEvents(EEG, membership, binTypes, modelOther)
+function codes = resolveOtherEvents(parsed)
+%RESOLVEOTHEREVENTS  Which unbinned codes to model: 'all', or a cellstr
+%   (possibly empty, meaning none). 'OtherEvents' wins when it was given;
+%   otherwise the older 'ModelOtherEvents' switch decides.
+    if ~ismember('OtherEvents', parsed.UsingDefaults)
+        codes = parsed.Results.OtherEvents;
+        if ischar(codes) && strcmpi(codes, 'all')
+            codes = 'all';
+        elseif isempty(codes)
+            codes = {};
+        else
+            codes = cellstr(string(codes));
+        end
+    elseif parsed.Results.ModelOtherEvents
+        codes = 'all';
+    else
+        codes = {};
+    end
+end
+
+function [events, nuisanceTypes, unbinned, notes] = rewriteEvents(EEG, membership, binTypes, otherCodes)
 %REWRITEEVENTS  The event list in the model's own terms.
-%   One row per (event, bin) pair, since an event in two bins is evidence
-%   about both, plus one row per unbinned event when those are modelled.
-%   Only .latency and .type are kept: they are what uf_designmat reads, and
-%   carrying the rest would invite a field name to collide with a predictor.
+%   One row per (event, bin) pair, plus one row per unbinned event whose code
+%   was chosen for modelling. Only .latency and .type are kept: they are what
+%   uf_designmat reads, and carrying the rest would invite a field name to
+%   collide with a predictor.
+%
+%   AN EVENT IN TWO BINS IS MODELLED ADDITIVELY, which is not what Average
+%   does. It gets one row per bin, so two sticks at the same latency, and the
+%   model explains its data as the SUM of the two bins' responses. Average
+%   instead counts that epoch fully in both averages. With mutually exclusive
+%   bins the two agree; with overlapping ones ("all targets" and "related
+%   targets") the second bin comes out as a difference from the first. This
+%   is stated here rather than hidden, and is a known open point.
+%
+%   UNBINNED lists every code that occurs outside the bins (boundaries
+%   excepted), with its count and whether it was modelled, in order of first
+%   appearance; NOTES name the codes left out and any code that was asked for
+%   but does not occur here, which is what a replay onto another recording
+%   runs into.
     events = struct('latency', {}, 'type', {});
     for b = 1:numel(membership)
         for k = reshape(membership{b}, 1, [])
@@ -263,24 +313,48 @@ function [events, nuisanceTypes] = rewriteEvents(EEG, membership, binTypes, mode
         end
     end
 
-    nuisanceTypes = {};
-    if modelOther
-        binned = unique([membership{:}]);
-        others = setdiff(1:numel(EEG.event), binned);
-        % A boundary is EEGLAB's marker for a cut in the recording, not a
-        % thing the brain responded to, and modelling it would fit a response
-        % to the editing.
-        rawTypes = arrayfun(@(e) char(string(e.type)), EEG.event(others), 'UniformOutput', false);
-        keep = ~strcmpi(rawTypes, 'boundary');
-        others = others(keep);
-        rawTypes = rawTypes(keep);
+    binned = unique([membership{:}]);
+    others = setdiff(1:numel(EEG.event), binned);
+    % A boundary is EEGLAB's marker for a cut in the recording, not a thing
+    % the brain responded to, and modelling it would fit a response to the
+    % editing. It is not even offered.
+    rawTypes = arrayfun(@(e) char(string(e.type)), EEG.event(others), 'UniformOutput', false);
+    keep = ~strcmpi(rawTypes, 'boundary');
+    others = others(keep);
+    rawTypes = rawTypes(keep);
 
-        distinct = unique(rawTypes, 'stable');
-        nuisanceTypes = uniqueTypes('evt_', distinct);
-        for k = 1:numel(others)
-            hit = strcmp(distinct, rawTypes{k});
+    distinct = unique(rawTypes, 'stable');
+    counts = cellfun(@(c) nnz(strcmp(rawTypes, c)), distinct);
+    if ischar(otherCodes)           % 'all'
+        chosen = true(1, numel(distinct));
+    else
+        chosen = ismember(distinct, otherCodes);
+    end
+    unbinned = struct('code', distinct, 'n', num2cell(counts), 'modelled', num2cell(chosen));
+
+    nuisanceTypes = uniqueTypes('evt_', distinct(chosen));
+    modelledCodes = distinct(chosen);
+    for k = 1:numel(others)
+        hit = strcmp(modelledCodes, rawTypes{k});
+        if any(hit)
             events(end + 1) = struct('latency', EEG.event(others(k)).latency, ...
                 'type', nuisanceTypes{hit}); %#ok<AGROW>
+        end
+    end
+
+    notes = {};
+    left = ~chosen;
+    if any(left)
+        notes{end + 1} = sprintf(['%d event(s) in no bin were left out of the model (%s), so ' ...
+            'wherever they overlap a bin their responses are still in its waveform.'], ...
+            sum(counts(left)), codeList(distinct(left), counts(left)));
+    end
+    if iscell(otherCodes)
+        absent = setdiff(otherCodes, distinct, 'stable');
+        if ~isempty(absent)
+            notes{end + 1} = sprintf(['%s %s chosen for modelling but %s not occur outside the ' ...
+                'bins in this recording.'], listOf(absent), ...
+                plural(numel(absent), 'was', 'were'), plural(numel(absent), 'does', 'do'));
         end
     end
 
@@ -288,6 +362,13 @@ function [events, nuisanceTypes] = rewriteEvents(EEG, membership, binTypes, mode
         [~, order] = sort([events.latency]);
         events = events(order);
     end
+end
+
+function text = codeList(codes, counts)
+%CODELIST  "201 x110, 211 x1" for a note.
+    parts = arrayfun(@(k) sprintf('%s x%d', codes{k}, counts(k)), 1:numel(codes), ...
+        'UniformOutput', false);
+    text = strjoin(parts, ', ');
 end
 
 function types = uniqueTypes(prefix, labels)
