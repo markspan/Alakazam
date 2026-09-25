@@ -30,12 +30,12 @@ function candidates = eventCovariates(EEG)
 %   CIRCULAR COVARIATES ARE REPORTED BUT MARKED, not silently offered as
 %   linear terms. A saccade angle of 359 degrees is next to one of 1 degree
 %   and miles from 180, so fitting a slope on it is meaningless; the honest
-%   treatment is a sine and cosine pair, which is a real addition rather than
-%   a checkbox. Marking the kind here is what lets a caller refuse them with a
-%   reason instead of quietly producing a wrong number. EYE-EEG's own measures
-%   carry their kind and units from Unfold.eyeEegMeasures, which knows them;
-%   anything else is reported as linear with no unit, which is the truth about
-%   what is known rather than a guess.
+%   treatment is a circular spline (circspl in a formula), which wraps round.
+%   Marking the kind here is what lets DeconvolveDialog list them apart, as
+%   angles, instead of beside the numbers a straight line suits. EYE-EEG's
+%   own measures carry their kind and units from Unfold.eyeEegMeasures,
+%   which knows them; anything else is reported as linear with no unit,
+%   which is the truth about what is known rather than a guess.
 %
 %   See also UNFOLD.BINMODEL, UNFOLD.EYEEEGMEASURES, DECONVOLVE.
     candidates = struct('name', {}, 'kind', {}, 'unit', {}, 'description', {}, ...

@@ -44,12 +44,18 @@ function [EEG, info] = fitBins(input, varargin)
 %                        drop from the result: 'all' (default), a cellstr of
 %                        codes, or {} for none. See Unfold.binModel for why
 %                        this is a choice per code.
-%     Covariates         event fields to fit alongside each bin, mean-centred
-%                        (see Unfold.binModel): their slopes are fitted and
-%                        dropped, so the result is still one waveform per bin,
-%                        but one from which the covariate's variance has been
-%                        taken out. Unfold.eventCovariates lists what a
-%                        dataset offers.
+%     Formulas           each bin's formula in Unfold's notation, as a struct
+%                        array of .bin (label) and .formula; 'y ~ 1' for a
+%                        bin without one (see Unfold.binModel).
+%     Covariates         the older option: event fields added as linear
+%                        terms to every bin without a formula of its own.
+%                        Unfold.eventCovariates lists what a dataset offers.
+%     EvaluateAt         for Output 'terms': where each continuous or spline
+%                        term is evaluated, as text, "sac_amplitude = 0.5 1 2;
+%                        rating = 1 5". A term not named is evaluated at five
+%                        quantiles of its own values, which differ from one
+%                        recording to the next, so name the values when the
+%                        terms are to be combined across subjects.
 %     ArtifactThresholdUv, ArtifactWindowMs, ArtifactStepMs
 %                        150 uV in a 2000 ms window stepped by 100 ms, which
 %                        are the toolbox's own defaults and the paper's
@@ -89,7 +95,37 @@ function [EEG, info] = fitBins(input, varargin)
 %                        waveform). A trial whose window touches a stretch
 %                        the model left out, or runs off the recording, is
 %                        dropped, since nothing was subtracted there; the
-%                        count is in the provenance.
+%                        count is in the provenance. 'terms': one waveform
+%                        per model term instead (see below).
+%
+%   A BIN'S WAVEFORM is the model's prediction with every continuous and
+%   spline term at its average over ALL the modelled events that carry it
+%   (Unfold.binModel's plan.pooled), the same for every bin, and every factor
+%   at the bin's own mix of levels. With y ~ 1 that is the intercept, as it
+%   always was. With a covariate it is each bin's response at the same value
+%   of it, so a covariate whose values differ between bins (a bigger saccade
+%   in one condition, a slower response in another) is held constant rather
+%   than showing up as a difference between them. That is what makes it a
+%   control. For a spline the average is taken over its basis, which is
+%   Unfold's own average marginal effect and is right for a circular one
+%   too, where a mean angle would not be. The spline bases are evaluated by
+%   the toolbox's own function (EEG.unfold.splines{s}.splinefunction with its
+%   knots and removedSplineIdx). A spline that is not circular is only
+%   averaged over the values every bin using it shares (plan.pooled's
+%   .common), since outside a bin's own values its spline is extrapolating;
+%   bins that share none are each averaged over their own, and the notes say
+%   which of the two happened. Where every bin carries the same values, as
+%   with y ~ 1 or a covariate one bin alone uses, this is also exactly what
+%   the bin's overlap-corrected trials average to.
+%
+%   THE TERMS OUTPUT is Unfold's own view of the model: uf_condense, then
+%   uf_predictContinuous (each continuous and spline term at the EvaluateAt
+%   values, or five quantiles), then uf_addmarginal, which makes every term a
+%   whole waveform with the others at their means. So the intercept is the
+%   response at each factor's reference level, a factor level is the response
+%   at that level, and a spline at a value is the response at that value.
+%   One "bin" per term of every binned event type, labelled "<bin>: <term>",
+%   in Average's shape, so Measure, GrandAverage and the reports read them.
 %
 %   WHAT THE RESULT DOES NOT CARRY is a standard error of its own. Average's
 %   .stErr is the spread of the trials that went into a mean, and a
@@ -108,18 +144,21 @@ function [EEG, info] = fitBins(input, varargin)
         @(v) isempty(v) || (ischar(v) || isstring(v)) || (isnumeric(v) && numel(v) == 2 && v(1) < v(2)));
     parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
+    parsed.addParameter('Formulas', [], @(v) isempty(v) || isstruct(v));
+    parsed.addParameter('EvaluateAt', '', @(v) ischar(v) || isstring(v));
     parsed.addParameter('ArtifactThresholdUv', 150, @(v) isnumeric(v) && isscalar(v) && v >= 0);
     parsed.addParameter('ArtifactWindowMs', 2000, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('ArtifactStepMs', 100, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('Channels', [], @(v) isnumeric(v));
     parsed.addParameter('Output', 'average', ...
-        @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'average', 'trials'})));
+        @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'average', 'trials', 'terms'})));
     parsed.parse(varargin{:});
     opts = parsed.Results;
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
 
     requireCentredData(input);
-    plan = Unfold.binModel(input, 'OtherEvents', opts.OtherEvents, 'Covariates', opts.Covariates);
+    plan = Unfold.binModel(input, 'OtherEvents', opts.OtherEvents, 'Covariates', opts.Covariates, ...
+        'Formulas', opts.Formulas);
     if isempty(plan.eventTypes)
         throw(MException('Alakazam:Unfold:NothingToFit', ...
             ['None of this dataset''s bins hold any events, so there is no model to fit. ' ...
@@ -127,13 +166,11 @@ function [EEG, info] = fitBins(input, varargin)
     end
     Unfold.ensure('Deconvolution (rERP)');
 
-    work = input;
-    work.event = plan.events;
     srate = double(input.srate);
 
-    % 1. The design: one intercept per event type (see Unfold.binModel).
-    work = uf_designmat(work, 'eventtypes', cellfun(@(t) {t}, plan.eventTypes, 'UniformOutput', false), ...
-        'formula', plan.formulas);
+    % 1. The design: one event type per bin, each with its own formula (see
+    %    Unfold.binModel).
+    work = Unfold.designMatrix(input, plan);
 
     % 2. Time expansion: the design matrix gains one column per predictor per
     %    time point in the window, which is what makes the fit a
@@ -169,7 +206,7 @@ function [EEG, info] = fitBins(input, varargin)
         work = uf_continuousArtifactExclude(work, 'winrej', excluded);
     end
 
-    % 4. The fit, and the condensed per-predictor time courses. The solver
+    % 4. The fit. The solver
     %    warns rather than fails when it runs out of iterations, and an
     %    under-converged fit looks like a result, so the warning is caught and
     %    carried into the notes instead of scrolling past in the log.
@@ -182,37 +219,51 @@ function [EEG, info] = fitBins(input, varargin)
             'means the design is close to collinear (bins whose events keep a near-constant ' ...
             'lag) or that a lot of the data was excluded as artefact.'];
     end
-    result = uf_condense(work);
 
-    % The waveforms are checked in both cases: a fit that produced no
-    % numbers produces no trials either, and says so the same way.
-    [waveforms, times] = fittedWaveforms(input, plan, result, opts);
+    % The waveforms are checked in every case: a fit that produced no
+    % numbers produces no trials or terms either, and says so the same way.
+    [waveforms, times, evaluationNotes] = fittedWaveforms(input, plan, work.unfold, opts);
+    plan.notes = [plan.notes, evaluationNotes];
     info = modelInfo(input, plan, opts, excluded, srate);
-    if strcmpi(opts.Output, 'trials')
-        [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times);
-    else
-        EEG = package(input, plan, waveforms, times);
+    switch lower(char(string(opts.Output)))
+        case 'trials'
+            [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times);
+        case 'terms'
+            [EEG, info] = packageTerms(input, plan, work, info, opts, times);
+        otherwise
+            EEG = package(input, plan, waveforms, times);
     end
     EEG = recordInfo(EEG, info, plan);
 end
 
 % ======================================================================= %
-function [data, times] = fittedWaveforms(input, plan, result, opts)
+function [data, times, notes] = fittedWaveforms(input, plan, unfold, opts)
 %FITTEDWAVEFORMS  One fitted waveform per bin, baseline-corrected, with the
-%   combination bins computed from them.
-    times = reshape(double(result.times) * 1000, 1, []);   % uf_condense reports seconds
-    nchan = size(result.beta, 1);
+%   combination bins computed from them. Each is the model's prediction at
+%   the pooled values of its continuous and spline terms (see this file's
+%   header), read from the documented EEG.unfold fields: X, colnames,
+%   cols2eventtypes, cols2variablenames, variablenames, variabletypes,
+%   splines, eventtypes and beta_dc, whose third dimension runs over X's
+%   columns. NOTES say where a spline could not be averaged over every
+%   pooled value (see referencePrediction).
+    times = reshape(double(unfold.times) * 1000, 1, []);   % Unfold keeps seconds
+    nchan = size(unfold.beta_dc, 1);
     nbin = numel(input.bindesc);
     data = nan(nchan, numel(times), nbin);
+    notes = {};
 
     ordinary = find(~comboMask(input.bindesc));
     fitted = false(1, nbin);
     for k = 1:numel(plan.binTypes)
-        column = interceptColumn(result, plan.binTypes{k});
-        if isempty(column)
+        [waveform, binNotes] = referencePrediction(unfold, plan, plan.binTypes{k}, ...
+            input.bindesc(ordinary(k)).label);
+        if ~isempty(binNotes)   % one note per spline, not one per bin
+            notes = reshape(unique([notes, binNotes], 'stable'), 1, []);
+        end
+        if isempty(waveform)
             continue;   % a bin with no events: left as NaN, and noted by binModel
         end
-        data(:, :, ordinary(k)) = result.beta(:, :, column);
+        data(:, :, ordinary(k)) = waveform;
         fitted(ordinary(k)) = true;
     end
     requireFiniteBetas(data, fitted, input.bindesc, opts);
@@ -261,8 +312,9 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
         span = max(1, round(excluded(k, 1))):min(npnts, round(excluded(k, 2)));
         bad(span) = true;
     end
-    model = struct('Xdc', work.unfold.Xdc, 'X', work.unfold.X, ...
-        'beta_dc', work.unfold.beta_dc, 'timelimits', opts.WindowMs / 1000, 'srate', srate);
+    model = struct('Xdc', work.unfold.Xdc, 'Xdc_terms2cols', work.unfold.Xdc_terms2cols, ...
+        'X', work.unfold.X, 'beta_dc', work.unfold.beta_dc, ...
+        'timelimits', opts.WindowMs / 1000, 'srate', srate);
     anchors = double([input.event(events).latency]);
     [trials, usable] = Unfold.overlapCorrectedTrials(input.data, model, owner, anchors, bad);
 
@@ -330,7 +382,8 @@ function info = modelInfo(input, plan, opts, excluded, srate)
     info = struct('output', 'average', 'window', opts.WindowMs, 'baseline', opts.BaselineMs, ...
         'binLabels', {plan.binLabels}, ...
         'binTypes', {plan.binTypes}, 'binCounts', plan.binCounts, ...
-        'nuisanceTypes', {plan.nuisanceTypes}, 'covariates', {plan.covariates}, ...
+        'nuisanceTypes', {plan.nuisanceTypes}, ...
+        'formulas', struct('type', plan.typeLabels, 'formula', plan.formulas), ...
         'notes', {plan.notes}, ...
         'excludedIntervals', excluded, ...
         'excludedSeconds', sum(diff(excluded, 1, 2)) / srate, ...
@@ -544,17 +597,179 @@ function mask = comboMask(bindesc)
     end
 end
 
-function column = interceptColumn(result, eventType)
-%INTERCEPTCOLUMN  Which of uf_condense's parameters is this event's intercept.
-%   With one formula of y ~ 1 per event type, each type contributes exactly
-%   one parameter, so the event name identifies it; the name is matched too
-%   rather than assumed, so a later formula with covariates cannot silently
-%   pick up the wrong column here.
-    events = arrayfun(@(p) char(string(p.event)), result.param, 'UniformOutput', false);
-    names = arrayfun(@(p) char(string(p.name)), result.param, 'UniformOutput', false);
-    column = find(strcmp(events, eventType) & contains(lower(names), 'intercept'), 1);
-    if isempty(column)
-        column = find(strcmp(events, eventType), 1);
+function [waveform, notes] = referencePrediction(unfold, plan, eventType, label)
+%REFERENCEPREDICTION  The waveform of the bin fitted as EVENTTYPE: the betas
+%   of the type's own columns (cols2eventtypes), weighted by the bin's own
+%   average design row for the intercept, factors and interactions, and by
+%   the pooled average for every continuous or spline term (see this file's
+%   header). [] when the type is not in the model.
+%
+%   A SPLINE IS ONLY AVERAGED WHERE EVERY BIN USING IT HAS DATA (the pooled
+%   values inside plan.pooled's .common range), because a bin's spline is
+%   fitted over its own values only, and outside them it is extrapolating,
+%   which a spline does badly. Where the bins share no values at all there
+%   is nothing a model can hold constant, and each bin is evaluated over its
+%   own; both are said in NOTES. A circular spline covers the whole circle
+%   and never extrapolates, so it takes every pooled value.
+    waveform = [];
+    notes = {};
+    t = find(cellfun(@(e) any(strcmp(cellstr(e), eventType)), unfold.eventtypes), 1);
+    if isempty(t)
+        return;
+    end
+    rows = strcmp({plan.events.type}, eventType);
+    cols = reshape(find(unfold.cols2eventtypes == t), 1, []);
+    weights = mean(unfold.X(rows, cols), 1);
+    variableOf = unfold.cols2variablenames(cols);
+    for v = reshape(unique(variableOf, 'stable'), 1, [])
+        kind = unfold.variabletypes{v};
+        if ~any(strcmp(kind, {'continuous', 'spline'}))
+            continue;
+        end
+        name = regexprep(unfold.variablenames{v}, '^\d+_', '');
+        pooled = plan.pooled(strcmp({plan.pooled.name}, name));
+        values = pooled.values;
+        at = variableOf == v;
+        if strcmp(kind, 'continuous')
+            weights(at) = mean(values);
+        else
+            spl = splineFor(unfold, unfold.colnames(cols(at)));
+            if ~contains(func2str(spl.splinefunction), 'cyclical')
+                if isempty(pooled.common)
+                    values = [plan.events(rows).(name)];
+                    notes{end + 1} = sprintf(['The bins using "%s" share no values of it, so it ' ...
+                        'cannot be held constant across them: "%s" is evaluated over its own.'], ...
+                        name, label); %#ok<AGROW>
+                elseif any(values < pooled.common(1) | values > pooled.common(2))
+                    values = values(values >= pooled.common(1) & values <= pooled.common(2));
+                    notes{end + 1} = sprintf(['The spline of "%s" is averaged over its values ' ...
+                        'from %.4g to %.4g, the range every bin using it shares: outside a bin''s ' ...
+                        'own values its spline is extrapolating.'], name, ...
+                        pooled.common(1), pooled.common(2)); %#ok<AGROW>
+                end
+            end
+            basis = spl.splinefunction(values, spl.knots);
+            basis(:, spl.removedSplineIdx) = [];
+            weights(at) = mean(basis, 1);
+        end
+    end
+    waveform = sum(unfold.beta_dc(:, :, cols) .* reshape(weights, 1, 1, []), 3);
+end
+
+function spl = splineFor(unfold, colnames)
+%SPLINEFOR  The entry of EEG.unfold.splines whose columns are COLNAMES, the
+%   columns of X it produced. Matched on the columns rather than the name,
+%   since two event types can each have a spline of the same field.
+    for s = 1:numel(unfold.splines)
+        spl = unfold.splines{s};
+        if isequal(reshape(cellstr(spl.colnames), 1, []), reshape(cellstr(colnames), 1, []))
+            return;
+        end
+    end
+    throw(MException('Alakazam:Unfold:SplineNotFound', '%s', sprintf([ ...
+        'No spline in the fitted model produced the columns %s, so the waveform cannot be ' ...
+        'evaluated. This is a fault in Alakazam, not in the model.'], strjoin(cellstr(colnames), ', '))));
+end
+
+function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
+%PACKAGETERMS  One waveform per model term of every binned event type, by
+%   Unfold's own route (see this file's header), in Average's shape.
+    result = uf_condense(work);
+    args = {'auto_method', 'quantile', 'auto_n', 5};
+    predictAt = Unfold.predictionValues(opts.EvaluateAt, result.unfold);
+    if ~isempty(predictAt)
+        args = [args, {'predictAt', predictAt}];
+    end
+    lastwarn('');
+    marginal = uf_addmarginal(uf_predictContinuous(result, args{:}));
+    [warningText, ~] = lastwarn();
+    if contains(lower(warningText), 'interaction')
+        plan.notes{end + 1} = ['The model has interactions, which uf_addmarginal does not ' ...
+            'fold into the other terms: an interaction term is its own beta plus the ' ...
+            'intercept, not the response to that combination of levels.'];
+        info.notes = plan.notes;
+    end
+
+    events = arrayfun(@(p) char(string(p.event)), marginal.param, 'UniformOutput', false);
+    labelOf = containers.Map(plan.eventTypes, plan.typeLabels);
+    keep = find(ismember(events, plan.binTypes));
+    labels = cell(1, numel(keep));
+    counts = zeros(1, numel(keep));
+    terms = struct('label', {}, 'bin', {}, 'name', {}, 'type', {}, 'value', {});
+    for j = 1:numel(keep)
+        p = marginal.param(keep(j));
+        binLabel = labelOf(events{keep(j)});
+        labels{j} = termLabel(binLabel, p, referenceLevels(result.unfold, plan.events, events{keep(j)}));
+        counts(j) = nnz(strcmp({plan.events.type}, events{keep(j)}));
+        terms(j) = struct('label', labels{j}, 'bin', binLabel, 'name', char(string(p.name)), ...
+            'type', char(string(p.type)), 'value', double(p.value(1)));
+    end
+
+    data = marginal.beta(:, :, keep);
+    requireFiniteBetas(data, true(1, numel(keep)), struct('label', labels), opts);
+    data = applyBaseline(data, true(1, numel(keep)), times, opts.BaselineMs);
+
+    EEG = input;
+    EEG.data = data;
+    EEG.times = times;
+    EEG.pnts = numel(times);
+    EEG.trials = 1;
+    EEG.xmin = times(1) / 1000;
+    EEG.xmax = times(end) / 1000;
+    EEG.DataFormat = "Averaged";
+    EEG.ntrials = sum(plan.binCounts);
+    EEG.stErr = zeros(size(data));      % see this file's header: there is none
+    EEG.aSME = nan(size(data, 1), numel(keep));
+    EEG.bindesc = struct('index', num2cell(1:numel(keep)), 'label', labels, ...
+        'combo', repmat({[]}, 1, numel(keep)), 'n', num2cell(counts));
+
+    info.output = 'terms';
+    info.terms = terms;
+    info.evaluateAt = char(string(opts.EvaluateAt));
+end
+
+function text = referenceLevels(unfold, events, eventType)
+%REFERENCELEVELS  ", factor = level" for each factor of EVENTTYPE: the level
+%   the intercept stands for, which is the one without a column of its own
+%   (Unfold's reference coding makes the first level, in sorted order, the
+%   reference). '' for a type without factors.
+    text = '';
+    t = find(cellfun(@(e) any(strcmp(cellstr(e), eventType)), unfold.eventtypes), 1);
+    if isempty(t)
+        return;
+    end
+    cols = reshape(find(unfold.cols2eventtypes == t), 1, []);
+    variables = reshape(unique(unfold.cols2variablenames(cols), 'stable'), 1, []);
+    rows = strcmp({events.type}, eventType);
+    for v = variables
+        if ~strcmp(unfold.variabletypes{v}, 'categorical')
+            continue;
+        end
+        name = regexprep(unfold.variablenames{v}, '^\d+_', '');
+        if ~isfield(events, name)
+            continue;
+        end
+        levels = unique(cellfun(@(x) char(string(x)), {events(rows).(name)}, 'UniformOutput', false));
+        own = regexprep(unfold.colnames(cols(unfold.cols2variablenames(cols) == v)), ['^(\d+_)?' name '_'], '');
+        reference = setdiff(levels, own);
+        if ~isempty(reference)
+            text = sprintf('%s, %s = %s', text, name, reference{1});
+        end
+    end
+end
+
+function label = termLabel(binLabel, p, references)
+%TERMLABEL  "<bin>: <term>" for one of uf_condense's parameters, without the
+%   "2_" Unfold puts before a second event type's names: the intercept with
+%   the factor levels it stands for, a continuous or spline term with the
+%   value it was evaluated at, anything else by Unfold's own column name.
+    name = regexprep(char(string(p.name)), '^\d+_', '');
+    if strcmpi(name, '(Intercept)')
+        label = sprintf('%s: (Intercept)%s', binLabel, references);
+    elseif contains(char(string(p.type)), 'converted') && isfinite(p.value(1))
+        label = sprintf('%s: %s = %.4g', binLabel, name, p.value(1));
+    else
+        label = sprintf('%s: %s', binLabel, name);
     end
 end
 

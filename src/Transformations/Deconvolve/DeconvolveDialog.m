@@ -1,10 +1,10 @@
 function options = DeconvolveDialog(EEG, stored)
 %DECONVOLVEDIALOG  Modal editor for Deconvolve's settings.
-%   OPTIONS = DeconvolveDialog(EEG, STORED) shows the bins to fit, the
-%   response window, the artefact threshold, the covariates, and which event
-%   codes outside every bin are modelled, seeded from STORED (a previous
-%   run's options, or [] on first use), and returns the options Deconvolve
-%   takes, or [] on Cancel.
+%   OPTIONS = DeconvolveDialog(EEG, STORED) shows the bins to fit, each
+%   bin's formula, the response window, the artefact threshold, which event
+%   codes outside every bin are modelled, and what comes out, seeded from
+%   STORED (a previous run's options, or [] on first use), and returns the
+%   options Deconvolve takes, or [] on Cancel.
 %
 %   THE BINS ARE A SETTING HERE, not a property of the dataset. Deconvolve
 %   runs on the continuous recording (see Deconvolve for why it cannot be
@@ -14,19 +14,31 @@ function options = DeconvolveDialog(EEG, stored)
 %   A dataset that does already carry tags is used as it stands until a script
 %   is given.
 %
+%   EACH BIN HAS A FORMULA, typed in Unfold's own notation in the table, one
+%   row per bin: 'y ~ 1' by default, or with linear terms, factors (cat),
+%   splines (spl, circspl) and interactions. The bins say which events are
+%   fitted together; the formula says what explains their response. Beside
+%   it is what a formula can use: this recording's event fields, by kind and
+%   unit, and the notation itself. Options stored before formulas existed
+%   carry a list of covariates instead; those are shown here as the formulas
+%   they always meant, and OK stores the formulas.
+%
 %   IT SHOWS THE MODEL IT WOULD FIT, not just the numbers. The list names
-%   every bin with its event count, the nuisance event types, and anything
-%   Unfold.binModel has to say about the design (a bin with no events, a pair
-%   whose timing never varies so their responses cannot be told apart). That
-%   is the one thing a user cannot work out from the dialog's fields, and the
-%   one thing that decides whether the answer will mean anything. It refreshes
-%   when the bins, the covariates or the chosen event codes change, because
-%   all three change the model.
+%   every bin with its event count, the columns the toolbox builds for each
+%   formula (Unfold.designMatrix on the events alone, so the preview is the
+%   same call the fit makes), the nuisance event types, and anything
+%   Unfold.binModel has to say about the design (a bin with no events, a
+%   field a formula names that a bin's events lack). That is the one thing
+%   a user cannot work out from the dialog's fields, and the one thing that
+%   decides whether the answer will mean anything. It refreshes when the
+%   bins, a formula or the chosen event codes change, because all three
+%   change the model.
 %
 %   OK checks the settings the way Deconvolve will apply them, so a design
 %   the fit would refuse is reported here rather than after the dialog closes.
 %
-%   See also DECONVOLVE, DEFINEBINSDIALOG, UNFOLD.BINMODEL, UNFOLD.FITBINS.
+%   See also DECONVOLVE, DEFINEBINSDIALOG, UNFOLD.BINMODEL, UNFOLD.FITBINS,
+%   UNFOLD.DESIGNMATRIX.
     options = [];
 
     seed = defaults();
@@ -72,6 +84,18 @@ function options = DeconvolveDialog(EEG, stored)
         binScript = lastDefineBinsScript();
     end
 
+    % Every formula typed in this session, by bin label, including those of
+    % bins the script no longer has: rewriting the bins and then writing them
+    % back should not cost the formulas that went with them.
+    remembered = storedFormulas(seed.formulas);
+    % The older covariates are turned into formulas once, the first time
+    % there are bins to turn them into (see seedFormulaTable).
+    legacyCovariates = cellstr(string(seed.covariates));
+    if ~isempty(remembered)
+        legacyCovariates = {};   % the formulas already say what they meant
+    end
+    selectedRow = 1;
+
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([120 60 800 900]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
@@ -83,17 +107,17 @@ function options = DeconvolveDialog(EEG, stored)
     uilabel(outer, 'WordWrap', 'on', 'Text', [ ...
         'Fits every bin at once against the whole continuous recording, so where two events are ' ...
         'close enough for their responses to overlap, each bin keeps its own and gives up the ' ...
-        'other''s. The result is either one waveform per bin, in the shape Average produces, or ' ...
-        'one overlap-corrected trial per event, in the shape DefineBins cuts, so the rest of ' ...
-        'Alakazam reads either unchanged.']);
+        'other''s. The result is one waveform per bin, in the shape Average produces, one ' ...
+        'overlap-corrected trial per event, in the shape DefineBins cuts, or one waveform per ' ...
+        'term of the model, so the rest of Alakazam reads any of them unchanged.']);
 
     binsRow = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 130}, 'Padding', [0 4 0 4]);
     binsLabel = uilabel(binsRow, 'WordWrap', 'on', 'Text', '');
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [5 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 5), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [6 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 6), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1));
     uilabel(settings, 'Text', 'Artefact threshold (uV, 0 = off):');
@@ -124,42 +148,71 @@ function options = DeconvolveDialog(EEG, stored)
 
     % What comes out. The waveforms are the same either way (Average of the
     % trials gives them back); the trials are for looking at them one by one
-    % and for the noise figures only trials can give.
+    % and for the noise figures only trials can give; the terms are the
+    % model's own view, one waveform per factor level and per value of a
+    % continuous term.
     outputLabel = uilabel(settings, 'Text', 'Result:');
     outputLabel.Layout.Row = 5;
     outputLabel.Layout.Column = 1;
     outputDropdown = uidropdown(settings, 'Tag', 'output', ...
         'Items', {'One waveform per bin (as Average gives)', ...
-                  'Overlap-corrected trials (as DefineBins cuts)'}, ...
-        'ItemsData', {'average', 'trials'}, 'Value', outputSeed(seed.output), ...
+                  'Overlap-corrected trials (as DefineBins cuts)', ...
+                  'One waveform per model term'}, ...
+        'ItemsData', {'average', 'trials', 'terms'}, 'Value', outputSeed(seed.output), ...
+        'ValueChangedFcn', @(~, ~) onOutputChanged(), ...
         'Tooltip', ['Trials hold each event''s recording with every other event''s fitted ' ...
-         'response subtracted. Run Average on them for the waveforms, and EpochView shows ' ...
-         'them as an ERP image without the overlap.']);
+         'response subtracted: run Average on them for the waveforms, and EpochView shows ' ...
+         'them as an ERP image without the overlap. Model terms are every factor level and ' ...
+         'every continuous or spline term at chosen values, each a whole waveform with the ' ...
+         'other terms at their means.']);
     outputDropdown.Layout.Row = 5;
     outputDropdown.Layout.Column = [2 4];
+    evaluateLabel = uilabel(settings, 'Text', 'Terms evaluated at:');
+    evaluateLabel.Layout.Row = 6;
+    evaluateLabel.Layout.Column = 1;
+    evaluateField = uieditfield(settings, 'text', 'Tag', 'evaluateAt', ...
+        'Value', char(string(seed.evaluateAt)), ...
+        'Placeholder', 'e.g. sac_amplitude = 0.5 1 2 4; rt = 300 500', ...
+        'Tooltip', ['Where each continuous or spline term is drawn, as "name = values", ' ...
+         'separated by semicolons. A term not named here is drawn at five quantiles ' ...
+         'of its own values.']);
+    evaluateField.Layout.Row = 6;
+    evaluateField.Layout.Column = [2 4];
+    onOutputChanged();
 
-    % The model preview and the covariate picker share the stretchy row: the
-    % picker is only meaningful next to the model it changes, since what a
-    % covariate does here is visible only as the formula each bin is fitted
-    % with, which the preview lists.
-    middle = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 220}, ...
+    % The formulas, the model they make, and what a formula can use share
+    % the stretchy row: a formula is only readable next to the columns it
+    % turns into and the fields it can name.
+    middle = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 250}, ...
         'Padding', [0 0 0 0], 'ColumnSpacing', 8);
-    modelList = uitextarea(middle, 'Editable', 'off', 'Value', {''});
-    picker = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1x'}, ...
-        'Padding', [0 0 0 0]);
-    uilabel(picker, 'WordWrap', 'on', 'Text', 'Covariates (optional):');
-    % Checkbox trees, not multi-select list boxes. A list box deselects only
+    left = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1.5x'}, ...
+        'Padding', [0 0 0 0], 'RowSpacing', 4);
+    formulaHead = uigridlayout(left, [1 2], 'ColumnWidth', {'1x', 130}, 'Padding', [0 0 0 0]);
+    uilabel(formulaHead, 'WordWrap', 'on', 'Text', ...
+        'What explains each bin''s response, in Unfold''s notation (double-click to edit):');
+    uibutton(formulaHead, 'Text', 'Copy to every bin', 'ButtonPushedFcn', @(~, ~) onCopyFormula(), ...
+        'Tooltip', 'Give every bin the formula of the row last clicked');
+    formulaTable = uitable(left, 'Tag', 'formulas', 'ColumnName', {'Bin', 'Formula'}, ...
+        'RowName', {}, 'ColumnEditable', [false true], 'ColumnWidth', {150, 'auto'}, ...
+        'Data', cell(0, 2), ...
+        'CellEditCallback', @(~, event) onFormulaEdited(event), ...
+        'CellSelectionCallback', @(~, event) onFormulaSelected(event));
+    uilabel(left, 'Text', 'The model:');
+    modelList = uitextarea(left, 'Editable', 'off', 'Value', {''});
+
+    right = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1.6x', 'fit', '1x'}, ...
+        'Padding', [0 0 0 0], 'RowSpacing', 4);
+    uilabel(right, 'WordWrap', 'on', 'Text', 'What a formula can use:');
+    uitextarea(right, 'Editable', 'off', 'Tag', 'fields', 'Value', fieldReference(EEG));
+    uilabel(right, 'WordWrap', 'on', 'Text', 'Events in no bin, modelled and dropped:');
+    % A checkbox tree, not a multi-select list box. A list box deselects only
     % with Ctrl+click, and a plain click on the one selected item leaves it
-    % selected, so going back to "none" was out of reach in practice: the
-    % reported symptom was a covariate that could not be unselected. A tick
+    % selected, so going back to "none" was out of reach in practice. A tick
     % box toggles on a plain click, which is what an optional choice needs.
-    covariateTree = uitree(picker, 'checkbox', 'CheckedNodesChangedFcn', @(~, ~) showModel());
-    uilabel(picker, 'WordWrap', 'on', 'Text', 'Events in no bin, modelled and dropped:');
-    otherTree = uitree(picker, 'checkbox', 'CheckedNodesChangedFcn', @(~, ~) onOtherEventsChanged(), ...
+    otherTree = uitree(right, 'checkbox', 'CheckedNodesChangedFcn', @(~, ~) onOtherEventsChanged(), ...
         'Tooltip', ['Each ticked code gets its own full response, fitted and then dropped, so ' ...
          'its overlap is taken out of the bins. A code with only a handful of events adds a ' ...
          'whole window of parameters for very little.']);
-    fillCovariates();
 
     uilabel(outer, 'WordWrap', 'on', 'FontColor', [0.35 0.35 0.35], 'Text', [ ...
         'The window should cover the whole response, including anything that precedes the event ' ...
@@ -168,11 +221,11 @@ function options = DeconvolveDialog(EEG, stored)
         '2000 ms window, stepped 100 ms) are the toolbox''s own. Events in no bin are worth ' ...
         'modelling: overlap is only removed where it is accounted for, so a response or a ' ...
         'following stimulus left out still overlaps, it just stops being separated out. ' ...
-        'Each code is listed with its count, so a code with one or two events, which adds a ' ...
-        'whole window of parameters for almost nothing, can be left unticked. ' ...
         'The threshold is peak-to-peak within the moving window, and a window that exceeds it ' ...
         'is left out whole, so in reading or free viewing, where eye movements are the task, ' ...
-        'it is usually better off (0) with the saccades and blinks modelled instead.']);
+        'it is usually better off (0) with the saccades and blinks modelled instead. A term in ' ...
+        'a formula is fitted and held at the same values for every bin that uses it, so a ' ...
+        'difference between bins is not one in that term.']);
 
     buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, 'Padding', [8 6 8 6]);
     cancelButton = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
@@ -185,6 +238,109 @@ function options = DeconvolveDialog(EEG, stored)
     showModel();
     uiwait(fig);
 
+    function onOutputChanged()
+    %ONOUTPUTCHANGED  The values to evaluate at only mean something for the
+    %   terms, so the field is only open for them.
+        evaluateField.Enable = matlab.lang.OnOffSwitchState(strcmp(outputDropdown.Value, 'terms'));
+    end
+
+    % ---- the formulas ------------------------------------------------- %
+    function formulas = tableFormulas()
+    %TABLEFORMULAS  The formulas as the table shows them, one per bin, read
+    %   from the table itself so OK returns what is on screen however it got
+    %   there.
+        data = formulaTable.Data;
+        formulas = struct('bin', {}, 'formula', {});
+        for k = 1:size(data, 1)
+            formulas(end + 1) = struct('bin', data{k, 1}, 'formula', normalFormula(data{k, 2})); %#ok<AGROW>
+        end
+    end
+
+    function seedFormulaTable(tagged)
+    %SEEDFORMULATABLE  One row per bin that gets fitted, with the formula
+    %   typed for it before, if any. Rebuilt only when the bins themselves
+    %   change, so an edit does not reset the table under the pointer.
+        labels = ordinaryBinLabels(tagged);
+        data = formulaTable.Data;
+        if ~isempty(data) && isequal(reshape(data(:, 1), 1, []), labels)
+            return;
+        end
+        remember(tableFormulas());
+        legacy = legacyFormulas(tagged);
+        data = [reshape(labels, [], 1), repmat({'y ~ 1'}, numel(labels), 1)];
+        for k = 1:numel(labels)
+            hit = find(strcmp({remembered.bin}, labels{k}), 1);
+            if ~isempty(hit)
+                data{k, 2} = remembered(hit).formula;
+            elseif isKey(legacy, labels{k})
+                data{k, 2} = legacy(labels{k});
+            end
+        end
+        formulaTable.Data = data;
+        onOff = {'off', 'on'};       % a table takes the words, not an OnOffSwitchState
+        formulaTable.Enable = onOff{1 + ~isempty(labels)};
+        selectedRow = 1;
+    end
+
+    function legacy = legacyFormulas(tagged)
+    %LEGACYFORMULAS  The formulas stored covariates always meant, by bin:
+    %   what Unfold.binModel makes of them, which adds each one only to the
+    %   bins whose events carry it and vary in it. Done once, since from
+    %   then on the table holds them.
+        legacy = containers.Map('KeyType', 'char', 'ValueType', 'char');
+        if isempty(legacyCovariates)
+            return;
+        end
+        try
+            plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
+                'Covariates', legacyCovariates);
+            for k = 1:numel(plan.typeLabels)
+                legacy(plan.typeLabels{k}) = plan.formulas{k};
+            end
+        catch
+            % The bins cannot be fitted as they stand; the model list says why.
+        end
+        legacyCovariates = {};
+    end
+
+    function remember(formulas)
+    %REMEMBER  Keep FORMULAS by bin label, replacing any older ones.
+        for k = 1:numel(formulas)
+            hit = strcmp({remembered.bin}, formulas(k).bin);
+            remembered(hit) = [];
+            remembered(end + 1) = formulas(k); %#ok<AGROW>
+        end
+    end
+
+    function onFormulaEdited(event)
+    %ONFORMULAEDITED  A formula tidied the way the fit will read it (an
+    %   empty one is 'y ~ 1', a missing 'y ~' is added), then the preview.
+        row = event.Indices(1);
+        formulaTable.Data{row, 2} = normalFormula(event.NewData);
+        remember(tableFormulas());
+        showModel();
+    end
+
+    function onFormulaSelected(event)
+        if ~isempty(event.Indices)
+            selectedRow = event.Indices(1, 1);
+        end
+    end
+
+    function onCopyFormula()
+    %ONCOPYFORMULA  The formula of the row last clicked, in every row.
+        data = formulaTable.Data;
+        if isempty(data)
+            return;
+        end
+        row = min(max(selectedRow, 1), size(data, 1));
+        data(:, 2) = data(row, 2);
+        formulaTable.Data = data;
+        remember(tableFormulas());
+        showModel();
+    end
+
+    % ---- the events in no bin ---------------------------------------- %
     function onOtherEventsChanged()
     %ONOTHEREVENTSCHANGED  The ticks become the choice, then the preview.
         otherSelection = otherTreeSelection();
@@ -238,53 +394,7 @@ function options = DeconvolveDialog(EEG, stored)
         setChecked(otherTree, nodes([unbinned.modelled]));
     end
 
-    function fillCovariates()
-    %FILLCOVARIATES  What this recording can offer, with the circular ones
-    %   left out: an angle cannot be entered as a slope (359 degrees sits
-    %   next to 1 and nowhere near 180), and the honest treatment is a
-    %   sine/cosine pair rather than a tick box, so they are named as
-    %   unavailable rather than quietly offered.
-        found = Unfold.eventCovariates(EEG);
-        linear = found(strcmpi({found.kind}, 'linear'));
-        delete(covariateTree.Children);
-        if isempty(linear)
-            uitreenode(covariateTree, 'Text', '(no numeric event fields)');
-            covariateTree.Enable = 'off';
-            return;
-        end
-        stored = cellstr(string(seed.covariates));
-        for k = 1:numel(linear)
-            uitreenode(covariateTree, 'Text', covariateItem(linear(k)), 'NodeData', linear(k).name);
-        end
-        nodes = covariateTree.Children;
-        setChecked(covariateTree, nodes(ismember({linear.name}, stored)));
-        circular = found(~strcmpi({found.kind}, 'linear'));
-        if ~isempty(circular)
-            covariateTree.Tooltip = sprintf(['Not offered, being circular: %s. An angle ' ...
-                'needs a sine/cosine pair, not a slope.'], strjoin({circular.name}, ', '));
-        end
-    end
-
-    function text = covariateItem(candidate)
-        text = candidate.name;
-        if ~isempty(candidate.unit)
-            text = sprintf('%s (%s)', text, candidate.unit);
-        end
-        text = sprintf('%s, n = %d', text, candidate.n);
-    end
-
-    function names = chosenCovariates()
-    %CHOSENCOVARIATES  The ticked covariates, read from the tree itself.
-        names = {};
-        if strcmpi(covariateTree.Enable, 'off')
-            return;
-        end
-        checked = covariateTree.CheckedNodes;
-        if ~isempty(checked)
-            names = reshape({checked.NodeData}, 1, []);
-        end
-    end
-
+    % ---- the rest ------------------------------------------------------ %
     function onBaselineToggled()
     %ONBASELINETOGGLED  The two fields follow the checkbox, so an unticked box
     %   cannot leave a window behind that looks as if it were being used.
@@ -336,13 +446,16 @@ function options = DeconvolveDialog(EEG, stored)
         [tagged, why] = binnedDataset();
         binsLabel.Text = binSourceText();
         if isempty(tagged)
+            formulaTable.Data = cell(0, 2);
+            formulaTable.Enable = 'off';
             modelList.Value = [{'No model yet:'}, {''}, {why}];
             refreshOtherTree([]);
             return;
         end
+        seedFormulaTable(tagged);
         try
             plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Covariates', chosenCovariates());
+                'Formulas', tableFormulas());
             % A code chosen earlier can stop being "in no bin" when the bins
             % change, and would then only produce a note saying it is absent.
             % The list is the user's view of the choice, so the choice follows
@@ -352,14 +465,15 @@ function options = DeconvolveDialog(EEG, stored)
                 if ~all(ismember(otherSelection, available))
                     otherSelection = intersect(otherSelection, available, 'stable');
                     plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                        'Covariates', chosenCovariates());
+                        'Formulas', tableFormulas());
                 end
             end
+            refreshOtherTree(plan.unbinnedCodes);
+            design = designLines(tagged, plan);
         catch err
             modelList.Value = [{'This design cannot be fitted:'}, {''}, {err.message}];
             return;
         end
-        refreshOtherTree(plan.unbinnedCodes);
         lines = {sprintf('%d bin(s) will be fitted:', numel(plan.binLabels))};
         for k = 1:numel(plan.binLabels)
             lines{end + 1} = sprintf('   %-30s %5d event(s)', plan.binLabels{k}, plan.binCounts(k)); %#ok<AGROW>
@@ -370,16 +484,7 @@ function options = DeconvolveDialog(EEG, stored)
                 'out here once the fit is done by subtracting the fitted waveforms. Nothing ' ...
                 'else has to be run for them.'], numel(plan.comboBins));
         end
-        if ~isempty(plan.covariates)
-            lines{end + 1} = '';
-            for k = 1:numel(plan.covariates)
-                cov = plan.covariates(k);
-                lines{end + 1} = sprintf(['Covariate "%s": fitted on %d event(s) in %d type(s), ' ...
-                    'centred on %.4g, then dropped.'], cov.name, cov.n, numel(cov.types), ...
-                    cov.centre); %#ok<AGROW>
-            end
-            lines{end + 1} = sprintf('Each bin is fitted as: %s', plan.formulas{1});
-        end
+        lines = [lines, design];
         if isempty(plan.nuisanceTypes)
             lines{end + 1} = '';
             lines{end + 1} = ['No nuisance events are modelled, so any overlap from events ' ...
@@ -413,7 +518,8 @@ function options = DeconvolveDialog(EEG, stored)
     function onOK()
         otherSelection = otherTreeSelection();
         candidate = struct('binScript', binScript, ...
-            'covariates', {chosenCovariates()}, ...
+            'formulas', {tableFormulas()}, ...
+            'evaluateAt', strtrim(evaluateField.Value), ...
             'windowMs', [startField.Value stopField.Value], ...
             'baselineMs', [], ...
             'otherEvents', {otherSelection}, ...
@@ -446,11 +552,24 @@ function options = DeconvolveDialog(EEG, stored)
             return;
         end
         try
-            Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Covariates', candidate.covariates);
+            plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
+                'Formulas', candidate.formulas);
+            designLines(tagged, plan);
         catch err
             uialert(fig, err.message, 'Check the design');
             return;
+        end
+        % The values to evaluate the terms at, read the way the fit reads
+        % them and against the same design, so what is refused here is what
+        % the fit would refuse. Without the toolbox the fit checks them.
+        if strcmp(candidate.output, 'terms') && ~isempty(candidate.evaluateAt) && Unfold.isAvailable()
+            try
+                designed = quietDesign(tagged, plan);
+                Unfold.predictionValues(candidate.evaluateAt, designed.unfold);
+            catch err
+                uialert(fig, err.message, 'Check the values to evaluate at');
+                return;
+            end
         end
         options = candidate;
         uiresume(fig);
@@ -464,12 +583,177 @@ function options = DeconvolveDialog(EEG, stored)
 end
 
 % ======================================================================= %
+function lines = designLines(tagged, plan)
+%DESIGNLINES  The columns the toolbox builds for each bin's formula, from
+%   Unfold.designMatrix on the events alone: the same call the fit makes, so
+%   a formula it refuses is refused here, naming the bin, and throws. Only
+%   bins whose formula is more than 'y ~ 1' are listed, since an intercept
+%   is what every bin has anyway. Without the toolbox the formulas have been
+%   checked against the events only, which is said.
+    lines = {};
+    trivial = cellfun(@(f) strcmp(strrep(f, ' ', ''), 'y~1'), plan.formulas);
+    if all(trivial)
+        return;
+    end
+    if ~Unfold.isAvailable()
+        lines = {'', ['The Unfold toolbox is not installed here, so the formulas are checked ' ...
+            'against the events only; the toolbox reads their notation when it fits.']};
+        return;
+    end
+    designed = quietDesign(tagged, plan);
+    unfold = designed.unfold;
+    lines = {'', 'Each formula, as the toolbox builds it:'};
+    nbins = numel(plan.eventTypes) - numel(plan.nuisanceTypes);
+    for t = find(~trivial(1:nbins))
+        cols = find(unfold.cols2eventtypes == t);
+        variableOf = unfold.cols2variablenames(cols);
+        parts = {};
+        for v = reshape(unique(variableOf, 'stable'), 1, [])
+            name = regexprep(unfold.variablenames{v}, '^\d+_', '');
+            at = cols(variableOf == v);
+            switch unfold.variabletypes{v}
+                case 'intercept'
+                    parts{end + 1} = 'intercept'; %#ok<AGROW>
+                case 'spline'
+                    parts{end + 1} = sprintf('%s as a spline (%d columns)', name, numel(at)); %#ok<AGROW>
+                case 'categorical'
+                    parts{end + 1} = sprintf('%s as a factor (%s)', name, ...
+                        strjoin(regexprep(unfold.colnames(at), '^\d+_', ''), ', ')); %#ok<AGROW>
+                otherwise
+                    parts{end + 1} = sprintf('%s (%s)', name, unfold.variabletypes{v}); %#ok<AGROW>
+            end
+        end
+        lines{end + 1} = sprintf('   %s: %s', plan.typeLabels{t}, strjoin(parts, '; ')); %#ok<AGROW>
+        lines{end + 1} = sprintf('      %s', plan.formulas{t}); %#ok<AGROW>
+    end
+end
+
+function designed = quietDesign(tagged, plan) %#ok<INUSD>  plan is read inside evalc
+%QUIETDESIGN  Unfold.designMatrix on the events alone, without the progress
+%   lines uf_designmat prints on every call: the preview reruns it on every
+%   edit, and the command window is for the fit's own narration.
+    stub = struct('event', tagged.event, 'srate', tagged.srate, 'pnts', tagged.pnts); %#ok<NASGU>
+    designed = [];
+    evalc('designed = Unfold.designMatrix(stub, plan);');
+end
+
+function formula = normalFormula(formula)
+%NORMALFORMULA  A formula as the fit reads it: an empty one is 'y ~ 1', and
+%   one without its left-hand side gets 'y ~ ' (Unfold.binModel does the
+%   same, so this only makes the table show what will be fitted).
+    formula = strtrim(char(string(formula)));
+    if isempty(formula)
+        formula = 'y ~ 1';
+    elseif ~contains(formula, '~')
+        formula = ['y ~ ' formula];
+    end
+end
+
+function formulas = storedFormulas(stored)
+%STOREDFORMULAS  Stored formulas as a struct array of .bin and .formula,
+%   whatever shape a template gave them.
+    formulas = struct('bin', {}, 'formula', {});
+    if ~isstruct(stored) || ~all(isfield(stored, {'bin', 'formula'}))
+        return;
+    end
+    for k = 1:numel(stored)
+        formulas(end + 1) = struct('bin', char(string(stored(k).bin)), ...
+            'formula', normalFormula(stored(k).formula)); %#ok<AGROW>
+    end
+end
+
+function labels = ordinaryBinLabels(EEG)
+%ORDINARYBINLABELS  The bins that are fitted, in order: every bin but the
+%   combination ones, which are worked out from the others after the fit.
+    labels = {};
+    if ~isfield(EEG, 'bindesc') || isempty(EEG.bindesc)
+        return;
+    end
+    combo = false(1, numel(EEG.bindesc));
+    if isfield(EEG.bindesc, 'combo')
+        combo = arrayfun(@(b) ~isempty(b.combo), EEG.bindesc);
+    end
+    labels = reshape(cellstr(string({EEG.bindesc(~combo).label})), 1, []);
+end
+
+function lines = fieldReference(EEG)
+%FIELDREFERENCE  The event fields a formula can name, by what they can be,
+%   and the notation, so a formula can be written without leaving the
+%   dialog. Numbers come from Unfold.eventCovariates, which knows EYE-EEG's
+%   units and which of them are angles; text fields with a handful of
+%   values are the factors.
+    lines = {};
+    found = Unfold.eventCovariates(EEG);
+    linear = found(strcmpi({found.kind}, 'linear'));
+    circular = found(~strcmpi({found.kind}, 'linear'));
+    if ~isempty(linear)
+        lines = [lines, {'Numbers (a term, or spl):'}, ...
+            arrayfun(@fieldItem, linear, 'UniformOutput', false)];
+    end
+    if ~isempty(circular)
+        lines = [lines, {'', 'Angles (circspl):'}, ...
+            arrayfun(@fieldItem, circular, 'UniformOutput', false)];
+    end
+    factors = textFields(EEG);
+    if ~isempty(factors)
+        lines = [lines, {'', 'Text (cat):'}, ...
+            arrayfun(@(f) sprintf('   %s, %d levels', f.name, f.levels), factors, ...
+            'UniformOutput', false)];
+    end
+    if isempty(lines)
+        lines = {'(no event field a formula could use)'};
+    end
+    lines = [lines, {'', 'The notation:', ...
+        '   y ~ 1   the bin''s own waveform', ...
+        '   y ~ 1 + rt   plus a straight line in rt', ...
+        '   y ~ 1 + spl(rt, 5)   a smooth curve, 5 splines', ...
+        '   y ~ 1 + cat(side)   a factor, its first level the reference', ...
+        '   y ~ 1 + cat(side) * rt   a factor, rt, and their interaction', ...
+        '   circspl(angle, 5, 0, 360)   a curve round a circle', ...
+        '', 'A bin''s events must all carry every field its formula names.'}];
+end
+
+function text = fieldItem(candidate)
+    text = ['   ' candidate.name];
+    if ~isempty(candidate.unit)
+        text = sprintf('%s (%s)', text, candidate.unit);
+    end
+    text = sprintf('%s, n = %d', text, candidate.n);
+end
+
+function fields = textFields(EEG)
+%TEXTFIELDS  Event fields holding text with between 2 and 20 distinct
+%   values: the ones cat() can make a factor of. More than that is a label
+%   per event (a word, a file name), not a condition. The fields that place
+%   and tag the events are left out, as Unfold.eventCovariates leaves them.
+    fields = struct('name', {}, 'levels', {});
+    if ~isfield(EEG, 'event') || isempty(EEG.event)
+        return;
+    end
+    skip = {'type', 'latency', 'duration', 'urevent', 'bini', 'epoch'};
+    for name = reshape(fieldnames(EEG.event), 1, [])
+        if any(strcmpi(name{1}, skip))
+            continue;
+        end
+        values = {EEG.event.(name{1})};
+        values = values(~cellfun(@isempty, values));
+        if isempty(values) || ~all(cellfun(@(v) ischar(v) || (isstring(v) && isscalar(v)), values))
+            continue;
+        end
+        levels = numel(unique(cellfun(@char, values, 'UniformOutput', false)));
+        if levels >= 2 && levels <= 20
+            fields(end + 1) = struct('name', name{1}, 'levels', levels); %#ok<AGROW>
+        end
+    end
+end
+
+% ======================================================================= %
 function setChecked(tree, nodes)
 %SETCHECKED  Tick exactly NODES in a checkbox tree. "Nothing ticked" has to
 %   be the plain [] rather than an empty array of tree nodes: CheckBoxTree
 %   rejects the latter as not being children of the tree, and indexing the
 %   children with a mask that matches nothing produces exactly that, so the
-%   dialog failed to open whenever no covariate was stored.
+%   dialog failed to open whenever nothing was stored.
     if isempty(nodes)
         tree.CheckedNodes = [];
     else
@@ -499,17 +783,19 @@ function seed = defaults()
 %DEFAULTS  First-run settings: the paper's window and the toolbox's own
 %   artefact parameters, with nuisance events modelled because leaving them
 %   out quietly weakens the correction the transformation exists for.
-    seed = struct('binScript', '', 'covariates', {{}}, 'windowMs', [-200 800], ...
-        'artifactThresholdUv', 150, ...
+%   covariates is only read, from options stored before formulas existed.
+    seed = struct('binScript', '', 'covariates', {{}}, ...
+        'formulas', {struct('bin', {}, 'formula', {})}, 'evaluateAt', '', ...
+        'windowMs', [-200 800], 'artifactThresholdUv', 150, ...
         'artifactWindowMs', 2000, 'artifactStepMs', 100, 'output', 'average');
 end
 
 function value = outputSeed(stored)
-%OUTPUTSEED  A stored output choice the dropdown can show: anything but
-%   'trials' (a hand-edited template, say) falls back to the waveforms, which
-%   is what Deconvolve itself does with it.
-    value = 'average';
-    if strcmpi(char(string(stored)), 'trials')
-        value = 'trials';
+%OUTPUTSEED  A stored output choice the dropdown can show: anything it does
+%   not offer (a hand-edited template, say) falls back to the waveforms,
+%   which is what Deconvolve itself does with it.
+    value = lower(char(string(stored)));
+    if ~any(strcmp(value, {'average', 'trials', 'terms'}))
+        value = 'average';
     end
 end

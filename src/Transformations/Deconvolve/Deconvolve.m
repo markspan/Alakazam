@@ -47,21 +47,22 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   subject, which the averaged form cannot. Trials whose window touches a
 %   stretch left out of the model are dropped (see Unfold.fitBins).
 %
-%   COVARIATES ARE NUISANCE REGRESSORS HERE. Any numeric event field can be
-%   added to the model (Unfold.eventCovariates lists what a recording
-%   offers); each is mean-centred and fitted per event type, and the slopes
-%   are then dropped. The result is still one waveform per bin, but one the
-%   covariate's variance has been taken out of, and the bin's own waveform is
-%   its response at that covariate's average value rather than at zero.
+%   EACH BIN HAS A FORMULA, in Unfold's own notation, edited in the dialog:
+%   'y ~ 1' (the default: one waveform per bin, nothing else), or anything
+%   uf_designmat accepts, factors (cat(x)), interactions, linear terms,
+%   splines (spl(x, 5)) and circular splines (circspl(angle, 5, 0, 360)).
+%   The bins still decide which events each event type holds; the formula
+%   decides what explains their response (see Unfold.binModel, which checks
+%   every field a formula names against the bin's own events first).
 %
-%   WHAT IT DOES NOT GIVE YOU. A bin is a set of events, so this inherits
-%   what bins can express: no spline (non-linear) covariate terms, no
-%   main-effect/interaction parameterisation (a 2x2 is four bins and a
-%   difference bin, not four terms), and no circular covariates. A
-%   covariate's own slope is not reported either: it is fitted to get it out
-%   of the way, and reporting it would need a node shaped around predictors
-%   rather than bins. The averaged form has no standard error: see
-%   Unfold.fitBins.
+%   WHAT COMES OUT (output): one waveform per bin, the model's prediction
+%   with every continuous and spline term at the same values for every bin
+%   (so a term is a control: see Unfold.fitBins) and every factor at the
+%   bin's own mix; overlap-corrected trials; or one waveform per model term
+%   ('terms'): every factor level, every spline or continuous term at chosen
+%   values (evaluateAt), each as a whole waveform with the other terms at
+%   their means (uf_predictContinuous and uf_addmarginal). A waveform has no
+%   standard error of its own: see Unfold.fitBins.
 %
 %   Options (all set in DeconvolveDialog, stored per user by
 %   TransformSettings):
@@ -71,8 +72,14 @@ function [EEG, options] = Deconvolve(input, varargin)
 %     baselineMs           window the fitted waveforms are baseline-corrected
 %                          over, default the pre-event part of windowMs; []
 %                          or an unticked box leaves them uncorrected
-%     covariates           event fields fitted alongside each bin and then
-%                          dropped, mean-centred, default none
+%     formulas             each bin's formula, as a struct array of .bin (the
+%                          label) and .formula; a bin without one is 'y ~ 1'
+%     covariates           the older way to add terms (templates saved before
+%                          the formulas): each field becomes a linear term of
+%                          every bin without a formula of its own
+%     evaluateAt           for output 'terms': "sac_amplitude = 0.5 1 2; ...",
+%                          where continuous and spline terms are evaluated;
+%                          five quantiles for a term not named
 %     otherEvents          event codes in no bin to fit as nuisance and drop:
 %                          'all' (default), a list of codes, or empty for
 %                          none; the older modelOtherEvents true/false is
@@ -82,7 +89,8 @@ function [EEG, options] = Deconvolve(input, varargin)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100
 %     output               'average' (default): one waveform per bin;
-%                          'trials': overlap-corrected trials, epoched
+%                          'trials': overlap-corrected trials, epoched;
+%                          'terms': one waveform per model term
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Deconvolve(input)        % interactive dialog
@@ -117,6 +125,8 @@ tagged = applyBins(input, options);
     'WindowMs', TransTools.FieldOr(options, 'windowMs', [-200 800]), ...
     'BaselineMs', baselineOption(options), ...
     'Covariates', TransTools.FieldOr(options, 'covariates', {}), ...
+    'Formulas', TransTools.FieldOr(options, 'formulas', []), ...
+    'EvaluateAt', char(string(TransTools.FieldOr(options, 'evaluateAt', ''))), ...
     'OtherEvents', Unfold.otherEventsChoice(options), ...
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
@@ -182,6 +192,15 @@ function report(info)
     fprintf('.\n');
     for k = 1:numel(info.binLabels)
         fprintf('  %-28s %4d event(s)\n', info.binLabels{k}, info.binCounts(k));
+    end
+    for k = 1:numel(info.formulas)
+        if ~strcmp(strrep(info.formulas(k).formula, ' ', ''), 'y~1')
+            fprintf('  %-28s %s\n', info.formulas(k).type, info.formulas(k).formula);
+        end
+    end
+    if isfield(info, 'output') && strcmpi(info.output, 'terms')
+        fprintf('  Returned as %d term waveform(s): %s.\n', numel(info.terms), ...
+            strjoin({info.terms.label}, '; '));
     end
     if isfield(info, 'output') && strcmpi(info.output, 'trials')
         fprintf('  Returned as %d overlap-corrected trial(s)', info.trials);

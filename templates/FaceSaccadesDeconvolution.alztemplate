@@ -6,10 +6,22 @@
     {
       "transformId": "Deconvolve",
       "params": {
-        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, and saccade\n% amplitude as a covariate of the saccade response.\n% Differs from the paper: amplitude enters linearly and centred (Alakazam has no\n% spline terms; the paper used 5 splines, its script 10); the artefact scan\n% covers the 36 scalp channels, not the eye electrodes IO1/IO2/LO1/LO2 as well;\n% and one baseline (-200 to 0 ms) serves every bin, where the paper baselined\n% the button-locked response at 400 to 600 ms.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
-        "covariates": [
-          "sac_amplitude"
+        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, stimulus onset and\n% button press fitted as y ~ 1, and the saccade as y ~ 1 + spl(sac_amplitude, 5),\n% because larger saccades are followed by larger lambda waves, and not in a\n% straight line (the formulas are in the Deconvolve dialog; the paper says 5\n% splines, the authors' published script uses 10).\n% Differs from the paper: the artefact scan covers the 36 scalp channels, not the\n% eye electrodes IO1/IO2/LO1/LO2 as well; and one baseline (-200 to 0 ms) serves\n% every bin, where the paper baselined the button-locked response at 400 to 600 ms.\n%\n% Beyond the figure, the last Deconvolve node returns the model's own terms: the\n% saccade response at amplitudes of 0.3, 0.6 (the median), 1.5 and 3 degrees.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "formulas": [
+          {
+            "bin": "Stimulus",
+            "formula": "y ~ 1"
+          },
+          {
+            "bin": "Saccade",
+            "formula": "y ~ 1 + spl(sac_amplitude, 5)"
+          },
+          {
+            "bin": "Button",
+            "formula": "y ~ 1"
+          }
         ],
+        "evaluateAt": "",
         "windowMs": [
           -1500,
           1000
@@ -29,10 +41,22 @@
     {
       "transformId": "Deconvolve",
       "params": {
-        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, and saccade\n% amplitude as a covariate of the saccade response.\n% Differs from the paper: amplitude enters linearly and centred (Alakazam has no\n% spline terms; the paper used 5 splines, its script 10); the artefact scan\n% covers the 36 scalp channels, not the eye electrodes IO1/IO2/LO1/LO2 as well;\n% and one baseline (-200 to 0 ms) serves every bin, where the paper baselined\n% the button-locked response at 400 to 600 ms.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
-        "covariates": [
-          "sac_amplitude"
+        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, stimulus onset and\n% button press fitted as y ~ 1, and the saccade as y ~ 1 + spl(sac_amplitude, 5),\n% because larger saccades are followed by larger lambda waves, and not in a\n% straight line (the formulas are in the Deconvolve dialog; the paper says 5\n% splines, the authors' published script uses 10).\n% Differs from the paper: the artefact scan covers the 36 scalp channels, not the\n% eye electrodes IO1/IO2/LO1/LO2 as well; and one baseline (-200 to 0 ms) serves\n% every bin, where the paper baselined the button-locked response at 400 to 600 ms.\n%\n% Beyond the figure, the last Deconvolve node returns the model's own terms: the\n% saccade response at amplitudes of 0.3, 0.6 (the median), 1.5 and 3 degrees.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "formulas": [
+          {
+            "bin": "Stimulus",
+            "formula": "y ~ 1"
+          },
+          {
+            "bin": "Saccade",
+            "formula": "y ~ 1 + spl(sac_amplitude, 5)"
+          },
+          {
+            "bin": "Button",
+            "formula": "y ~ 1"
+          }
         ],
+        "evaluateAt": "",
         "windowMs": [
           -1500,
           1000
@@ -89,6 +113,41 @@
         "Param": "Init"
       },
       "parent": 5
+    },
+    {
+      "transformId": "Deconvolve",
+      "params": {
+        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, stimulus onset and\n% button press fitted as y ~ 1, and the saccade as y ~ 1 + spl(sac_amplitude, 5),\n% because larger saccades are followed by larger lambda waves, and not in a\n% straight line (the formulas are in the Deconvolve dialog; the paper says 5\n% splines, the authors' published script uses 10).\n% Differs from the paper: the artefact scan covers the 36 scalp channels, not the\n% eye electrodes IO1/IO2/LO1/LO2 as well; and one baseline (-200 to 0 ms) serves\n% every bin, where the paper baselined the button-locked response at 400 to 600 ms.\n%\n% Beyond the figure, the last Deconvolve node returns the model's own terms: the\n% saccade response at amplitudes of 0.3, 0.6 (the median), 1.5 and 3 degrees.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "formulas": [
+          {
+            "bin": "Stimulus",
+            "formula": "y ~ 1"
+          },
+          {
+            "bin": "Saccade",
+            "formula": "y ~ 1 + spl(sac_amplitude, 5)"
+          },
+          {
+            "bin": "Button",
+            "formula": "y ~ 1"
+          }
+        ],
+        "evaluateAt": "sac_amplitude = 0.3 0.6 1.5 3",
+        "windowMs": [
+          -1500,
+          1000
+        ],
+        "baselineMs": [
+          -200,
+          0
+        ],
+        "otherEvents": [],
+        "artifactThresholdUv": 250,
+        "artifactWindowMs": 2000,
+        "artifactStepMs": 100,
+        "output": "terms"
+      },
+      "parent": -1
     }
   ]
 }

@@ -339,8 +339,8 @@ classdef OverlapCorrectedTrialsTest < matlab.unittest.TestCase
             beta(:, :, 2) = [-2 * t; exp(-4 * t)];
             flat = reshape(permute(beta, [2 3 1]), 2 * nlags, 2);
 
-            m.model = struct('Xdc', Xdc, 'X', X, 'beta_dc', beta, ...
-                'timelimits', timelimits, 'srate', srate);
+            m.model = struct('Xdc', Xdc, 'Xdc_terms2cols', kron(1:2, ones(1, nlags)), ...
+                'X', X, 'beta_dc', beta, 'timelimits', timelimits, 'srate', srate);
             m.data = (Xdc * flat).';
             m.owner = owner;
             m.anchors = anchors;

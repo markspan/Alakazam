@@ -6,11 +6,14 @@ classdef FaceSaccadesTemplateTest < matlab.unittest.TestCase
 %   What is pinned is the part a later edit could quietly break: every
 %   node's parent is an earlier node (Apply Template replays
 %   resultNodes{parent}, see DimigenRiftTemplateTest for what a bad index
-%   did there), both Deconvolve nodes carry the paper's settings and differ
-%   only in what they return, and the comparison branch ends in an average.
-%   The analysis itself was replayed on the real data when the template was
-%   written: the stimulus ERP at Oz matched the authors' own script's
-%   (r = 0.997).
+%   did there), every Deconvolve node fits the paper's model, formulas
+%   included, and they differ only in what they return, and the comparison
+%   branch ends in an average. The analysis itself was replayed on the real
+%   data when the template was written: with the paper's spline of saccade
+%   amplitude, the stimulus ERP at Oz matched the authors' own script's
+%   (r = 0.9998), and the terms showed the lambda response growing with
+%   saccade size and levelling off, the non-linearity the paper gives as its
+%   reason for the spline.
 %
 %   Run with: runtests('tests/FaceSaccadesTemplateTest.m').
 %
@@ -31,30 +34,47 @@ classdef FaceSaccadesTemplateTest < matlab.unittest.TestCase
             end
         end
 
-        function bothDeconvolutionsFitThePapersModel(testCase)
-        %BOTHDECONVOLUTIONSFITTHEPAPERSMODEL  Three event types, -1.5 to 1 s,
-        %   250 uV in a 2 s window, saccade amplitude as a covariate, and
+        function everyDeconvolutionFitsThePapersModel(testCase)
+        %EVERYDECONVOLUTIONFITSTHEPAPERSMODEL  Three event types, -1.5 to 1 s,
+        %   250 uV in a 2 s window, the saccade fitted with 5 splines of its
+        %   amplitude and the other two with their intercept alone, and
         %   nothing else modelled.
             nodes = testCase.readTemplateNodes();
             deconvolve = nodes(cellfun(@(n) strcmp(n.transformId, 'Deconvolve'), nodes));
-            testCase.assertNumElements(deconvolve, 2);
+            testCase.assertNumElements(deconvolve, 3);
 
-            for k = 1:2
+            for k = 1:numel(deconvolve)
                 p = deconvolve{k}.params;
                 testCase.verifyEqual(reshape(p.windowMs, 1, []), [-1500 1000]);
                 testCase.verifyEqual(p.artifactThresholdUv, 250);
                 testCase.verifyEqual(p.artifactWindowMs, 2000);
-                testCase.verifyEqual(cellstr(p.covariates), {'sac_amplitude'});
+                testCase.verifyEqual({p.formulas.bin}, {'Stimulus', 'Saccade', 'Button'});
+                testCase.verifyEqual({p.formulas.formula}, ...
+                    {'y ~ 1', 'y ~ 1 + spl(sac_amplitude, 5)', 'y ~ 1'});
+                testCase.verifyFalse(isfield(p, 'covariates'), ...
+                    'The formulas carry the model; the older covariates would add a second one.');
                 testCase.verifyEmpty(p.otherEvents, 'Only the three event types are modelled.');
                 for code = {'"stimonset"', '"saccade"', '"buttonpress"'}
                     testCase.verifySubstring(p.binScript, code{1});
                 end
             end
             outputs = sort(cellfun(@(n) char(n.params.output), deconvolve, 'UniformOutput', false));
-            testCase.verifyEqual(reshape(outputs, 1, []), {'average', 'trials'});
-            same = rmfield(deconvolve{1}.params, 'output');
-            testCase.verifyEqual(rmfield(deconvolve{2}.params, 'output'), same, ...
-                'The waveforms and the trials come from the same model.');
+            testCase.verifyEqual(reshape(outputs, 1, []), {'average', 'terms', 'trials'});
+            same = rmfield(deconvolve{1}.params, {'output', 'evaluateAt'});
+            for k = 2:numel(deconvolve)
+                testCase.verifyEqual(rmfield(deconvolve{k}.params, {'output', 'evaluateAt'}), same, ...
+                    'The waveforms, the trials and the terms come from the same model.');
+            end
+        end
+
+        function theTermsAreEvaluatedAtChosenAmplitudes(testCase)
+        %THETERMSAREEVALUATEDATCHOSENAMPLITUDES  Named values, not the default
+        %   quantiles, which would differ from one recording to the next.
+            nodes = testCase.readTemplateNodes();
+            terms = nodes(cellfun(@(n) strcmp(n.transformId, 'Deconvolve') ...
+                && strcmp(n.params.output, 'terms'), nodes));
+            testCase.assertNumElements(terms, 1);
+            testCase.verifyEqual(terms{1}.params.evaluateAt, 'sac_amplitude = 0.3 0.6 1.5 3');
         end
 
         function theComparisonBranchEndsInAnAverage(testCase)

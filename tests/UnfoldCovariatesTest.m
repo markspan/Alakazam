@@ -1,26 +1,31 @@
 classdef UnfoldCovariatesTest < matlab.unittest.TestCase
-%UNFOLDCOVARIATESTEST  Covariates in the deconvolution model.
+%UNFOLDCOVARIATESTEST  What explains a bin's response: formulas and the
+%   older covariates, in the deconvolution model.
 %
-%   A covariate here is a NUISANCE regressor: it is fitted per event type,
-%   mean-centred, and its slope is then dropped, so the result is still one
-%   waveform per bin and the node's shape does not change. What it buys is
-%   the waveform that is left, and the case that shows it is a covariate
+%   EACH BIN HAS A FORMULA in Unfold's notation ('y ~ 1' by default), and the
+%   older Covariates option still adds its fields as linear terms to every
+%   bin without one. Unfold.binModel checks every field a formula names
+%   against the bin's own events before the toolbox sees it, and
+%   Unfold.designMatrix names the bin when the toolbox refuses a formula.
+%
+%   A TERM IS A CONTROL, and the case that shows it is a covariate
 %   UNBALANCED BETWEEN BINS: if the rare events happen to have larger values
 %   than the frequent ones, a model without the covariate charges that
 %   difference to the bins and reports a condition effect that is not one.
 %   itSeparatesACovariateFromTheBinItIsConfoundedWith is that case, with two
-%   bins whose true responses are identical.
+%   bins whose true responses are identical. It works because every bin's
+%   waveform is the prediction at the SAME values of the term (the pooled
+%   values, Unfold.binModel's plan.pooled), not at each bin's own; for a
+%   spline, over the values the bins share, since outside a bin's own values
+%   its spline is extrapolating (aSplineControlsTheConfoundToo).
 %
-%   THE CENTRING IS NOT COSMETIC. A bin's waveform is the model's intercept,
-%   which is the response when every predictor is zero. On a raw covariate
-%   that means the response at an amplitude, or a reaction time, of zero:
-%   an extrapolation off the end of the data. Centred, it is the response at
-%   the covariate's average value, which is what the bin's waveform should
-%   mean and what makes it comparable with an average of the same events.
+%   THE TERMS OUTPUT is the model's own view (uf_predictContinuous, then
+%   uf_addmarginal): one waveform per term, at chosen values.
 %
 %   Run with: runtests('tests/UnfoldCovariatesTest.m').
 %
-%   See also UNFOLD.BINMODEL, UNFOLD.EVENTCOVARIATES, DECONVOLVE.
+%   See also UNFOLD.BINMODEL, UNFOLD.FITBINS, UNFOLD.DESIGNMATRIX,
+%   UNFOLD.EVENTCOVARIATES, DECONVOLVE.
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
@@ -50,24 +55,27 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
                 'A field with one value everywhere has no slope to fit.');
         end
 
-        function aCovariateJoinsTheFormulaAndIsCentred(testCase)
+        function aCovariateJoinsTheFormulaAndIsPooled(testCase)
+        %ACOVARIATEJOINSTHEFORMULAANDISPOOLED  The older option: a linear
+        %   term in every type's formula, the events carrying their own
+        %   values, and the values pooled over the events the model contains,
+        %   which is where Unfold.fitBins evaluates every bin's waveform.
             EEG = UnfoldCovariatesTest.recording();
 
             plan = Unfold.binModel(EEG, 'Covariates', {'rt'});
 
             testCase.verifyTrue(all(contains(plan.formulas, 'y ~ 1 + rt')), ...
                 'Every modelled type carries the term.');
-            testCase.verifyEqual(numel(plan.covariates), 1);
-            testCase.verifyEqual(plan.covariates.name, 'rt');
-            values = [plan.events.rt];
-            testCase.verifyEqual(mean(values), 0, 'AbsTol', 1e-9, ...
-                'Centred, so a bin''s waveform is its response at the average value.');
+            source = [EEG.event(plan.eventSource).rt];
+            testCase.verifyEqual([plan.events.rt], source, ...
+                'The values go to Unfold as they are; nothing is centred any more.');
+            testCase.verifyEqual({plan.pooled.name}, {'rt'});
             % Over the events the model actually contains, which is not every
             % event in the recording: a boundary is dropped from the design
             % (it is a cut, not a response), so its value must not move the
             % point the bins' waveforms are reported at either.
             modelled = ~strcmp({EEG.event.type}, 'boundary');
-            testCase.verifyEqual(plan.covariates.centre, mean([EEG.event(modelled).rt]), ...
+            testCase.verifyEqual(mean(plan.pooled.values), mean([EEG.event(modelled).rt]), ...
                 'AbsTol', 1e-9);
         end
 
@@ -76,7 +84,7 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
 
             plan = Unfold.binModel(EEG);
 
-            testCase.verifyEmpty(plan.covariates);
+            testCase.verifyEmpty(plan.pooled);
             testCase.verifyTrue(all(strcmp(plan.formulas, 'y ~ 1')));
         end
 
@@ -158,8 +166,90 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
 
             plan = Unfold.binModel(EEG, 'Covariates', {'noSuchField'});
 
-            testCase.verifyEmpty(plan.covariates);
+            testCase.verifyEmpty(plan.pooled);
+            testCase.verifyTrue(all(strcmp(plan.formulas, 'y ~ 1')));
             testCase.verifyTrue(any(contains(plan.notes, 'noSuchField')));
+        end
+
+        % ---- formulas ------------------------------------------------------ %
+        function eachBinTakesItsOwnFormula(testCase)
+        %EACHBINTAKESITSOWNFORMULA  A formula names its bin by label, may be
+        %   written without its 'y ~', and a bin without one is 'y ~ 1'.
+            EEG = UnfoldCovariatesTest.recording();
+            formulas = struct('bin', {'Rare'}, 'formula', {'1 + spl(rt, 4)'});
+
+            plan = Unfold.binModel(EEG, 'Formulas', formulas);
+
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Rare')}, 'y ~ 1 + spl(rt, 4)');
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Frequent')}, 'y ~ 1');
+            rare = strcmp({plan.events.type}, 'bin_Rare');
+            testCase.verifyEqual([plan.events(rare).rt], [EEG.event(plan.eventSource(rare)).rt], ...
+                'The field a formula uses travels with its events.');
+            testCase.verifyEqual(numel(plan.pooled.values), nnz(rare), ...
+                'Pooled over the bins that use it, and only those.');
+        end
+
+        function aFormulaOverridesTheOlderCovariates(testCase)
+            EEG = UnfoldCovariatesTest.recording();
+            formulas = struct('bin', {'Rare'}, 'formula', {'y ~ 1'});
+
+            plan = Unfold.binModel(EEG, 'Formulas', formulas, 'Covariates', {'rt'});
+
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Rare')}, 'y ~ 1');
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Frequent')}, 'y ~ 1 + rt');
+        end
+
+        function aFactorTravelsAsText(testCase)
+            EEG = UnfoldCovariatesTest.recording();
+            for k = 1:numel(EEG.event)
+                EEG.event(k).hand = char('L' + 6 * (mod(k, 2) == 0));   % 'L' or 'R'
+            end
+
+            plan = Unfold.binModel(EEG, 'Formulas', struct('bin', 'Frequent', 'formula', 'y ~ 1 + cat(hand)'));
+
+            frequent = strcmp({plan.events.type}, 'bin_Frequent');
+            testCase.verifyEqual(sort(unique({plan.events(frequent).hand})), {'L', 'R'});
+            testCase.verifyEmpty(plan.pooled, 'A factor is not pooled: each bin keeps its own mix.');
+        end
+
+        function aMisspeltFieldIsRefusedNamingTheBin(testCase)
+        %AMISSPELTFIELDISREFUSEDNAMINGTHEBIN  uf_designmat's own message for
+        %   this is "Function is not defined for 'cell' inputs".
+            EEG = UnfoldCovariatesTest.recording();
+
+            try
+                Unfold.binModel(EEG, 'Formulas', struct('bin', 'Rare', 'formula', 'y ~ 1 + rtt'));
+                err = MException('none:none', 'no error');
+            catch err
+            end
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:NoSuchField');
+            testCase.verifySubstring(err.message, '"Rare"');
+            testCase.verifySubstring(err.message, '"rtt"');
+        end
+
+        function aTermThatNeverVariesIsRefused(testCase)
+        %ATERMTHATNEVERVARIESISREFUSED  Written explicitly, a constant term is
+        %   refused rather than dropped: the user asked for it, and it would be
+        %   a copy of the bin's own intercept (EYE-EEG's zero-filled fields).
+            EEG = UnfoldCovariatesTest.recording();
+
+            try
+                Unfold.binModel(EEG, 'Formulas', struct('bin', 'Rare', 'formula', 'y ~ 1 + constantField'));
+                err = MException('none:none', 'no error');
+            catch err
+            end
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:NeverVaries');
+            testCase.verifySubstring(err.message, 'EYE-EEG');
+        end
+
+        function aFactorWithOneLevelIsRefused(testCase)
+            EEG = UnfoldCovariatesTest.recording();
+            [EEG.event.hand] = deal('L');
+
+            testCase.verifyError(@() Unfold.binModel(EEG, 'Formulas', ...
+                struct('bin', 'Rare', 'formula', 'y ~ 1 + cat(hand)')), 'Alakazam:Unfold:OneLevel');
         end
     end
 
@@ -198,8 +288,98 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(size(fitted.data, 3), numel(EEG.bindesc), ...
                 'A covariate adds no bins: its slope is fitted and thrown away.');
-            testCase.verifyEqual(info.covariates.name, 'gain');
-            testCase.verifyEqual(info.covariates.n, 120);
+            testCase.verifyTrue(all(contains({info.formulas.formula}, 'gain')));
+        end
+
+        function aSplineControlsTheConfoundToo(testCase)
+        %ASPLINECONTROLSTHECONFOUNDTOO  The same test with the covariate as a
+        %   spline: both bins are evaluated over the gains they share, so the
+        %   confound still does not show up as a bin difference, and the note
+        %   says which range that was.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording('overlap');
+            formulas = struct('bin', {'A', 'B'}, 'formula', {'y ~ 1 + spl(gain, 4)', 'y ~ 1 + spl(gain, 4)'});
+
+            plain = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0);
+            [adjusted, info] = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'Formulas', formulas);
+
+            testCase.verifyLessThan(maxDifference(adjusted, 1, 2), 0.2 * maxDifference(plain, 1, 2));
+            testCase.verifyTrue(any(contains(info.notes, 'the range every bin using it shares')), ...
+                'Cutting the pooled values to the shared range is said, not done silently.');
+        end
+
+        function binsWithNoSharedValuesAreEachEvaluatedOverTheirOwn(testCase)
+        %BINSWITHNOSHAREDVALUESAREEACHEVALUATEDOVERTHEIROWN  Where the bins'
+        %   gains do not overlap, a spline cannot compare them anywhere
+        %   without extrapolating, so each bin keeps its own values and the
+        %   note says the confound is still in the difference.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            formulas = struct('bin', {'A', 'B'}, 'formula', {'y ~ 1 + spl(gain, 4)', 'y ~ 1 + spl(gain, 4)'});
+
+            [fitted, info] = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'Formulas', formulas);
+
+            testCase.verifyTrue(any(contains(info.notes, 'share no values')));
+            testCase.verifyTrue(all(isfinite(fitted.data(:))));
+        end
+
+        function aFormulaTheToolboxRefusesNamesItsBin(testCase)
+        %AFORMULATHETOOLBOXREFUSESNAMESITSBIN  A spline without its number of
+        %   splines names a field the events have, so binModel passes it, and
+        %   uf_designmat's parser refuses it without saying which formula it
+        %   was reading. The error names the bin and quotes its formula.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.recording();
+            plan = Unfold.binModel(EEG, 'Formulas', struct('bin', 'Rare', 'formula', 'y ~ 1 + spl(rt)'));
+
+            try
+                Unfold.designMatrix(EEG, plan);
+                err = [];
+            catch err
+            end
+
+            testCase.assertNotEmpty(err, 'The toolbox accepted a spline without its size.');
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:Formula');
+            testCase.verifySubstring(err.message, '"Rare", y ~ 1 + spl(rt)');
+        end
+
+        function aModelOfOneEventTypeIsFitted(testCase)
+        %AMODELOFONEEVENTTYPEISFITTED  One bin and no other events modelled
+        %   is a list of one formula, which uf_designmat does not split the
+        %   way it splits two or more; it has to be handed over as the
+        %   formula itself.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DefineBins(UnfoldCovariatesTest.recording(), struct('script', 'bin 1 "Frequent" "S1"'));
+
+            [fitted, info] = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'OtherEvents', {}, 'Formulas', struct('bin', 'Frequent', 'formula', 'y ~ 1 + rt'));
+
+            testCase.verifyEqual({info.formulas.formula}, {'y ~ 1 + rt'});
+            testCase.verifyTrue(all(isfinite(fitted.data(:))));
+        end
+
+        function theTermsAreTheModelsOwnView(testCase)
+        %THETERMSARETHEMODELSOWNVIEW  Output 'terms': per bin, the intercept
+        %   and the spline at each value asked for, labelled, each a whole
+        %   waveform (uf_addmarginal), and the response grows with the gain
+        %   as the recording was built.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            formulas = struct('bin', {'A'}, 'formula', {'y ~ 1 + gain'});
+
+            [terms, info] = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'Formulas', formulas, 'Output', 'terms', 'EvaluateAt', 'gain = 0.8 1.2');
+
+            labels = {terms.bindesc.label};
+            testCase.verifyEqual(labels, {'A: (Intercept)', 'A: gain = 0.8', 'A: gain = 1.2', ...
+                'B: (Intercept)'});
+            testCase.verifyEqual(char(string(terms.DataFormat)), 'Averaged');
+            testCase.verifyEqual(info.output, 'terms');
+            peak = @(k) max(terms.data(1, :, k));
+            testCase.verifyGreaterThan(peak(3), peak(2), 'A larger gain, a larger response.');
+            testCase.verifyEqual(peak(3) / peak(2), 1.2 / 0.8, 'RelTol', 0.1);
         end
     end
 
@@ -217,10 +397,14 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             EEG = DefineBins(EEG, struct('script', DeconvolveTest.BinScript));
         end
 
-        function [EEG, truth] = confoundedRecording()
+        function [EEG, truth] = confoundedRecording(overlap)
         %CONFOUNDEDRECORDING  Both bins have the SAME response, scaled per
         %   event by a covariate whose values are systematically larger for
         %   the second bin. The honest answer is no bin difference.
+        %   CONFOUNDEDRECORDING('overlap') draws the gains from ranges that
+        %   overlap (A 0.6 to 2.4, B 1.2 to 3.0), which a spline needs to
+        %   compare the bins at values both of them have; without it they do
+        %   not overlap at all.
             srate = 100;
             npnts = 30000;
             t = (0:round(0.3 * srate)) / srate;
@@ -230,6 +414,9 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             first = round(linspace(300, 29000, 60) + 30 * randn(1, 60));
             second = round(first + 90 + 30 * rand(1, 60));
             gain = [1 + 0.15 * randn(1, 60), 2.5 + 0.15 * randn(1, 60)];   % confounded with bin
+            if nargin > 0 && strcmp(overlap, 'overlap')
+                gain = [0.6 + 1.8 * rand(1, 60), 1.2 + 1.8 * rand(1, 60)];
+            end
 
             data = 0.05 * randn(1, npnts);
             latencies = [first second];

@@ -28,14 +28,18 @@ hop as `+TransTools` is.*
 | `AutoEyeICA` | `pop_runica` / `fastica`, `iclabel`, `pop_subcomp` |
 | `RemoveComponents` | the same ICA stack, plus `eeg_checkset` |
 | `AutoGEDAI` | `GEDAI` (GEDAI plugin), `pop_select` |
-| `Deconvolve` | `uf_designmat`, `uf_timeexpandDesignmat`, `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude`, `uf_combineWinrej`, `uf_glmfit`, `uf_condense` (Unfold), through `Unfold.fitBins` |
+| `Deconvolve` | `uf_designmat`, `uf_timeexpandDesignmat`, `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude`, `uf_combineWinrej`, `uf_glmfit`, `uf_condense`, `uf_predictContinuous`, `uf_addmarginal` (Unfold), through `Unfold.fitBins` and `Unfold.designMatrix` |
 | `EyeTracking` | `parseeyelink`, `pop_importeyetracker` (EYE-EEG) |
 
 `Deconvolve` has the most of its own around the toolkit: turning DefineBins'
-bins into Unfold's event types and formulas (`Unfold.binModel`), centring the
-covariates, leaving out the stretches around cuts, the baseline, the difference
-bins, and the overlap-corrected trials, which are Alakazam's arithmetic on
-Unfold's own time-expanded design and betas (`Unfold.overlapCorrectedTrials`).
+bins into Unfold's event types, each with its formula, and checking every
+field a formula names against the bin's own events (`Unfold.binModel`);
+evaluating each bin's waveform at the same values of its terms, from the
+toolbox's own design matrix, betas and spline functions; leaving out the
+stretches around cuts; the baseline; the difference bins; and the
+overlap-corrected trials, which are Alakazam's arithmetic on Unfold's own
+time-expanded design and betas (`Unfold.overlapCorrectedTrials`). The terms
+output is the toolbox's own (`uf_predictContinuous`, then `uf_addmarginal`).
 `EyeTracking` adds finding the eye file beside the recording, choosing the
 anchor triggers, and refusing a poor synchronisation, judged from EYE-EEG's
 own table of per-trigger offsets.
