@@ -97,7 +97,7 @@ function options = DeconvolveDialog(EEG, stored)
     selectedRow = 1;
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([120 60 800 900]), 'Color', bgColor);
+    fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([80 60 1200 900]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Deconvolve: overlapping responses separated', 'FontSize', 14, ...
         'FontWeight', 'bold', 'FontColor', [1 1 1], 'BackgroundColor', accentColor, ...
@@ -182,9 +182,12 @@ function options = DeconvolveDialog(EEG, stored)
 
     % The formulas, the model they make, and what a formula can use share
     % the stretchy row: a formula is only readable next to the columns it
-    % turns into and the fields it can name.
-    middle = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', 250}, ...
-        'Padding', [0 0 0 0], 'ColumnSpacing', 8);
+    % turns into and the fields it can name. The right-hand column shares
+    % the width rather than taking a fixed strip: its lines (a field with
+    % its unit and count, an example formula, an event code with its count)
+    % wrapped at every word in a narrow one, and it grows with the window.
+    middle = uigridlayout(outer, [1 2], 'ColumnWidth', {'1x', '1x'}, ...
+        'Padding', [0 0 0 0], 'ColumnSpacing', 10);
     left = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1.5x'}, ...
         'Padding', [0 0 0 0], 'RowSpacing', 4);
     formulaHead = uigridlayout(left, [1 2], 'ColumnWidth', {'1x', 130}, 'Padding', [0 0 0 0]);
@@ -200,7 +203,7 @@ function options = DeconvolveDialog(EEG, stored)
     uilabel(left, 'Text', 'The model:');
     modelList = uitextarea(left, 'Editable', 'off', 'Value', {''});
 
-    right = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '1.6x', 'fit', '1x'}, ...
+    right = uigridlayout(middle, [4 1], 'RowHeight', {'fit', '2x', 'fit', '1x'}, ...
         'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(right, 'WordWrap', 'on', 'Text', 'What a formula can use:');
     uitextarea(right, 'Editable', 'off', 'Tag', 'fields', 'Value', fieldReference(EEG));
