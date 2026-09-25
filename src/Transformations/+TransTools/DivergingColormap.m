@@ -1,4 +1,4 @@
-function cmap = DivergingColormap()
+function cmap = DivergingColormap(name)
 %DIVERGINGCOLORMAP  The app's shared colour map for a signed, zero-
 %   centred quantity (ERSP power vs. baseline, ERP-image/scalp-topography
 %   amplitude, ...), settings-driven via AlakazamSettings
@@ -14,7 +14,14 @@ function cmap = DivergingColormap()
 %   -- one call site, so every plot that shows a signed quantity always
 %   uses the SAME colour map, and changing the setting updates all three
 %   at once without touching any of their own code.
-    name = AlakazamSettings.get("graphics", "colormap", "name");
+%
+%   CMAP = TransTools.DivergingColormap(NAME) gives the map NAME instead of
+%   the stored one: what the Settings dialog's preview draws each choice
+%   with (AlakazamSettings.colormapStrip), so the preview is the plots' own
+%   map rather than a second description of it.
+    if nargin < 1 || isempty(name)
+        name = AlakazamSettings.get("graphics", "colormap", "name");
+    end
     switch name
         case "parula"
             cmap = parula(64);

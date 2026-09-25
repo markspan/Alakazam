@@ -173,16 +173,25 @@ classdef SettingsDialog < handle
                 end
             end
 
-            % Following rows: label + control for each non-bool setting.
+            % Following rows: label + control for each non-bool setting, and
+            % a preview beside the control when the setting has one.
             for j = 1:nOther
                 item = otherItems(j);
                 current = AlakazamSettings.get(tabName, sectionDef.name, item.key);
-                rowGrid = uigridlayout(grid, [1 2], 'ColumnWidth', {220, '1x'}, ...
-                    'Padding', [0 0 0 0], 'ColumnSpacing', 8);
+                if isempty(item.preview)
+                    rowGrid = uigridlayout(grid, [1 2], 'ColumnWidth', {220, '1x'}, ...
+                        'Padding', [0 0 0 0], 'ColumnSpacing', 8);
+                else
+                    rowGrid = uigridlayout(grid, [1 3], 'ColumnWidth', {220, 130, '1x'}, ...
+                        'Padding', [0 0 0 0], 'ColumnSpacing', 8);
+                end
                 rowGrid.Layout.Row = cbRows + j;
                 uilabel(rowGrid, 'Text', item.label, 'Tooltip', item.tooltip, ...
                     'VerticalAlignment', 'center');
                 handle = this.makeControl(rowGrid, item, current);
+                if ~isempty(item.preview)
+                    this.addPreview(rowGrid, item, handle, current);
+                end
                 byKey(item.key) = handle;
                 this.addField(tabName, sectionDef.name, item, handle);
             end
@@ -347,6 +356,17 @@ classdef SettingsDialog < handle
             for i = 1:numel(deps)
                 deps{i}.Enable = state;
             end
+        end
+
+        function addPreview(~, grid, item, handle, current)
+        %ADDPREVIEW  A picture of the setting's value beside its control
+        %   (ITEM.preview maps a value to an RGB image), redrawn as the value
+        %   changes, so a choice can be seen before it is saved. Only for a
+        %   control without a ValueChangedFcn of its own (a dropdown or a
+        %   field; a stepped slider's snapping would be replaced).
+            picture = uiimage(grid, 'ScaleMethod', 'stretch', 'Tag', ['preview:' item.key], ...
+                'ImageSource', item.preview(current), 'Tooltip', item.tooltip);
+            handle.ValueChangedFcn = @(src, ~) set(picture, 'ImageSource', item.preview(src.Value));
         end
 
         function handle = makeControl(~, grid, item, current)

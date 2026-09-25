@@ -78,7 +78,15 @@ function recalculateTransformNode(this, node, ownEEG)
     newEEG.Call   = transformId;
     newEEG.params = newParams;
     newEEG.File   = node.UserData; % keep this node's own identity/path
+    % Its own name, not the transformation's: .id is the node's label,
+    % which a rename (onRenameNode) changes, and resetting it here undid
+    % the rename on disk while the tree still showed it, until a restart
+    % read the old name back. planDescendantRecalc keeps each descendant's
+    % name the same way.
     newEEG.id     = transformId;
+    if isfield(ownEEG, 'id') && ~isempty(ownEEG.id)
+        newEEG.id = ownEEG.id;
+    end
 
     % Compute the whole downstream branch in memory FIRST -- only
     % once every descendant recomputes cleanly are any files

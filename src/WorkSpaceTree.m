@@ -362,17 +362,25 @@ classdef WorkSpaceTree < handle
         %ICONFORRESULT  Icon for a dataset produced by a transformation: the
         %   transformation's own icon (Transformations/<id>/<id>.json's
         %   Icon field, the same PNG AlakazamRibbon's Tools tab buttons
-        %   show), scaled down to the tree row's icon footprint. EEG.id is
-        %   the transformation id (see Alakazam.persistResultNode/
+        %   show), scaled down to the tree row's icon footprint. The
+        %   transformation is EEG.Call (see Alakazam.persistResultNode/
         %   onTransformation: transformId, stored on the result as both
-        %   EEG.id and EEG.Call). Falls back to iconFor(EEG.DataType) (the
-        %   'time'/'freq'/'default' badge keys) when TRANSROOT is omitted
-        %   or no matching Transformations/<id>/<id>.json exists -- e.g. a
-        %   Grand Average, whose id is a user-chosen name, not a
-        %   transformation id.
+        %   EEG.Call and EEG.id). EEG.id is tried second, for a dataset
+        %   cached before Call was recorded: it is the node's NAME, which is
+        %   the transformation id only until the node is renamed, and
+        %   reading the icon from it is why a renamed node came back from a
+        %   restart with the generic icon. Falls back to
+        %   iconFor(EEG.DataType) (the 'time'/'freq'/'default' badge keys)
+        %   when TRANSROOT is omitted or neither names a
+        %   Transformations/<id>/<id>.json -- e.g. a raw recording, or a
+        %   Grand Average, whose id is a user-chosen name.
             icon = '';
-            if nargin >= 2 && ~isempty(transRoot) && isfield(EEG, 'id') && ~isempty(EEG.id)
-                icon = WorkSpaceTree.encodeTransformIcon(char(string(EEG.id)), transRoot);
+            if nargin >= 2 && ~isempty(transRoot)
+                for field = {'Call', 'id'}
+                    if isempty(icon) && isfield(EEG, field{1}) && ~isempty(EEG.(field{1}))
+                        icon = WorkSpaceTree.encodeTransformIcon(char(string(EEG.(field{1}))), transRoot);
+                    end
+                end
             end
             if isempty(icon)
                 icon = WorkSpaceTree.iconFor(EEG.DataType);

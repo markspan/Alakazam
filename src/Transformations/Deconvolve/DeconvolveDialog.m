@@ -43,7 +43,7 @@ function options = DeconvolveDialog(EEG, stored)
     % and the loop would read it as absent and restore the default. 'all' is
     % stored as the word, not as today's list of codes, so a replay on another
     % recording still means every code that recording has.
-    otherSelection = storedOtherEvents(stored);
+    otherSelection = Unfold.otherEventsChoice(stored);
 
     % The baseline is stored as the window itself, with [] meaning "leave the
     % betas as the solver returned them", so the checkbox and the two fields
@@ -73,7 +73,7 @@ function options = DeconvolveDialog(EEG, stored)
     end
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([120 120 660 620]), 'Color', bgColor);
+    fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([120 60 800 900]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Deconvolve: overlapping responses separated', 'FontSize', 14, ...
         'FontWeight', 'bold', 'FontColor', [1 1 1], 'BackgroundColor', accentColor, ...
@@ -474,30 +474,6 @@ function setChecked(tree, nodes)
         tree.CheckedNodes = [];
     else
         tree.CheckedNodes = nodes;
-    end
-end
-
-% ======================================================================= %
-function selection = storedOtherEvents(stored)
-%STOREDOTHEREVENTS  The stored choice of unbinned codes: 'all', or a cellstr
-%   (empty meaning none). Options saved before the choice was per code carry
-%   only modelOtherEvents, and false there still means none.
-    selection = 'all';
-    if ~isstruct(stored)
-        return;
-    end
-    if isfield(stored, 'otherEvents')
-        value = stored.otherEvents;
-        if isempty(value)
-            selection = {};
-        elseif ischar(value) && strcmpi(value, 'all')
-            selection = 'all';
-        else
-            selection = reshape(cellstr(string(value)), 1, []);
-        end
-    elseif isfield(stored, 'modelOtherEvents') && ~isempty(stored.modelOtherEvents) ...
-            && ~logical(stored.modelOtherEvents)
-        selection = {};
     end
 end
 

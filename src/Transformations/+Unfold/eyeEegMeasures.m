@@ -1,0 +1,49 @@
+function catalogue = eyeEegMeasures()
+%EYEEEGMEASURES  What the event fields EYE-EEG writes for eye movements mean.
+%   CATALOGUE = Unfold.eyeEegMeasures() is a struct array, one element per
+%   field EYE-EEG's detecteyemovements writes onto saccade and fixation
+%   events, with .name (EYE-EEG's own field name), .kind ('linear' or
+%   'circular'), .unit and .description. Unfold.eventCovariates uses it to
+%   describe what a recording offers as a covariate; a field it does not
+%   list is offered as linear with no unit, which is all that is known.
+%
+%   WHAT IT KNOWS, all read from detecteyemovements.m rather than assumed:
+%
+%   DURATION IS IN SAMPLES, EEGLAB's convention for that field, not in
+%   milliseconds (EYE-EEG's own plots convert with *1000/srate).
+%
+%   SPATIAL MEASURES ARE IN WHATEVER EYE-EEG WAS TOLD: degrees when it was
+%   given degperpixel, otherwise "the original data metric", with a warning.
+%   Nothing in the saved dataset records which happened, so the unit is
+%   'degrees or pixels' rather than a guess.
+%
+%   SAC_ANGLE IS CIRCULAR, which is why there is a kind at all: it runs over
+%   the full turn, so 359 degrees sits next to 1, and a slope fitted on it is
+%   meaningless. Dimigen and Ehinger (2021) model saccade direction with
+%   circular splines for that reason; Deconvolve does not offer it.
+%
+%   FIXATIONS CAN CARRY THEIR INCOMING SACCADE: since EYE-EEG's September
+%   2021 change, a fixation detected by detecteyemovements also holds the
+%   sac_* properties of the saccade that produced it. Fixations imported from
+%   an EyeLink's own events do not, and carry 0 there instead
+%   (Unfold.binModel refuses a covariate that never varies within a type).
+%
+%   See also UNFOLD.EVENTCOVARIATES, UNFOLD.BINMODEL.
+    c = { ...
+        'duration',         'linear',   'samples', ...
+            'Duration of the event, in samples.'; ...
+        'sac_amplitude',    'linear',   'degrees or pixels', ...
+            'Distance from the start of the saccade to its landing point.'; ...
+        'sac_vmax',         'linear',   'degrees or pixels per second', ...
+            'Peak velocity of the saccade.'; ...
+        'sac_angle',        'circular', 'degrees', ...
+            'Orientation of the saccade over the full turn; model it with circular splines.'; ...
+        'sac_startpos_x',   'linear',   'degrees or pixels', 'Horizontal launch position of the saccade.'; ...
+        'sac_startpos_y',   'linear',   'degrees or pixels', 'Vertical launch position of the saccade.'; ...
+        'sac_endpos_x',     'linear',   'degrees or pixels', 'Horizontal landing position of the saccade.'; ...
+        'sac_endpos_y',     'linear',   'degrees or pixels', 'Vertical landing position of the saccade.'; ...
+        'fix_avgpos_x',     'linear',   'degrees or pixels', 'Mean horizontal gaze position during the fixation.'; ...
+        'fix_avgpos_y',     'linear',   'degrees or pixels', 'Mean vertical gaze position during the fixation.'; ...
+        'fix_avgpupilsize', 'linear',   'tracker units', 'Mean pupil size during the fixation.'};
+    catalogue = struct('name', c(:, 1), 'kind', c(:, 2), 'unit', c(:, 3), 'description', c(:, 4));
+end

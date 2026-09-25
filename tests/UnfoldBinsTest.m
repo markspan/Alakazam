@@ -63,8 +63,8 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
         %   not stop overlapping: it just stops being accounted for.
             EEG = UnfoldBinsTest.recording();
 
-            withOthers = Unfold.binModel(EEG, 'ModelOtherEvents', true);
-            without = Unfold.binModel(EEG, 'ModelOtherEvents', false);
+            withOthers = Unfold.binModel(EEG, 'OtherEvents', 'all');
+            without = Unfold.binModel(EEG, 'OtherEvents', {});
 
             testCase.verifyEqual(withOthers.nuisanceTypes, {'evt_response'});
             testCase.verifyEmpty(without.nuisanceTypes);
@@ -123,15 +123,23 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(contains(plan.notes, 'probe')));
         end
 
-        function theOlderSwitchStillWorksAndTheNewChoiceWins(testCase)
-            EEG = UnfoldBinsTest.withProbes(UnfoldBinsTest.recording());
+        function aStoredChoiceIsReadOneWayEverywhere(testCase)
+        %ASTOREDCHOICEISREADONEWAYEVERYWHERE  Unfold.otherEventsChoice is
+        %   what Deconvolve, its dialog and binModel all ask, so these are
+        %   the cases a stored template can present: the older true/false
+        %   field, both fields at once, and the shapes JSON brings back.
+            choice = @Unfold.otherEventsChoice;
 
-            off = Unfold.binModel(EEG, 'ModelOtherEvents', false);
-            both = Unfold.binModel(EEG, 'ModelOtherEvents', false, 'OtherEvents', {'probe'});
-
-            testCase.verifyEmpty(off.nuisanceTypes, 'false still means none.');
-            testCase.verifyEqual(both.nuisanceTypes, {'evt_probe'}, ...
-                'Given both, the per-code choice decides.');
+            testCase.verifyEqual(choice(struct('modelOtherEvents', false)), {}, ...
+                'The older field''s false still means none.');
+            testCase.verifyEqual(choice(struct('modelOtherEvents', true)), 'all');
+            testCase.verifyEqual(choice(struct('modelOtherEvents', false, 'otherEvents', {{'probe'}})), ...
+                {'probe'}, 'Given both, the per-code choice decides.');
+            testCase.verifyEqual(choice(struct('otherEvents', [])), {}, ...
+                'An empty list, as JSON returns it, is none rather than the default.');
+            testCase.verifyEqual(choice(struct('otherEvents', 'probe')), {'probe'}, ...
+                'One code, as JSON returns a list of one, is that code.');
+            testCase.verifyEqual(choice([]), 'all', 'Nothing stored is the default.');
         end
 
         function combinationBinsAreNotPredictors(testCase)

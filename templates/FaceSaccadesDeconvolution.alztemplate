@@ -1,0 +1,94 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "Ehinger & Dimigen (2019) Fig. 11: faces, saccades and button presses, deconvolved",
+  "nodes": [
+    {
+      "transformId": "Deconvolve",
+      "params": {
+        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, and saccade\n% amplitude as a covariate of the saccade response.\n% Differs from the paper: amplitude enters linearly and centred (Alakazam has no\n% spline terms; the paper used 5 splines, its script 10); the artefact scan\n% covers the 36 scalp channels, not the eye electrodes IO1/IO2/LO1/LO2 as well;\n% and one baseline (-200 to 0 ms) serves every bin, where the paper baselined\n% the button-locked response at 400 to 600 ms.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "covariates": [
+          "sac_amplitude"
+        ],
+        "windowMs": [
+          -1500,
+          1000
+        ],
+        "baselineMs": [
+          -200,
+          0
+        ],
+        "otherEvents": [],
+        "artifactThresholdUv": 250,
+        "artifactWindowMs": 2000,
+        "artifactStepMs": 100,
+        "output": "average"
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "Deconvolve",
+      "params": {
+        "binScript": "% Ehinger & Dimigen (2019), PeerJ 7:e7838, Fig. 11: one participant's face\n% discrimination task (Data/opendata/face_saccades_opendata_fig10.set). Stimulus\n% onsets, the involuntary (micro)saccades that follow them and the button presses\n% overlap in every trial; each gets its own response, and the other two are\n% taken out of it. Plot electrode Oz to compare with the figure.\n%\n% As the paper: three event types, a -1500 to 1000 ms window, intervals exceeding\n% 250 uV peak-to-peak in a 2 s window left out of the model, and saccade\n% amplitude as a covariate of the saccade response.\n% Differs from the paper: amplitude enters linearly and centred (Alakazam has no\n% spline terms; the paper used 5 splines, its script 10); the artefact scan\n% covers the 36 scalp channels, not the eye electrodes IO1/IO2/LO1/LO2 as well;\n% and one baseline (-200 to 0 ms) serves every bin, where the paper baselined\n% the button-locked response at 400 to 600 ms.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "covariates": [
+          "sac_amplitude"
+        ],
+        "windowMs": [
+          -1500,
+          1000
+        ],
+        "baselineMs": [
+          -200,
+          0
+        ],
+        "otherEvents": [],
+        "artifactThresholdUv": 250,
+        "artifactWindowMs": 2000,
+        "artifactStepMs": 100,
+        "output": "trials"
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "DefineBins",
+      "params": {
+        "script": "% The same three event types as plain epochs, without deconvolution: the\n% figure's \"no deconvolution\" ERPs and single-trial images, for comparison.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "epoch": {
+          "lo": -1500,
+          "hi": 1000,
+          "unit": "ms"
+        }
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "Baseline",
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      },
+      "parent": 3
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "params": {
+        "Method": [
+          "Moving-window peak-to-peak"
+        ],
+        "Threshold": 250,
+        "Window": 2000,
+        "Step": 100,
+        "Scope": "Whole epoch",
+        "Channels": "Scalp EEG only"
+      },
+      "parent": 4
+    },
+    {
+      "transformId": "Average",
+      "params": {
+        "Param": "Init"
+      },
+      "parent": 5
+    }
+  ]
+}

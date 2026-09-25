@@ -169,20 +169,37 @@ scrolling, channel stacking, and overlays for events and marked artefacts.
 
 Epoched data opens in `EpochView` as an ERP image: one row per trial, time
 across, colour for amplitude, with the trial average underneath. **Sort by**
-puts the rows in order of a value each trial carries: the reaction time
-`DefineBins` captured for its bin (the delay to the neighbour a bin's
-definition names going forward, which is also how to sort by the time to the
-next event of any kind), or any numeric field of the trial's own event, such as
-a fixation's duration, a saccade's amplitude or a pupil size from `EyeTracking`.
-Trials without a value go last, and with **group trials by bin** on (Settings,
-Graphics tab) the sort happens within each bin. When the value is a time after
-the event, reaction time or duration, it is drawn across the image as a line.
+puts the rows in order of a value each trial carries: when the next or the
+previous event of any type fell (**Next saccade**, **Previous stimonset**, and so
+on, measured when the trials were cut, by `DefineBins` or by `Deconvolve`), the
+reaction time `DefineBins` captured for its bin, or any numeric field of the
+trial's own event, such as a fixation's duration, a saccade's amplitude or a
+pupil size from `EyeTracking`. The smallest value is at the top, or the largest
+with **Reverse the sort** (Settings, Graphics tab), the way EEGLAB's `erpimage`
+and the published figures draw it; trials without a value go last either way.
+With **Plot trials by bin** on (the same tab) the sort happens within each bin;
+**Bin:** shows one bin's trials alone instead, with the average below taken over
+them, and the bin chosen follows you to the next node as the other views' do.
+When the value is a time, a neighbouring event, a reaction time or a duration,
+it is drawn across the image as a line. **Colour ±** sets the colour range for
+the shown channel's group (EEG, EOG or other); **Auto** takes it from the data,
+as the 98th percentile of the absolute amplitude, so that one blink or drift
+does not wash out every other trial.
 
 That line is what tells overlap from a response. Activity locked to the event
 runs straight down the image; activity that belongs to the next event bends
 with the line. Sorting fixation-locked epochs by fixation duration shows the
 next fixation's response following the line, and on `Deconvolve`'s
-overlap-corrected trials it should be gone.
+overlap-corrected trials it should be gone. These are the ERP images of Ehinger
+& Dimigen (2019, Fig. 11): stimulus-locked trials sorted by the next saccade,
+saccade-locked by the next button press, and button-locked by the stimulus
+before. [`FaceSaccadesDeconvolution.alztemplate`](templates/FaceSaccadesDeconvolution.alztemplate)
+runs that analysis on the authors' own data (their face task, with the
+involuntary saccades and the button presses): one branch deconvolves into
+waveforms, one into overlap-corrected trials, and one epochs and averages
+without deconvolution for comparison. Its first node's comment lists where it
+departs from the paper (a linear rather than spline saccade-amplitude term, the
+channels scanned for artefacts, one baseline for every bin).
 
 ## Installation
 
@@ -2134,7 +2151,8 @@ processing uniformly, independent of the active workspace.
 - **Graphics** tab: ERP-plot polarity (positive deflection oriented upward
   or downward), a shared versus per-electrode y-axis, the
   confidence-interval band and its width, whether trials in the epoch
-  image are grouped by bin, the colour map applied to every signed,
+  image are grouped by bin and whether a sorted epoch image runs largest
+  first, the colour map applied to every signed,
   zero-centred plot (ERP image, ERSP power, scalp topography), and whether
   the Fourier power spectrum is smoothed prior to display.
 - **Frequency bands** tab: the named frequency ranges (label, lower and

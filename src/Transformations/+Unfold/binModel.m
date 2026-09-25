@@ -33,8 +33,8 @@ function plan = binModel(EEG, varargin)
 %   the user can see which is which, and a code left out is named in the
 %   notes, because its overlap is still in the result.
 %
-%   The older 'ModelOtherEvents' switch still works (true is 'all', false is
-%   none); 'OtherEvents' wins when both are given.
+%   'OtherEvents' is read by Unfold.otherEventsChoice, as a stored setting
+%   is, so an empty list means none here exactly as it does in a template.
 %
 %   COMBINATION BINS ARE NOT PREDICTORS. A difference bin ("bin 3 = bin 1 -
 %   bin 2") has no events of its own; Average computes it afterwards from the
@@ -58,20 +58,18 @@ function plan = binModel(EEG, varargin)
 %   each row of .events, the row of EEG.event it was made from, which is how
 %   an event in two bins is still known to be one trial) and .notes.
 %
-%   THE FORMULAS ARE THE SEAM FOR COVARIATES. Every formula here is 'y ~ 1'
-%   because a bin carries no covariate, but a later extension that wants
-%   "the response to this bin, holding saccade amplitude constant" changes
-%   one string per event type and adds the field to the rewritten events
-%   (see Unfold.eyeEegCovariates, which already produces exactly that table).
-%   Nothing else in the pipeline needs to know.
+%   EVERY FORMULA STARTS AS 'y ~ 1'; 'Covariates' adds a mean-centred term
+%   to the types whose events carry a varying value for it (see
+%   addCovariates below, which says why centred and why only there).
 %
-%   See also UNFOLD.FITBINS, UNFOLD.EYEEEGCOVARIATES, DEFINEBINS, AVERAGE.
+%   See also UNFOLD.FITBINS, UNFOLD.OTHEREVENTSCHOICE, UNFOLD.EVENTCOVARIATES,
+%   DEFINEBINS, AVERAGE.
     parsed = inputParser();
-    parsed.addParameter('ModelOtherEvents', true, @(v) islogical(v) && isscalar(v));
     parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
     parsed.parse(varargin{:});
-    otherCodes = resolveOtherEvents(parsed);
+    choice.otherEvents = parsed.Results.OtherEvents;
+    otherCodes = Unfold.otherEventsChoice(choice);
     wanted = cellstr(string(parsed.Results.Covariates));
 
     validateInput(EEG);
@@ -115,12 +113,12 @@ function plan = binModel(EEG, varargin)
     plan.eventTypes = [plan.binTypes(~empty), plan.nuisanceTypes];
     plan.formulas = repmat({'y ~ 1'}, 1, numel(plan.eventTypes));
     [plan.events, plan.formulas, plan.covariates, covariateNotes] = ...
-        addCovariates(plan.events, plan.formulas, plan.eventTypes, EEG, wanted);
+        addCovariates(plan.events, plan.eventSource, plan.formulas, plan.eventTypes, EEG, wanted);
     plan.notes = [plan.notes, covariateNotes];
 end
 
 % ======================================================================= %
-function [events, formulas, applied, notes] = addCovariates(events, formulas, eventTypes, EEG, wanted)
+function [events, formulas, applied, notes] = addCovariates(events, source, formulas, eventTypes, EEG, wanted)
 %ADDCOVARIATES  Put the chosen event fields into the model as covariates.
 %
 %   THEY ARE NUISANCE REGRESSORS, not the thing being reported. Each one adds
@@ -160,7 +158,7 @@ function [events, formulas, applied, notes] = addCovariates(events, formulas, ev
                 'events, so it was left out of the model.'], name); %#ok<AGROW>
             continue;
         end
-        values = covariateValues(events, EEG, name);
+        values = covariateValues(source, EEG, name);
         usableTypes = typesWithEveryValue(types, values, eventTypes);
         if isempty(usableTypes)
             notes{end + 1} = sprintf(['No event type has "%s" varying across all of its events, ' ...
@@ -193,28 +191,27 @@ function [events, formulas, applied, notes] = addCovariates(events, formulas, ev
     end
 end
 
-function values = covariateValues(events, EEG, name)
+function values = covariateValues(source, EEG, name)
 %COVARIATEVALUES  The covariate for each row of the rewritten event list,
-%   fetched from the ORIGINAL events by latency. rewriteEvents keeps only
-%   .latency and .type (and one row per event-bin pair), so the value has to
-%   be carried across from the dataset rather than read off the rewritten row.
-    original = nan(1, numel(EEG.event));
-    for k = 1:numel(EEG.event)
-        v = EEG.event(k).(name);
+%   read from the ORIGINAL event that row was made from (SOURCE, see
+%   rewriteEvents). rewriteEvents keeps only .latency and .type (and one row
+%   per event-bin pair), so the value has to be carried across from the
+%   dataset rather than read off the rewritten row.
+%
+%   BY THE ROW IT CAME FROM, NOT BY LATENCY, which is how this used to find
+%   it and what went wrong: two events at the same sample are ordinary (a
+%   stimulus and the saccade that starts on it, a trigger and the event it
+%   marks), and a lookup by latency hands one of them the other's value. In
+%   Ehinger & Dimigen's face data three stimulus onsets coincide with a
+%   saccade, so the stimulus type picked up three saccade amplitudes among
+%   its zeros, counted as "varying", and was fitted with a covariate that is
+%   constant on all but three events: a column that is nearly its own
+%   intercept, and a stimulus waveform the solver could not pin down.
+    values = nan(1, numel(source));
+    for k = 1:numel(source)
+        v = EEG.event(source(k)).(name);
         if isnumeric(v) && isscalar(v) && ~islogical(v)
-            original(k) = double(v);
-        end
-    end
-    lookup = containers.Map('KeyType', 'double', 'ValueType', 'double');
-    for k = 1:numel(EEG.event)
-        lookup(double(EEG.event(k).latency)) = original(k);
-    end
-
-    values = nan(1, numel(events));
-    for k = 1:numel(events)
-        key = double(events(k).latency);
-        if isKey(lookup, key)
-            values(k) = lookup(key);
+            values(k) = double(v);
         end
     end
 end
@@ -280,26 +277,6 @@ function membership = binMembership(EEG, binIndex)
     bini = {EEG.event.bini};
     for b = 1:numel(binIndex)
         membership{b} = find(cellfun(@(v) any(v == binIndex(b)), bini));
-    end
-end
-
-function codes = resolveOtherEvents(parsed)
-%RESOLVEOTHEREVENTS  Which unbinned codes to model: 'all', or a cellstr
-%   (possibly empty, meaning none). 'OtherEvents' wins when it was given;
-%   otherwise the older 'ModelOtherEvents' switch decides.
-    if ~ismember('OtherEvents', parsed.UsingDefaults)
-        codes = parsed.Results.OtherEvents;
-        if ischar(codes) && strcmpi(codes, 'all')
-            codes = 'all';
-        elseif isempty(codes)
-            codes = {};
-        else
-            codes = cellstr(string(codes));
-        end
-    elseif parsed.Results.ModelOtherEvents
-        codes = 'all';
-    else
-        codes = {};
     end
 end
 

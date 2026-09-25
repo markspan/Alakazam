@@ -37,11 +37,21 @@ classdef EpochView < AlakazamView
 %   "look at the single-trial detail AND the summary at once" idea an
 %   ERP-image conventionally pairs with.
 %
+%   "Bin:" shows one bin's trials alone (every ordinary bin that holds a
+%   trial is offered; a combination bin has none of its own), with the
+%   average below taken over them, or "All trials". A bin shown alone is
+%   never bracketed, since there is one group. The choice is reported to
+%   ViewFocus and adopted from it like the other views' bin choices, so the
+%   same bin follows from node to node.
+%
 %   "Sort by" puts the rows in order of a per-trial value (epochSortKeys
-%   lists what a dataset offers: DefineBins' reaction time, and any numeric
-%   field of the time-locking event, such as a fixation's duration or a
-%   saccade's amplitude), ascending from the top, trials without a value
-%   last. With "group by bin" on, the sort happens within each bin, so the
+%   lists what a dataset offers: when the next or previous event of each
+%   type fell, DefineBins' reaction time, and any numeric field of the
+%   time-locking event, such as a fixation's duration or a saccade's
+%   amplitude), ascending from the top (descending with the "Reverse the
+%   sort" setting, as EEGLAB's erpimage draws it), trials without a value
+%   last either way. With "group by bin" on, the sort happens within each
+%   bin, so the
 %   groups stay whole (the split the Unfold ERP-image tutorial uses). When
 %   the value is a time after the event (reaction time, duration) it is
 %   drawn across the image as a line, so activity that moves with it (a
@@ -61,6 +71,15 @@ classdef EpochView < AlakazamView
 %   because a large-amplitude EOG/ECG channel would otherwise set the
 %   limit and wash every EEG channel's ERP-image out (or vice versa) --
 %   each group gets a scale appropriate to its own typical amplitude.
+%
+%   THE AUTOMATIC SCALE IS THE 98TH PERCENTILE of the group's absolute
+%   amplitude (robustColorLimit), not its maximum. The maximum was set by
+%   the one largest sample, a blink, a drift or an unrejected artefact, and
+%   left ordinary single-trial activity in the palest few colours.
+%   "Colour ±" in the top row shows the scale of the shown channel's group
+%   and takes a value of its own; "Auto" puts the automatic one back. Set
+%   per group, so paging through the channels of one group stays
+%   comparable.
 %
 %   Style follows the project standard (UpperCamelCase class/properties,
 %   lowerCamelCase methods, double quotes except where a char array is
@@ -87,6 +106,9 @@ classdef EpochView < AlakazamView
         Channel = 1     % current channel
         ChannelGroup    % 1 x nchan cellstr, each channel's display group ("EEG"/"EOG"/"OTHER", see channelGroup)
         GroupColorLimit % containers.Map: group name -> shared, symmetric [-lim lim] colour scale for that group
+        AutoColorLimit  % containers.Map: group name -> the automatic scale (robustColorLimit), which "Auto" restores
+        ColorField      % "Colour ±" numeric field, row 1: the shown group's limit, editable
+        ShownLimit      % the limit the drawn ColorbarWrap was built for
         ColorbarWrap    % the shared colorbar's own wrapping sub-grid (TransTools.AddSharedColorbar); rebuilt, not just re-CLim'd, when the shown channel's group changes
         ShownGroup      % the group the currently-drawn ColorbarWrap/HeatAxes.CLim was built for, so redraw() only rebuilds the colorbar when it actually changes
         HasBins = false      % true when epochs carry .bini membership
@@ -95,6 +117,9 @@ classdef EpochView < AlakazamView
         TrialOrder      % 1 x nRows, trial index per row (bin-grouped if HasBins, else 1:nTrials);
                          % may repeat a trial index when grouped by bin, so nRows can exceed nTrials
         RowBinKey       % 1 x nRows, each row's bin key (0 = no bin), parallel to TrialOrder
+        BinDropdown     % "Bin:" uidropdown, row 1: every trial, or one bin's alone
+        BinChoices      % positions in EEG.bindesc of the bins "Bin:" offers (ordinary bins with trials)
+        SelectedBin = 0 % position in EEG.bindesc of the bin shown alone, 0 for every trial
         SortKeys        % what the trials can be sorted by (epochSortKeys)
         SortDropdown    % "Sort by:" uidropdown, row 1; its value indexes SortKeys, 0 = recording order
         SortLine        % the sort value drawn across the heatmap when it is a time (else NaN data)
@@ -132,13 +157,11 @@ classdef EpochView < AlakazamView
                 this.ChannelGroup = repmat({'EEG'}, 1, size(eeg.data, 1));
             end
             this.GroupColorLimit = containers.Map("KeyType", "char", "ValueType", "double");
+            this.AutoColorLimit = containers.Map("KeyType", "char", "ValueType", "double");
             for g = unique(this.ChannelGroup)
                 mask = strcmp(this.ChannelGroup, g{1});
-                groupData = eeg.data(mask, :, :);
-                lim = max(abs(groupData(:)), [], "omitnan");
-                if ~isfinite(lim) || lim == 0
-                    lim = 1; % an all-zero (or all-NaN) group would otherwise give an empty [0 0] scale
-                end
+                lim = EpochView.robustColorLimit(eeg.data(mask, :, :));
+                this.AutoColorLimit(g{1}) = lim;
                 this.GroupColorLimit(g{1}) = lim;
             end
 
@@ -166,15 +189,24 @@ classdef EpochView < AlakazamView
             % spans every column, above the brace margin/heatmap/colorbar
             % row, so it is unaffected by the brace column's own width
             % (collapsed to 0 except while "group by bin" is active).
-            % The row is shared with "Sort by", half each.
-            controls = uigridlayout(this.Grid, [1 2], "ColumnWidth", {'1x', '1x'}, ...
+            % The row is shared with "Bin", "Sort by" and the colour scale.
+            controls = uigridlayout(this.Grid, [1 4], "ColumnWidth", {'1x', '1x', '1x', 220}, ...
                 "Padding", [0 0 0 0], "ColumnSpacing", 12);
             controls.Layout.Row = 1;
             controls.Layout.Column = [1, 3];
             this.ChannelDropdown = TransTools.BuildChannelDropdown(controls, 1, 1, ...
                 this.Labels, @(idx) this.onChannelSelected(idx));
+            this.BinChoices = EpochView.selectableBins(eeg);
+            this.BinDropdown = TransTools.BuildBinDropdown(controls, 1, 2, ...
+                [{'All trials'}, this.binLabels()], @(choice) this.onBinSelected(choice));
+            this.BinDropdown.Tag = "bin";
+            if isempty(this.BinChoices)
+                this.BinDropdown.Enable = "off";
+                this.BinDropdown.Tooltip = 'These trials are in no bin, so there is none to show alone.';
+            end
             this.SortKeys = epochSortKeys(eeg);
             this.SortDropdown = this.buildSortDropdown(controls);
+            this.ColorField = this.buildColorControl(controls);
 
             this.BraceAxes = uiaxes(this.Grid);
             this.BraceAxes.Layout.Row = 2;
@@ -277,9 +309,10 @@ classdef EpochView < AlakazamView
             group = this.ChannelGroup{this.Channel};
             lim = this.GroupColorLimit(group);
             this.HeatAxes.CLim = [-lim, lim];
-            if ~isequal(group, this.ShownGroup)
+            if ~isequal(group, this.ShownGroup) || ~isequal(lim, this.ShownLimit)
                 % Paging landed on a different group (EEG/EOG/OTHER) than
-                % what the colorbar currently shows -- rebuild it to match.
+                % what the colorbar currently shows, or its scale was set
+                % in "Colour ±" -- rebuild it to match.
                 % AddSharedColorbar's own hidden axes isn't exposed to just
                 % re-set CLim on, so a changing scale means delete() + build
                 % again (see its own header comment on this exact case).
@@ -289,20 +322,33 @@ classdef EpochView < AlakazamView
                 this.ColorbarWrap = TransTools.AddSharedColorbar(this.Grid, 2, 3, ...
                     TransTools.DivergingColormap(), [-lim, lim], "Amplitude (\muV)");
                 this.ShownGroup = group;
+                this.ShownLimit = lim;
             end
+            this.ColorField.Value = lim;
             xlim(this.HeatAxes, [this.Times(1), this.Times(end)]);
             ylim(this.HeatAxes, [0.5, nRows + 0.5]);
             key = this.currentSortKey();
-            if isempty(key)
-                title(this.HeatAxes, "Channel: " + this.Labels{this.Channel});
-            else
-                title(this.HeatAxes, "Channel: " + this.Labels{this.Channel} + ", sorted by " + key.label);
+            heading = "Channel: " + this.Labels{this.Channel};
+            if this.SelectedBin > 0
+                heading = heading + ", " + this.binLabel(this.SelectedBin);
             end
+            if ~isempty(key)
+                heading = heading + ", sorted by " + key.label;
+            end
+            title(this.HeatAxes, heading);
             this.ChannelDropdown.Value = this.Channel;
             this.drawBinGroupLines(nRows);
             this.drawSortLine(key);
 
-            this.TraceLine.YData = mean(data, 1, "omitnan");
+            % The average of what the image shows: every trial, or the
+            % chosen bin's.
+            if this.SelectedBin > 0
+                this.TraceLine.YData = mean(data(unique(this.TrialOrder), :), 1, "omitnan");
+                title(this.TraceAxes, "Average of " + this.binLabel(this.SelectedBin));
+            else
+                this.TraceLine.YData = mean(data, 1, "omitnan");
+                title(this.TraceAxes, "Trial average");
+            end
         end
 
         function onKey(this, event)
@@ -342,6 +388,26 @@ classdef EpochView < AlakazamView
     end
 
     methods (Access = private)
+        function tf = showsBinGroups(this)
+        %SHOWSBINGROUPS  Rows grouped by bin, with brackets: the dataset has
+        %   bins, the "groupByBin" setting is on (read fresh), and no single
+        %   bin is chosen in "Bin:", where one group would only repeat it.
+            tf = this.HasBins && this.SelectedBin == 0 ...
+                && AlakazamSettings.get("graphics", "epochImage", "groupByBin");
+        end
+
+        function onBinSelected(this, choice)
+        %ONBINSELECTED  "Bin:"'s ValueChangedFcn. CHOICE 1 is every trial;
+        %   CHOICE k shows the trials of bin BinChoices(k - 1) alone.
+            this.notifyActivated();
+            if choice <= 1
+                this.SelectedBin = 0;
+            else
+                this.SelectedBin = this.BinChoices(choice - 1);
+            end
+            this.redraw();
+        end
+
         function onChannelSelected(this, idx)
         %ONCHANNELSELECTED  ChannelDropdown's ValueChangedFcn: jump straight
         %   to the picked electrode, the same effect as stepping there one
@@ -359,15 +425,15 @@ classdef EpochView < AlakazamView
         %   trial), which stays correct in "group by bin" mode where a
         %   trial can appear as more than one row, each under a
         %   different bin. Only drawn at all when grouping is actually
-        %   ACTIVE (both HasBins and the "groupByBin" setting are true --
-        %   computeTrialOrder already leaves RowBinKey all-zero
-        %   otherwise), so the brace margin column collapses back to 0
-        %   width and the heatmap/trace reclaim the full tab width when
-        %   the setting is off, exactly like a bins-less dataset.
+        %   ACTIVE (showsBinGroups: HasBins, the "groupByBin" setting, and
+        %   no single bin chosen -- computeTrialOrder already leaves
+        %   RowBinKey all-zero otherwise), so the brace margin column
+        %   collapses back to 0 width and the heatmap/trace reclaim the full
+        %   tab width when the setting is off, exactly like a bins-less
+        %   dataset.
             delete(findobj(this.HeatAxes, "Type", "constantline"));
             cla(this.BraceAxes);
-            isGrouped = this.HasBins && AlakazamSettings.get("graphics", "epochImage", "groupByBin");
-            if ~isGrouped
+            if ~this.showsBinGroups()
                 this.Grid.ColumnWidth{1} = 0;
                 return;
             end
@@ -528,9 +594,16 @@ classdef EpochView < AlakazamView
         %       index).
         %   Either way, a "Sort by" choice then orders the rows within each
         %   run of equal RowBinKey (the whole image when not grouped), so
-        %   RowBinKey itself is unchanged by it.
+        %   RowBinKey itself is unchanged by it: smallest at the top, or
+        %   largest with the "reverseSort" setting (also read fresh).
+        %   A bin chosen in "Bin:" comes first: its trials alone, in
+        %   recording order, and no grouping.
             nTrials = size(this.EEG.data, 3);
-            if ~this.HasBins || ~AlakazamSettings.get("graphics", "epochImage", "groupByBin")
+            if this.SelectedBin > 0
+                order = reshape(TransTools.BinTrials(this.EEG, this.SelectedBin), 1, []);
+                order = order(order >= 1 & order <= nTrials);
+                this.RowBinKey = zeros(1, numel(order));
+            elseif ~this.showsBinGroups()
                 order = 1:nTrials;
                 this.RowBinKey = zeros(1, nTrials);
             else
@@ -538,7 +611,8 @@ classdef EpochView < AlakazamView
             end
             key = this.currentSortKey();
             if ~isempty(key)
-                order = EpochView.sortWithinGroups(order, this.RowBinKey, key.values);
+                order = EpochView.sortWithinGroups(order, this.RowBinKey, key.values, ...
+                    AlakazamSettings.get("graphics", "epochImage", "reverseSort"));
             end
         end
 
@@ -550,7 +624,7 @@ classdef EpochView < AlakazamView
             box = uigridlayout(parent, [1, 2], "ColumnWidth", {70, '1x'}, ...
                 "Padding", [0 0 0 0], "ColumnSpacing", 4);
             box.Layout.Row = 1;
-            box.Layout.Column = 2;
+            box.Layout.Column = 3;
             uilabel(box, "Text", "Sort by:", "HorizontalAlignment", "right");
             dropdown = uidropdown(box, "Tag", "sortBy", ...
                 "Items", [{'Recording order'}, {this.SortKeys.label}], ...
@@ -558,9 +632,31 @@ classdef EpochView < AlakazamView
                 "ValueChangedFcn", @(~, ~) this.redraw());
             if isempty(this.SortKeys)
                 dropdown.Enable = "off";
-                dropdown.Tooltip = ['These trials carry nothing to sort by: no reaction time ' ...
-                    'from DefineBins and no numeric field on their events that varies.'];
+                dropdown.Tooltip = ['These trials carry nothing to sort by: no neighbouring ' ...
+                    'events recorded when they were cut, no reaction time from DefineBins, and ' ...
+                    'no numeric field on their events that varies.'];
             end
+        end
+
+        function field = buildColorControl(this, parent)
+        %BUILDCOLORCONTROL  "Colour ±" with its "Auto" button, at the end of
+        %   the top row: the colour scale of the shown channel's group, which
+        %   redraw keeps showing and which a value typed here replaces.
+            box = uigridlayout(parent, [1, 3], "ColumnWidth", {62, '1x', 48}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 4);
+            box.Layout.Row = 1;
+            box.Layout.Column = 4;
+            uilabel(box, "Text", "Colour ±", "HorizontalAlignment", "right");
+            field = uieditfield(box, "numeric", "Tag", "colourRange", "Value", 1, ...
+                "Limits", [0 Inf], "LowerLimitInclusive", "off", "ValueDisplayFormat", "%.3g", ...
+                "ValueChangedFcn", @(src, ~) this.setColorLimit(src.Value), ...
+                "Tooltip", ['The colour scale runs from minus to plus this value, for every ' ...
+                 'channel of the shown channel''s group (EEG, EOG or other), so stepping ' ...
+                 'through them stays comparable. Auto sets it from the data: the 98th ' ...
+                 'percentile of the absolute amplitude.']);
+            uibutton(box, "Text", "Auto", "Tag", "colourAuto", ...
+                "Tooltip", 'Back to the scale taken from the data', ...
+                "ButtonPushedFcn", @(~, ~) this.setColorLimit([]));
         end
 
         function key = currentSortKey(this)
@@ -614,35 +710,124 @@ classdef EpochView < AlakazamView
     end
 
     methods
+        function setColorLimit(this, limit)
+        %SETCOLORLIMIT  Colour scale of the shown channel's group: -LIMIT to
+        %   +LIMIT, or the automatic scale when LIMIT is empty ("Auto").
+            group = this.ChannelGroup{this.Channel};
+            if isempty(limit) || ~isfinite(limit) || limit <= 0
+                limit = this.AutoColorLimit(group);
+            end
+            this.GroupColorLimit(group) = limit;
+            this.redraw();
+        end
+
         function focus = currentFocus(this)
-        %CURRENTFOCUS  The channel this view is showing, by label.
+        %CURRENTFOCUS  The channel this view is showing, by label, and the
+        %   bin when one is shown alone. "All trials" reports no bin, which
+        %   leaves the one remembered from another view as it was.
             focus = struct();
             if this.Channel >= 1 && this.Channel <= numel(this.Labels)
                 focus.Channel = char(string(this.Labels{this.Channel}));
             end
+            if this.SelectedBin > 0
+                focus.Bin = this.binLabel(this.SelectedBin);
+            end
         end
 
         function applyFocus(this, focus)
-        %APPLYFOCUS  Show FOCUS.Channel if this dataset has it.
-            if ~isstruct(focus) || ~isfield(focus, 'Channel') || isempty(this.Labels)
+        %APPLYFOCUS  Show FOCUS.Channel, and FOCUS.Bin alone, where this
+        %   dataset has them, as the other views with a bin choice do.
+            if ~isstruct(focus)
                 return;
             end
-            idx = ViewFocus.indexOfLabel(this.Labels, focus.Channel);
-            if isempty(idx) || idx == this.Channel
-                return;
+            changed = false;
+            if isfield(focus, 'Channel') && ~isempty(this.Labels)
+                idx = ViewFocus.indexOfLabel(this.Labels, focus.Channel);
+                if ~isempty(idx) && idx ~= this.Channel
+                    this.Channel = idx;
+                    changed = true;
+                end
             end
-            this.Channel = idx;
-            this.redraw();
+            if isfield(focus, 'Bin') && ~isempty(this.BinChoices)
+                k = ViewFocus.indexOfLabel(this.binLabels(), focus.Bin);
+                if ~isempty(k) && this.BinChoices(k) ~= this.SelectedBin
+                    this.SelectedBin = this.BinChoices(k);
+                    this.BinDropdown.Value = k + 1;
+                    changed = true;
+                end
+            end
+            if changed
+                this.redraw();
+            end
+        end
+    end
+
+    methods (Access = private)
+        function labels = binLabels(this)
+        %BINLABELS  The labels of the bins "Bin:" offers, in its order.
+            labels = arrayfun(@(b) this.binLabel(b), this.BinChoices, 'UniformOutput', false);
+        end
+
+        function label = binLabel(this, position)
+            label = char(string(this.EEG.bindesc(position).label));
         end
     end
 
     methods (Static)
-        function order = sortWithinGroups(order, keys, values)
+        function positions = selectableBins(EEG)
+        %SELECTABLEBINS  The bins "Bin:" offers, as positions in
+        %   EEG.bindesc: every ordinary bin that holds a trial. A combination
+        %   (difference) bin has no trials of its own to show.
+            positions = zeros(1, 0);
+            if ~isfield(EEG, 'bindesc') || isempty(EEG.bindesc)
+                return;
+            end
+            for b = 1:numel(EEG.bindesc)
+                isCombo = isfield(EEG.bindesc, 'combo') && ~isempty(EEG.bindesc(b).combo);
+                if ~isCombo && ~isempty(TransTools.BinTrials(EEG, b))
+                    positions(end + 1) = b; %#ok<AGROW>
+                end
+            end
+        end
+
+        function lim = robustColorLimit(data)
+        %ROBUSTCOLORLIMIT  The automatic colour scale: the 98th percentile of
+        %   the absolute amplitude in DATA, rather than its maximum, which the
+        %   one largest sample (a blink, a drift, an unrejected artefact) set
+        %   for everything else. Read from at most a million evenly spaced
+        %   samples, which is as good for a percentile and stays quick on a
+        %   long recording's worth of trials. 1 when there is nothing to scale
+        %   by (all zero or all NaN), so the scale is never empty.
+            step = max(1, floor(numel(data) / 1e6));
+            values = abs(double(data(1:step:end)));
+            values = sort(values(isfinite(values)));
+            lim = 1;
+            if isempty(values)
+                return;
+            end
+            candidate = values(max(1, ceil(0.98 * numel(values))));
+            if candidate <= 0
+                candidate = values(end);    % mostly zeros: fall back on the largest
+            end
+            if candidate > 0
+                lim = candidate;
+            end
+        end
+
+        function order = sortWithinGroups(order, keys, values, descending)
         %SORTWITHINGROUPS  ORDER (trial per row) sorted by VALUES(trial),
-        %   ascending, within each run of equal KEYS (bin per row), so a
-        %   grouped image keeps its groups. Stable, so ties keep recording
-        %   order, and NaN last, so trials without a value collect at the
-        %   bottom of their group instead of scattering through it.
+        %   ascending, or descending when DESCENDING is true, within each run
+        %   of equal KEYS (bin per row), so a grouped image keeps its groups.
+        %   Stable, so ties keep recording order, and NaN last in either
+        %   direction, so trials without a value collect at the bottom of
+        %   their group instead of scattering through it.
+            if nargin < 4
+                descending = false;
+            end
+            direction = 'ascend';
+            if descending
+                direction = 'descend';
+            end
             if isempty(order)
                 return;
             end
@@ -650,7 +835,7 @@ classdef EpochView < AlakazamView
             stops = [starts(2:end) - 1, numel(keys)];
             for g = 1:numel(starts)
                 span = starts(g):stops(g);
-                [~, at] = sort(values(order(span)));
+                [~, at] = sort(values(order(span)), direction, 'MissingPlacement', 'last');
                 order(span) = order(span(at));
             end
         end

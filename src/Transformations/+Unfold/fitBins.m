@@ -43,8 +43,7 @@ function [EEG, info] = fitBins(input, varargin)
 %     OtherEvents        which event codes in no bin to fit as nuisance and
 %                        drop from the result: 'all' (default), a cellstr of
 %                        codes, or {} for none. See Unfold.binModel for why
-%                        this is a choice per code. The older
-%                        ModelOtherEvents true/false still works.
+%                        this is a choice per code.
 %     Covariates         event fields to fit alongside each bin, mean-centred
 %                        (see Unfold.binModel): their slopes are fitted and
 %                        dropped, so the result is still one waveform per bin,
@@ -107,7 +106,6 @@ function [EEG, info] = fitBins(input, varargin)
     parsed.addParameter('WindowMs', [-200 800], @(v) isnumeric(v) && numel(v) == 2 && v(1) < v(2));
     parsed.addParameter('BaselineMs', 'pre-event', ...
         @(v) isempty(v) || (ischar(v) || isstring(v)) || (isnumeric(v) && numel(v) == 2 && v(1) < v(2)));
-    parsed.addParameter('ModelOtherEvents', true, @(v) islogical(v) && isscalar(v));
     parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('ArtifactThresholdUv', 150, @(v) isnumeric(v) && isscalar(v) && v >= 0);
@@ -121,14 +119,7 @@ function [EEG, info] = fitBins(input, varargin)
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
 
     requireCentredData(input);
-    % OtherEvents is passed only when it was given, so the older
-    % ModelOtherEvents switch keeps meaning what it meant for a caller that
-    % still uses it (binModel lets OtherEvents win when both arrive).
-    modelArgs = {'ModelOtherEvents', opts.ModelOtherEvents, 'Covariates', opts.Covariates};
-    if ~ismember('OtherEvents', parsed.UsingDefaults)
-        modelArgs = [modelArgs, {'OtherEvents', opts.OtherEvents}];
-    end
-    plan = Unfold.binModel(input, modelArgs{:});
+    plan = Unfold.binModel(input, 'OtherEvents', opts.OtherEvents, 'Covariates', opts.Covariates);
     if isempty(plan.eventTypes)
         throw(MException('Alakazam:Unfold:NothingToFit', ...
             ['None of this dataset''s bins hold any events, so there is no model to fit. ' ...
@@ -251,12 +242,14 @@ function EEG = package(input, plan, data, times)
 end
 
 function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times)
-%PACKAGETRIALS  Overlap-corrected trials in the epoched shape DefineBins
-%   cuts: one trial per binned event (an event in two bins is one trial
-%   carrying both tags, as there), EEG.epoch with each trial's .bini, the
-%   anchor events' .epoch and latencies set as cutEpochs sets them, and
-%   bindesc.trials, so Average, EpochView and the data-quality report read it
-%   without knowing it came from a model.
+%PACKAGETRIALS  Overlap-corrected trials, laid out by DefineBins' own
+%   cutEpochs, so the result is a DefineBins epoch node in every field but
+%   its data: one trial per binned event (an event in two bins is one trial
+%   carrying both tags), EEG.epoch, the anchor events' .epoch and latencies,
+%   bindesc.trials, and the neighbour table EpochView sorts by. Average,
+%   EpochView and the data-quality report then read it without knowing it
+%   came from a model, and there is one definition of an epoched dataset
+%   rather than two to keep in step.
     events = unique([plan.membership{:}]);           % one trial per binned event
     trialOf = zeros(1, numel(input.event));
     trialOf(events) = 1:numel(events);
@@ -289,30 +282,20 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
         trials = trials - mean(trials(:, inWindow, :), 2);
     end
 
-    EEG = input;
+    % cutEpochs lays out the kept events' trials, time zero on the sample
+    % Unfold placed each event on. It is handed one channel only: it would
+    % otherwise cut every channel of the raw recording just for that to be
+    % replaced by the corrected trials a line later.
+    layout = input;
+    layout.data = input.data(1, :);
+    centre = zeros(1, numel(input.event));
+    centre(kept) = round([input.event(kept).latency]);
+    lags = round(times / 1000 * srate);
+    [EEG, bindesc] = DefineBinsEngine.cutEpochs(layout, keptBins(input.bindesc, plan, kept), ...
+        struct('lo', lags(1), 'hi', lags(end) + 1, 'unit', 'samples'), centre);
+    EEG.bindesc = bindesc;
     EEG.data = trials;
-    EEG.pnts = numel(times);
-    EEG.trials = numel(kept);
-    EEG.times = times;
-    EEG.xmin = times(1) / 1000;
-    EEG.xmax = times(end) / 1000;
-    EEG.DataFormat = 'EPOCHED';
-    EEG.epoch = struct('event', {}, 'eventtype', {}, 'eventlatency', {}, 'bini', {});
-    for k = 1:numel(kept)
-        ei = kept(k);
-        EEG.epoch(k).event = ei;
-        EEG.epoch(k).eventtype = EEG.event(ei).type;
-        EEG.epoch(k).eventlatency = 0;
-        EEG.epoch(k).bini = EEG.event(ei).bini;
-        EEG.event(ei).epoch = k;
-    end
-    % 0 for every other event, not []: see cutEpochs for what an empty
-    % .epoch does to eeg_checkset further down the chain.
-    for ei = setdiff(1:numel(EEG.event), kept)
-        EEG.event(ei).epoch = 0;
-    end
-    EEG = rewriteEpochedEventLatencies(EEG);
-    EEG.bindesc = trialBins(EEG.bindesc, plan, kept);
+    EEG.times = times;      % uf_condense's own, which the waveforms carry too
 
     info.output = 'trials';
     info.trialCandidates = numel(events);
@@ -320,13 +303,11 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
     info.trialsDropped = numel(events) - numel(kept);
 end
 
-function bindesc = trialBins(bindesc, plan, kept)
-%TRIALBINS  Each ordinary bin's trials, and its events and reaction times cut
-%   to the ones that became trials, so the three stay aligned element by
-%   element (TransTools.BinTrials reads .trials; a sort by reaction time pairs
-%   .rt with .trials).
-    newTrial = zeros(1, max(kept));
-    newTrial(kept) = 1:numel(kept);
+function bindesc = keptBins(bindesc, plan, kept)
+%KEPTBINS  Each ordinary bin's events cut to those that became trials, which
+%   is what cutEpochs makes trials of, with their reaction times kept
+%   aligned: cutEpochs derives .trials from .events element by element, and a
+%   sort by reaction time pairs .rt with .trials the same way.
     ordinary = find(~comboMask(bindesc));
     for k = 1:numel(ordinary)
         b = ordinary(k);
@@ -341,10 +322,6 @@ function bindesc = trialBins(bindesc, plan, kept)
         bindesc(b).events = members;
         bindesc(b).rt = rts;
         bindesc(b).n = numel(members);
-        bindesc(b).trials = newTrial(members);
-    end
-    for b = find(comboMask(bindesc))
-        bindesc(b).trials = [];
     end
 end
 
@@ -583,39 +560,17 @@ end
 
 function data = resolveComboBins(data, bindesc)
 %RESOLVECOMBOBINS  Difference bins, as Average computes them: the signed sum
-%   of the bins they reference, resolved in dependency order so a difference
-%   of differences works too. They are not predictors (see Unfold.binModel);
-%   subtracting two fitted waveforms is the same operation subtracting two
-%   averages is.
-    isCombo = comboMask(bindesc);
-    if ~any(isCombo)
-        return;
-    end
-    position = containers.Map('KeyType', 'double', 'ValueType', 'double');
-    for b = 1:numel(bindesc)
-        position(bindesc(b).index) = b;
-    end
-
-    resolved = ~isCombo;
-    progress = true;
-    while progress && ~all(resolved)
-        progress = false;
-        for b = find(~resolved)
-            combo = bindesc(b).combo;
-            if ~all(isKey(position, num2cell([combo.bin])))
-                continue;   % references a bin this dataset does not have
-            end
-            parts = arrayfun(@(t) position(t.bin), combo);
-            if ~all(resolved(parts))
-                continue;   % a dependency is itself an unresolved difference
-            end
-            acc = zeros(size(data, 1), size(data, 2));
-            for t = 1:numel(combo)
-                acc = acc + combo(t).coeff * data(:, :, parts(t));
-            end
-            data(:, :, b) = acc;
-            resolved(b) = true;
-            progress = true;
+%   of the bins they reference, in the dependency order TransTools.ComboOrder
+%   works out for both, so a difference of differences works too. They are
+%   not predictors (see Unfold.binModel); subtracting two fitted waveforms is
+%   the same operation subtracting two averages is. A combination that
+%   cannot be resolved is left NaN, which DefineBins' own parse-time check
+%   makes unreachable from a script.
+    for s = TransTools.ComboOrder(bindesc)
+        acc = zeros(size(data, 1), size(data, 2));
+        for t = 1:numel(s.parts)
+            acc = acc + s.coeffs(t) * data(:, :, s.parts(t));
         end
+        data(:, :, s.target) = acc;
     end
 end

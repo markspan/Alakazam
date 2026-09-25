@@ -106,21 +106,16 @@ function options = EyeTrackingDialog(EEG, ascFile, stored)
     end
 
     function fillColumns()
-    %FILLCOLUMNS  One tick box per signal column, ticked as stored. TIME and
-    %   INPUT are left out: the join replaces the one and reads the other.
-        names = cellstr(string(et.colheader));
-        names = names(~ismember(upper(names), {'TIME', 'INPUT'}));
+    %FILLCOLUMNS  One tick box per column the join could import, ticked as
+    %   stored; EyeEeg.columns decides both, as it does for the join itself.
+        [~, names] = EyeEeg.columns(et.colheader, 'all');
+        [~, stored] = EyeEeg.columns(et.colheader, seed.columns);
         delete(columnTree.Children);
         for k = 1:numel(names)
             uitreenode(columnTree, 'Text', names{k}, 'NodeData', names{k});
         end
         nodes = columnTree.Children;
-        if ischar(seed.columns) && strcmpi(seed.columns, 'all')
-            ticked = true(1, numel(names));
-        else
-            ticked = ismember(strrep(names, '-', '_'), strrep(cellstr(string(seed.columns)), '-', '_'));
-        end
-        setChecked(columnTree, nodes(ticked));
+        setChecked(columnTree, nodes(ismember(names, stored)));
     end
 
     function showPreview()

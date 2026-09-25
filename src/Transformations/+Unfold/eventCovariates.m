@@ -15,9 +15,10 @@ function candidates = eventCovariates(EEG)
 %
 %     .latency, .duration and the bin tags DefineBins writes. Latency is the
 %     event's position, which the deconvolution is already built around;
-%     duration is EYE-EEG's sample count, superseded by durationMs; .bini and
-%     .urevent are bookkeeping. Offering any of them as a predictor invites a
-%     model that regresses the data on its own time axis.
+%     duration is a sample count (EEGLAB's convention, and EYE-EEG's), so a
+%     slope on it would mean something different at every sampling rate;
+%     .bini and .urevent are bookkeeping. Offering any of them as a predictor
+%     invites a model that regresses the data on its own time axis.
 %
 %     Fields that are not one finite number per event: a cell, a vector, or a
 %     field that is empty on most events. Unfold needs the predictor filled
@@ -32,18 +33,18 @@ function candidates = eventCovariates(EEG)
 %   treatment is a sine and cosine pair, which is a real addition rather than
 %   a checkbox. Marking the kind here is what lets a caller refuse them with a
 %   reason instead of quietly producing a wrong number. EYE-EEG's own measures
-%   carry their kind and units from Unfold.eyeEegCovariates, which knows them;
+%   carry their kind and units from Unfold.eyeEegMeasures, which knows them;
 %   anything else is reported as linear with no unit, which is the truth about
 %   what is known rather than a guess.
 %
-%   See also UNFOLD.BINMODEL, UNFOLD.EYEEEGCOVARIATES, DECONVOLVE.
+%   See also UNFOLD.BINMODEL, UNFOLD.EYEEEGMEASURES, DECONVOLVE.
     candidates = struct('name', {}, 'kind', {}, 'unit', {}, 'description', {}, ...
         'n', {}, 'types', {});
     if ~isfield(EEG, 'event') || isempty(EEG.event)
         return;
     end
 
-    known = knownMeta(EEG);
+    known = Unfold.eyeEegMeasures();
     reserved = {'latency', 'type', 'urevent', 'bini', 'duration', 'epoch', 'bvtime', 'bvmknum'};
     types = cellfun(@(t) char(string(t)), {EEG.event.type}, 'UniformOutput', false);
 
@@ -55,9 +56,9 @@ function candidates = eventCovariates(EEG)
             continue;   % nothing to fit a slope on: absent, or constant
         end
         meta = metaFor(known, field);
-        candidates(end + 1) = struct('name', field, 'kind', meta.kind, ... %#ok<AGROW>
+        candidates(end + 1) = struct('name', field, 'kind', meta.kind, ...
             'unit', meta.unit, 'description', meta.description, ...
-            'n', nnz(usable), 'types', {unique(types(usable), 'stable')});
+            'n', nnz(usable), 'types', {unique(types(usable), 'stable')}); %#ok<AGROW>
     end
 end
 
@@ -73,26 +74,10 @@ function values = numericValues(events, field)
     end
 end
 
-function known = knownMeta(EEG)
-%KNOWNMETA  What Unfold.eyeEegCovariates knows about this dataset's
-%   eye-movement measures, or nothing when there are none. Wrapped because a
-%   dataset with no eye events is the ordinary case, not a failure.
-    known = struct('name', {}, 'kind', {}, 'unit', {}, 'description', {});
-    try
-        [~, meta] = Unfold.eyeEegCovariates(EEG);
-        if ~isempty(meta)
-            known = meta;
-        end
-    catch
-        % no eye-movement events, or none of EYE-EEG's fields: nothing known
-    end
-end
-
 function meta = metaFor(known, field)
+%METAFOR  What Unfold.eyeEegMeasures says about FIELD, or linear with no
+%   unit when it is not one of EYE-EEG's.
     meta = struct('kind', 'linear', 'unit', '', 'description', '');
-    if isempty(known)
-        return;
-    end
     hit = find(strcmp({known.name}, field), 1);
     if isempty(hit)
         return;

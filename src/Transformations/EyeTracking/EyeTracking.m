@@ -127,7 +127,7 @@ function EEG = join(input, ascFile, how, s)
     quality = EyeEeg.syncQuality(EEG.etc.eyetracker_syncquality, EEG.srate, triggerCount);
     requireGoodSync(quality, s, ascFile);
 
-    EEG = restoreAlakazamFields(EEG, input, before);
+    EEG = restoreAlakazamFields(EEG, input);
     channels = {EEG.chanlocs(before + 1:end).labels};
     EEG.etc.alz.eyeTracking = struct('file', ascFile, 'how', how, 'keyword', s.keyword, ...
         'startEvent', startCode, 'endEvent', endCode, 'columns', {labels}, ...
@@ -150,30 +150,16 @@ function requireContinuous(EEG)
 end
 
 function [columns, labels] = pickColumns(colheader, wanted)
-%PICKCOLUMNS  The eye-tracker columns to import, by name. TIME is the
-%   tracker's clock, which the join replaces, and INPUT is the trigger port,
-%   which it reads; neither is a signal worth a channel.
-    names = cellstr(string(colheader));
-    signal = ~ismember(upper(names), {'TIME', 'INPUT'});
-    if (ischar(wanted) || isstring(wanted)) && strcmpi(char(wanted), 'all')
-        chosen = signal;
-    else
-        % Either spelling is accepted: the parser calls a column L_GAZE_X,
-        % and EYE-EEG names the channel it becomes L-GAZE-X (underscores
-        % break EEGLAB's channel decoding, its own comment says), so a user
-        % may well copy either one into the options.
-        wanted = strrep(cellstr(string(wanted)), '-', '_');
-        chosen = signal & ismember(strrep(names, '-', '_'), wanted);
-        missing = setdiff(wanted, strrep(names(signal), '-', '_'));
-        if ~isempty(missing)
-            throw(MException('Alakazam:EyeTracking:NoSuchColumn', '%s', sprintf([ ...
-                'This eye-tracking file has no column %s. It has %s. A column is chosen by ' ...
-                'name, so a recording made with a different eye or sample set does not ' ...
-                'provide the same ones.'], strjoin(missing, ', '), strjoin(names(signal), ', '))));
-        end
+%PICKCOLUMNS  The eye-tracker columns to import (EyeEeg.columns), refusing
+%   a name the file does not have rather than joining without it.
+    [columns, labels, missing] = EyeEeg.columns(colheader, wanted);
+    if ~isempty(missing)
+        [~, available] = EyeEeg.columns(colheader, 'all');
+        throw(MException('Alakazam:EyeTracking:NoSuchColumn', '%s', sprintf([ ...
+            'This eye-tracking file has no column %s. It has %s. A column is chosen by ' ...
+            'name, so a recording made with a different eye or sample set does not ' ...
+            'provide the same ones.'], strjoin(missing, ', '), strjoin(available, ', '))));
     end
-    columns = find(chosen);
-    labels = names(chosen);
     if isempty(columns)
         throw(MException('Alakazam:EyeTracking:NoColumns', ...
             'There are no eye-tracking columns to import from this file.'));
@@ -240,18 +226,16 @@ function requireGoodSync(q, s, ascFile)
     end
 end
 
-function EEG = restoreAlakazamFields(EEG, input, before)
-%RESTOREALAKAZAMFIELDS  What EYE-EEG's own eeg_checkset may have changed
-%   back to Alakazam's conventions: continuous .times in seconds, the data
-%   format and type, and EYE as the type of every channel it added (so
-%   eegChannelMask keeps them out of everything meant for the scalp).
+function EEG = restoreAlakazamFields(EEG, input)
+%RESTOREALAKAZAMFIELDS  What EYE-EEG's own eeg_checkset may have changed,
+%   put back to Alakazam's conventions: the recording's own .times, the data
+%   format and type. The channels it adds need nothing: pop_importeyetracker
+%   types each one EYE itself, which is what keeps them out of everything
+%   eegChannelMask decides for the scalp.
     EEG.times = input.times;
     EEG.DataFormat = input.DataFormat;
     if isfield(input, 'DataType')
         EEG.DataType = input.DataType;
-    end
-    for c = before + 1:size(EEG.data, 1)
-        EEG.chanlocs(c).type = 'EYE';
     end
 end
 

@@ -25,7 +25,8 @@ classdef OverlapCorrectedTrialsTest < matlab.unittest.TestCase
                      fullfile(root, 'src', 'Transformations', 'DefineBins'), ...
                      fullfile(root, 'src', 'Transformations', 'Average'), ...
                      fullfile(root, 'src', 'Support'), fullfile(root, 'src', 'IO'), ...
-                     fullfile(root, 'src', 'Reports'), fullfile(root, 'tests')}
+                     fullfile(root, 'src', 'Reports'), fullfile(root, 'src', 'Views'), ...
+                     fullfile(root, 'tests')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
@@ -169,6 +170,27 @@ classdef OverlapCorrectedTrialsTest < matlab.unittest.TestCase
                 'Every corrected trial is its own response plus noise.');
             testCase.verifyGreaterThan(worstRaw, 1.5, ...
                 'The raw epochs do carry the overlap, or this test shows nothing.');
+        end
+
+        function theTrialsKnowWhenTheirNeighboursCame(testCase)
+        %THETRIALSKNOWWHENTHEIRNEIGHBOURSCAME  So EpochView can sort them by
+        %   the next response without the bin having to name it.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = OverlapCorrectedTrialsTest.jitteredRecording();
+
+            trials = Deconvolve(EEG, DeconvolveTest.options('output', 'trials', ...
+                'binScript', 'bin 1 "Stimulus" "S1"'));
+
+            stimuli = [EEG.event(strcmp({EEG.event.type}, 'S1')).latency];
+            responses = [EEG.event(strcmp({EEG.event.type}, 'R')).latency];
+            % The first response after each stimulus, which is not always its
+            % own: where two stimuli fall close together, the earlier one's
+            % response can come after the later one.
+            expected = arrayfun(@(s) min(responses(responses > s)) - s, stimuli) / EEG.srate * 1000;
+            key = epochSortKeys(trials);
+            key = key(strcmp({key.id}, 'next:R'));
+            testCase.assertNotEmpty(key, 'The next response is offered as a sort key.');
+            testCase.verifyEqual(key.values, expected, 'AbsTol', 1e-9);
         end
 
         function theTrialsAreShapedLikeAnEpochNode(testCase)

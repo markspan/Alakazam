@@ -117,35 +117,13 @@ tagged = applyBins(input, options);
     'WindowMs', TransTools.FieldOr(options, 'windowMs', [-200 800]), ...
     'BaselineMs', baselineOption(options), ...
     'Covariates', TransTools.FieldOr(options, 'covariates', {}), ...
-    'OtherEvents', otherEventsOption(options), ...
+    'OtherEvents', Unfold.otherEventsChoice(options), ...
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
     'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100), ...
     'Output', char(string(TransTools.FieldOr(options, 'output', 'average'))));
 
 report(info);
-end
-
-% ======================================================================= %
-function codes = otherEventsOption(options)
-%OTHEREVENTSOPTION  Which unbinned event codes to model, where an EMPTY list
-%   is a real answer ("none"), just as an empty baseline is. Not
-%   TransTools.FieldOr, which would read it as absent and hand back 'all'.
-%   An options struct saved before the choice was per code carries only
-%   modelOtherEvents, and still means what it meant.
-    codes = 'all';
-    if ~isstruct(options)
-        return;
-    end
-    if isfield(options, 'otherEvents')
-        codes = options.otherEvents;
-        if isempty(codes)
-            codes = {};
-        end
-    elseif isfield(options, 'modelOtherEvents') && ~isempty(options.modelOtherEvents) ...
-            && ~logical(options.modelOtherEvents)
-        codes = {};
-    end
 end
 
 % ======================================================================= %

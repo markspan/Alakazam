@@ -2,21 +2,31 @@ function keys = epochSortKeys(EEG)
 %EPOCHSORTKEYS  What an epoched dataset's trials can be sorted by.
 %   KEYS = epochSortKeys(EEG) lists every per-trial value EpochView can order
 %   its ERP image by, as a struct array with
-%     .id      'rt', or 'field:<name>' for a field of the time-locking event
+%     .id      'rt'; 'next:<type>' or 'previous:<type>' for the nearest event
+%              of a type after or before the trial's own; or 'field:<name>'
+%              for a field of the time-locking event
 %     .label   the text the "Sort by" dropdown shows
 %     .values  1 x nTrials, NaN where a trial has no value
-%     .timeMs  true when the values are times after the time-locking event,
-%              in ms, which EpochView then draws across the image as a line
+%     .timeMs  true when the values are times relative to the time-locking
+%              event, in ms, which EpochView then draws across the image as
+%              a line
 %   Only keys with at least two different values are offered: a sort by
 %   something every trial shares changes nothing and only lengthens the list.
 %
 %   THE REACTION TIME is DefineBins' own: the delay to the neighbour a bin's
-%   definition captured going forward ("followed by ..."), which is also how
-%   to sort by the time to the next event of any kind, a button press or the
-%   next saccade, by naming it in the bin. It is read from bindesc(b).rt,
-%   which cutEpochs (and Deconvolve's trials) keep aligned element by
-%   element with bindesc(b).trials. A trial in two bins takes the first
-%   finite one.
+%   definition captured going forward (next(...) within ...). It is read
+%   from bindesc(b).rt, which cutEpochs (and Deconvolve's trials) keep
+%   aligned element by element with bindesc(b).trials. A trial in two bins
+%   takes the first finite one.
+%
+%   THE NEIGHBOURS need nothing in the bin definition: "Next saccade (ms)",
+%   "Previous stimonset (ms)" and so on, for every event type, from the
+%   table cutEpochs and Deconvolve's trials record while the continuous
+%   latencies still exist (TransTools.EpochNeighbours). A capture in the bin
+%   definition would also drop every trial without that neighbour, which is
+%   wrong for a model that has to see every event; this sorts without
+%   dropping anything, and a trial with no such neighbour in its window goes
+%   last.
 %
 %   AN EVENT FIELD is any numeric field of each trial's own time-locking
 %   event: an importer's or EYE-EEG's (fixation position, pupil size,
@@ -40,6 +50,7 @@ function keys = epochSortKeys(EEG)
         keys(end + 1) = struct('id', 'rt', 'label', 'Reaction time (ms)', ...
             'values', rt, 'timeMs', true);
     end
+    keys = [keys, neighbourKeys(EEG, nTrials)];
 
     anchors = anchorEvents(EEG, nTrials);
     if ~any(anchors) || ~isfield(EEG, 'event') || isempty(EEG.event)
@@ -71,6 +82,35 @@ function keys = epochSortKeys(EEG)
 end
 
 % ======================================================================= %
+function keys = neighbourKeys(EEG, nTrials)
+%NEIGHBOURKEYS  "Next <type>" and "Previous <type>": when the nearest event
+%   of each type fell after and before each trial's own event, as measured
+%   when the trials were cut (TransTools.EpochNeighbours). Not offered when
+%   the table no longer has one column per trial, since a column that belongs
+%   to another trial is worse than none.
+    keys = struct('id', {}, 'label', {}, 'values', {}, 'timeMs', {});
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'alz') ...
+            || ~isstruct(EEG.etc.alz) || ~isfield(EEG.etc.alz, 'epochNeighbours')
+        return;
+    end
+    context = EEG.etc.alz.epochNeighbours;
+    if ~isstruct(context) || ~all(isfield(context, {'types', 'next', 'previous'})) ...
+            || size(context.next, 2) ~= nTrials || size(context.previous, 2) ~= nTrials
+        return;
+    end
+    for k = 1:numel(context.types)
+        name = context.types{k};
+        if varies(context.next(k, :))
+            keys(end + 1) = struct('id', ['next:' name], 'label', ['Next ' name ' (ms)'], ...
+                'values', context.next(k, :), 'timeMs', true); %#ok<AGROW>
+        end
+        if varies(context.previous(k, :))
+            keys(end + 1) = struct('id', ['previous:' name], 'label', ['Previous ' name ' (ms)'], ...
+                'values', context.previous(k, :), 'timeMs', true); %#ok<AGROW>
+        end
+    end
+end
+
 function rt = reactionTimes(EEG, nTrials)
 %REACTIONTIMES  Each trial's DefineBins reaction time, NaN where it has none.
     rt = nan(1, nTrials);

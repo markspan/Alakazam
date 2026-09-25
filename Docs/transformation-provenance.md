@@ -11,7 +11,10 @@ it is at the foot of this page, so it can be re-run rather than trusted.
 *Last verified: 30 August 2026, 22 transformations. The `CoherenceMap` sizes
 below were refreshed on 19 September 2026, after it gained a filter-Hilbert
 method and a reference spectrum; the same command found no toolkit call in the
-new code.*
+new code. `Deconvolve` and `EyeTracking` were added on 24 September 2026, with
+the pattern below extended by Unfold's `uf_` prefix and EYE-EEG's
+`parseeyelink`, and their helper packages (`+Unfold`, `+EyeEeg`) resolved one
+hop as `+TransTools` is.*
 
 ## Wrappers: the toolkit does the work
 
@@ -25,6 +28,17 @@ new code.*
 | `AutoEyeICA` | `pop_runica` / `fastica`, `iclabel`, `pop_subcomp` |
 | `RemoveComponents` | the same ICA stack, plus `eeg_checkset` |
 | `AutoGEDAI` | `GEDAI` (GEDAI plugin), `pop_select` |
+| `Deconvolve` | `uf_designmat`, `uf_timeexpandDesignmat`, `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude`, `uf_combineWinrej`, `uf_glmfit`, `uf_condense` (Unfold), through `Unfold.fitBins` |
+| `EyeTracking` | `parseeyelink`, `pop_importeyetracker` (EYE-EEG) |
+
+`Deconvolve` has the most of its own around the toolkit: turning DefineBins'
+bins into Unfold's event types and formulas (`Unfold.binModel`), centring the
+covariates, leaving out the stretches around cuts, the baseline, the difference
+bins, and the overlap-corrected trials, which are Alakazam's arithmetic on
+Unfold's own time-expanded design and betas (`Unfold.overlapCorrectedTrials`).
+`EyeTracking` adds finding the eye file beside the recording, choosing the
+anchor triggers, and refusing a poor synchronisation, judged from EYE-EEG's
+own table of per-trigger offsets.
 
 `Filter` is the one worth a note: the filtering is `firfilt`, but the
 parameter design is Alakazam's. You give a frequency and a stopband
@@ -93,24 +107,26 @@ Run from `src/Transformations`:
 import io, os, re, glob
 PAT = re.compile(r'\b(pop_[a-zA-Z0-9_]+|eeg_[a-zA-Z0-9_]+|ft_[a-zA-Z0-9_]+'
                  r'|GEDAI|iclabel|fastica|runica|firfilt|newtimef|spectopo'
-                 r'|topoplot|readlocs|dipfitdefs)\b')
+                 r'|topoplot|readlocs|dipfitdefs|uf_[a-zA-Z0-9_]+|parseeyelink)\b')
+PACKAGES = ('TransTools', 'Unfold', 'EyeEeg')
 
 def code(path):
     return "\n".join(l for l in io.open(path, encoding='utf-8',
                                         errors='replace').read().split('\n')
                      if not l.lstrip().startswith('%'))
 
-helper = {os.path.basename(f)[:-2]: sorted(set(PAT.findall(code(f))))
-          for f in glob.glob('+TransTools/*.m')}
+helper = {p: {os.path.basename(f)[:-2]: sorted(set(PAT.findall(code(f))))
+              for f in glob.glob('+' + p + '/*.m')} for p in PACKAGES}
 
 for d in sorted(os.listdir('.')):
-    if not os.path.isdir(d) or d == '+TransTools':
+    if not os.path.isdir(d) or d.startswith('+'):
         continue
     src = "\n".join(code(f) for f in glob.glob(os.path.join(d, '*.m')))
     print(d, "direct:", sorted(set(PAT.findall(src))) or "-")
-    for h in sorted(set(re.findall(r'TransTools\.([A-Za-z0-9_]+)', src))):
-        if helper.get(h):
-            print("   via", h + ":", helper[h])
+    for p in PACKAGES:
+        for h in sorted(set(re.findall(p + r'\.([A-Za-z0-9_]+)', src))):
+            if helper[p].get(h):
+                print("   via", p + "." + h + ":", helper[p][h])
 ```
 
 ### What this does not prove

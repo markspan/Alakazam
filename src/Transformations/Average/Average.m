@@ -86,62 +86,39 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     % error propagates as the root of the summed squared errors. A
     % combination bin may itself reference another combination bin (a
     % difference-of-differences, e.g. an interaction effect), so these are
-    % resolved in dependency order -- repeating passes until every one is
-    % computed, or a pass makes no further progress -- rather than assuming
-    % every reference is an ordinary bin already averaged in the first pass.
-    pos = containers.Map('KeyType', 'double', 'ValueType', 'double');
-    for b = 1:nbin; pos(input.bindesc(b).index) = b; end
-
-    isCombo  = false(1, nbin);
-    if isfield(input.bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {input.bindesc.combo});
-    end
-    resolved = ~isCombo;   % ordinary bins are already averaged above
-
-    progress = true;
-    while progress && ~all(resolved)
-        progress = false;
-        for b = find(~resolved)
-            combo = input.bindesc(b).combo;
-            if ~all(isKey(pos, num2cell([combo.bin])))
-                continue; % references a bin that does not exist; never resolves
+    % computed in the dependency order TransTools.ComboOrder works out, the
+    % one resolver ComputeErsp and Unfold.fitBins share with this.
+    [steps, unresolved] = TransTools.ComboOrder(input.bindesc);
+    for s = steps
+        acc     = zeros(nchan, npnts);
+        varAcc  = zeros(nchan, npnts);
+        smeAcc  = zeros(nchan, 1);
+        nParts = strings(1, numel(s.parts));
+        for t = 1:numel(s.parts)
+            r      = s.parts(t);
+            coeff  = s.coeffs(t);
+            acc    = acc    + coeff * data(:, :, r);
+            varAcc = varAcc + (coeff * stErr(:, :, r)).^2;
+            smeAcc = smeAcc + (coeff * aSME(:, r)).^2;
+            if coeff < 0;         sign = "-";
+            elseif t == 1;        sign = "";
+            else;                 sign = "+";
             end
-            refPos = arrayfun(@(t) pos(t.bin), combo);
-            if ~all(resolved(refPos))
-                continue; % a dependency (possibly itself a combo bin) isn't ready yet
-            end
-
-            acc     = zeros(nchan, npnts);
-            varAcc  = zeros(nchan, npnts);
-            smeAcc  = zeros(nchan, 1);
-            nParts = strings(1, numel(combo));
-            for t = 1:numel(combo)
-                r      = refPos(t);
-                acc    = acc    + combo(t).coeff * data(:, :, r);
-                varAcc = varAcc + (combo(t).coeff * stErr(:, :, r)).^2;
-                smeAcc = smeAcc + (combo(t).coeff * aSME(:, r)).^2;
-                if combo(t).coeff < 0;     sign = "-";
-                elseif t == 1;             sign = "";
-                else;                      sign = "+";
-                end
-                nParts(t) = sign + string(EEG.bindesc(r).n);
-            end
-            data(:, :, b)  = acc;
-            stErr(:, :, b) = sqrt(varAcc);
-            aSME(:, b)     = sqrt(smeAcc);
-            % A combination bin has no trials of its own; report the
-            % constituent bins' (signed) trial counts, e.g. "68-74", or, for
-            % a nested combination, another such string -- rather than the
-            % misleading "0" its own (empty) trial list would otherwise give.
-            EEG.bindesc(b).n = char(strjoin(nParts, ""));
-            resolved(b) = true;
-            progress = true;
+            nParts(t) = sign + string(EEG.bindesc(r).n);
         end
+        data(:, :, s.target)  = acc;
+        stErr(:, :, s.target) = sqrt(varAcc);
+        aSME(:, s.target)     = sqrt(smeAcc);
+        % A combination bin has no trials of its own; report the
+        % constituent bins' (signed) trial counts, e.g. "68-74", or, for
+        % a nested combination, another such string, rather than the
+        % misleading "0" its own (empty) trial list would otherwise give.
+        EEG.bindesc(s.target).n = char(strjoin(nParts, ""));
     end
     % Any bin left unresolved here references one that does not exist, or is
     % part of a cycle; DefineBins already rejects both at parse time, so this
     % only bites a hand-built/edited .bins struct (e.g. a stored session).
-    for b = find(~resolved)
+    for b = unresolved
         warning('Alakazam:Average', ...
             '"%s": could not resolve its combination (unknown or circular bin reference); left as NaN.', ...
             input.bindesc(b).label);
@@ -170,6 +147,8 @@ function sme = windowedSME(trials)
         sme = nan(size(trials, 1), 1);
         return;
     end
-    perTrialMean = squeeze(mean(trials, 2, 'omitnan'));   % channels x trials
+    % reshape, not squeeze: with one channel, squeeze turns channels x 1 x
+    % trials into a trials x 1 column, and the SME came out one per trial.
+    perTrialMean = reshape(mean(trials, 2, 'omitnan'), size(trials, 1), []);   % channels x trials
     sme = std(perTrialMean, 0, 2, 'omitnan') / sqrt(n);
 end

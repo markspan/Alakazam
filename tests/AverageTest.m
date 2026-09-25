@@ -87,6 +87,22 @@ classdef AverageTest < matlab.unittest.TestCase
             testCase.verifyEqual(result.bindesc(3).n, '2-2');
         end
 
+        function aSingleChannelIsAveragedToo(testCase)
+        %ASINGLECHANNELISAVERAGEDTOO  A dataset cut down to one channel
+        %   used to stop Average: the per-bin SME squeezed channels x 1 x
+        %   trials into a trials x 1 column and could not be stored as one
+        %   value per channel.
+            EEG = makeTestEEG('nbchan', 1, 'trials', 4);
+            EEG.bindesc(1) = struct('index', 1, 'label', 'A', 'trials', [1 2 3], 'combo', []);
+
+            [result, ~] = Average(EEG);
+
+            perTrial = squeeze(mean(EEG.data(1, :, [1 2 3]), 2, 'omitnan'));
+            testCase.verifyEqual(result.aSME, std(perTrial) / sqrt(3), 'AbsTol', 1e-10);
+            testCase.verifyEqual(result.data(:, :, 1), mean(EEG.data(:, :, [1 2 3]), 3, 'omitnan'), ...
+                'AbsTol', 1e-10);
+        end
+
         function rejectsContinuousData(testCase)
             EEG = makeTestEEG('DataFormat', 'CONTINUOUS');
             testCase.verifyError(@() Average(EEG), 'Alakazam:Average');

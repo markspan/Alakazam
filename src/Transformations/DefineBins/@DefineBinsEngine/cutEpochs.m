@@ -74,6 +74,18 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
     EEG.xmax       = times(end) / 1000;
     EEG.DataFormat = 'EPOCHED';
 
+    % Where each trial's neighbours were, measured now, while the events
+    % still carry their continuous latencies: what EpochView sorts by when
+    % asked for "the next saccade" or "the stimulus before".
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc)
+        EEG.etc = struct();
+    end
+    if ~isfield(EEG.etc, 'alz') || ~isstruct(EEG.etc.alz)
+        EEG.etc.alz = struct();
+    end
+    EEG.etc.alz.epochNeighbours = TransTools.EpochNeighbours(EEG.event, lat(allEvents), ...
+        srate, times([1 end]));
+
     % Per-trial epoch table and bin -> trial index mapping.
     trialOf = zeros(1, max(allEvents));
     trialOf(allEvents) = 1:ntr;

@@ -18,7 +18,8 @@ classdef EpochSortTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Support'), ...
-                     fullfile(root, 'src', 'Views'), fullfile(root, 'src', 'Transformations')}
+                     fullfile(root, 'src', 'Views'), fullfile(root, 'src', 'Transformations'), ...
+                     fullfile(root, 'src', 'Transformations', 'DefineBins'), fullfile(root, 'src', 'IO')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
@@ -83,6 +84,81 @@ classdef EpochSortTest < matlab.unittest.TestCase
             testCase.verifyEqual(key.values, [4 3 2 1]);
         end
 
+        % ---- neighbouring events ----------------------------------------- %
+        function neighboursAreMeasuredOnBothSidesWithinTheWindow(testCase)
+        %NEIGHBOURSAREMEASUREDONBOTHSIDESWITHINTHEWINDOW  At 100 Hz: two
+        %   trials locked to "stim" at samples 100 and 300, a "sac" between
+        %   them, a boundary that is not an event of interest, and a "button"
+        %   too late for the first trial's window.
+            events = struct('type', {'stim', 'sac', 'boundary', 'stim', 'button'}, ...
+                'latency', {100, 150, 200, 300, 395});
+
+            context = TransTools.EpochNeighbours(events, [100 300], 100, [-2000 1000]);
+
+            testCase.verifyEqual(context.types, {'stim', 'sac', 'button'});
+            testCase.verifyEqual(context.trials, 2);
+            testCase.verifyEqual(context.next(2, :), [500 NaN]);
+            testCase.verifyEqual(context.previous(2, :), [NaN -1500]);
+            testCase.verifyEqual(context.next(1, :), [NaN NaN], ...
+                'The next stim is 2000 ms on, past the window, and a trial is not its own neighbour.');
+            testCase.verifyEqual(context.previous(1, :), [NaN -2000], ...
+                'The window''s own edge still counts.');
+            testCase.verifyEqual(context.next(3, :), [NaN 950]);
+        end
+
+        function neighboursAreOfferedPerType(testCase)
+            EEG = EpochSortTest.epoched();
+            EEG.etc.alz.epochNeighbours = struct('types', {{'sac', 'button'}}, ...
+                'next', [300 120 NaN 450; NaN NaN NaN NaN], ...
+                'previous', [-50 -80 -20 -60; -900 -700 -800 -950], 'trials', 4);
+
+            keys = epochSortKeys(EEG);
+
+            next = EpochSortTest.keyWithId(keys, 'next:sac');
+            testCase.verifyEqual(next.values, [300 120 NaN 450]);
+            testCase.verifyEqual(next.label, 'Next sac (ms)');
+            testCase.verifyTrue(next.timeMs);
+            previous = EpochSortTest.keyWithId(keys, 'previous:button');
+            testCase.verifyEqual(previous.values, [-900 -700 -800 -950]);
+            testCase.verifyFalse(ismember('next:button', {keys.id}), ...
+                'No trial has a button after it, so there is nothing to sort by.');
+        end
+
+        function aNeighbourTableThatNoLongerFitsIsIgnored(testCase)
+        %ANEIGHBOURTABLETHATNOLONGERFITSISIGNORED  One column per trial, or
+        %   nothing: a column that belongs to another trial would sort the
+        %   image wrongly and look right.
+            EEG = EpochSortTest.epoched();
+            EEG.etc.alz.epochNeighbours = struct('types', {{'sac'}}, ...
+                'next', [300 120 450], 'previous', [-50 -80 -20], 'trials', 3);
+
+            ids = {epochSortKeys(EEG).id};
+
+            testCase.verifyFalse(any(startsWith(ids, {'next:', 'previous:'})));
+        end
+
+        function defineBinsRecordsTheNeighboursWhenItCutsEpochs(testCase)
+        %DEFINEBINSRECORDSTHENEIGHBOURSWHENITCUTSEPOCHS  Measured while the
+        %   latencies are still the recording's, before epoching rewrites
+        %   them; a trial without a response in its window has none.
+            srate = 100;
+            EEG = struct('data', randn(2, 2000), 'srate', srate, 'pnts', 2000, 'trials', 1, ...
+                'nbchan', 2, 'xmin', 0, 'xmax', 19.99, 'times', (0:1999) * 10, ...
+                'DataFormat', 'CONTINUOUS', 'chanlocs', struct('labels', {'Cz', 'Pz'}), ...
+                'event', struct('type', {'S1', 'R', 'S1', 'S1', 'R'}, ...
+                                'latency', {300, 345, 800, 1300, 1362}));
+
+            epoched = DefineBins(EEG, struct('script', 'bin 1 "Stimulus" "S1"', ...
+                'epoch', struct('lo', -200, 'hi', 800, 'unit', 'ms')));
+
+            context = epoched.etc.alz.epochNeighbours;
+            response = strcmp(context.types, 'R');
+            testCase.verifyEqual(context.trials, 3);
+            testCase.verifyEqual(context.next(response, :), [450 NaN 620]);
+            key = EpochSortTest.keyWithId(epochSortKeys(epoched), 'next:R');
+            testCase.verifyEqual(key.values, [450 NaN 620]);
+        end
+
         function aSingleTrialOffersNothing(testCase)
             EEG = EpochSortTest.epoched();
             EEG.data = EEG.data(:, :, 1);
@@ -101,6 +177,18 @@ classdef EpochSortTest < matlab.unittest.TestCase
             order = EpochView.sortWithinGroups(1:5, zeros(1, 5), [2 NaN 1 2 NaN]);
 
             testCase.verifyEqual(order, [3 1 4 2 5]);
+        end
+
+        function reversedTheLargestComesFirstAndMissingValuesStillGoLast(testCase)
+        %REVERSEDTHELARGESTCOMESFIRSTANDMISSINGVALUESSTILLGOLAST  The
+        %   "Reverse the sort" setting: largest at the top, as EEGLAB's
+        %   erpimage draws it, ties still in recording order, and a trial
+        %   without a value still at the bottom rather than on top.
+            order = EpochView.sortWithinGroups(1:5, zeros(1, 5), [2 NaN 1 2 NaN], true);
+
+            testCase.verifyEqual(order, [1 4 3 2 5]);
+            testCase.verifyEqual(EpochView.sortWithinGroups(1:6, [1 1 2 2 2 3], [5 4 3 9 1 2], true), ...
+                [1 2 4 3 5 6], 'Groups stay whole when reversed too.');
         end
 
         function aTrialInTwoBinsIsSortedInEach(testCase)
@@ -125,13 +213,21 @@ classdef EpochSortTest < matlab.unittest.TestCase
             testCase.assertTrue(ismember('Event duration (ms)', labels));
             testCase.verifyTrue(all(isnan(view.SortLine.XData)), 'Recording order draws no line.');
 
-            % The user's own "group by bin" setting decides whether the sort
-            % runs over all four trials or within each bin (A: 1 and 3; B: 2
-            % and 4); both are checked rather than one skipped.
+            % The user's own "group by bin" and "reverse the sort" settings
+            % decide whether the sort runs over all four trials or within
+            % each bin (A: 1 and 3; B: 2 and 4), and in which direction;
+            % every combination is checked rather than any skipped.
             grouped = AlakazamSettings.get("graphics", "epochImage", "groupByBin");
-            if grouped
+            reversed = AlakazamSettings.get("graphics", "epochImage", "reverseSort");
+            if grouped && reversed
+                byDuration = [3 1 4 2];
+                byPupil = [1 3 2 4];
+            elseif grouped
                 byDuration = [1 3 2 4];
                 byPupil = [3 1 4 2];
+            elseif reversed
+                byDuration = [3 1 4 2];
+                byPupil = [1 2 3 4];
             else
                 byDuration = [2 4 1 3];
                 byPupil = [4 3 2 1];

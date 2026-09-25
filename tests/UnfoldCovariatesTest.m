@@ -123,6 +123,36 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(contains(plan.notes, 'all carry the same')));
         end
 
+        function aValueIsReadFromItsOwnEventNotFromOneAtTheSameSample(testCase)
+        %AVALUEISREADFROMITSOWNEVENTNOTFROMONEATTHESAMESAMPLE  The values
+        %   used to be looked up by latency, so an event sharing its sample
+        %   with another took the other's value. In Ehinger & Dimigen's face
+        %   data three stimulus onsets coincide with a saccade: the stimuli
+        %   (all 0) picked up three saccade amplitudes, counted as varying,
+        %   and were fitted with a covariate that was nearly their own
+        %   intercept. Here one Rare event (rt all 0) shares its sample with
+        %   a response whose rt is not.
+            EEG = UnfoldCovariatesTest.recording();
+            rare = find(strcmp({EEG.event.type}, 'S2'));
+            for k = rare
+                EEG.event(k).rt = 0;
+            end
+            twin = EEG.event(rare(3));
+            twin.type = 'response';
+            twin.bini = [];
+            twin.rt = 512;
+            EEG.event(end + 1) = twin;                 % after the Rare event, at its sample
+            [~, order] = sort([EEG.event.latency]);    % stable: the twin stays after it
+            EEG.event = EEG.event(order);
+
+            plan = Unfold.binModel(EEG, 'Covariates', {'rt'});
+
+            testCase.verifyEqual(plan.formulas{strcmp(plan.eventTypes, 'bin_Rare')}, 'y ~ 1', ...
+                'Every Rare event carries rt = 0; the response''s 512 is not theirs.');
+            rareRows = strcmp({plan.events.type}, 'bin_Rare');
+            testCase.verifyEqual(unique([plan.events(rareRows).rt]), 0);
+        end
+
         function anAbsentFieldIsNotedRatherThanThrown(testCase)
             EEG = UnfoldCovariatesTest.recording();
 

@@ -1,7 +1,13 @@
 {
-  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/reading/",
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/opendata/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
-  "TransformSettings": {},
+  "TransformSettings": {
+    "Deconvolve": [],
+    "Baseline": {
+      "Start": -100,
+      "Stop": 0
+    }
+  },
   "Groups": []
 }

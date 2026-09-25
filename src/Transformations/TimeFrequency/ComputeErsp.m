@@ -125,51 +125,29 @@ function [ersp, freqs] = ComputeErsp(input, opts)
         TransTools.progressbar(1); % nothing above ever reached fractiondone==1
     end
 
-    % Second pass: resolve combo bins in dependency order. A combo bin's
-    % ERSP is the coefficient-weighted sum of the referenced bins' own
-    % (already dB-baseline-corrected) ERSP -- a legitimate operation in
-    % dB/log-power space (dB is already a ratio quantity, so a signed sum
-    % across bins is exactly the standard ERSP contrast/difference map --
-    % the same reasoning Average.m applies to sum voltage averages, except
-    % there it is summing raw voltage, which is linear to begin with). A
-    % combo bin may itself reference another combo bin (a
-    % difference-of-differences), so this resolves in dependency order,
-    % repeating passes until every one is computed or a pass makes no
-    % further progress, exactly like Average.m's own combo resolution.
-    if any(isCombo)
-        pos = containers.Map('KeyType', 'double', 'ValueType', 'double');
-        for b = 1:nBins; pos(input.bindesc(b).index) = b; end
-
-        resolved = ~isCombo;
-        progress = true;
-        while progress && ~all(resolved)
-            progress = false;
-            for b = find(~resolved)
-                combo = input.bindesc(b).combo;
-                if ~all(isKey(pos, num2cell([combo.bin])))
-                    continue; % references a bin that does not exist; never resolves
-                end
-                refPos = arrayfun(@(t) pos(t.bin), combo);
-                if ~all(resolved(refPos))
-                    continue; % a dependency (possibly itself a combo bin) isn't ready yet
-                end
-
-                acc = zeros(nChan, opts.NumFreqs, nT);
-                for t = 1:numel(combo)
-                    acc = acc + combo(t).coeff * ersp(:, :, :, refPos(t));
-                end
-                ersp(:, :, :, b) = acc;
-                resolved(b) = true;
-                progress = true;
-            end
+    % Second pass: combo bins. A combo bin's ERSP is the coefficient-weighted
+    % sum of the referenced bins' own (already dB-baseline-corrected) ERSP,
+    % a legitimate operation in dB/log-power space: dB is already a ratio
+    % quantity, so a signed sum across bins is exactly the standard ERSP
+    % contrast/difference map (Average.m sums voltage averages on the same
+    % reasoning, where the quantity is linear to begin with). A combo bin may
+    % itself reference another (a difference-of-differences), so they are
+    % computed in the dependency order TransTools.ComboOrder works out, the
+    % one resolver Average.m and Unfold.fitBins share with this.
+    [steps, unresolved] = TransTools.ComboOrder(input.bindesc);
+    for s = steps
+        acc = zeros(nChan, opts.NumFreqs, nT);
+        for t = 1:numel(s.parts)
+            acc = acc + s.coeffs(t) * ersp(:, :, :, s.parts(t));
         end
-        % Any bin left unresolved here references one that does not exist,
-        % or is part of a cycle; DefineBins already rejects both at parse
-        % time, so this only bites a hand-built/edited .bins struct.
-        for b = find(~resolved)
-            warning('Alakazam:TimeFrequency', ...
-                '"%s": could not resolve its combination (unknown or circular bin reference); left as NaN.', ...
-                input.bindesc(b).label);
-        end
+        ersp(:, :, :, s.target) = acc;
+    end
+    % Any bin left unresolved here references one that does not exist, or is
+    % part of a cycle; DefineBins already rejects both at parse time, so this
+    % only bites a hand-built/edited .bins struct.
+    for b = unresolved
+        warning('Alakazam:TimeFrequency', ...
+            '"%s": could not resolve its combination (unknown or circular bin reference); left as NaN.', ...
+            input.bindesc(b).label);
     end
 end
