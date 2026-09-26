@@ -2166,7 +2166,8 @@ processing uniformly, independent of the active workspace.
   takes the smallest of the number of recordings, the physical cores, and
   what the free memory allows for the largest recording.
 
-The epoch image, trials grouped by bin (Prime/Target x related/unrelated):
+The epoch image, trials grouped by bin (here Ehinger & Dimigen's face data:
+stimulus, saccade and button-press epochs at Oz):
 
 ![Epoch image with trials grouped by bin](Screenshots/Epoched.jpg)
 
