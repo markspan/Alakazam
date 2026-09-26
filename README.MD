@@ -201,7 +201,9 @@ without deconvolution for comparison, all with the paper's model (the saccade
 fitted with five splines of its amplitude); a last node returns the model's
 terms, the saccade response at four amplitudes. Its first node's comment lists
 where it departs from the paper (the channels scanned for artefacts, one
-baseline for every bin).
+baseline for every bin). The
+[walkthrough](#a-worked-example-overlap-correction-recreating-figure-11-of-ehinger-and-dimigen-2019)
+runs it step by step, with the figure's waveforms and ERP images.
 
 ## Installation
 
@@ -2182,9 +2184,12 @@ No separate save operation is required for these settings.
 
 ## How-to walkthroughs
 
-Three worked pipelines, plus a fourth that is a complete, reproducible run on
-real published data rather than a recipe (see
-[below](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)). Each
+Three worked pipelines, plus two complete, reproducible runs on real
+published data rather than recipes: the ERP CORE N400 dataset (see
+[below](#a-worked-example-start-to-finish-the-erp-core-n400-dataset)), and
+overlap correction with `Deconvolve`, recreating Figure 11 of the Unfold
+toolbox paper (see
+[below](#a-worked-example-overlap-correction-recreating-figure-11-of-ehinger-and-dimigen-2019)). Each
 is an ordinary chain of transformations, so once built on one recording it
 replays across a whole study in one click with **Apply to All Raw Files**
 (a branch's right-click menu) or a saved template. The marker
@@ -2579,6 +2584,136 @@ combination bin's own vs-zero test is the direct, single-number version of
 the same finding: the priming effect itself (unrelated minus related) is
 reliably below zero across subjects, not just different-looking in an
 omnibus sense.
+
+</details>
+
+<details>
+<summary><strong>A worked example: overlap correction, recreating Figure 11 of Ehinger and Dimigen (2019)</strong> (click to expand)</summary>
+
+### A worked example: overlap correction, recreating Figure 11 of Ehinger and Dimigen (2019)
+
+The second complete run on published data, and the one to read before
+using [`Deconvolve`](#transformations): it rebuilds Figure 11 of the Unfold
+toolbox paper (Ehinger & Dimigen, 2019, see [References](#references)) from
+the authors' own recording, with a template that ships in the repository
+([`FaceSaccadesDeconvolution.alztemplate`](templates/FaceSaccadesDeconvolution.alztemplate)).
+
+**The data.** One participant of a face-discrimination task recorded by the
+authors: a face on screen for 1350 ms and a button press to judge its
+emotion, while the participant, although told to keep fixating, made small
+involuntary saccades towards the mouth of the face. Every trial therefore
+holds three responses that overlap in time: to the face (`stimonset`), to
+each (micro)saccade (`saccade`, the first a median 250 ms after the face) and
+to the button press (`buttonpress`, a median 750 ms after the face). The
+recording, `face_saccades_opendata_fig10.set` (40 channels at 500 Hz, the eye
+electrodes IO1, IO2, LO1 and LO2 among them), and the authors' own script
+come from the paper's OSF page ([osf.io/wbz7x](https://osf.io/wbz7x/)); they
+are not bundled with this repository. Put the recording in a folder of its
+own (a local checkout keeps it in `Data/opendata`, where the repository's
+`DefaultWorkspace.wksp` points) and open a workspace on it. The authors'
+script calls the figure "Figure 10", the numbering of the bioRxiv preprint;
+in the published paper it is Figure 11.
+
+**Applying the template.** Select the recording and right-click ->
+**Apply Template...** (or drag the template file onto it). It adds seven
+nodes: three Deconvolve nodes fitting the same model, and a four-node
+branch that epochs and averages without deconvolution, for comparison.
+
+- **Deconvolve**, returning one waveform per bin, with the paper's model.
+  Three bins, one per event type (`bin 1 "Stimulus" "stimonset"`,
+  `bin 2 "Saccade" "saccade"`, `bin 3 "Button" "buttonpress"`); a response
+  window from -1500 to 1000 ms around each event; every stretch whose
+  peak-to-peak amplitude exceeds 250 µV within a moving 2 s window left out
+  of the model (13.5% of this recording); and a formula per bin: `y ~ 1`
+  for the face and the button press, `y ~ 1 + spl(sac_amplitude, 5)` for
+  the saccade, since larger saccades are followed by larger lambda waves,
+  and not in a straight line. None of the events outside the three bins is
+  modelled, as in the paper, and for a reason the data show: a fixation
+  begins 12 ms after its saccade (SD 6 ms), and the `S 99` marker precedes
+  each face by about 1010 ms (SD 6 ms), lags so nearly constant that no
+  model can tell those responses apart from the saccade's and the face's
+  own.
+- **Deconvolve** again, the same model, returning overlap-corrected trials.
+- **DefineBins** with the same three bins, epoched from -1500 to 1000 ms,
+  then **Baseline** (-200 to 0 ms), **ArtefactDetect** (the same 250 µV
+  moving-window peak-to-peak criterion, on the scalp channels) and
+  **Average**: the comparison without deconvolution.
+- **Deconvolve** a third time, returning the model's terms, with the
+  saccade's spline evaluated at amplitudes of 0.3, 0.6, 1.5 and 3 degrees.
+
+Built by hand, the first node is **Deconvolve** on the Tools tab, with the
+bins written under **Define bins...** and the formulas typed into the
+table. Before anything is fitted, the model list shows what the toolbox
+makes of each formula: the saccade's five splines become four columns,
+since one is already covered by the intercept.
+
+![The Deconvolve dialog with the paper's model: three bins, a spline of saccade amplitude for the saccade, no other events modelled](Screenshots/DeconvolveDialog.jpg)
+
+**Figure 11, top row: the waveforms.** Select the first Deconvolve node,
+then drag the **Average** node onto it: an average dropped on another of the
+same shape is drawn in the same plot rather than transformed. Pick Oz and
+untick everything but the two stimulus waveforms:
+
+![Figure 11C, top: the response to the faces at Oz, deconvolved (blue) and plainly averaged (orange)](Screenshots/Figure11Waveforms.jpg)
+
+The two agree for the first 300 ms after the face (within 0.7 µV) and then
+part: between 300 and 500 ms the plain average peaks at 23.6 µV and the
+deconvolved waveform at 17.7 µV, so about a quarter of what looks like a
+P300 to the faces belongs to the microsaccades and the button press, which
+is the paper's point (the arrow in its Figure 11C). Ticking the saccade or
+the button pair instead gives the other two panels of the row. Run on the
+same recording, the authors' own script gives a stimulus waveform at Oz
+that correlates with this one at r = 0.9998 from -200 to 1000 ms (largest
+difference 3.2 µV, from the differences listed at the end).
+
+**Figure 11, bottom row: the single trials.** Select the **Baseline** node
+(the plain epochs) and, in its [ERP image](#erp-images-and-sorting), pick
+Oz, the **Stimulus** bin and **Sort by: Next saccade (ms)**. Every row is one
+trial, ordered by when the first saccade came, and that moment is drawn
+across the image. The response to the face runs straight down at a fixed
+latency; the lambda response to the saccade follows the line. The same
+settings on the second Deconvolve node, the overlap-corrected trials, leave
+the face's response alone:
+
+![Figure 11C, bottom: trials locked to the face and sorted by the next saccade, without deconvolution](Screenshots/Figure11StimulusPlain.jpg)
+
+![Figure 11C, bottom: the same trials, overlap-corrected](Screenshots/Figure11StimulusCorrected.jpg)
+
+The button press shows it most plainly. In the **Button** bin, sorted by
+**Previous stimonset (ms)**, the plain epochs carry the face's response
+along the line, further back the longer the participant took to respond;
+in the corrected trials there is nothing left to follow it:
+
+![Figure 11E, bottom: trials locked to the button press and sorted by the preceding face, without deconvolution](Screenshots/Figure11ButtonPlain.jpg)
+
+![Figure 11E, bottom: the same trials, overlap-corrected](Screenshots/Figure11ButtonCorrected.jpg)
+
+The **Saccade** bin sorted by **Next buttonpress (ms)** is the remaining
+panel (11D). Each corrected trial is the recording around its event with
+every other event's fitted response subtracted. 3337 of the 3829 events keep
+a trial: a window that touches a stretch left out of the model had nothing
+subtracted there, so it is dropped. Averaging the trials kept comes within
+0.3 µV of the fitted waveforms.
+
+**Beyond the figure: how saccade size matters.** The last node returns the
+model's own view of the saccade term (Unfold's `uf_predictContinuous` and
+`uf_addmarginal`): the saccade response at each amplitude asked for, each a
+whole waveform. At Oz the lambda response, 50 to 150 ms after saccade onset,
+peaks at -0.3, 3.1, 13.3 and 13.2 µV for saccades of 0.3, 0.6, 1.5 and 3
+degrees. It grows with amplitude and then levels off, the non-linearity the
+paper gives as its reason for a spline. The median saccade here is 0.6
+degrees, on the steep part of that curve.
+
+![The saccade response at Oz for saccades of 0.3, 0.6, 1.5 and 3 degrees, from the model's terms](Screenshots/Figure11Terms.jpg)
+
+**Where it differs from the paper.** The artefact scan covers the 36 scalp
+channels, where the authors' script scans all 40, the eye electrodes
+included; an eye channel's range is several times the EEG's, so scanning it
+leaves out far more of the recording. One baseline, -200 to 0 ms, serves
+every bin, where the authors' script baselines the button-locked panels at
+400 to 600 ms. The saccade takes five splines, as the paper says; the
+authors' script uses ten. Panels A and B (the trial timeline and a heatmap
+of saccade endpoints) are not ERPs and are not reproduced.
 
 </details>
 
