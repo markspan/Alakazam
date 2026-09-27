@@ -256,7 +256,10 @@ function configureView(ctx, view, s)
     if ~isempty(s.overlay) && ismethod(view, 'addDataset')
         other = stage(ctx, s.overlay);
         other.File = fullfile(ctx.cacheDir, [s.overlay '.mat']);
-        view.addDataset(other);
+        problem = view.addDataset(other);
+        if ~isempty(problem)
+            error('captureManualImages:overlay', 'Could not overlay %s: %s', s.overlay, problem);
+        end
         settle(4);
     end
     if (~isempty(s.channel) || ~isempty(s.bin)) && ismethod(view, 'applyFocus')

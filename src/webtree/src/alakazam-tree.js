@@ -129,6 +129,7 @@ const LEAVE_GRACE_MS = 250
 const DRAG_THRESHOLD_PX = 10
 const CONTEXT_ITEMS = [
     { action: 'listEvents', label: 'List events' },
+    { action: 'overlayErp', label: 'Overlay on ERP plot' },
     { separator: true },
     { action: 'rename', label: 'Rename' },
     { action: 'recalculate', label: 'Recalculate' },
@@ -240,6 +241,24 @@ class AlakazamTree {
         // fires INSIDE the original _pickup, before it relocates the row, so the
         // slot to backfill does not exist yet at that point.
         const input = this._tree._input
+
+        // Only the primary (left) button clicks or drags. yy-tree's
+        // Input._down takes a mousedown from any button, and a right-click's
+        // mousedown and mouseup come before its contextmenu event, so every
+        // right-click was also a click: MATLAB plotted the node and brought
+        // its plot to the front before the menu opened. Overlay on ERP plot,
+        // which draws onto the plot in view, then only ever found the node's
+        // own. The context menu still selects the node (see _selectById in
+        // the contextmenu handler), and every menu action reads that
+        // selection, not the plot. Touch has no button and passes through.
+        const originalDown = input._down.bind(input)
+        input._down = (e) => {
+            if (e.type === 'mousedown' && e.button !== 0) {
+                return
+            }
+            originalDown(e)
+        }
+
         const originalPickup = input._pickup.bind(input)
         input._pickup = () => {
             const target = input._target
@@ -557,11 +576,15 @@ class AlakazamTree {
             // 'exportErpset' (Averaged data only), a .set export is valid
             // for any real dataset -- continuous, epoched or averaged --
             // so the only thing worth disabling it for is a report node.
+            // 'overlayErp' shares 'exportErpset''s signal (averaged data):
+            // the tree cannot tell an ERP from a scalp map, so MATLAB checks
+            // that when it runs (Alakazam.onOverlayErp) and says why not.
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
                 || (item.action === 'recalculate' && !data.canRecalculate)
                 || (item.action === 'applyToAll' && !data.canApplyToAll)
                 || (item.action === 'saveTemplate' && !data.canApplyToAll)
                 || (item.action === 'exportErpset' && !data.canExportErpset)
+                || (item.action === 'overlayErp' && !data.canExportErpset)
                 || (item.action === 'exportSet' && !data.canApplyTemplate)
                 || (item.action === 'applyTemplate' && !data.canApplyTemplate)
                 || (item.action === 'rejectionBreakdown' && !data.canRejectionBreakdown)

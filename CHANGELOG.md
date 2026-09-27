@@ -4,6 +4,40 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **Overlay on ERP plot**, in a node's right-click menu: draws an average's
+  waveforms on the ERP plot in view, from either tree, to compare two
+  subjects, two conditions, or the same average before and after a step.
+- **Difference**: with exactly two lines ticked, the ERP plot draws the
+  first minus the second (**Swap** reverses it), interpolating when the two
+  were sampled differently.
+- **Overlay opacity**: overlaid datasets are drawn underneath the plot's own
+  and paler, by a slider below the tick boxes. **Remove overlay** takes them
+  off again.
+- The ERP plot keeps a zoom or pan made with its toolbar while channels are
+  stepped and lines ticked; **Restore view** returns to automatic scaling.
+
+### Changed
+
+- Overlaid ERPs are matched by channel name and drawn on their own time
+  axes, so a resampled or re-referenced average overlays the original; two
+  datasets with no channel or time in common are refused with the reason.
+  Their lines are named by what sets the datasets apart in the tree.
+
+### Fixed
+
+- A right-click on a tree node also clicked it, so the node was plotted and
+  its plot brought to the front before the menu opened. Only the left button
+  clicks now; the right-click still selects the node for its menu.
+- Overlaying two averages whose channels were in different orders drew
+  different electrodes on one plot, since channels were matched by position.
+- Dropping an average onto an average of another shape replayed Average
+  onto it, which could only fail, instead of saying why they cannot be
+  overlaid.
+
 ## V0.4.4.1 (2026-09-27)
 
 ### Documentation

@@ -41,6 +41,7 @@ click) offers what can be done with that node:
 | **Save Template** / **Apply Template** | Write the branch to a template file; replay a template here. |
 | **Rename**, **Delete** | Rename a node; delete it and its branch, and the files behind them. |
 | **List events** | Count the event codes in a dataset. |
+| **Overlay on ERP plot** | Draw an average's waveforms on the ERP plot in view, to compare the two (@sec-overlay). |
 | **Rejection breakdown** | For an ArtefactDetect node: which detector rejected which trials (@fig-rejection-breakdown). |
 | **Export as ERPset**, **Export as EEGLAB .set** | Hand an averaged dataset to ERPLAB, or any dataset to EEGLAB. |
 

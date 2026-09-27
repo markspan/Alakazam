@@ -293,8 +293,16 @@ classdef BranchReplayTest < matlab.unittest.TestCase
         end
 
         function EEG = averaged(testCase, call, level)
+        %AVERAGED  An average as the plotter sees one: time-domain, several
+        %   channels, one trial. isOverlayableAverage only calls a drop an
+        %   overlay when both datasets are drawn as ERP waveforms
+        %   (AlakazamPlotter.viewClassFor), so a stand-in without these
+        %   fields would be replayed instead.
             EEG = testCase.dataset(0);
             EEG.data = level * ones(2, 3);
+            EEG.DataType = 'TimeDomain';
+            EEG.nbchan = 2;
+            EEG.trials = 1;
             EEG.DataFormat = 'Averaged';
             EEG.Call = call;
             EEG.id = call;

@@ -101,8 +101,8 @@ a grand average. Its right-click menu is described in @tbl-context-menu.
 Dragging a node onto a recording's root replays the step, and every step
 below it, onto that recording (@sec-replay). Dragging an averaged dataset
 onto another averaged dataset of the same shape does not transform anything:
-it overlays the first on the second's plot, the quickest way to compare two
-subjects, two conditions or two preprocessing branches on the same axes.
+it overlays the first on the second's plot, the same as **Overlay on ERP
+plot** in its right-click menu (@sec-overlay).
 
 ## The plot area {#sec-plot-area}
 
@@ -199,6 +199,53 @@ down arrow keys, or the mouse wheel, step the channel for every line at
 once. When the dataset carries ERP Measure results, the measurement windows
 are drawn on the waveforms: the window shaded, and the measured value marked
 (a peak, a fractional latency, or the area filled).
+
+A zoom or pan made with the plot's toolbar is kept while you step channels
+or tick lines; the toolbar's **Restore view** returns to automatic scaling.
+The difference (below) keeps its own amplitude zoom.
+
+### Overlaying ERPs {#sec-overlay}
+
+Two subjects, two conditions, or the same average before and after a
+preprocessing step are easiest to compare on the same axes. Show one ERP,
+then right-click another averaged node, in either tree, and choose
+**Overlay on ERP plot**: its waveforms are added to the ERP plot in view
+(the selected tab, or in a grid the tile last clicked). Dragging one average
+onto another does the same.
+
+**Channels are matched by name, and each line keeps its own time axis.** A
+resampled average overlays the original, and so does one with a different
+montage or channel order: every line shows the electrode named in the
+title, and a dataset without that electrode says so in its tick box. Two
+datasets with no channel in common, or with time ranges that do not
+overlap, are refused with the reason. Only averages drawn as waveforms can
+be overlaid; a scalp map or a time-frequency result cannot.
+
+**Lines are named by what sets their datasets apart** in the tree: two
+subjects' averages read `S01` and `S02`, two branches of one subject by the
+step where they part. Nodes carry their transformation's name until they
+are renamed, so two branches whose nodes are all called the same are told
+apart as `[1]` and `[2]`, the plot's own dataset first; renaming a node
+(right-click, **Rename**) gives its lines a clearer name. The full path is
+in the tick box's tooltip.
+
+**Overlaid datasets are drawn underneath and paler** than the plot's own,
+so its lines stay readable; **Overlay opacity**, below the tick boxes, sets
+how pale. **Remove overlay** takes every overlaid dataset off the plot again
+and leaves its own lines as they were.
+
+**Difference.** With exactly two lines ticked, **Difference** draws the
+first minus the second instead of the two lines, and **Swap** reverses the
+subtraction: the difference between two bins of one average, or what a
+filter removed from the same bin. When the two were sampled differently,
+the second is interpolated onto the first's time points. No confidence band
+is drawn around a difference: the two lines may share their trials, as the
+same bin before and after a filter does, and then the standard error of
+their difference cannot be derived from theirs. For a difference with its
+own error, define a difference bin (@sec-tr-definebins).
+
+An overlay is part of the plot, not of the workspace: closing the plot
+removes it.
 
 ### Spectra
 

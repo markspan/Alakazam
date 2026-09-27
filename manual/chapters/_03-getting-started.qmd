@@ -118,9 +118,10 @@ There are three ways out, in increasing order of ambition.
 **Drag a node onto another recording.** Alakazam replays that step, and every
 step below it, onto the other recording, including branches where the
 analysis forked. One drag can reproduce a whole pipeline. As a special case,
-dropping one averaged dataset onto another of the same shape overlays the two
-plots instead of transforming anything: the quickest way to compare two
-conditions or two subjects on the same axes.
+dropping one averaged dataset onto another overlays the two plots instead of
+transforming anything, as **Overlay on ERP plot** in its right-click menu
+does: the quickest way to compare two conditions or two subjects on the same
+axes (@sec-overlay).
 
 **Right-click a node and choose Apply to All Raw Files.** The same replay, to
 every recording in the workspace at once. With the Parallel Computing Toolbox

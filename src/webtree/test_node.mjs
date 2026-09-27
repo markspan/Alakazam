@@ -127,6 +127,20 @@ assert.strictEqual(events.length, 1, 'jitter within the threshold should still b
 assert.strictEqual(JSON.stringify(events[0]), JSON.stringify({ type: 'nodeClicked', id: 'd' }))
 console.log('sub-threshold mouse jitter during a click is not mistaken for a drag: OK')
 
+// --- 3c. a right-click is not a click: its mousedown and mouseup come
+//     before the contextmenu event, and must not select-and-plot the node
+//     (MATLAB would bring that node's plot to the front before the menu's
+//     action ran). A real left-button press on the same node still clicks. ---
+events.length = 0
+const leafRight = findLeafByLabel('FourierResult1')
+leafRight.name.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 2 }))
+window.document.body.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true, button: 2 }))
+assert.ok(!events.some(e => e.type === 'nodeClicked' || e.type === 'nodeDoubleClicked'), 'a right-button press must not send a click')
+leafRight.name.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }))
+window.document.body.dispatchEvent(new window.MouseEvent('mouseup', { bubbles: true, button: 0 }))
+assert.strictEqual(events.filter(e => e.type === 'nodeClicked').length, 1, 'a left-button press still clicks')
+console.log('a right-click does not click the node; a left click still does: OK')
+
 // --- 4. context menu ---
 events.length = 0
 const leafC = findLeafByLabel('Average1')   // canListEvents:false
@@ -135,7 +149,7 @@ const menu = window.document.querySelector('.alz-menu')
 assert.ok(menu, 'context menu should be shown')
 const items = [...menu.querySelectorAll('.alz-menu-item')].map(el => el.textContent)
 console.log('menu items:', items);
-assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Rename', 'Recalculate', 'Rejection breakdown...', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
+assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Overlay on ERP plot', 'Rename', 'Recalculate', 'Rejection breakdown...', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
 // 'Average1' is not an ArtefactDetect node (canRejectionBreakdown falsy) ->
 // the breakdown item is present but greyed out, the same way List events is.
 const breakdownItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Rejection breakdown...')
@@ -143,6 +157,9 @@ assert.ok(breakdownItemC.classList.contains('alz-menu-item-disabled'), 'Rejectio
 // 'Average1' is an averaged node (canExportErpset: true) -> Export as ERPset enabled.
 const exportItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
 assert.ok(!exportItemC.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be enabled for an averaged node')
+// ... and so is Overlay on ERP plot, which shares its signal.
+const overlayItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Overlay on ERP plot')
+assert.ok(!overlayItemC.classList.contains('alz-menu-item-disabled'), 'Overlay on ERP plot should be enabled for an averaged node')
 // 'Average1' is an ordinary dataset node (canApplyTemplate: true) -> Export as .set enabled.
 const exportSetItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as EEGLAB .set...')
 assert.ok(!exportSetItemC.classList.contains('alz-menu-item-disabled'), 'Export as EEGLAB .set should be enabled for an ordinary dataset node')
@@ -166,6 +183,10 @@ leafRaw.content.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: tr
 const rawMenu = window.document.querySelector('.alz-menu')
 const exportItemRaw = [...rawMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Export as ERPset...')
 assert.ok(exportItemRaw.classList.contains('alz-menu-item-disabled'), 'Export as ERPset should be disabled for a non-averaged node')
+const overlayItemRaw = [...rawMenu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Overlay on ERP plot')
+assert.ok(overlayItemRaw.classList.contains('alz-menu-item-disabled'), 'Overlay on ERP plot should be disabled for a non-averaged node')
+overlayItemRaw.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+assert.ok(!events.some(e => e.action === 'overlayErp'), 'a disabled Overlay on ERP plot must not send an action')
 tree._closeMenu()
 console.log('Export as ERPset gating (enabled for averaged, disabled otherwise): OK')
 

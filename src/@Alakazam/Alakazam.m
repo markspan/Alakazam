@@ -83,6 +83,8 @@ classdef Alakazam < handle
         steps = readTemplate(~, file)
         tf = isOverlayableAverage(~, targetEEG, sourceEEG)
         overlayAverage(this, targetEEG, sourceEEG)
+        onOverlayErp(this)
+        path = erpTreePath(this, file)
         [files, labels, kinds, included] = findGrandAverageCandidates(this)
         deleteBranchFiles(this, file)
         bins = candidateBinLabels(this, candidateFiles)

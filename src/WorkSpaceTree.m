@@ -304,6 +304,31 @@ classdef WorkSpaceTree < handle
             node = this.nodeStruct(id);
         end
 
+        function path = pathOf(this, id)
+        %PATHOF  The labels from ID's root down to ID itself, as a cellstr,
+        %   or {} if ID is unknown. What an overlaid ERP's lines are named
+        %   by (see AverageView and overlayNames).
+            path = {};
+            id = this.resolveId(id);
+            while ~isempty(id) && isKey(this.Nodes, id)
+                n = this.Nodes(id);
+                path = [{n.label}, path]; %#ok<AGROW>
+                id = n.parentId;
+            end
+        end
+
+        function id = findByFile(this, file)
+        %FINDBYFILE  The id of the node holding FILE, or '' when none does.
+            id = '';
+            ids = keys(this.Nodes);
+            for i = 1:numel(ids)
+                if strcmp(this.Nodes(ids{i}).file, char(file))
+                    id = ids{i};
+                    return;
+                end
+            end
+        end
+
         function release = beginBatch(this)
         %BEGINBATCH  Hold back redraws until the returned object goes out of
         %   scope, then send the tree to the page once.

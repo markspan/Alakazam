@@ -1222,6 +1222,7 @@ var AlakazamTree = (() => {
   var DRAG_THRESHOLD_PX = 10;
   var CONTEXT_ITEMS = [
     { action: "listEvents", label: "List events" },
+    { action: "overlayErp", label: "Overlay on ERP plot" },
     { separator: true },
     { action: "rename", label: "Rename" },
     { action: "recalculate", label: "Recalculate" },
@@ -1281,6 +1282,13 @@ var AlakazamTree = (() => {
         return false;
       };
       const input = this._tree._input;
+      const originalDown = input._down.bind(input);
+      input._down = (e) => {
+        if (e.type === "mousedown" && e.button !== 0) {
+          return;
+        }
+        originalDown(e);
+      };
       const originalPickup = input._pickup.bind(input);
       input._pickup = () => {
         const target = input._target;
@@ -1533,7 +1541,7 @@ var AlakazamTree = (() => {
         const row = document.createElement("div");
         row.className = "alz-menu-item";
         row.textContent = item.label;
-        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset || item.action === "exportSet" && !data.canApplyTemplate || item.action === "applyTemplate" && !data.canApplyTemplate || item.action === "rejectionBreakdown" && !data.canRejectionBreakdown;
+        const disabled = item.disabled || item.action === "listEvents" && !data.canListEvents || item.action === "recalculate" && !data.canRecalculate || item.action === "applyToAll" && !data.canApplyToAll || item.action === "saveTemplate" && !data.canApplyToAll || item.action === "exportErpset" && !data.canExportErpset || item.action === "overlayErp" && !data.canExportErpset || item.action === "exportSet" && !data.canApplyTemplate || item.action === "applyTemplate" && !data.canApplyTemplate || item.action === "rejectionBreakdown" && !data.canRejectionBreakdown;
         if (disabled) {
           row.classList.add("alz-menu-item-disabled");
         } else {

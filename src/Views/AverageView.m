@@ -4,17 +4,31 @@ classdef AverageView < AlakazamView
 %   AverageView draws the per-channel trial average of an averaged dataset
 %   together with a +/- 3 standard-error band. A bin-aware average (produced by
 %   Average on a DefineBins dataset) is drawn as one labelled line per bin;
-%   a plain average is a single line. Several averaged datasets can be overlaid
-%   on the same axes (dragging one onto another calls addDataset), and a legend
-%   identifies each line. It replaces the old Tools.plotEpochedTimeMultiAverage
-%   function with a clean stateful class.
+%   a plain average is a single line. It replaces the old
+%   Tools.plotEpochedTimeMultiAverage function with a clean stateful class.
+%
+%   OVERLAYS. Other averages can be drawn on the same axes (addDataset): the
+%   tree's Overlay on ERP plot command, or dropping one average onto another.
+%   Each line keeps its own time axis and each channel is found by its label,
+%   so a resampled or re-referenced average overlays the original, and a
+%   montage in another order still shows the same electrode on every line
+%   (erpOverlayProblem says when an overlay is not possible). Lines are named
+%   by what tells their datasets apart in the tree (overlayNames). Overlaid
+%   datasets are drawn underneath the plot's own and paler, by the Overlay
+%   opacity slider, so the plot's own lines stay readable, and Remove
+%   overlay takes them all off again.
+%
+%   DIFFERENCE. With exactly two lines ticked, the Difference button draws
+%   the first minus the second instead (Swap reverses it): two bins of one
+%   average, or the same bin before and after a step.
 %
 %   The up / down arrow keys, or the mouse wheel, step the displayed
 %   channel for every line at once.
 %
 %   Style follows the project standard.
 %
-%   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW.
+%   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW, ERPOVERLAYPROBLEM,
+%   OVERLAYNAMES.
 
     properties
     end
@@ -26,8 +40,22 @@ classdef AverageView < AlakazamView
         Axes            % axes the averages are drawn in
         CheckboxGrid    % uigridlayout the tickboxes stack into (right strip)
         Series          % flat cell array of per-line series structs
-        Channel = 1     % channel shown for every line
+        Channel = 1     % index, in the plot's own labels, of the channel shown
         Visible         % logical row vector, one per series: line shown?
+        DifferenceOn = false       % drawing the first ticked line minus the second?
+        DifferenceSwapped = false  % ... or the second minus the first
+        OverlayOpacity = 0.5       % how strongly overlaid datasets are drawn, 0.1 to 1
+    end
+
+    properties (Access = private)
+        Paths           % containers.Map: dataset file -> its tree path (cellstr)
+        % A zoom or pan made with the axes toolbar, kept across redraws (see
+        % keepUserZoom): the time range, shared by both modes, and the
+        % amplitude range per mode, since a difference has its own scale.
+        % Empty while the view scales itself.
+        ZoomX = []
+        ZoomY = struct('lines', [], 'difference', [])
+        LastLimits = struct('x', [], 'y', [], 'mode', 'lines')   % what redraw last set
     end
 
     properties (Constant, Access = private)
@@ -62,6 +90,7 @@ classdef AverageView < AlakazamView
             this.CheckboxGrid = uigridlayout(this.Grid, [1 1], "Padding", [0 0 0 0]);
             this.CheckboxGrid.Layout.Row = 2;
             this.CheckboxGrid.Layout.Column = 2;
+            this.Paths   = containers.Map('KeyType', 'char', 'ValueType', 'any');
             this.Series  = this.prepare(eeg);
             this.Visible = true(1, numel(this.Series));
             % Key handling is wired by the shared Alakazam-level dispatcher
@@ -71,33 +100,119 @@ classdef AverageView < AlakazamView
             % constructed last, breaking key navigation on every other open
             % tab.
             this.redraw();
-            axtoolbar(this.Axes, "default");
+            % The default tools, but Restore view is the view's own: MATLAB's
+            % restores the view saved when zooming began, which after a channel
+            % step belongs to another electrode, and the kept zoom (see
+            % keepUserZoom) has to be forgotten too.
+            toolbar = axtoolbar(this.Axes, {'export', 'brush', 'datacursor', 'pan', 'zoomin', 'zoomout'});
+            axtoolbarbtn(toolbar, 'push', 'Icon', 'restoreview', 'Tag', 'RestoreView', ...
+                'Tooltip', 'Restore view', 'ButtonPushedFcn', @(~, ~) this.resetZoom());
         end
 
-        function addDataset(this, eeg)
-        %ADDDATASET  Overlay another averaged dataset (ignores duplicates by
-        %   source file). EEG.id is just the transform name (e.g. "Average"
-        %   for every averaged dataset in the tree), so it cannot identify
-        %   *which* dataset this is; EEG.File is the unique cache path.
+        function problem = addDataset(this, eeg, path)
+        %ADDDATASET  Overlay another averaged dataset.
+        %   PROBLEM = addDataset(THIS, EEG, PATH) draws EEG's lines on these
+        %   axes and returns '', or leaves the plot as it is and returns why:
+        %   no channel or time in common (erpOverlayProblem), or the dataset
+        %   is already here. PATH, optional, is the dataset's place in the
+        %   tree (a cellstr of labels), which names its lines. EEG.id is just
+        %   the transform name (e.g. "Average" for every averaged dataset in
+        %   the tree), so it cannot identify *which* dataset this is;
+        %   EEG.File is the unique cache path.
+            problem = this.overlayProblem(eeg);
+            if ~isempty(problem)
+                return;
+            end
             newSeries = this.prepare(eeg);
             if isempty(newSeries)
+                problem = 'It has no waveform to draw.';
                 return;
             end
             existingFiles = cellfun(@(s) string(s.file), this.Series);
-            if ~any(existingFiles == string(newSeries{1}.file))
-                this.Series  = [this.Series, newSeries];
-                this.Visible = [this.Visible, true(1, numel(newSeries))];
+            if any(existingFiles == string(newSeries{1}.file))
+                problem = 'It is already on this plot.';
+                return;
             end
+            if nargin >= 3 && ~isempty(path)
+                this.setDatasetPath(newSeries{1}.file, path);
+            end
+            this.Series  = [this.Series, newSeries];
+            this.Visible = [this.Visible, true(1, numel(newSeries))];
+            this.redraw();
+        end
+
+        function problem = overlayProblem(this, eeg)
+        %OVERLAYPROBLEM  Why EEG cannot be overlaid here, or '' if it can.
+            first = this.Series{1};
+            problem = erpOverlayProblem(first.labels, first.times, ...
+                {eeg.chanlocs.labels}, eeg.times);
+        end
+
+        function setDatasetPath(this, file, path)
+        %SETDATASETPATH  Name FILE's lines by PATH, its place in the tree.
+            this.Paths(char(string(file))) = cellstr(string(path));
+            if numel(unique(cellfun(@(s) string(s.file), this.Series))) > 1
+                this.redraw();
+            end
+        end
+
+        function tf = canShowDifference(this)
+        %CANSHOWDIFFERENCE  A difference needs exactly two ticked lines.
+            tf = nnz(this.Visible) == 2;
+        end
+
+        function setDifference(this, on)
+        %SETDIFFERENCE  Draw the difference of the two ticked lines, or the lines.
+            this.DifferenceOn = logical(on) && this.canShowDifference();
+            this.notifyActivated();
+            this.redraw();
+        end
+
+        function swapDifference(this)
+        %SWAPDIFFERENCE  Subtract the other way round.
+            this.DifferenceSwapped = ~this.DifferenceSwapped;
+            this.notifyActivated();
+            this.redraw();
+        end
+
+        function setOverlayOpacity(this, value)
+        %SETOVERLAYOPACITY  How strongly overlaid datasets are drawn (0.1 to 1).
+            this.OverlayOpacity = min(1, max(0.1, value));
+            this.redraw();
+        end
+
+        function resetZoom(this)
+        %RESETZOOM  Forget a zoom or pan made with the axes toolbar, and scale
+        %   the plot automatically again (the toolbar's Restore view).
+            this.ZoomX = [];
+            this.ZoomY = struct('lines', [], 'difference', []);
+            this.redraw();
+        end
+
+        function removeOverlays(this)
+        %REMOVEOVERLAYS  Take every overlaid dataset off the plot, leaving the
+        %   plot's own lines as they were (ticked or not).
+            own = cellfun(@(s) this.isOwn(s), this.Series);
+            for file = unique(cellfun(@(s) string(s.file), this.Series(~own)))
+                if isKey(this.Paths, char(file))
+                    remove(this.Paths, char(file));
+                end
+            end
+            this.Series  = this.Series(own);
+            this.Visible = this.Visible(own);
+            this.notifyActivated();
             this.redraw();
         end
 
         function redraw(this)
         %REDRAW  Draw every visible line's channel average and +/- 3 SE band,
-        %   plus the tickbox list (right of the axes) used to show/hide lines.
-        %   Checked state lives in this.Visible, not in the tickboxes
-        %   themselves, so it survives the delete+recreate below (e.g. an
-        %   electrode step via the arrow keys leaves the ticks untouched).
+        %   or the difference of the two ticked lines, plus the tickbox list
+        %   (right of the axes) used to show/hide lines. Checked state lives
+        %   in this.Visible, not in the tickboxes themselves, so it survives
+        %   the delete+recreate below (e.g. an electrode step via the arrow
+        %   keys leaves the ticks untouched).
             ax = this.Axes;
+            this.keepUserZoom();
             % Remove ALL prior axes objects, including ones with hidden
             % handles (bands, patches, reference lines). cla only deletes
             % visible-handle children on older MATLAB, which otherwise pile up
@@ -106,57 +221,20 @@ classdef AverageView < AlakazamView
             delete(allchild(ax));
             hold(ax, "on");
 
-            fileKeys = cellfun(@(s) string(s.file), this.Series);
-            manyIds  = numel(unique(fileKeys)) > 1;   % overlaying > 1 dataset
-            allNames = strings(1, numel(this.Series));
-            for i = 1:numel(this.Series)
-                s = this.Series{i};
-                if manyIds; allNames(i) = sprintf('%s: %s', s.id, s.name); else; allNames(i) = s.name; end
+            [names, fullNames] = this.seriesNames();
+            label = this.channelLabel();
+            if ~this.canShowDifference()
+                this.DifferenceOn = false;
+            end
+            if this.DifferenceOn
+                [handles, legendNames, ymin, ymax, xRange] = this.drawDifference(ax, names, label);
+                title(ax, "Channel: " + label + ", difference");
+            else
+                [handles, legendNames, ymin, ymax, xRange] = this.drawLines(ax, names, label);
+                title(ax, "Channel: " + label);
             end
 
-            ymin = inf; ymax = -inf;
-            handles = gobjects(1, 0);   % mean line per VISIBLE series
-            names   = strings(1, 0);
-            showBand = AlakazamSettings.get('graphics', 'erpPlot', 'showConfInt');
-            confN    = AlakazamSettings.get('graphics', 'erpPlot', 'confIntN');
-
-            for i = 1:numel(this.Series)
-                if ~this.Visible(i)
-                    continue;
-                end
-                s = this.Series{i};
-                ch = min(this.Channel, size(s.data, 1));
-
-                % Force row vectors so the band arithmetic is unambiguous.
-                meanCh = reshape(s.data(ch, :), 1, []);
-                band   = confN * reshape(s.stErr(ch, :), 1, []);
-
-                colour = this.Palette(mod(i - 1, size(this.Palette, 1)) + 1, :);
-                line   = plot(ax, s.times, meanCh, "Color", colour, "LineWidth", 1.5);
-                if showBand
-                    plot(ax, s.times, meanCh + band, "Color", colour, "LineStyle", ":");
-                    plot(ax, s.times, meanCh - band, "Color", colour, "LineStyle", ":");
-                    patch(ax, [s.times, fliplr(s.times)], [meanCh + band, fliplr(meanCh - band)], ...
-                        colour, "EdgeColor", "none", "FaceAlpha", 0.3);
-                    lo = meanCh - band; hi = meanCh + band;
-                else
-                    lo = meanCh; hi = meanCh;
-                end
-
-                handles(end + 1) = line;      %#ok<AGROW>
-                names(end + 1)   = allNames(i); %#ok<AGROW>
-                ymin = min(ymin, min(lo, [], "omitnan"));
-                ymax = max(ymax, max(hi, [], "omitnan"));
-
-                % Overlay this series' Measure annotations for the shown
-                % channel (a no-op unless this dataset is a Measure result).
-                this.drawMeasurements(ax, s, ch, colour, meanCh);
-            end
-
-            first = this.Series{1};
-            ch = min(this.Channel, numel(first.labels));
-            title(ax, "Channel: " + first.labels{ch});
-            this.ChannelDropdown.Value = ch;
+            this.ChannelDropdown.Value = this.Channel;
             % Data quality (analytic aSME per bin, at the shown channel) is shown
             % below the bin tickboxes rather than as an axes subtitle -- see
             % buildCheckboxes / asmeText.
@@ -165,16 +243,38 @@ classdef AverageView < AlakazamView
             xline(ax, 0, "Color", "k", "LineStyle", "--");
             yline(ax, 0, "Color", "k", "LineStyle", "--");
             box(ax, "off");
-            xlim(ax, [min(first.times), max(first.times)]);
+            if all(isfinite(xRange)) && xRange(2) > xRange(1)
+                xlim(ax, xRange);
+            end
             % Clamp every electrode to the largest range (graphics > erpPlot >
             % clampYAxis) so the amplitude axis stays fixed while stepping
             % electrodes; otherwise rescale to the shown electrode.
             if AlakazamSettings.get('graphics', 'erpPlot', 'clampYAxis')
-                [ymin, ymax] = this.globalExtent();
+                if this.DifferenceOn
+                    [ymin, ymax] = this.differenceExtent();
+                else
+                    [ymin, ymax] = this.globalExtent();
+                end
+            end
+            if this.DifferenceOn
+                % A bare line has no band to leave room around it, so its
+                % extremes would sit on the frame.
+                margin = 0.05 * (ymax - ymin);
+                ymin = ymin - margin;
+                ymax = ymax + margin;
             end
             if isfinite(ymin) && isfinite(ymax) && ymax > ymin
                 ylim(ax, [ymin, ymax]);
             end
+            % A zoom made with the toolbar wins over the automatic scaling.
+            mode = this.limitsMode();
+            if ~isempty(this.ZoomX)
+                xlim(ax, this.ZoomX);
+            end
+            if ~isempty(this.ZoomY.(mode))
+                ylim(ax, this.ZoomY.(mode));
+            end
+            this.LastLimits = struct('x', ax.XLim, 'y', ax.YLim, 'mode', mode);
             % Orientation of the amplitude axis (graphics > erpPlot > positiveUp).
             if AlakazamSettings.get('graphics', 'erpPlot', 'positiveUp')
                 set(ax, 'YDir', 'normal');
@@ -184,13 +284,14 @@ classdef AverageView < AlakazamView
             % Build the legend from the mean-line handles only, so the bin
             % names always appear and bands/reference lines never leak in.
             if ~isempty(handles)
-                legend(handles, cellstr(names), "Location", "northeast");
+                legend(handles, cellstr(legendNames), "Location", "northeast", ...
+                    "Interpreter", "none");
             else
                 legend(ax, "off");
             end
             hold(ax, "off");
 
-            this.buildCheckboxes(allNames);
+            this.buildCheckboxes(names, fullNames, label);
         end
 
         function onKey(this, event)
@@ -202,8 +303,7 @@ classdef AverageView < AlakazamView
                 case "uparrow"
                     this.Channel = max(1, this.Channel - 1);
                 case "downarrow"
-                    maxChan = min(cellfun(@(s) size(s.data, 1), this.Series));
-                    this.Channel = min(maxChan, this.Channel + 1);
+                    this.Channel = min(numel(this.channelLabels()), this.Channel + 1);
                 otherwise
                     return;
             end
@@ -220,8 +320,7 @@ classdef AverageView < AlakazamView
         %   currently active, mirroring EpochView's/TimeFrequencyView's/
         %   ScalpDistributionView's own onWheel contract.
             if callbackData.VerticalScrollCount > 0
-                maxChan = min(cellfun(@(s) size(s.data, 1), this.Series));
-                this.Channel = min(maxChan, this.Channel + 1);
+                this.Channel = min(numel(this.channelLabels()), this.Channel + 1);
             else
                 this.Channel = max(1, this.Channel - 1);
             end
@@ -407,51 +506,320 @@ classdef AverageView < AlakazamView
                 'Interpreter', 'none', 'HandleVisibility', 'off', 'Tag', 'MeasureAnnotation');
         end
 
-        function buildCheckboxes(this, names)
+        function [handles, names, ymin, ymax, xRange] = drawLines(this, ax, allNames, label)
+        %DRAWLINES  Every visible line at the channel called LABEL, with its
+        %   band and Measure annotations. Overlaid datasets are drawn first,
+        %   so the plot's own lines lie on top of them, and paler (see
+        %   paleColour). A dataset without that channel is skipped, and its
+        %   tickbox says so.
+            showBand = AlakazamSettings.get('graphics', 'erpPlot', 'showConfInt');
+            confN    = AlakazamSettings.get('graphics', 'erpPlot', 'confIntN');
+            ymin = inf; ymax = -inf; xRange = [inf, -inf];
+            n = numel(this.Series);
+            lineOf = gobjects(1, n);
+            own = cellfun(@(s) this.isOwn(s), this.Series);
+            for i = [find(~own), find(own)]
+                if ~this.Visible(i)
+                    continue;
+                end
+                s = this.Series{i};
+                ch = this.seriesChannel(s, label);
+                if isempty(ch)
+                    continue;
+                end
+                opacity = 1;
+                if ~own(i)
+                    opacity = this.OverlayOpacity;
+                end
+                colour = this.paleColour(this.Palette(mod(i - 1, size(this.Palette, 1)) + 1, :), opacity);
+                t = reshape(double(s.times), 1, []);
+
+                % Force row vectors so the band arithmetic is unambiguous.
+                meanCh = reshape(s.data(ch, :), 1, []);
+                band   = confN * reshape(s.stErr(ch, :), 1, []);
+                lineOf(i) = plot(ax, t, meanCh, "Color", colour, "LineWidth", 1.5, ...
+                    "Tag", "ErpLine", "UserData", i);
+                if showBand
+                    plot(ax, t, meanCh + band, "Color", colour, "LineStyle", ":");
+                    plot(ax, t, meanCh - band, "Color", colour, "LineStyle", ":");
+                    patch(ax, [t, fliplr(t)], [meanCh + band, fliplr(meanCh - band)], ...
+                        colour, "EdgeColor", "none", "FaceAlpha", 0.3 * opacity);
+                    lo = meanCh - band; hi = meanCh + band;
+                else
+                    lo = meanCh; hi = meanCh;
+                end
+                ymin = min(ymin, min(lo, [], "omitnan"));
+                ymax = max(ymax, max(hi, [], "omitnan"));
+                xRange = [min(xRange(1), min(t)), max(xRange(2), max(t))];
+
+                % Overlay this series' Measure annotations for the shown
+                % channel (a no-op unless this dataset is a Measure result).
+                this.drawMeasurements(ax, s, ch, colour, meanCh);
+            end
+            drawn = isgraphics(lineOf);
+            handles = lineOf(drawn);
+            names = allNames(drawn);
+        end
+
+        function [handles, names, ymin, ymax, xRange] = drawDifference(this, ax, allNames, label)
+        %DRAWDIFFERENCE  The first ticked line minus the second at LABEL.
+        %   No band: the two lines may share their trials (the same bin
+        %   before and after a filter), and then the standard error of their
+        %   difference cannot be had from the two standard errors.
+            handles = gobjects(1, 0); names = strings(1, 0);
+            ymin = inf; ymax = -inf; xRange = [inf, -inf];
+            pair = this.differencePair();
+            a = this.Series{pair(1)};
+            b = this.Series{pair(2)};
+            ca = this.seriesChannel(a, label);
+            cb = this.seriesChannel(b, label);
+            if isempty(ca) || isempty(cb)
+                return;   % a line lacking this channel: nothing to subtract
+            end
+            [t, d] = this.differenceOf(a, b, ca, cb);
+            handles = plot(ax, t, d, "Color", [0 0 0], "LineWidth", 1.5, "Tag", "DifferenceLine");
+            names = allNames(pair(1)) + " " + char(8722) + " " + allNames(pair(2));
+            ymin = min(d, [], "omitnan");
+            ymax = max(d, [], "omitnan");
+            xRange = [min(t), max(t)];
+        end
+
+        function keepUserZoom(this)
+        %KEEPUSERZOOM  Remember a zoom or pan made since the last redraw.
+        %   Redraw deletes and redraws everything, and sets the limits, on
+        %   every channel step, tick or setting, which would throw away what
+        %   the axes toolbar did. Limits that are no longer the ones redraw
+        %   set were changed by the user, so they are kept (ZoomX/ZoomY) and
+        %   put back after drawing, until Restore view (resetZoom).
+            ax = this.Axes;
+            last = this.LastLimits;
+            if isempty(last.x)
+                return;   % nothing drawn yet
+            end
+            if differs(ax.XLim, last.x)
+                this.ZoomX = ax.XLim;
+            end
+            if differs(ax.YLim, last.y)
+                this.ZoomY.(last.mode) = ax.YLim;
+            end
+        end
+
+        function mode = limitsMode(this)
+        %LIMITSMODE  Which amplitude zoom applies: the lines' or the difference's.
+            mode = 'lines';
+            if this.DifferenceOn
+                mode = 'difference';
+            end
+        end
+
+        function pair = differencePair(this)
+        %DIFFERENCEPAIR  The two ticked lines, in the order they subtract.
+            pair = find(this.Visible, 2);
+            if this.DifferenceSwapped
+                pair = fliplr(pair);
+            end
+        end
+
+        function [t, d] = differenceOf(~, a, b, ca, cb)
+        %DIFFERENCEOF  Line A at channel CA minus line B at channel CB, on
+        %   A's time points. B is interpolated onto them when the two were
+        %   sampled differently, and the difference is NaN where only one of
+        %   them has data.
+            t = reshape(double(a.times), 1, []);
+            ya = reshape(double(a.data(ca, :)), 1, []);
+            tb = reshape(double(b.times), 1, []);
+            yb = reshape(double(b.data(cb, :)), 1, []);
+            if numel(tb) == numel(t) && max(abs(tb - t)) < 1e-3
+                d = ya - yb;
+            else
+                d = ya - interp1(tb, yb, t, 'linear', NaN);
+            end
+        end
+
+        function [lo, hi] = differenceExtent(this)
+        %DIFFERENCEEXTENT  Min/max of the difference over every channel both
+        %   lines have, for a clamped amplitude axis (see redraw).
+            lo = inf; hi = -inf;
+            pair = this.differencePair();
+            a = this.Series{pair(1)};
+            b = this.Series{pair(2)};
+            for label = this.channelLabels()
+                ca = this.seriesChannel(a, label{1});
+                cb = this.seriesChannel(b, label{1});
+                if isempty(ca) || isempty(cb)
+                    continue;
+                end
+                [~, d] = this.differenceOf(a, b, ca, cb);
+                lo = min(lo, min(d, [], "omitnan"));
+                hi = max(hi, max(d, [], "omitnan"));
+            end
+        end
+
+        function colour = paleColour(this, colour, opacity)
+        %PALECOLOUR  COLOUR as seen at OPACITY over the axes' background.
+        %   Mixed by hand rather than given as an RGBA colour: MATLAB takes a
+        %   fourth colour component for a line without complaint but does not
+        %   keep it (R2026a reads the colour back without it), and exported
+        %   figures drop it. A line drawn under the plot's own lines looks
+        %   the same either way.
+            background = this.Axes.Color;
+            if ~isnumeric(background) || numel(background) ~= 3
+                background = [1 1 1];
+            end
+            colour = opacity * colour + (1 - opacity) * background;
+        end
+
+        function tf = isOwn(this, s)
+        %ISOWN  Whether series S belongs to the plot's own dataset.
+            tf = strcmp(s.file, this.Series{1}.file);
+        end
+
+        function label = channelLabel(this)
+        %CHANNELLABEL  The label of the channel shown, from the plot's own list.
+            labels = this.channelLabels();
+            label = '';
+            if ~isempty(labels)
+                label = char(string(labels{min(max(this.Channel, 1), numel(labels))}));
+            end
+        end
+
+        function ch = seriesChannel(~, s, label)
+        %SERIESCHANNEL  Where the channel called LABEL is in series S, or []
+        %   when S does not have it. By label, since an overlaid dataset's
+        %   channels need not be in the plot's order.
+            ch = find(strcmpi(strtrim(s.labels), strtrim(label)), 1);
+        end
+
+        function [names, fullNames] = seriesNames(this)
+        %SERIESNAMES  A legend name for every line, and its full tree path.
+        %   A single dataset's lines are named by their bin, as always. Once
+        %   another dataset is overlaid, each name is prefixed with what
+        %   tells the datasets apart (overlayNames); a dataset with no known
+        %   path is called by its transformation's name.
+            n = numel(this.Series);
+            names = strings(1, n);
+            fullNames = strings(1, n);
+            files = unique(cellfun(@(s) string(s.file), this.Series), 'stable');
+            for i = 1:n
+                names(i) = this.Series{i}.name;
+                fullNames(i) = this.Series{i}.name;
+            end
+            if numel(files) < 2
+                return;
+            end
+            paths = cell(1, numel(files));
+            for k = 1:numel(files)
+                if isKey(this.Paths, char(files(k)))
+                    paths{k} = this.Paths(char(files(k)));
+                else
+                    first = find(cellfun(@(s) string(s.file) == files(k), this.Series), 1);
+                    paths{k} = {char(string(this.Series{first}.id))};
+                end
+            end
+            [short, full] = overlayNames(paths);
+            for i = 1:n
+                k = find(files == string(this.Series{i}.file), 1);
+                names(i) = short(k) + ": " + this.Series{i}.name;
+                fullNames(i) = full(k) + ": " + this.Series{i}.name;
+            end
+        end
+
+        function buildCheckboxes(this, names, fullNames, label)
         %BUILDCHECKBOXES  One tickbox per series, stacked down the right-hand
         %   grid strip (this.CheckboxGrid), reflecting (and toggling)
-        %   this.Visible; directly below them, the per-bin analytic aSME
-        %   data-quality readout for the shown channel (visible bins only).
+        %   this.Visible; below them the Difference and Swap buttons, the
+        %   overlay opacity once another dataset is overlaid, and the per-bin
+        %   analytic aSME data-quality readout for the shown channel (visible
+        %   bins only, and not for a difference).
             delete(this.CheckboxGrid.Children);
             n = numel(this.Series);
             if n == 0
                 this.CheckboxGrid.RowHeight = {'1x'};
                 return;
             end
-            smeText = this.asmeText();
-            rows = repmat({22}, 1, n);
-            if ~isempty(smeText)
-                rows = [rows, {'fit'}];   % aSME block sits under the tickboxes
+            overlaid = numel(unique(cellfun(@(s) string(s.file), this.Series))) > 1;
+            % Overlaid lines carry their dataset's name as well as their bin's,
+            % too long for a tenth of the width; give the strip room while
+            % there is an overlay.
+            if overlaid
+                this.Grid.ColumnWidth = {'1x', 200};
+            else
+                this.Grid.ColumnWidth = {'9x', '1x'};
             end
+            smeText = strings(0, 1);
+            if ~this.DifferenceOn
+                smeText = this.asmeText(label);
+            end
+            rows = [repmat({22}, 1, n), {24}];              % tickboxes, Difference
+            if this.DifferenceOn;      rows = [rows, {24}];     end   % Swap
+            if overlaid;               rows = [rows, {24, 16, 24}]; end   % Remove overlay, opacity
+            if ~isempty(smeText);      rows = [rows, {'fit'}];  end   % aSME block
             this.CheckboxGrid.RowHeight = [rows, {'1x'}];
+
             for i = 1:n
+                text = names(i);
+                if isempty(this.seriesChannel(this.Series{i}, label))
+                    text = sprintf('%s (no %s)', text, label);
+                end
                 cb = uicheckbox(this.CheckboxGrid, ...
-                    "Text", char(names(i)), ...
+                    "Text", char(text), ...
+                    "Tooltip", char(fullNames(i)), ...
                     "Value", this.Visible(i), ...
                     "ValueChangedFcn", @(src, ~) this.onToggle(i, src.Value));
                 cb.Layout.Row = i;
             end
+            row = n + 1;
+            difference = uibutton(this.CheckboxGrid, "state", "Text", "Difference", ...
+                "Value", this.DifferenceOn, "Enable", this.canShowDifference(), ...
+                "Tag", "DifferenceButton", ...
+                "Tooltip", 'Show the first ticked line minus the second. Tick exactly two lines.', ...
+                "ValueChangedFcn", @(src, ~) this.setDifference(src.Value));
+            difference.Layout.Row = row;
+            if this.DifferenceOn
+                row = row + 1;
+                swap = uibutton(this.CheckboxGrid, "Text", "Swap", "Tag", "SwapButton", ...
+                    "Tooltip", 'Subtract the other way round.', ...
+                    "ButtonPushedFcn", @(~, ~) this.swapDifference());
+                swap.Layout.Row = row;
+            end
+            if overlaid
+                row = row + 1;
+                remover = uibutton(this.CheckboxGrid, "Text", "Remove overlay", ...
+                    "Tag", "RemoveOverlayButton", ...
+                    "Tooltip", 'Take the overlaid datasets off this plot, keeping its own lines.', ...
+                    "ButtonPushedFcn", @(~, ~) this.removeOverlays());
+                remover.Layout.Row = row;
+                row = row + 1;
+                caption = uilabel(this.CheckboxGrid, "Text", "Overlay opacity", "FontSize", 10);
+                caption.Layout.Row = row;
+                row = row + 1;
+                slider = uislider(this.CheckboxGrid, "Limits", [0.1 1], ...
+                    "Value", this.OverlayOpacity, "MajorTicks", [], "MinorTicks", [], ...
+                    "Tag", "OverlayOpacity", ...
+                    "Tooltip", 'How strongly the overlaid datasets are drawn, under the plot''s own.', ...
+                    "ValueChangedFcn", @(src, ~) this.setOverlayOpacity(src.Value));
+                slider.Layout.Row = row;
+            end
             if ~isempty(smeText)
                 lbl = uilabel(this.CheckboxGrid, "Text", smeText, "FontSize", 10, ...
                     "VerticalAlignment", "top", "WordWrap", "on");
-                lbl.Layout.Row = n + 1;
+                lbl.Layout.Row = row + 1;
             end
         end
 
-        function txt = asmeText(this)
-        %ASMETEXT  Per-bin analytic aSME (uV) at the shown channel, one line per
-        %   visible bin, as a string array (each element a line) for a uilabel.
-        %   Empty when no visible bin carries an aSME (e.g. an averaged dataset
-        %   made before aSME existed).
+        function txt = asmeText(this, label)
+        %ASMETEXT  Per-bin analytic aSME (uV) at the channel called LABEL, one
+        %   line per visible bin, as a string array (each element a line) for
+        %   a uilabel. Empty when no visible bin carries an aSME (e.g. an
+        %   averaged dataset made before aSME existed).
             txt = strings(0, 1);
             if isempty(this.Series); return; end
-            first = this.Series{1};
-            ch = min(this.Channel, numel(first.labels));
             lines = strings(0, 1);
             for i = 1:numel(this.Series)
                 if ~this.Visible(i); continue; end
                 s = this.Series{i};
-                if isfield(s, 'aSME') && numel(s.aSME) >= ch && isfinite(s.aSME(ch))
+                ch = this.seriesChannel(s, label);
+                if ~isempty(ch) && isfield(s, 'aSME') && numel(s.aSME) >= ch && isfinite(s.aSME(ch))
                     lines(end + 1, 1) = sprintf('%s  %.2f', s.name, s.aSME(ch)); %#ok<AGROW>
                 end
             end
@@ -461,6 +829,8 @@ classdef AverageView < AlakazamView
 
         function onToggle(this, idx, value)
         %ONTOGGLE  A tickbox was (un)checked: show/hide that line and redraw.
+        %   A difference needs exactly two lines, so ticking a third (or
+        %   unticking one of the two) returns to the lines (see redraw).
             this.Visible(idx) = logical(value);
             this.notifyActivated();
             this.redraw();
@@ -573,4 +943,9 @@ function sme = binASME(eeg, b)
     if isfield(eeg, 'aSME') && ~isempty(eeg.aSME) && size(eeg.aSME, 2) >= b
         sme = eeg.aSME(:, b);
     end
+end
+
+function tf = differs(a, b)
+%DIFFERS  Whether two axis ranges are not the same, allowing for rounding.
+    tf = numel(a) ~= numel(b) || any(abs(a - b) > 1e-9 * max(1, max(abs([a, b]))));
 end

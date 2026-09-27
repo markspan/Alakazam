@@ -174,6 +174,94 @@ classdef AlakazamPlotter < handle
         end
     end
 
+    methods (Static)
+        function viewClass = viewClassFor(eeg)
+        %VIEWCLASSFOR  The name of the view class that draws an epoched or
+        %   averaged dataset, or '' when there is none: continuous data (drawn
+        %   by plotContinuous instead) and single-channel epoched data.
+        %   plotEpoched builds exactly this view, and the tree's Overlay on
+        %   ERP plot command asks it whether a node is an ERP (AverageView), so
+        %   the two cannot disagree about what counts as one.
+        %
+        %   Multichannel time-domain data is drawn either as individual trials
+        %   (trials > 1, EpochView) or as a trial average (trials == 1,
+        %   AverageView). Frequency-domain data is drawn as a FourierView.
+        %
+        %   EEG.id (stamped by Alakazam.persistResultNode to the
+        %   transformation's own id) is checked first for transformations
+        %   whose result needs a dedicated view rather than falling into
+        %   the generic DataFormat/DataType routing below -- e.g.
+        %   TimeFrequency's result is still DataFormat "EPOCHED" with
+        %   multiple trials (so it would otherwise land in EpochView,
+        %   which cannot draw an ERSP heatmap), and ScalpDistribution's
+        %   result is still DataFormat "AVERAGED" with trials==1 (so it
+        %   would otherwise land in AverageView, which cannot draw a
+        %   scalp topography).
+        %
+        %   The id check catches a fresh transform result; the field check
+        %   also catches a grand average of such results, whose id has been
+        %   renamed to the grand-average's name (see saveGrandAverage) but
+        %   which still carries the .ersp / .coherence map to draw.
+            viewClass = '';
+            format = fieldText(eeg, 'DataFormat');
+            if ~strcmpi(format, 'EPOCHED') && ~strcmpi(format, 'AVERAGED')
+                return;   % continuous: plotContinuous's business
+            end
+            id = fieldText(eeg, 'id');
+            if strcmpi(id, 'Report')
+                % A rendered Quarto/R statistics report (see
+                % Alakazam.persistReportNode), not a dataset at all -- its
+                % DataFormat is set to "EPOCHED" purely to route here (see
+                % persistReportNode's own comment), so this check must come
+                % before every DataFormat/DataType-based branch below.
+                viewClass = 'ReportView';
+            elseif strcmpi(id, 'TimeFrequency') || hasContent(eeg, 'ersp')
+                viewClass = 'TimeFrequencyView';
+            elseif strcmpi(id, 'ScalpDistribution')
+                viewClass = 'ScalpDistributionView';
+            elseif strcmpi(id, 'Brain3D')
+                % Also DataFormat "AVERAGED" with trials==1, same as
+                % ScalpDistribution's own result (see TransTools.
+                % ResolveScalpDistribution, shared by both) -- projected
+                % onto a rotatable 3D brain mesh instead of a flat topoplot.
+                viewClass = 'Brain3DView';
+            elseif strcmpi(id, 'SpectralMeasure')
+                % Still DataFormat "EPOCHED" with multiple trials (so it would
+                % otherwise land in EpochView), but it carries EEG.spectrum /
+                % .spectralMeasures for a per-channel tagged-spectrum view.
+                viewClass = 'SpectralMeasureView';
+            elseif strcmpi(id, 'CoherenceMap') || hasContent(eeg, 'coherence')
+                % Also EPOCHED, but carries EEG.coherence for a per-channel
+                % time x frequency coherence-to-reference heatmap (or a grand
+                % average of such maps, renamed -- see the TimeFrequency note).
+                viewClass = 'CoherenceView';
+            elseif strcmpi(id, 'CoherenceTopography') || hasContent(eeg, 'CohTopoValues')
+                % Also EPOCHED, but carries EEG.CohTopoValues for a per-bin
+                % scalp head-map of coherence to a reference at a single
+                % (auto-detected) frequency.
+                viewClass = 'CoherenceTopographyView';
+            elseif strcmpi(id, 'CrossCorrelation') || hasContent(eeg, 'xcorr')
+                % Passes the data through but carries EEG.xcorr: r against
+                % lag per channel per bin, drawn as a line with an SE band.
+                viewClass = 'CrossCorrelationView';
+            elseif strcmpi(id, 'Covariance') || hasContent(eeg, 'covariance')
+                % Passes the data through but carries EEG.covariance: a
+                % channel x channel matrix per bin, drawn as a heatmap.
+                viewClass = 'CovarianceView';
+            elseif strcmpi(fieldText(eeg, 'DataType'), 'TIMEDOMAIN')
+                if isfield(eeg, 'nbchan') && eeg.nbchan > 1 && isfield(eeg, 'trials')
+                    if eeg.trials > 1
+                        viewClass = 'EpochView';     % channels x time x trials
+                    elseif eeg.trials == 1
+                        viewClass = 'AverageView';   % a trial average, with its SE
+                    end
+                end
+            elseif strcmpi(fieldText(eeg, 'DataType'), 'FREQUENCYDOMAIN')
+                viewClass = 'FourierView';
+            end
+        end
+    end
+
     methods (Access = private)
         function view = viewOnTab(~, tab)
         %VIEWONTAB  The AlakazamView stored on TAB, or [] if there is none.
@@ -207,108 +295,21 @@ classdef AlakazamPlotter < handle
 
         function plotEpoched(this, eeg, tab)
         %PLOTEPOCHED  Render an epoched or averaged dataset into TAB.
-        %   Multichannel time-domain data is drawn either as individual trials
-        %   (trials > 1, EpochView) or as a trial average (trials == 1,
-        %   AverageView). Frequency-domain data is drawn as a FourierView. The
-        %   view handle is stored on the tab so it lives as long as it does.
-        %   Single-channel epoched data is not yet handled (empty tab). Each
-        %   view's ActivatedFcn is wired to Alakazam.registerTileClick so
-        %   keyboard/wheel shortcuts route to whichever tile was last
-        %   clicked while several are visible at once in Grid/Stack mode --
-        %   see Alakazam.dispatchKey and migration.md.
-        %
-        %   EEG.id (stamped by Alakazam.persistResultNode to the
-        %   transformation's own id) is checked first for transformations
-        %   whose result needs a dedicated view rather than falling into
-        %   the generic DataFormat/DataType routing below -- e.g.
-        %   TimeFrequency's result is still DataFormat "EPOCHED" with
-        %   multiple trials (so it would otherwise land in EpochView,
-        %   which cannot draw an ERSP heatmap), and ScalpDistribution's
-        %   result is still DataFormat "AVERAGED" with trials==1 (so it
-        %   would otherwise land in AverageView, which cannot draw a
-        %   scalp topography).
-            % The id check catches a fresh transform result; the field check
-            % also catches a grand average of such results, whose id has been
-            % renamed to the grand-average's name (see saveGrandAverage) but
-            % which still carries the .ersp / .coherence map to draw.
-            if strcmpi(eeg.id, "Report")
-                % A rendered Quarto/R statistics report (see
-                % Alakazam.persistReportNode), not a dataset at all -- its
-                % DataFormat is set to "EPOCHED" purely to route here (see
-                % persistReportNode's own comment), so this check must come
-                % before every DataFormat/DataType-based branch below.
-                view = ReportView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "ReportView", view);
-            elseif strcmpi(eeg.id, "TimeFrequency") || (isfield(eeg, "ersp") && ~isempty(eeg.ersp))
-                view = TimeFrequencyView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "TimeFrequencyView", view);
-            elseif strcmpi(eeg.id, "ScalpDistribution")
-                view = ScalpDistributionView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "ScalpDistributionView", view);
-            elseif strcmpi(eeg.id, "Brain3D")
-                % Also DataFormat "AVERAGED" with trials==1, same as
-                % ScalpDistribution's own result (see TransTools.
-                % ResolveScalpDistribution, shared by both) -- projected
-                % onto a rotatable 3D brain mesh instead of a flat topoplot.
-                view = Brain3DView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "Brain3DView", view);
-            elseif strcmpi(eeg.id, "SpectralMeasure")
-                % Still DataFormat "EPOCHED" with multiple trials (so it would
-                % otherwise land in EpochView), but it carries EEG.spectrum /
-                % .spectralMeasures for a per-channel tagged-spectrum view.
-                view = SpectralMeasureView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "SpectralMeasureView", view);
-            elseif strcmpi(eeg.id, "CoherenceMap") || (isfield(eeg, "coherence") && ~isempty(eeg.coherence))
-                % Also EPOCHED, but carries EEG.coherence for a per-channel
-                % time x frequency coherence-to-reference heatmap (or a grand
-                % average of such maps, renamed -- see the TimeFrequency note).
-                view = CoherenceView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "CoherenceView", view);
-            elseif strcmpi(eeg.id, "CoherenceTopography") || (isfield(eeg, "CohTopoValues") && ~isempty(eeg.CohTopoValues))
-                % Also EPOCHED, but carries EEG.CohTopoValues for a per-bin
-                % scalp head-map of coherence to a reference at a single
-                % (auto-detected) frequency.
-                view = CoherenceTopographyView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "CoherenceTopographyView", view);
-            elseif strcmpi(eeg.id, "CrossCorrelation") || (isfield(eeg, "xcorr") && ~isempty(eeg.xcorr))
-                % Passes the data through but carries EEG.xcorr: r against
-                % lag per channel per bin, drawn as a line with an SE band.
-                view = CrossCorrelationView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "CrossCorrelationView", view);
-            elseif strcmpi(eeg.id, "Covariance") || (isfield(eeg, "covariance") && ~isempty(eeg.covariance))
-                % Passes the data through but carries EEG.covariance: a
-                % channel x channel matrix per bin, drawn as a heatmap.
-                view = CovarianceView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "CovarianceView", view);
-            elseif strcmpi(eeg.DataType, "TIMEDOMAIN")
-                if eeg.nbchan > 1 && isfield(eeg, "trials")
-                    if eeg.trials > 1
-                        % Multichannel epoched data (channels x time x trials).
-                        view = EpochView(tab, eeg);
-                        view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                        setappdata(tab, "EpochView", view);
-                    elseif eeg.trials == 1
-                        % Trial average (carries a standard error).
-                        view = AverageView(tab, eeg);
-                        view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                        setappdata(tab, "AverageView", view);
-                    end
-                end
-                % (single-channel epoched data is not yet supported)
-            elseif strcmpi(eeg.DataType, "FREQUENCYDOMAIN")
-                view = FourierView(tab, eeg);
-                view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
-                setappdata(tab, "FourierView", view);
+        %   Which view draws it is viewClassFor's answer (see there for the
+        %   rules). The view handle is stored on the tab under its own class
+        %   name, so it lives as long as the tab does. Single-channel epoched
+        %   data is not yet handled (empty tab). Each view's ActivatedFcn is
+        %   wired to Alakazam.registerTileClick so keyboard/wheel shortcuts
+        %   route to whichever tile was last clicked while several are
+        %   visible at once in Grid/Stack mode -- see Alakazam.dispatchKey
+        %   and migration.md.
+            viewClass = AlakazamPlotter.viewClassFor(eeg);
+            if isempty(viewClass)
+                return;   % single-channel epoched data is not yet supported
             end
+            view = feval(viewClass, tab, eeg);
+            view.ActivatedFcn = @() this.App.registerTileClick(tab.Tag);
+            setappdata(tab, viewClass, view);
         end
 
         function plotContinuous(this, eeg, tab)
@@ -344,4 +345,18 @@ classdef AlakazamPlotter < handle
             end
         end
     end
+end
+
+% ======================================================================= %
+function text = fieldText(eeg, name)
+%FIELDTEXT  EEG.(NAME) as char, or '' when the field is absent.
+    text = '';
+    if isfield(eeg, name) && ~isempty(eeg.(name))
+        text = char(string(eeg.(name)));
+    end
+end
+
+function tf = hasContent(eeg, name)
+%HASCONTENT  Whether EEG carries a non-empty field NAME.
+    tf = isfield(eeg, name) && ~isempty(eeg.(name));
 end
