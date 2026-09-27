@@ -323,8 +323,8 @@ without a word.
 
 Writes/reads the epoch bounds and the script together as one `.binscript`
 file: a `% epoch_start_ms: …` / `% epoch_stop_ms: …` header, then the script
-text. A plain script file with no header loads fine too , the epoch fields
-are just left as they were.
+text. A plain script file with no header loads fine too: the epoch fields
+are left as they were.
 
 ### Import BDF...
 

@@ -56,7 +56,7 @@ these channels".
 | **Cluster-forming p** | 0.05 | The threshold that forms clusters; ignored by TFCE. |
 | **Permutations** | 1000 | Random relabellings. A within-subject test permutes by flipping each subject's sign, so there are $2^N$ distinct relabellings for $N$ subjects; a request above half of that runs all of them. |
 | **Correction method** | TFCE | **TFCE** or the classic cluster mass. |
-| **Include these subjects** | all averaged datasets | The same list Grand Average offers. |
+| **Include these subjects** | the averaged datasets in the study | The same list Grand Average offers. Recordings taken out of the study under **Grouping** are listed, marked "(not in study)", but not selected. |
 
 : A cluster test's options. {#tbl-cluster-options}
 

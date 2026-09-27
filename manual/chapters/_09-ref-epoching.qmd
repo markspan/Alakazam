@@ -21,7 +21,7 @@ time-locking point (0 ms) of that bin.
 
 | Option | Default | Meaning |
 |-----------------------|-------|-------------------------------------------------------|
-| **Epoch start**, **Epoch stop** | | The epoch around each matched event, in ms. Both blank: tag the events with their bins and leave the data continuous. |
+| **Epoch start**, **Epoch stop** | | The epoch around each matched event, in ms, when the script has no `epoch` line. With neither: tag the events with their bins and leave the data continuous. |
 | script | | The bin definitions, in the language below. |
 | **Save**, **Load** | | Write or read the script and the epoch together, as a `.binscript` file. |
 | **Import BDF** | | Translate an ERPLAB bin descriptor file into the language (below). |
@@ -30,7 +30,10 @@ time-locking point (0 ms) of that bin.
 : DefineBins' options. {#tbl-definebins}
 
 The script is compiled when the dialog closes, and the compiled form, not
-the text, is what a replay evaluates on another recording's events. Every
+the text, is what a replay evaluates on another recording's events. Apart
+from comments (`%` or `#` to the end of the line), a script is a series of
+statements, each starting with `bin`, `let` or `epoch`; anything else before
+the first of them is an error rather than being dropped. Every
 error is reported with its line, a caret under the mistake and an
 explanation of how to fix it.
 
@@ -108,6 +111,21 @@ relation that contributed to the match; a backward relation such as
 within`. The reaction time also becomes a sort key of the ERP image
 (@sec-plot-area).
 
+**The epoch** is a statement of its own, shared by all bins, in the same
+interval notation as a window:
+
+```
+epoch [-200,800] ms
+bin 1 "Targets" 112
+```
+
+Its unit is `ms` (the default) or `samples`, never `events`, and an epoch
+keeps both of its ends, so round and square brackets mean the same here. It
+may stand anywhere in the script, once. When the script has an `epoch` line,
+it wins over the **Epoch start** and **Epoch stop** fields, and the summary
+after the run says so if the fields held something else; this is what lets a
+script, a `.binscript` file or a template carry its own epoch.
+
 **Response-locking** moves time zero to a neighbour with `timelock`, while
 membership is still decided by the condition:
 
@@ -182,7 +200,8 @@ as far as it goes and marked with a `% WARNING:` line to finish by hand.
 ### Grammar
 
 ```
-script   : ( let | bin )+
+script   : ( let | bin | epoch )+      (only comments before the first)
+epoch    : epoch <window>             (ms or samples; at most once)
 let      : let <name> = <expr>
 bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
          | bin <int> "<label>" = <combo>
@@ -261,7 +280,7 @@ explained by two events is shared between them [@smith2015; @ehinger2019;
 
 | Option | Default | Meaning |
 |-------------------------------------------------------|--------------------------|-------------------------------------------------------|
-| **Define bins** | the dataset's own bin tags | The bins, in DefineBins' language and editor. |
+| **Define bins** | the dataset's own bin tags | The bins, in DefineBins' language and editor. An `epoch` line is ignored: the fit uses the continuous recording, and **Window** sets the response window. |
 | **Window** start, stop | -200, 800 ms | The response window fitted around every event. |
 | **Baseline** start, stop, **Baseline-correct the result** | the pre-event window, on | The interval the fitted waveforms are baseline-corrected over. |
 | **Result** | One waveform per bin | **One waveform per bin** (shaped like Average), **overlap-corrected trials** (shaped like DefineBins' epochs), or **the model's terms**. |

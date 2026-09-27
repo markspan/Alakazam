@@ -105,11 +105,13 @@ classdef AboutDependenciesTest < matlab.unittest.TestCase
         end
 
         % ---- the papers ---------------------------------------------------
-        function everyPaperIsCompleteAndCitedInTheReadme(testCase)
-        %EVERYPAPERISCOMPLETEANDCITEDINTHEREADME  The About box and the
-        %   README must name the same papers; a DOI is the unambiguous key.
+        function everyPaperIsCompleteAndCitedInTheManual(testCase)
+        %EVERYPAPERISCOMPLETEANDCITEDINTHEMANUAL  Every paper the About box
+        %   names is in the manual's bibliography too; a DOI is the
+        %   unambiguous key. The manual, not the README, is where the
+        %   methods are described and cited.
             root = fileparts(fileparts(mfilename('fullpath')));
-            readme = fileread(fullfile(root, 'README.MD'));
+            bib = lower(fileread(fullfile(root, 'manual', 'references.bib')));
 
             refs = alakazamReferences();
             testCase.assertNotEmpty(refs);
@@ -120,8 +122,8 @@ classdef AboutDependenciesTest < matlab.unittest.TestCase
                         sprintf('Reference %d has an empty %s.', i, field{1}));
                 end
                 testCase.verifyFalse(startsWith(r.doi, 'http'), 'A DOI is stored bare.');
-                testCase.verifySubstring(readme, r.doi, sprintf( ...
-                    '%s (%d) is in the About box but not in README.MD''s References.', ...
+                testCase.verifySubstring(bib, lower(r.doi), sprintf( ...
+                    '%s (%d) is in the About box but not in manual/references.bib.', ...
                     r.authors, r.year));
             end
         end

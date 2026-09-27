@@ -122,7 +122,8 @@ again reopens it.
 ### The channel and bin follow you
 
 When a new plot opens, it shows the channel that was showing in the plot
-before it, and in most views the bin as well. Stepping down a branch from filter to epochs to average
+before it and, in every view that shows one bin at a time, the bin as well.
+Stepping down a branch from filter to epochs to average
 therefore keeps showing Pz, rather than returning to the first channel at
 every step. The match is by label, so it holds when the channels are in a
 different order or some are missing; a dataset without that channel keeps

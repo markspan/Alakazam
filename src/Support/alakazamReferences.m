@@ -13,9 +13,9 @@ function refs = alakazamReferences()
 %   where the practice Deconvolve follows on eye-movement data is set out.
 %
 %   Every DOI here was checked against Crossref when it was added, and
-%   AboutDependenciesTest holds each one to appearing in README.MD's
-%   References too, so the About box and the README cannot name different
-%   papers without a test saying so.
+%   AboutDependenciesTest holds each one to appearing in the manual's
+%   bibliography (manual/references.bib) too, so the About box cannot name a
+%   paper the manual does not cite without a test saying so.
 %
 %   See also ALAKAZAMDEPENDENCIES, ABOUTPAGEHTML.
     refs = struct('authors', {}, 'year', {}, 'title', {}, 'source', {}, 'doi', {}, 'usedFor', {});

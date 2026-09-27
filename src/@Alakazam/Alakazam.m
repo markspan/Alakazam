@@ -152,7 +152,7 @@ classdef Alakazam < handle
         onRibbonAction(this, id)
         onRibbonWidthMeasured(this, width)
         onHelp(this)
-        offerReadmeInstead(this)
+        offerManualInstead(this)
         [ok, message] = buildHelpPage(this)
         onAbout(this)
         onUpdate(this)

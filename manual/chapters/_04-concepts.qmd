@@ -69,7 +69,7 @@ the numbers *mean* without changing how they look, it also records what it
 did: which channels it interpolated in which trials, which artefact detector
 rejected which trial, which ICA components it removed, which channels it
 rectified and how, the model a deconvolution fitted. The data-quality report
-(@sec-data-quality) reads these records (all but rectification), so that a
+(@sec-data-quality) reads these records, so that a
 subject whose data were heavily interpolated cannot pass as a clean one.
 
 ### The cache

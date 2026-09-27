@@ -16,12 +16,14 @@ name: Release
 # draft release that can be inspected and deleted without announcing
 # anything).
 #
-# The package is the tracked repository tree PLUS src/AlakazamHelp.html,
-# which is deliberately not in version control (about 5 MB of embedded
-# screenshots regenerated from README.MD, see .gitignore) but is exactly
-# what a user downloading a release needs: without it the in-app Help
-# button can only offer the raw README, and building it here needs Node,
-# which they will not have. Everything else is taken straight from the git
+# The package is the tracked repository tree PLUS the rendered manual.
+# manual/manual.html is not in version control (it embeds every figure of
+# the manual, see manual/.gitignore) but is exactly what a user downloading
+# a release needs: the in-app Help button shows it, which on a release is a
+# copy, where a working copy has to render it with Quarto, which the user
+# may not have. manual/manual.pdf is committed, but is rendered again here
+# so the package cannot ship one older than its text; it is also attached
+# to the release on its own. Everything else is taken straight from the git
 # index, so gitignored working data (Data/, eeglab/, node_modules/) cannot
 # leak into a published archive.
 
@@ -104,18 +106,18 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing $VERSION"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Build the in-app help page
-        working-directory: src/help
+      - name: Render the manual
+        working-directory: manual
+        # HTML for the in-app Help, and a PDF typeset by the Typst that
+        # Quarto bundles, with the fonts in manual/fonts, so no LaTeX is
+        # needed.
         run: |
-          npm ci
-          npm run build
-          cp dist/AlakazamHelp.html ../AlakazamHelp.html
-          ls -l ../AlakazamHelp.html
+          quarto render manual.qmd --to html
+          quarto render manual.qmd --to typst
+          ls -l manual.html manual.pdf
 
       - name: Assemble the package
         id: package
@@ -128,8 +130,8 @@ jobs:
           # git archive emits the tracked tree only, so nothing ignored
           # (Data/, eeglab/, node_modules/) can end up in the package.
           git archive HEAD | tar -x -C "stage/${NAME}"
-          # The one deliberate addition: the built help page.
-          cp src/AlakazamHelp.html "stage/${NAME}/src/AlakazamHelp.html"
+          # The one deliberate addition: the rendered manual.
+          cp manual/manual.html manual/manual.pdf "stage/${NAME}/manual/"
           # Stamp the version the package was published from. A release
           # package has no .git directory, so `git describe` cannot tell an
           # user what they are running; alakazamVersion reads this file
@@ -138,7 +140,9 @@ jobs:
           ( cd stage && zip -qr "../${NAME}.zip" "${NAME}" )
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
           echo "zip=${NAME}.zip" >> "$GITHUB_OUTPUT"
-          ls -lh "${NAME}.zip"
+          cp manual/manual.pdf "Alakazam-manual-${VERSION}.pdf"
+          echo "pdf=Alakazam-manual-${VERSION}.pdf" >> "$GITHUB_OUTPUT"
+          ls -lh "${NAME}.zip" "Alakazam-manual-${VERSION}.pdf"
 
       - name: Verify the package contents
         env:
@@ -146,12 +150,14 @@ jobs:
           NAME: ${{ steps.package.outputs.name }}
         run: |
           set -euo pipefail
-          # A release that silently omits the help page, or that ships a
+          # A release that silently omits the manual, or that ships a
           # participant's data, is worth failing the build over rather than
           # discovering after publication.
           unzip -l "$ZIP" > listing.txt
-          grep -q "${NAME}/src/AlakazamHelp.html" listing.txt \
-            || { echo "::error::The built help page is missing from the package."; exit 1; }
+          grep -q "${NAME}/manual/manual.html" listing.txt \
+            || { echo "::error::The rendered manual (HTML) is missing from the package."; exit 1; }
+          grep -q "${NAME}/manual/manual.pdf" listing.txt \
+            || { echo "::error::The manual PDF is missing from the package."; exit 1; }
           grep -q "${NAME}/startAlakazam.m" listing.txt \
             || { echo "::error::startAlakazam.m is missing from the package."; exit 1; }
           # Without this the About box silently falls back to whatever
@@ -170,6 +176,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: ${{ steps.package.outputs.zip }}
+          PDF: ${{ steps.package.outputs.pdf }}
           DRAFT: ${{ inputs.draft }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -187,8 +194,8 @@ jobs:
           on first run, or obtained as described in `dependencies.md`. The
           example datasets are not included either (see `DATA.md`).
 
-          This package includes the pre-built in-app help page, so the Home
-          tab's **Help** button works without needing Node.js.
+          The manual is included, as HTML for the **Help** button on the
+          Alakazam tab and as a PDF, which is also attached to this release.
 
           EOF
           # Whether THIS run is meant to leave a draft behind. Only the manual
@@ -218,7 +225,7 @@ jobs:
           # corrected re-run is possible without deleting it by hand.
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release $VERSION already exists; uploading the asset to it."
-            gh release upload "$VERSION" "$ZIP" --clobber
+            gh release upload "$VERSION" "$ZIP" "$PDF" --clobber
             # `gh release view` resolves DRAFTS as well as published releases
             # (it runs a draft lookup alongside the by-tag one), so this branch
             # is also reached by a leftover dry-run draft -- not just by a
@@ -239,5 +246,5 @@ jobs:
                 --notes-file "$NOTES_FILE"
             fi
           else
-            gh release create "$VERSION" "$ZIP" "${FLAGS[@]}"
+            gh release create "$VERSION" "$ZIP" "$PDF" "${FLAGS[@]}"
           fi

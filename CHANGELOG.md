@@ -4,7 +4,7 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
-## Unreleased
+## V0.4.4.1 (2026-09-27)
 
 ### Documentation
 
@@ -22,11 +22,44 @@ bar. Dates are those of the tag.
   scratch workspaces that leave every real workspace untouched.
 - The bibliography is a BibTeX file (`manual/references.bib`) and the manual
   cites it throughout.
+- **Help shows the manual.** The in-app help page is the rendered manual,
+  prepared on the first press of Help (a release ships it ready-made; a clone
+  renders it with Quarto). Without Quarto, Help offers the PDF manual or the
+  README. The Node.js help builder is gone. The manual's maths is MathML, so
+  the page needs nothing from the internet.
+- The PDF manual (`manual/manual.pdf`) is committed, and attached to each
+  release.
+
+### Added
+
+- **An `epoch` statement in the bin language**: `epoch [-200,800] ms` in a
+  script sets the epoch, so a script, a `.binscript` or a template carries
+  its own. It wins over the dialog's epoch fields, and the run's summary
+  says so when they differ. Deconvolve ignores it.
+- **The data-quality report shows rectification**: the mode, which channels,
+  and whether single trials or the average were rectified.
+- **Rejection breakdown** is a small dialog with a table, instead of an
+  alert.
 
 ### Changed
 
 - `onApplyTemplate` takes an optional template file, so a script can apply a
   template without the file picker.
+- Text before the first statement of a bin script, other than comments, is
+  refused with an explanation, where it used to be dropped without a word.
+- Recordings taken out of the study under **Grouping** are marked
+  "(not in study)" in Define Grand and the cluster dialogs, and the cluster
+  dialogs no longer select them.
+- The Spectral Measure view keeps the selected bin, as well as the channel,
+  when another node is opened.
+
+### Fixed
+
+- **Average**: the standard error, the aSME and the trial count included
+  rejected trials. Averages computed before this fix keep the old values
+  until they are recalculated.
+- **TimeFrequency**: one rejected trial made the whole ERSP map NaN.
+- **Coherence Map**: one rejected trial made a channel's coherence NaN.
 
 ## V0.4.4 (2026-09-25)
 

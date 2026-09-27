@@ -15,6 +15,10 @@ crossref:
 format:
   html:
     embed-resources: true
+    # MathML, drawn by the browser itself: MathJax would be fetched from a
+    # CDN whenever the page is opened, which the in-app Help viewer's policy
+    # may refuse, and which fails offline.
+    html-math-method: mathml
     toc-location: left
     theme: cosmo
     fontsize: 1rem

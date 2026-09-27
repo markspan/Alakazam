@@ -1,58 +1,51 @@
 # help
 
-Build tooling for `src/AlakazamHelp.html`, the self-contained `uihtml` page
-the app's own Help button opens.
+The **Help** button shows the manual. Its text lives in [`manual/`](../../manual)
+(Quarto), not here; this folder holds the tool that makes the manual's
+pictures.
 
-**The built page is not in version control.** It embeds every screenshot as
-base64 and runs to about 5 MB, regenerated from `README.MD`, so committing it
-would add a 5 MB diff to history on every README edit. Build it locally with
-the steps below. Until you do, the Help button explains that and offers to
-open `README.MD` instead (see `Alakazam.offerReadmeInstead`), so a fresh clone
-is never left with a dead button.
+## Where the help page comes from
 
-Converts the repository's own [`README.MD`](../../README.MD) into a single
-in-app help page, rather than authoring a second, parallel set of help text
--- the README is already written for the app's own target audience (see its
-"Using your own data"/walkthrough sections) and already kept up to date as
-features change, so rendering it in-app is the whole point. `build.mjs`:
+The page the Help button opens is the rendered manual,
+`manual/manual.html`, copied to `src/AlakazamHelp.html` and adapted for the
+app's `uihtml` viewer by `buildHelpPageInto` (`src/Support/`): stylesheets and
+scripts that Quarto delivers as `data:` URIs are inlined, since the viewer's
+content-security policy refuses them, and links that leave the page are
+handed to MATLAB, which opens them in the real browser.
 
-- uses [marked](https://github.com/markedjs/marked) (MIT licensed) to
-  convert the Markdown to HTML **at build time** -- no Markdown parser is
-  shipped to the page itself, it is already plain HTML by the time
-  `AlakazamHelp.html` exists;
-- inlines every `Screenshots/*.jpg` the README references as a base64
-  data URI (matching `AlakazamRibbon`'s own self-contained-HTML convention:
-  no relative-path resolution once the page is loaded into a `uihtml`
-  component);
-- gives every `##`/`###` heading a stable slug `id` and builds a table-of-
-  contents sidebar from the exact same pass, so the TOC and the rendered
-  anchors can never drift apart.
-
-No client-side search box: `uihtml`'s underlying view is a real Chromium
-browser, so the standard Ctrl+F "find in page" already works.
-
-## Rebuilding
-
-Once after cloning, and again whenever `README.MD` or `Screenshots/*.jpg`
-changes:
+Neither HTML file is in version control, since each embeds every figure
+(the PDF, `manual/manual.pdf`, is). A release ships the rendered manual, so
+there the page is a copy. On a working
+copy the Help button renders the manual with Quarto (bundled with RStudio)
+when it is missing or older than its sources, which takes a couple of
+minutes; without Quarto it offers the PDF manual or `README.MD` instead (see
+`Alakazam.offerManualInstead`). To render it by hand:
 
 ```
-cd src/help
-npm install
-npm run build          # -> dist/AlakazamHelp.html
-cp dist/AlakazamHelp.html ../AlakazamHelp.html
+cd manual
+quarto render manual.qmd --to html     # manual.html, what Help shows
+quarto render manual.qmd --to typst    # manual.pdf
 ```
 
-`node_modules/`, `dist/` and the built `src/AlakazamHelp.html` are all
-gitignored, so nothing from this step is committed.
+`DEVELOPER.md` describes the manual's sources and the PDF's design.
 
-If you ship Alakazam to users rather than handing them the repository,
-build the page first and include it: they will not have Node, and the Help
-button is aimed precisely at people who would never open a README.
+## capture/
 
-## Files
+Every picture in `manual/images/` is regenerated from the running
+application by `captureManualImages`, from the list in `manualShots`: which
+dataset, which transformation or view, and which settings each picture
+shows. Nothing real is touched: each dataset is copied into a scratch
+workspace of its own, and dialogs are caught by a timer, exported and
+cancelled.
 
-- `build.mjs` -- the whole build: image inlining, Markdown -> HTML, TOC,
-  and the page template (CSS lives inline in the template, matching
-  `AlakazamRibbon.html`'s own style).
-- `package.json` -- the one dependency (`marked`).
+Run it from the repository root, with the datasets in `DATA.md` in place:
+
+```matlab
+addpath('src/help/capture');
+captureManualImages();                              % all of them
+captureManualImages('Only', {'filter-dialog'});     % one
+captureManualImages('Datasets', {'rift'});          % one dataset's
+```
+
+A picture that is added to or dropped from the manual belongs in
+`manualShots` as well; `ManualTest` fails when the two disagree.

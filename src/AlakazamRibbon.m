@@ -464,12 +464,12 @@ classdef AlakazamRibbon < handle
 
         function items = helpItems(this, iconsDir)
         %HELPITEMS  In-app help viewer launcher (see Alakazam.onHelp) --
-        %   the app's own README.MD, rendered and searchable (Ctrl+F) right
-        %   here, for a user who is never going to open a README file
-        %   in a repository.
+        %   the manual, rendered and searchable (Ctrl+F) right here, for a
+        %   user who is never going to open a documentation folder in a
+        %   repository.
             icon = this.encodeSvgFile(fullfile(iconsDir, 'Help.svg'));
             items = {struct('id', 'help', 'label', 'Help', ...
-                'tooltip', 'Open the in-app help (the same content as README.MD)', ...
+                'tooltip', 'Open the manual, in the application', ...
                 'icon', icon)};
         end
 

@@ -1,6 +1,7 @@
-# Rendered output: built by Quarto (see DEVELOPER.md), shipped with releases.
+# Rendered output, built by Quarto (see DEVELOPER.md). The PDF is committed,
+# so the manual can be read from a clone or on GitHub without rendering it;
+# the HTML is not (it embeds every figure and is rebuilt for Help on demand).
 manual.html
-manual.pdf
 manual.tex
 manual.typ
 manual_files/

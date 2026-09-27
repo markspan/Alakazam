@@ -30,10 +30,15 @@ need epoched data; Resample, Welch, Deconvolve and Eye tracking need
 continuous data; ERP Measure needs an average or epochs; Scalp and Brain (3D)
 need an average.
 
-**DefineBins left the data continuous.** Both **Epoch start** and **Epoch
-stop** were blank, which means "tag the events with their bins and do not
-cut epochs" (@sec-tr-definebins). The epoch is set in those fields, not in the
-script: text before the first `let` or `bin` statement is ignored.
+**DefineBins left the data continuous.** The script has no `epoch` line and
+both **Epoch start** and **Epoch stop** were blank, which means "tag the
+events with their bins and do not cut epochs" (@sec-tr-definebins). Add a
+line such as `epoch [-200,800] ms` to the script, or fill in the fields.
+
+**DefineBins does not recognise the start of the script.** Apart from
+comments, a script is a series of statements, each starting with `bin`, `let`
+or `epoch`. A note written above the first statement needs a `%` or `#` in
+front of it.
 
 **Filter reports that the data are too short.** A low high-pass cutoff needs
 a long filter, 25 s at 0.1 Hz (@tbl-filter-design). Filter the continuous
@@ -90,9 +95,11 @@ for a manual installation.
 whole recording and its intermediate results. Lower **Most recordings at
 once**, or turn parallel processing off (@sec-settings).
 
-**The Help button offers the README instead of this manual.** The manual has
-not been built on this machine. A release includes it; a clone builds it when
-Quarto is installed.
+**The Help button asks to prepare the help first.** The help page is this
+manual, which a clone does not carry in the form the Help button shows.
+**Prepare it now** renders it, which needs Quarto (bundled with RStudio) and
+takes a couple of minutes; a release includes it ready-made. Without Quarto,
+the same dialog opens the PDF of this manual instead.
 
 ## Where to look next
 

@@ -553,7 +553,7 @@ the **number of trials flagged per channel per subject** as a count rather than
 a proportion, which is what a decision to interpolate or drop a channel
 actually rests on. Its organising concern is whether trial loss is even across
 conditions, since uneven loss affects the validity of the contrast rather than
-only its power. See [Data quality](../README.MD#data-quality).
+only its power. See the manual's [data-quality chapter](../manual/chapters/_15-data-quality.qmd).
 
 **Dependability, where per-trial scores exist.** SME says what the loss cost in
 the units of the measure. It does not say whether the measure is reliable
@@ -1010,7 +1010,8 @@ statistical model, edit the generated R script.
 
 Theory rather than software; the book's introductory appendix is the place for
 it. Alakazam's own algorithm citations are in
-[README.MD](../README.MD#references).
+the manual's bibliography,
+[`manual/references.bib`](../manual/references.bib).
 
 ## Appendix 3 -- The example pipeline, as a template
 

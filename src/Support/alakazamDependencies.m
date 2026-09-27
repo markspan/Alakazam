@@ -16,8 +16,8 @@ function deps = alakazamDependencies()
 %
 %   Not listed: MATLAB itself and its toolboxes (a requirement rather than
 %   a dependency, and already stated in the README), and the build-time
-%   tooling in src/webtree and src/help, whose code does not run in the
-%   application. yy-tree IS listed, because unlike those its JavaScript is
+%   tooling in src/webtree, whose code does not run in the application.
+%   yy-tree IS listed, because unlike that tooling its JavaScript is
 %   bundled into WorkSpaceTree.html and runs in every session.
 %
 %   See also ABOUTPAGEHTML, ALAKAZAMVERSION, ALAKAZAM/ONABOUT.
@@ -92,7 +92,8 @@ function deps = alakazamDependencies()
     % and renderQuartoReport says so plainly when they are absent.
     deps(end + 1) = entry('Quarto', 'any recent', 'MIT', ...
         'https://quarto.org', ...
-        'Renders the generated .qmd statistical reports to HTML.', ...
+        ['Renders the generated .qmd statistical reports to HTML, and the manual ' ...
+         'the Help button shows when it has not been prepared yet.'], ...
         'Reporting');
 
     deps(end + 1) = entry('R', 'any recent', 'GNU GPL v2+', ...

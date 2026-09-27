@@ -460,7 +460,8 @@ two orders have names: the average of squares is **total** power, including
 activity that is not phase-locked, and the square of the average is
 **evoked** power. Both orders are legitimate, and the step records with the
 dataset which channels it rectified, which order applied and, for the
-squared mode, the change of unit. Rejected samples stay rejected.
+squared mode, the change of unit; the data-quality report shows all three
+per subject (@sec-dq-provenance). Rejected samples stay rejected.
 
 ## Baseline {#sec-tr-baseline}
 

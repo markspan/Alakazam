@@ -378,7 +378,7 @@ outside the epoch (no samples) is treated as no baseline.
 
 A short methodological note, since this is where measures are easy to get
 wrong (see Luck, *Applied Event-Related Potential Data Analysis*, in the
-project [references](../../../README.MD#references)):
+manual's [bibliography](../../../manual/references.bib)):
 
 - **Prefer mean amplitude over peak amplitude** when you can. Peak amplitude is
   biased by noise (noisier waveforms have larger peaks) and by window length
@@ -454,7 +454,7 @@ The windows defined here are also what the **Data Quality Report**
 (Export/Report tab) computes a standardized measurement error against: SME
 describes the error on a specific score, so it is reported per window and per
 measure type rather than once per recording. See
-[Data quality](../../../README.MD#data-quality).
+the manual's [data-quality chapter](../../../manual/chapters/_15-data-quality.qmd).
 
 To get the numbers into a statistics package, use the **ERP & Report**
 button on the ribbon's **Export/Report** tab. It walks the whole workspace, every

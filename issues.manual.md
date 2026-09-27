@@ -24,18 +24,18 @@ decision before anything changes).
 | M11 | open | Cache | Average nodes computed before M1 keep the old errors |
 | M12 | fixed | Docs | ManualReject header said it was not recalculable |
 | M13 | fixed | Docs | `measure.md` and `bin_language.md` were out of date |
-| M14 | open | Docs | README still says ManualReject is not recalculable |
+| M14 | fixed | Docs | README still said ManualReject is not recalculable |
 | M15 | fixed | Manual | Chapters 11 to 22 were draft stubs |
 | M16 | fixed | Manual | Screenshots to retake |
-| M17 | open | Manual | Remaining plan items (README, Help, tests, release) |
+| M17 | fixed | Manual | Remaining plan items (README, Help, tests, release) |
 | M18 | open | Manual | Screenshots that show a non-default or weak example |
 | M19 | fixed | Rejection breakdown | Was a uialert, which the capture tool cannot photograph; now a dialog |
 | M20 | fixed | Manual | Captions that did not match their pictures |
-| M21 | decide | DefineBins | Text before the first statement is ignored; the README's `epoch` lines do nothing |
-| M22 | decide | Grand Average | Define Grand offers recordings taken out of the study |
-| M23 | open | Cluster dialog | Says "Home tab" where the ribbon tab is "Alakazam" |
-| M24 | open | Data quality | Rectification is recorded but not reported |
-| M25 | open | Spectral view | Takes the channel from the focus but not the bin |
+| M21 | fixed | DefineBins | `epoch` is now a statement; other text before the first statement is refused |
+| M22 | fixed | Grand Average | Recordings taken out of the study are marked "(not in study)" |
+| M23 | fixed | Cluster dialog | Said "Home tab" where the ribbon tab is "Alakazam" |
+| M24 | fixed | Data quality | Rectification is now reported |
+| M25 | fixed | Spectral view | Now keeps the bin as well as the channel |
 
 ---
 
@@ -195,7 +195,8 @@ entry for the fix.
 
 ### M14. README still says ManualReject is not recalculable
 
-*Status: open. `README.MD` line 576.*
+*Status: fixed 2026-09-27: the README is now the landing page (M17), and the
+manual describes ManualReject as recalculable.*
 
 `WorkSpaceTree.RecalculableTransforms` includes ManualReject on purpose,
 and its header now says so (M12). The README will be replaced by the landing
@@ -236,7 +237,39 @@ After the retake, look at every image again before relying on its caption.
 
 ### M17. Remaining plan items
 
-*Status: open.*
+*Status: fixed 2026-09-27.*
+
+- The README is a landing page: what Alakazam is for (education and
+  reusability in research), what it does, getting started, and links to the
+  manual (`manual/manual.pdf`, now committed), `DATA.md`, `DEVELOPER.md`,
+  `CHANGELOG.md`, `dependencies.md` and the Luck templates. Every bin script
+  in it and in the recipes was parsed by `DefineBinsEngine.parseSpec`.
+- Help shows the manual: `src/Support/buildHelpPageInto.m` (copies
+  `manual/manual.html`, rendering it with Quarto when it is missing or older
+  than its sources, then inlines the `data:` resources and adds the link
+  bridge), `Alakazam.buildHelpPage`, `onHelp`, and `offerManualInstead`
+  (replacing `offerReadmeInstead`: prepare it now, the PDF, or the README).
+  `tests/BuildHelpPageTest.m`, seven cases, Quarto replaced by a stand-in.
+  The Node builder in `src/help` is gone; `src/help/README.md` now
+  describes the Help page and the capture tool.
+- The HTML manual draws its maths as MathML (`html-math-method: mathml`),
+  so neither MathJax nor its polyfill is fetched from a CDN: the viewer
+  needs nothing from outside the page.
+- `tests/ManualTest.m`, six cases: every transformation has a
+  `{#sec-tr-<folder>}` section; every picture shown exists, is in
+  `manual/images` and is made by `manualShots` (except `statistics-report`);
+  every picture in the folder is shown; no em dash and no " -- " in the
+  manual or the README.
+- `AboutDependenciesTest` checks the About box's papers against
+  `manual/references.bib` instead of the README.
+- `.github/workflows/release.yml` sets up Quarto, renders the HTML and the
+  Typst PDF, ships both in the package, checks for them, and attaches the PDF
+  to the release.
+- `dependencies.md`, `PROJECT_STRUCTURE.md`, `.gitignore`, `DEVELOPER.md`,
+  `alakazamDependencies.m` (the Quarto entry) and the links into the old
+  README from `Docs/luck.md` and `measure.md` updated.
+
+The plan as it was:
 
 - `README.MD` rewritten as a short landing page linking the manual,
   `DEVELOPER.md` and `CHANGELOG.md`; move or reuse `Screenshots/`.
@@ -323,7 +356,22 @@ Found by looking at every retaken picture after M19:
 
 ### M21. DefineBins ignores text before the first statement
 
-*Status: decide. `src/Transformations/DefineBins/@DefineBinsEngine/parseSpecInner.m`
+*Status: fixed 2026-09-27, as you decided: `epoch [lo,hi] ms` (or `samples`)
+is a statement (`parseEpochStatement.m`), at most once, and wins over the
+dialog's fields, with a note in the run's summary when they differ;
+Deconvolve ignores it (`tagsOnly`). Anything else before the first
+statement is refused with the parser's explanation. Tests in
+`tests/DefineBinsTest.m` (anEpochStatementSegmentsTheData,
+theScriptsEpochWinsOverAPassedOne, anEpochCanBeGivenInSamples,
+tagsOnlyIgnoresTheEpoch, aSecondEpochIsRefused, anEpochInEventsIsRefused,
+anEmptyEpochIsRefused, textAfterTheEpochWindowIsRefused,
+textBeforeTheFirstStatementIsRefused,
+commentsBeforeTheFirstStatementAreFine) and the new
+`tests/TemplateBinScriptsTest.m` (every template's bin script parses).
+`bin_language.md`, manual chapters 9, 20 and 21 updated; the recipes carry
+their epoch in the script.*
+
+*Was: decide. `src/Transformations/DefineBins/@DefineBinsEngine/parseSpecInner.m`
 (statements start at `let` or `bin`); `README.MD` P300, LRP and MMN recipes.*
 
 The parser splits the script at `let` and `bin <n> "<label>"` and drops
@@ -338,7 +386,13 @@ statement), and correct the README recipes either way.
 
 ### M22. Define Grand offers recordings taken out of the study
 
-*Status: decide. `src/@Alakazam/findGrandAverageCandidates.m`.*
+*Status: fixed 2026-09-27, as you decided: they stay in the lists, marked
+"(not in study)" (`findGrandAverageCandidates` now asks
+`WorkSpace.includedFor`), and the two cluster dialogs preselect only the
+recordings in the study. Test: `tests/ClusterStatsDialogSelectionTest.m`.
+Manual chapters 12 and 14 updated.*
+
+*Was: decide. `src/@Alakazam/findGrandAverageCandidates.m`.*
 
 Unticking **In study** under Grouping is documented as taking a recording out
 of every report, statistic and grand average. **Per Design Cell** respects it
@@ -350,7 +404,9 @@ or keep them and mark them.
 
 ### M23. The cluster dialog says "Home tab"
 
-*Status: open. `src/Dialogs/ClusterStatsDialog.m` (the note under the subject
+*Status: fixed 2026-09-27 (the string; no test).*
+
+*Was: open. `src/Dialogs/ClusterStatsDialog.m` (the note under the subject
 list: "Home tab, Design group, Grouping...").*
 
 The ribbon's first tab is labelled **Alakazam**, not Home. Seen in
@@ -358,7 +414,17 @@ The ribbon's first tab is labelled **Alakazam**, not Home. Seen in
 
 ### M24. Rectification is recorded but not reported
 
-*Status: open. `src/Transformations/Rectify/Rectify.m` writes
+*Status: fixed 2026-09-27, as you asked: `dataQualityMetrics` reads it (from
+the average, falling back to the epoched dataset) into a provenance row, and
+the report has a "Channels rectified" table: mode, how many channels and
+which, whether single trials or the average, and for the squared mode the
+unit and total or evoked power. Tests in
+`tests/DataQualityProvenanceTest.m`
+(rectificationIsReportedWithItsModeAndOrder,
+rectificationAfterAveragingIsReadOffTheAverage,
+theReportHasARectificationTable). Manual chapters 4, 7 and 15 updated.*
+
+*Was: open. `src/Transformations/Rectify/Rectify.m` writes
 `EEG.etc.alz.rectified` and `rectifySquared`, "or the data-quality report
 cannot see it"; `src/Reports/dataQualityMetrics.m` does not read either.*
 
@@ -368,7 +434,12 @@ Rectify header.
 
 ### M25. The spectral view takes the channel from the focus but not the bin
 
-*Status: open. `src/Views/SpectralMeasureView.m`, `applyFocus` and
+*Status: fixed 2026-09-27, as you asked: `SpectralMeasureView.currentFocus`
+and `applyFocus` carry the bin, by label. Tests in `tests/ViewFocusTest.m`
+(aSpectralViewAdoptsARememberedBin, aBinTheSpectralViewLacksLeavesItAlone).
+Chapter 5 now says every view that shows one bin at a time keeps it.*
+
+*Was: open. `src/Views/SpectralMeasureView.m`, `applyFocus` and
 `currentFocus`.*
 
 Moving between nodes keeps the channel but resets the bin to the first,

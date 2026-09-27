@@ -79,7 +79,7 @@ this pass). This listing was itself stale; corrected.
 | Tool | Location | Purpose |
 |---|---|---|
 | Node.js + npm (`yy-tree`, esbuild) | `src/webtree/` | Regenerates `src/WorkSpaceTree.html` from `src/webtree/src/*` (the workspace tree's JS/CSS). Only needed when editing the tree's look/behaviour -- the built output is committed, so a fresh clone does not need Node.js to run Alakazam. See `src/webtree/README.md`. |
-| Node.js + npm (`marked`) | `src/help/` | Generates `src/AlakazamHelp.html`, the in-app help page, from `README.MD`. Unlike the tree above, this output is **not** committed: it embeds every screenshot as base64 and runs to about 5 MB. A fresh clone therefore has no help page until it is built; the Help button explains this and offers `README.MD` instead. See `src/help/README.md`. |
+| Quarto (bundled with RStudio) | `manual/` | Renders the manual: `manual.html`, which the Help button shows, and `manual.pdf`, typeset with the Typst that Quarto bundles (no LaTeX needed). The PDF is committed, so the manual can be read from a clone without rendering anything; the HTML is not (it embeds every figure). A release ships both, and on a working copy the Help button renders the HTML when it is missing, or offers the PDF and `README.MD` when Quarto is absent. The fonts (Noto Sans and Noto Mono, SIL Open Font License) are vendored in `manual/fonts/`. See `DEVELOPER.md`. |
 
 ## Follow-up (not done in this pass)
 

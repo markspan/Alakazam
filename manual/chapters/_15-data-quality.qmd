@@ -109,6 +109,9 @@ per subject:
 - GEDAI's SENSAI score and the share of noise per epoch and channel
   (@sec-tr-autogedai);
 - the synchronisation of an eye-tracking join (@sec-tr-eyetracking);
+- rectification (@sec-tr-rectify): the mode, how many of the channels and
+  which, and whether single trials or the average were rectified, with the
+  unit and the kind of power for the squared mode;
 - for deconvolved subjects, the overlap-corrected trials' noise and the
   events dropped at gaps in the model (@sec-tr-deconvolve).
 

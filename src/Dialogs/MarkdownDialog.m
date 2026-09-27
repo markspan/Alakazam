@@ -12,14 +12,14 @@ function fig = MarkdownDialog(titleText, mdFile, parentFig)
 %   correct forever, in a project whose subject is EEG. When pandoc is
 %   absent, FIG comes back empty and the user is offered the Markdown
 %   file itself, which is perfectly readable and is what they would have
-%   been reading anyway -- the same trade Alakazam.offerReadmeInstead makes
+%   been reading anyway -- the same trade Alakazam.offerManualInstead makes
 %   when the built help page has not been generated.
 %
 %   NOT MODAL. This shows reference material, and the point of a reference
 %   beside an editor is reading it while you type; a window that had to be
 %   dismissed first would defeat that.
 %
-%   See also PANDOCEXE, ALAKAZAM.OFFERREADMEINSTEAD, DEFINEBINSDIALOG.
+%   See also PANDOCEXE, ALAKAZAM.OFFERMANUALINSTEAD, DEFINEBINSDIALOG.
     fig = [];
     if nargin < 3; parentFig = []; end
 

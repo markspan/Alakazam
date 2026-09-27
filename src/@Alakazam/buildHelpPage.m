@@ -1,17 +1,15 @@
 function [ok, message] = buildHelpPage(this)
-%BUILDHELPPAGE  Generate src/AlakazamHelp.html from README.MD, in place.
+%BUILDHELPPAGE  Put the manual at src/AlakazamHelp.html, for the Help button.
 %   [OK, MESSAGE] = buildHelpPage(THIS). A thin wrapper over
 %   buildHelpPageInto, which holds the logic so it can be tested without a
-%   running application.
+%   running application: the rendered manual (manual/manual.html) is used
+%   when it is current, and rendered with Quarto first when it is not.
 %
-%   WHY THE APP BUILDS IT AT ALL. The page is not in version control (about
-%   5 MB of embedded screenshots regenerated from README.MD, see
-%   .gitignore), so a fresh clone has no copy. Until now the Help button
-%   could only explain how to build one, which asks a user to leave the
-%   application, find a terminal and run three npm commands in order to
-%   read the documentation.
+%   The page is not in version control (it embeds every figure of the
+%   manual), so a fresh clone has none until this runs; a release ships the
+%   rendered manual, so there it is a copy.
 %
-%   See also BUILDHELPPAGEINTO, ONHELP, OFFERREADMEINSTEAD.
-    [ok, message] = buildHelpPageInto(fullfile(this.RootDir, 'help'), ...
+%   See also BUILDHELPPAGEINTO, ONHELP, OFFERMANUALINSTEAD.
+    [ok, message] = buildHelpPageInto(fullfile(this.RepoRoot, 'manual'), ...
         fullfile(this.RootDir, 'AlakazamHelp.html'));
 end

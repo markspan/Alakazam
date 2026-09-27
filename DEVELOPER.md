@@ -314,10 +314,13 @@ tables' navy header rows, code blocks and callouts. The fonts are Noto Sans
 and Noto Mono, vendored in `manual/fonts/` under the SIL Open Font License
 (see its README), so the PDF looks the same wherever it is built.
 
-The **Help** button shows the HTML build: `Alakazam.buildHelpPage` renders it
-when it is missing and copies it to `src/AlakazamHelp.html`, which is not in
-version control. The release workflow builds both and ships them with the
-package.
+`manual/manual.pdf` is committed, so the manual can be read from a clone or
+on GitHub without rendering anything: re-render it when the text changes,
+and commit it with the change. The HTML is not committed (it embeds every
+figure). The **Help** button shows it: `Alakazam.buildHelpPage` renders it
+when it is missing or older than its sources, and copies it, adapted for the
+app's viewer, to `src/AlakazamHelp.html`, which is not committed either. The
+release workflow renders both again and ships them with the package.
 
 ### The pictures
 

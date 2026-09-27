@@ -25,8 +25,9 @@ same set of bin labels. Bins are matched by label, not by position, so a
 subject whose bins were defined in a different order combines correctly,
 and one missing a bin is reported rather than combined with the wrong one.
 The list shows every recording's datasets, including recordings taken out of
-the study under **Grouping** (@sec-design); leave those unticked, or use
-**Per Design Cell** below, which leaves them out.
+the study under **Grouping** (@sec-design), which are marked
+"(not in study)"; leave those unticked, or use **Per Design Cell** below,
+which leaves them out.
 
 ### Weighting
 

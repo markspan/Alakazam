@@ -1,105 +1,143 @@
-function [ok, message] = buildHelpPageInto(helpDir, target)
-%BUILDHELPPAGEINTO  Run the help builder in HELPDIR and put its page at
-%   TARGET. [OK, MESSAGE] where MESSAGE explains a failure, for showing to
-%   the user.
+function [ok, message] = buildHelpPageInto(manualDir, target, findQuarto)
+%BUILDHELPPAGEINTO  Put the manual, as the in-app help page, at TARGET.
+%   [OK, MESSAGE] = buildHelpPageInto(MANUALDIR, TARGET) takes the HTML
+%   manual from MANUALDIR (manual/manual.html), rendering it first with
+%   Quarto when it is missing or older than its sources, and writes it to
+%   TARGET ready for the app's viewer. MESSAGE explains a failure, for
+%   showing to the user, or notes that an older copy was used.
+%   FINDQUARTO, optional, is a function returning the quarto executable or
+%   '' (default: locateQuartoTools), so a test can take Quarto away.
 %
-%   A PLAIN FUNCTION SO IT CAN BE TESTED. As a method under @Alakazam this
-%   needed a running application to call at all, so the only thing a test
-%   could reach was the shell command it happens to build. Here every
-%   branch is exercisable: no builder, no node, a build that fails, a
-%   builder that writes nothing.
+%   THE MANUAL IS THE HELP. The help page used to be the README rendered by
+%   a Node script. The manual (manual/, Quarto) is now the documentation,
+%   and the README a landing page, so Help shows the manual: one text, kept
+%   up to date in one place.
 %
-%   TRIES THE BUILD BEFORE THE INSTALL, deliberately. node_modules is
-%   gitignored but usually present in a working copy, and the build then
-%   needs no network at all. Running npm install first would demand one
-%   every time, which is the wrong thing to require of somebody who has
-%   just opened Help on a machine in a lab.
+%   A RELEASE NEEDS NO QUARTO. The release ships manual/manual.html, so on
+%   an installed copy this is a copy and two small rewrites. A working copy
+%   renders it, which needs Quarto (bundled with RStudio) and about two
+%   minutes; a copy older than its sources is re-rendered when Quarto is
+%   there, and used as it is, with a note, when it is not.
 %
-%   NODE IS NOT A DEPENDENCY OF THE APPLICATION and this must not imply it
-%   is. Alakazam analyses EEG perfectly well without it; the only thing
-%   missing is a rendered copy of the README. Its absence is therefore
-%   reported as a plain fact, and the caller keeps its own fallback.
+%   TWO REWRITES FOR THE VIEWER. uihtml is served over MATLAB's connector,
+%   whose content-security policy refuses stylesheets and scripts given as
+%   data: URIs, which is how Quarto's self-contained output delivers them;
+%   inlineDataUriResources turns them into inline blocks, as it does for the
+%   reports. And an ordinary link does nothing in a uihtml, which has no
+%   window to open into, so a small script hands every link that leaves the
+%   page to MATLAB (Alakazam.onHelp opens it in the real browser).
 %
-%   See also ALAKAZAM.BUILDHELPPAGE, ALAKAZAM.ONHELP.
+%   A PLAIN FUNCTION SO IT CAN BE TESTED without a running application.
+%
+%   See also ALAKAZAM.BUILDHELPPAGE, ALAKAZAM.ONHELP, INLINEDATAURIRESOURCES.
     ok = false;
-    buildScript = fullfile(helpDir, 'build.mjs');
-
-    if exist(buildScript, 'file') ~= 2
-        message = sprintf(['The help builder is missing from this copy ' ...
-            '(expected %s).'], buildScript);
-        return;
-    end
-    if ~hasNode()
-        message = ['Building the help page needs Node.js, which is not on this ' ...
-            'machine''s PATH. Node is not needed for anything else in Alakazam.'];
-        return;
+    message = '';
+    if nargin < 3 || isempty(findQuarto)
+        findQuarto = @quartoFromTools;
     end
 
-    [status, output] = runIn(helpDir, 'node build.mjs');
-    if status ~= 0
-        % Almost always a missing node_modules, which npm install fixes and
-        % which is the one step needing the network. Retried rather than
-        % reported, since the user can act on "Cannot find package
-        % 'marked'" no better than this function can.
-        [installStatus, installOutput] = runIn(helpDir, 'npm install');
-        if installStatus ~= 0
-            message = sprintf(['The help page could not be built. Installing its ' ...
-                'one dependency failed, which usually means no network ' ...
-                'connection:\n\n%s'], firstLines(installOutput, 12));
-            return;
+    source = fullfile(manualDir, 'manual.qmd');
+    built  = fullfile(manualDir, 'manual.html');
+    haveBuilt = exist(built, 'file') == 2;
+    if ~haveBuilt && exist(source, 'file') ~= 2
+        message = sprintf(['The manual is missing from this copy (expected %s, or ' ...
+            'its source %s).'], built, source);
+        return;
+    end
+
+    if ~haveBuilt || (exist(source, 'file') == 2 && isStale(built, manualDir))
+        quarto = findQuarto();
+        if isempty(quarto)
+            if ~haveBuilt
+                message = ['Building the help page renders the manual with Quarto, ' ...
+                    'which was not found on this machine (it is bundled with RStudio). ' ...
+                    'Quarto is not needed for anything else in Alakazam except the ' ...
+                    'statistical reports.'];
+                return;
+            end
+            message = ['The manual has changed since this copy of it was rendered, and ' ...
+                'Quarto was not found to render it again, so the older copy is shown.'];
+        else
+            [status, output] = runIn(manualDir, ...
+                sprintf('"%s" render manual.qmd --to html', quarto));
+            if status ~= 0 || exist(built, 'file') ~= 2
+                message = sprintf('The manual could not be rendered:\n\n%s', ...
+                    lastLines(output, 12));
+                return;
+            end
         end
-        [status, output] = runIn(helpDir, 'node build.mjs');
-    end
-    if status ~= 0
-        message = sprintf('The help page could not be built:\n\n%s', firstLines(output, 12));
-        return;
     end
 
-    built = fullfile(helpDir, 'dist', 'AlakazamHelp.html');
-    if exist(built, 'file') ~= 2
-        message = sprintf(['The builder reported success but wrote no page ' ...
-            '(expected %s).'], built);
-        return;
-    end
-
-    % The copy is the deploy step build.mjs deliberately leaves manual
-    % (matching src/webtree). Done here because the whole point is that
-    % nobody had to run the build by hand.
     [copied, copyMessage] = copyfile(built, target, 'f');
     if ~copied
-        message = sprintf('The page was built but could not be copied to %s: %s', ...
+        message = sprintf('The manual was rendered but could not be copied to %s: %s', ...
             target, copyMessage);
         return;
     end
-
+    inlineDataUriResources(target);
+    addLinkBridge(target);
     ok = true;
-    message = '';
 end
 
 % ======================================================================= %
-function tf = hasNode()
-%HASNODE  Whether node is callable. Asked by running it, not by looking for
-%   it on the PATH: a version check is the only answer that accounts for
-%   shims, version managers and PATH entries pointing at nothing.
-    [status, ~] = system('node --version');
-    tf = status == 0;
+function exe = quartoFromTools()
+    [~, exe] = locateQuartoTools();
+end
+
+function tf = isStale(built, manualDir)
+%ISSTALE  Whether any source of the manual is newer than its HTML.
+    builtTime = dir(built).datenum;
+    sources = [dir(fullfile(manualDir, '*.qmd')); dir(fullfile(manualDir, '*.bib')); ...
+        dir(fullfile(manualDir, 'chapters', '*.qmd')); dir(fullfile(manualDir, 'images', '*'))];
+    sources = sources(~[sources.isdir]);
+    tf = any([sources.datenum] > builtTime);
+end
+
+function addLinkBridge(htmlFile)
+%ADDLINKBRIDGE  Hand links that leave the page to MATLAB. uihtml calls a
+%   page's setup(htmlComponent) once it is loaded; the listener sends the
+%   link as an 'openUrl' event, which Alakazam.onHelp opens in the browser.
+%   Links within the page (#sec-...) are left to work as they do.
+    fid = fopen(htmlFile, 'r', 'n', 'UTF-8');
+    html = fread(fid, '*char')';
+    fclose(fid);
+    if contains(html, 'alzHelpBridge')
+        return;
+    end
+    bridge = ['<script id="alzHelpBridge">' newline ...
+        'let alzHelp;' newline ...
+        'function setup(htmlComponent) {' newline ...
+        '  alzHelp = htmlComponent;' newline ...
+        '  document.addEventListener(''click'', function (e) {' newline ...
+        '    const a = e.target.closest(''a'');' newline ...
+        '    if (!a) { return; }' newline ...
+        '    const href = a.getAttribute(''href'') || '''';' newline ...
+        '    if (href === '''' || href.startsWith(''#'')) { return; }' newline ...
+        '    e.preventDefault();' newline ...
+        '    if (alzHelp) { alzHelp.sendEventToMATLAB(''openUrl'', a.href); }' newline ...
+        '  });' newline ...
+        '}' newline ...
+        '</script>' newline];
+    bodyEnd = strfind(html, '</body>');
+    if isempty(bodyEnd)
+        html = [html bridge];
+    else
+        html = [html(1:bodyEnd(end) - 1) bridge html(bodyEnd(end):end)];
+    end
+    fid = fopen(htmlFile, 'w', 'n', 'UTF-8');
+    fprintf(fid, '%s', html);
+    fclose(fid);
 end
 
 function [status, output] = runIn(folder, command)
-%RUNIN  Run COMMAND with FOLDER as the working directory.
-%   cd is part of the command rather than a MATLAB cd, so this cannot
-%   leave the application in another directory if it throws.
-    [status, output] = system(sprintf('cd /d "%s" && %s', folder, command));
+    here = pwd;
+    back = onCleanup(@() cd(here));
+    cd(folder);
+    [status, output] = system(command);
+    clear back;
 end
 
-function text = firstLines(output, n)
-%FIRSTLINES  The first N lines of OUTPUT, for a dialog.
-%   npm and node are both capable of several hundred lines of stack, and a
-%   uialert showing all of it is one the user cannot read or dismiss
-%   sensibly.
-    lines = strsplit(strtrim(char(string(output))), newline);
-    if numel(lines) > n
-        lines = [lines(1:n), {sprintf('... (%d more lines)', numel(lines) - n)}];
-    end
-    text = strjoin(lines, newline);
+function text = lastLines(output, n)
+    lines = splitlines(strtrim(string(output)));
+    text = char(strjoin(lines(max(1, end - n + 1):end), newline));
 end

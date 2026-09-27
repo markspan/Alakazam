@@ -8,10 +8,10 @@ experiment, ending in a rendered report. The overlap-correction example is in
 Each recipe is an ordinary chain of transformations, so once built on one
 recording it replays across a study with **Apply to All Raw Files** or a
 template (@sec-reproducibility). The event codes are placeholders:
-substitute your own. In every recipe the epoch is set in the **Epoch start**
-and **Epoch stop** fields of the DefineBins dialog (@fig-definebins-dialog),
-not in the script; anything written before the first `let` or `bin`
-statement is ignored.
+substitute your own. Every recipe's script carries its own epoch, as an
+`epoch` line (@sec-tr-definebins), so it can be pasted into the DefineBins
+dialog, saved as a `.binscript` or kept in a template as it is, with the
+**Epoch start** and **Epoch stop** fields left alone.
 
 ## Tested templates for the ERP CORE paradigms
 
@@ -36,6 +36,7 @@ target stimuli [@polich2007]. Stimulus-locked.
    out; the epoch stays stimulus-locked:
 
    ```
+   epoch [-200,800] ms
    let responded = next("201") within (200,1200] ms
    bin 1 "Rare"      : "S2?" and responded
    bin 2 "Frequent"  : "S1?"
@@ -66,6 +67,7 @@ left- and right-hand responses. Response-locked.
    the button press with `timelock`, so time zero is the press:
 
    ```
+   epoch [-800,200] ms
    let leftPress  = next("201") within (150,1500] ms
    let rightPress = next("202") within (150,1500] ms
    bin 1 "Left-hand"  : "S1?" and leftPress  timelock leftPress
@@ -105,6 +107,7 @@ in the deviant-minus-standard difference wave, and needs no attention
    serial position between the two bins:
 
    ```
+   epoch [-100,400] ms
    let standard = "S1"
    let deviant  = "S2"
    bin 1 "Deviant"        : deviant

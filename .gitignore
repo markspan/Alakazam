@@ -40,16 +40,12 @@ ga.txt
 src/webtree/node_modules/
 src/webtree/dist/
 
-# ── src/help/ (the in-app help viewer's build tooling) ────────────────
-# Nothing here is committed, INCLUDING the built page itself: it embeds
-# every screenshot as base64 and runs to ~5 MB, and it is regenerated
-# from readme.MD, so committing it would put a 5 MB binary-ish diff in
-# history every time the readme changed. Build it with
-# `npm install && npm run build` in src/help, then copy dist/
-# AlakazamHelp.html up to src/ (see src/help/README.md). Alakazam.onHelp
-# explains what to do if it is missing rather than failing.
-src/help/node_modules/
-src/help/dist/
+# ── The in-app help page ─────────────────────────────────────────────
+# A copy of the rendered manual (manual/manual.html, itself ignored in
+# manual/.gitignore) prepared for the app's viewer by
+# Alakazam.buildHelpPage. It embeds every figure of the manual, so
+# committing it would put a large binary-ish diff in history with every
+# change to the text. Alakazam.onHelp prepares it when it is missing.
 src/AlakazamHelp.html
 
 # Commit-message scratch files (never part of a commit).
