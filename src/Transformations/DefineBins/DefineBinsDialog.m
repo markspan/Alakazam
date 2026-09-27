@@ -46,9 +46,12 @@ function result = DefineBinsDialog(defaultScript, prevEpoch, opts)
             'ColumnWidth', {'fit', 90, 'fit', 90}, 'Padding', [8 8 8 0]);
         epochRow.Layout.Row = 1;
         uilabel(epochRow, 'Text', 'Epoch start (ms):');
-        startField = uieditfield(epochRow, 'text', 'Value', prevEpoch{1});
+        epochTip = ['Leave both blank to tag the bins without cutting epochs. An ' ...
+            'epoch line in the script (epoch [-200,800] ms) takes precedence over ' ...
+            'these fields.'];
+        startField = uieditfield(epochRow, 'text', 'Value', prevEpoch{1}, 'Tooltip', epochTip);
         uilabel(epochRow, 'Text', 'Epoch stop (ms):');
-        stopField = uieditfield(epochRow, 'text', 'Value', prevEpoch{2});
+        stopField = uieditfield(epochRow, 'text', 'Value', prevEpoch{2}, 'Tooltip', epochTip);
     else
         startField = [];
         stopField  = [];

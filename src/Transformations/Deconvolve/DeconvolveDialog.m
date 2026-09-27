@@ -437,7 +437,7 @@ function options = DeconvolveDialog(EEG, stored)
             return;
         end
         try
-            tagged = DefineBins(EEG, struct('script', binScript));
+            tagged = DefineBins(EEG, struct('script', binScript, 'tagsOnly', true));
         catch err
             tagged = [];
             why = err.message;

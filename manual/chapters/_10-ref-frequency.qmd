@@ -1,0 +1,382 @@
+# Reference: measurement, frequency and components {#sec-ref-frequency}
+
+**Tools > 4. Frequency and Component Analysis** holds the steps that turn
+waveforms into numbers: ERP Measure for time-domain scores; Fourier, Welch,
+Spectral Measure and RESS for the frequency domain; Covariance and Cross
+Correlation for relations between channels; and Source Estimate, which
+stores a cortical inverse for later statistics.
+
+## ERP Measure {#sec-tr-measure}
+
+*Tools > 4. Frequency and Component Analysis > ERP Measure · averaged or
+epoched → the same, with measurements · `Measure`*
+
+Turns a window on a waveform into a number. A table of **measurement
+windows**, each a time range and a way of reducing it to a value, is
+evaluated for every bin and every selected channel. On an average this
+gives one value per bin; on epoched data the same windows give one value per
+trial, which the statistical report's single-trial models use
+(@sec-statistics). The waveforms are not changed.
+
+![**ERP Measure** with the N400 windows of the worked example: mean amplitude and 50% area latency over 300 to 500 ms at CPz.](images/measure-dialog.png){#fig-measure-dialog}
+
+| Measure | Reports | Unit |
+|-----------------------|-------------------------------------------------------|-------------|
+| **Mean Amplitude** | the mean of the waveform over the window | µV |
+| **Peak** | the most extreme sample of the chosen polarity, and its latency | µV, ms |
+| **Area**, whole window | the integral over the window, in the chosen area mode | µV·ms |
+| **Area**, peak band | the integral over a band of **Width** ms centred on the peak, and the peak's amplitude and latency | µV·ms, µV, ms |
+| **Fractional Peak Latency** | the time, before the peak, at which the waveform reaches **Fraction** of the peak amplitude, interpolated between samples | ms |
+| **Fractional Area Latency** | the time that divides the window's area at **Fraction**, interpolated between samples | ms |
+
+: The measures of ERP Measure. {#tbl-measures}
+
+| Column | Values | Used by |
+|-----------------|-------------------------------------------------------|--------------------|
+| **Label** | a name, best unique | all |
+| **Start**, **Stop** | the window, in ms, snapped to the nearest sample | all |
+| **Polarity** | Positive, Negative | peak-based measures |
+| **Width** | 0 for the whole window, or a band in ms | Area |
+| **Local pts** | 0 for the absolute extreme; *N* for a peak more extreme than its *N* neighbours on each side | peak-based measures |
+| **Fraction** | between 0 and 1 | fractional latencies |
+| **Area mode** | Signed, Rectified, Positive, Negative | Area |
+| **Baseline** | an interval such as `-100 0`, subtracted before measuring | all |
+| **Reference channel** | find the peak once, on this channel, and read every channel at its latency | Peak, band Area |
+| **Channels** | a list, each measured separately; `{Pz POz CPz}` pools a region; blank for all | all |
+
+: The columns of the window table. {#tbl-measure-columns}
+
+The dialog greys the columns a row's measure does not use. **Derived
+channels** can be defined in a `let` field as in Derive Channels
+(@sec-tr-derivechannels), though deriving them in that step is the better
+choice. **Save** and **Load** write and read a window set as an `.alm` file;
+Load adds to the table, so a battery can be assembled from several files.
+Ready-made sets for P1, N170, P2, MMN, visual MMN, N2, P300, N400, LPP, LRP
+and ERN are included, each at its customary site and window.
+
+When a Measure result is drawn, the measurements are marked on the
+waveforms: a dot at a peak, the area shaded, a level line at a mean, and a
+drop line at a fractional latency.
+
+### Choosing a measure
+
+The choice of measure matters as much as the choice of window
+[@luckApplied; @luck2014].
+
+- **Mean amplitude is the default choice.** A peak is biased by noise (a
+  noisier waveform has larger peaks) and by the width of the window (a wider
+  window can only find a larger one), so peak amplitudes are comparable
+  across conditions and groups only when both are equal. A mean over a fixed
+  window has neither bias.
+- **For latency, use the 50% area latency** rather than the peak latency: it
+  is far less affected by noise [@kiesel2008]. Fractional peak latency is
+  the usual measure of onset. Latencies of single subjects are noisy in any
+  case, and jackknifing, measuring the grand averages of leave-one-out
+  subsamples, is often the better approach for group differences
+  [@miller1998; @kiesel2008].
+- **Choose windows before looking at the effect.** A window placed where the
+  difference between conditions is largest inflates the false-positive rate
+  in a way no correction repairs [@luckgaspelin2017]. Take windows from the
+  literature, from an orthogonal contrast (the average of all conditions), or
+  test without a window at all with a cluster test
+  (@sec-cluster-statistics).
+
+## Fourier {#sec-tr-fourier}
+
+*Tools > 4. Frequency and Component Analysis > Fourier · epoched or
+continuous → frequency domain · `Fourier`*
+
+The discrete Fourier transform of each segment (each trial of epoched data),
+tapered at its ends, in one of six units.
+
+![**Fourier**, set to a calibrated power spectral density with a 10% Hanning taper.](images/fourier-dialog.png){#fig-fourier-dialog}
+
+| Option | Default | Meaning |
+|---------------------|-------|-------------------------------------------------------|
+| **Units** | Volt | **Volt**, **Power**, **VoltDens**, **PowerDens**, **Complex** or **PSD** (below). |
+| **Full spectrum (×2)** | on | Double the one-sided magnitude, for the folded negative frequencies. Ignored for PSD. |
+| **Taper** | Hanning | The window function. |
+| **Length (% of segment)** | 100 | The share of the segment that is tapered, half at each end; 100 is a full Hanning window, 10 tapers 5% at each end and leaves the rest flat. |
+| **Mode**, **Resolution** | Max | **Max** uses the segment's own length, padded to a power of two; **Other** sets the frequency spacing to the value given. |
+
+: Fourier's options. {#tbl-fourier}
+
+**Which unit.** The first four are magnitudes: the absolute value is taken
+per segment, so the phase is discarded. **Volt** gives a sinusoid of
+amplitude *A* a peak of *A*, matching BrainVision Analyzer. **Complex** keeps
+the coefficients, so the phase survives (the view's **P** key shows it).
+**PSD** is the only calibrated unit: a periodogram in units²/Hz, normalised
+by the energy of the taper, whose integral over frequency equals the
+signal's mean square [@welch1967], so that it can be compared with other
+software and with published values. Power and PowerDens square the
+amplitude convention and are kept for continuity with earlier analyses.
+
+**The order of averaging decides what is measured.** Averaging magnitude
+spectra over trials (Fourier, then Average) keeps activity that is not phase
+locked: it is the **total** spectrum. Averaging complex spectra, or taking
+the Fourier transform of an average, keeps only the phase-locked part: the
+**evoked** spectrum. The two differ by the induced power, which is often most
+of the signal. On epoched data, Fourier with PSD followed by Average is
+Welch's method with the trials as its segments.
+
+**Resolution.** The frequency resolution of a segment is the reciprocal of
+its length, whatever the spacing: padding with zeros interpolates the
+spectrum without resolving anything finer. A spacing coarser than the
+segment supports (**Other** with a value above the reciprocal of the segment
+length) shortens the transform, which then uses only the start of each
+segment.
+
+![The PSD of the N400 epochs at Oz, averaged per bin, with the frequency bands of @sec-settings shaded beneath it and the alpha peak near 10 Hz.](images/fourier-result.jpg){#fig-fourier-result}
+
+## Welch PSD {#sec-tr-welch}
+
+*Tools > 4. Frequency and Component Analysis > Welch PSD · continuous →
+frequency domain · `Welch`*
+
+The calibrated power spectral density of a continuous recording, by Welch's
+method [@welch1967]: overlapping segments, each tapered, their periodograms
+averaged. A segment containing rejected samples is skipped.
+
+![**Welch PSD** with 2 s segments overlapping by half, and a Hanning taper.](images/welch-dialog.png){#fig-welch-dialog}
+
+| Option | Default | Meaning |
+|--------------|-------|-------------------------------------------------------|
+| **Segment length** | 4 s | The resolution is its reciprocal: 0.25 Hz for 4 s. |
+| **Overlap** | 50% | The overlap of consecutive segments; 50% is usual with a Hanning taper. |
+| **Taper** | Hanning | The window function. |
+
+: Welch's options. {#tbl-welch}
+
+Segment length is the trade between resolution and variance: longer
+segments resolve lower frequencies, more segments give a steadier estimate.
+Welch refuses epoched data: there, Fourier with PSD followed by Average is
+already an averaged periodogram with one segment per trial, and splitting
+each trial further would spend resolution twice.
+
+![The Welch PSD of the continuous N400 recording at Oz, 2 s segments.](images/welch-result.jpg){#fig-welch-result}
+
+## Spectral Measure {#sec-tr-spectralmeasure}
+
+*Tools > 4. Frequency and Component Analysis > Spectral Measure · epoched →
+epoched, with spectral measures · `SpectralMeasure`*
+
+Measures responses at named frequencies, for frequency tagging, steady-state
+responses (SSVEP) and rapid invisible frequency tagging (RIFT)
+[@norcia2015; @zhigalov2019]. For each frequency, channel and bin it reports:
+
+| Quantity | Definition |
+|--------------------|-------------------------------------------------------|
+| **power**, **amplitude** | of the evoked (trial-averaged) complex coefficient, since a tagged response is phase-locked to the stimulation |
+| **SNR** | the power at the frequency divided by the mean power at the neighbouring frequencies on each side, beyond a guard band |
+| **ITC** | inter-trial phase coherence, $\lvert \frac{1}{N}\sum_n X_n/\lvert X_n\rvert \rvert$, between 0 and 1 [@tallonbaudry1996; @lachaux1999] |
+| **phase** | the angle of the evoked coefficient |
+| **coherence**, **phase lag** | magnitude-squared coherence and cross phase to a reference channel such as a photodiode |
+
+: What Spectral Measure reports. {#tbl-spectralmeasure-quantities}
+
+Frequencies are written as expressions over named fundamentals: after
+`let f1 = 60`, a row may ask for `f1`, `2*f1` (a harmonic) or `f1+f2` and
+`2*f1-f2` (intermodulation terms). Each coefficient is computed by a tapered
+discrete Fourier transform evaluated exactly at the requested frequency, so a
+harmonic or intermodulation frequency that falls between the bins of the
+epoch's own spectrum is still measured exactly.
+
+![**Spectral Measure** on a RIFT recording: the fundamental, the reference channel, the taper and SNR settings, the coherence estimator, and one row per tagged frequency.](images/spectralmeasure-dialog.png){#fig-spectralmeasure-dialog}
+
+| Option | Default | Meaning |
+|----------------------------------|--------------|-------------------------------------------------------|
+| **Fundamentals** | | `let` lines naming the base frequencies. |
+| rows: **Label**, **Frequency**, **Channels** | | A frequency expression and the channels to measure; `{Pz POz}` pools. |
+| **Reference channel** | none | The channel coherence and phase lag are computed against. |
+| **Taper method**, **Multitaper tapers** | Hann, 3 | A single Hann taper, or DPSS multitapers, which average over *K* tapers to reduce variance. |
+| **SNR neighbour bins**, **SNR guard bins** | 10, 1 | How many frequency bins on each side form the noise estimate, and how many next to the frequency are skipped. |
+| **Coherence estimator** | Frame-averaged | See below. |
+| **Window start**, **Window stop** | whole epoch | The part of each epoch analysed, to leave out the onset response. |
+
+: Spectral Measure's options. {#tbl-spectralmeasure}
+
+**Coherence.** Only coherence and phase lag depend on the estimator; the
+single-channel quantities do not.
+
+- **Frame-averaged** (the default) cuts the signals into overlapping frames
+  (75% overlap), computes the coherence across trials in each frame at the
+  exact frequency, and averages over frames. It agrees with EEGLAB's
+  `newcrossf` and with the Coherence Map and CohTopo views, so the number in
+  a report and the map beside it are the same quantity.
+- **Window** uses the whole analysis window as one tapered segment per trial.
+  It is cheap but biased upwards, since far fewer independent samples enter
+  the average: on ten RIFT recordings it read 2.4 to 2.9 times the
+  frame-averaged value.
+- **newcrossf** calls EEGLAB's own function, the estimator the RIFT study
+  used [@dimigen2025], and can only report frequencies inside its band.
+
+The report states which estimator was used. **Spectral & Report** on the
+**Export/Report** tab collects every Spectral Measure result into a CSV and
+a report (@sec-frequency-tagging).
+
+![A RIFT recording's evoked amplitude spectrum at Oz in the 60 Hz condition, 0 to 100 Hz, with the measured frequencies marked and labelled with their SNR: the tagged 60 Hz response (SNR about 100), and a larger 50 Hz line-noise peak beside it.](images/spectralmeasure-result.jpg){#fig-spectralmeasure-result}
+
+## RESS {#sec-tr-ress}
+
+*Tools > 4. Frequency and Component Analysis > RESS · epoched, with bins →
+the same, with added channels · `RESS`*
+
+Rhythmic entrainment source separation [@cohen2017]. A tagged response is
+usually read from the electrode where it looks strongest, a choice that
+differs between people and frequencies and is circular when made on the
+response itself. RESS replaces it with a spatial filter per recording and
+frequency: the weighting of all scalp channels whose power at the
+stimulation frequency is largest relative to the frequencies beside it. Each
+filter is added as a channel (`RESS60Hz`), so that everything downstream,
+Spectral Measure's coherence to a photodiode, SNR and ITC, reads it like an
+electrode.
+
+![**RESS** for the RIFT design: one row per tagged frequency, each built from its own bins, with the reference code's filter widths.](images/ress-dialog.png){#fig-ress-dialog}
+
+| Option | Default | Meaning |
+|---------------------------------------|-----------|-------------------------------------------------------|
+| rows: **Label**, **Frequency**, **Build from bins** | | One component per row, built from the pooled trials of the listed bins (blank: all). |
+| **Width at the frequency** | 0.5 Hz | FWHM of the narrow Gaussian filter at the frequency. |
+| **Neighbours, either side** | 1 Hz | Distance of the reference frequencies. |
+| **Width at the neighbours** | 1 Hz | FWHM of the filters at the neighbours. |
+| **Window start**, **Window stop** | whole epoch | The samples entering the covariances, to leave out the onset response. |
+| **Shrinkage of the reference** | 1% | Regularisation of the reference covariance (below). |
+| **Include the mastoids** | off | Include mastoid channels among the scalp channels combined. |
+
+: RESS's options. The defaults are those of the authors' code. {#tbl-ress}
+
+**The method.** Two channel covariance matrices are formed from the same
+samples: **S** from the data filtered narrowly at the frequency, and **R**
+as the mean of the covariances at the frequency minus and plus the
+neighbour distance. The generalised eigenvector of (S, R) with the largest
+eigenvalue maximises the ratio of power at the frequency to power beside
+it. The filters are Gaussians in the frequency domain, applied to the whole
+epoch before the window is taken. The forward model (the component's scalp
+map) is $S\mathbf w / (\mathbf w^\top S \mathbf w)$, and the sign is fixed so
+that the largest element of the map is positive; unlike the reference code,
+the weights are flipped with it, so that the component's phase, and its
+phase lag to a photodiode, is not arbitrary.
+
+**Shrinkage.** An average reference, an interpolated channel or a removed
+ICA component lowers the rank of the data, and a singular R has no
+well-defined generalised eigenvectors. R is therefore shrunk towards a
+multiple of the identity, $(1-g)R + g\,\overline{\lambda}(R)\,I$; 0 reproduces
+the article, which used full-rank data.
+
+**Which trials.** A filter built from every condition at a frequency compares
+those conditions fairly, because none had the filter fitted to it alone, as
+the authors advise. The component is then computed for every trial, so it is
+also applied to the bins it was not built from, and those are its null: what
+the filter gives where its flicker was absent. A recording without a row's
+bins gets that component as all-missing, with a note, so that every
+recording keeps the same channels.
+
+Only scalp EEG channels are combined, never eye channels, a photodiode or an
+earlier component; running RESS again replaces its channels. The weights,
+maps and eigenvalues are kept for the report.
+
+![The spectrum of the 60 Hz RESS component in the same trials: SNR at 60 Hz about 460, against about 100 at Oz (@fig-spectralmeasure-result), with the 50 Hz line noise largely gone.](images/ress-result.jpg){#fig-ress-result}
+
+## Covariance {#sec-tr-covariance}
+
+*Tools > 4. Frequency and Component Analysis > Covariance · epoched →
+channel matrix per bin · `Covariance`*
+
+The channel-by-channel covariance or correlation matrix of each bin, over
+the samples of a time window pooled across the bin's trials.
+
+![**Covariance**: the channels, the statistic, the shrinkage, and the window.](images/covariance-dialog.png){#fig-covariance-dialog}
+
+| Option | Default | Meaning |
+|------------------|--------------------|--------------------------------|
+| **Channels** | all | At least two. |
+| **Matrix** | Covariance | **Covariance** (µV²) or **Correlation**. |
+| **Shrinkage** | Ledoit-Wolf | **Ledoit-Wolf**, or **None**. |
+| **Window** start, stop | 0 to 0 (whole epoch) | The samples used, in ms. |
+
+: Covariance's options. {#tbl-covariance}
+
+With *p* channels, a sample covariance needs many more than *p* independent
+observations to be well conditioned, and a 64-channel montage over a short
+window rarely has them: the small eigenvalues come out too small or zero,
+which breaks anything that later inverts the matrix. Ledoit-Wolf shrinkage
+towards a scaled identity is the closed-form optimum, needs no tuning
+parameter, and is always positive definite [@ledoit2004]; the condition
+number before and after is reported. A correlation matrix is derived from
+the shrunk covariance, in that order.
+
+Rejected samples are handled by dropping every time point at which any
+selected channel was rejected, rather than pairwise: pairwise deletion
+computes each entry from a different set of samples, and the result need not
+be a valid covariance matrix. The number of observations used and dropped is
+shown with each matrix.
+
+![The correlation matrix of the N400 epochs of one bin, with the number of observations used and dropped in the title. The EOG channels, at the bottom right, correlate little with the rest.](images/covariance-result.jpg){#fig-covariance-result}
+
+## Cross Correlation {#sec-tr-crosscorrelation}
+
+*Tools > 4. Frequency and Component Analysis > Cross Correlation · epoched
+→ lag functions per bin · `CrossCorrelation`*
+
+The Pearson correlation of each channel with a reference channel at every
+lag, computed per trial and averaged over the bin's trials, with the peak
+correlation and its lag. **A positive lag means the channel follows the
+reference.**
+
+![**Cross Correlation**: the reference channel, the channels, the maximum lag, the minimum number of sample pairs per lag, and the window.](images/crosscorrelation-dialog.png){#fig-crosscorrelation-dialog}
+
+| Option | Default | Meaning |
+|----------------------------|--------------------|-------------------------------------------|
+| **Reference channel** | | Required. |
+| **Channels** | all | The channels correlated with it. |
+| **Maximum lag** | 200 ms | The range of lags, either side. |
+| **Minimum sample pairs per lag** | 20 | A lag with fewer valid pairs is left empty. |
+| **Window** start, stop | 0 to 0 (whole epoch) | The samples used, in ms. |
+
+: Cross Correlation's options. {#tbl-crosscorrelation}
+
+Three choices distinguish it from the classic formulation (BrainVision
+Analyzer's, for instance):
+
+- **Each lag is normalised by the samples that overlap at that lag**, not by
+  the whole segment, so every value is a true correlation between -1 and 1,
+  and lags are comparable.
+- **Trials are averaged in Fisher's *z***, $z = \operatorname{atanh} r$, and
+  transformed back, since the mean of *r* is biased towards zero; this also
+  gives the standard error drawn as a band.
+- **Rejected samples are excluded pairwise, per lag**, and a lag with too few
+  pairs is left empty rather than estimated from almost no data.
+
+![The cross-correlation of FP1 with VEOG in one N400 bin: a negative peak at 0 ms, since eye activity appears with opposite signs in FP1 and in the bipolar VEOG channel.](images/crosscorrelation-result.jpg){#fig-crosscorrelation-result}
+
+## Source Estimate {#sec-tr-sourceestimate}
+
+*Tools > 4. Frequency and Component Analysis > Source Estimate · averaged →
+averaged, with a stored source estimate · `SourceEstimate`*
+
+Inverts every bin of an averaged dataset onto a template cortical surface
+and stores the result on a node, so that a source cluster test
+(@sec-source-cluster) and the 3D brain read it instead of computing it again.
+The inverse methods and their limits are described in
+@sec-source-estimation.
+
+![**Source Estimate**: the inverse method, the orientation, the cortical mesh, the time window, the stored sampling rate and the regularisation, with the disk space the node will take.](images/sourceestimate-dialog.png){#fig-sourceestimate-dialog}
+
+| Option | Default | Meaning |
+|--------------|------------------------|-------------------------------------------------------|
+| **Inverse method** | dSPM | **dSPM** [@dale2000] or **sLORETA** [@pascualmarqui2002]. |
+| **Orientation** | Signed (cortical normal) | The dipole component along the cortical normal, keeping its sign, or the **Magnitude** of a free orientation. |
+| **Source space** | 20 484 vertices | The template cortical mesh: 20 484, 8 196 or 5 124 vertices. |
+| **Time window** | the whole epoch | The samples stored. |
+| **Store at** | 200 Hz | The rate the estimate is stored at. |
+| **Regularisation** | 0.05 | The Tikhonov regularisation of the inverse. |
+
+: Source Estimate's options. {#tbl-sourceestimate}
+
+A stored estimate is reused only when every one of these settings, the
+montage and the data themselves match what the later analysis needs, so they
+should be the same for every subject. The dialog shows the space the node
+will take, which for a fine mesh and a long window is much larger than a
+typical node.
+
+![The N400 difference at 400 ms as a dSPM estimate on the template cortex, drawn as a magnitude (the **Signed** box unticked). The fit line reports how much of the scalp data the estimate reproduces.](images/sourceestimate-result.jpg){#fig-sourceestimate-result}

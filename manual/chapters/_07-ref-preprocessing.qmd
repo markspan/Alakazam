@@ -1,0 +1,533 @@
+# Reference: preprocessing {#sec-ref-preprocessing}
+
+This chapter and the four after it describe every transformation, one
+section each, in a fixed order: what the step does and on what grounds, its
+options with their defaults, the dialog, a result where the result has a
+view of its own, and notes on its limits. Each section opens with a line
+giving the ribbon path, the formats it accepts and returns, and its internal
+name, which is the name a template or an exported script uses.
+
+The transformations of **Tools > 1. Preprocessing** are described here in
+the order in which they are usually applied rather than in the ribbon's
+alphabetical order: first the channels and events, then the signal, then
+derived quantities, and last the two steps that work on epochs and averages.
+
+## ChannelEditor {#sec-tr-channeleditor}
+
+*Tools > 1. Preprocessing > ChannelEditor · any format → the same ·
+`ChannelEditor`*
+
+Edits the channel labels, types and positions. Only the channel description
+changes; the data are untouched. This is what scalp maps, interpolation, ICA
+and the source estimates depend on, so it is the step to reach for when a
+recording arrives with the wrong labels, with no positions, or with a
+montage that is not the 10-20 system.
+
+![**ChannelEditor**: one row per channel with its label, type and Cartesian coordinates. **Look up locations** fills the coordinates by label from the chosen template.](images/channeleditor-dialog.png){#fig-channeleditor-dialog}
+
+| Control | Effect |
+|-----------------|-------------------------------------------------------|
+| Table | Edit a channel's **Label**, **Type** and **X**, **Y**, **Z** directly. |
+| **Template** | The electrode template **Look up locations** reads: the standard 10-5 positions [@oostenveld2001], or any montage file placed in `src/Electrodes` (an equidistant cap is included). |
+| **Look up locations** | Fill every channel's coordinates from the template, matching by label. |
+| **Load montage** | Read positions from a channel-location file instead. |
+
+: ChannelEditor's controls. {#tbl-channeleditor}
+
+The edited channel description is stored, and on replay it is merged onto
+the other recording by label, so a correction made on one subject applies to
+every subject with the same channels.
+
+## EventEditor {#sec-tr-eventeditor}
+
+*Tools > 1. Preprocessing > EventEditor · continuous or epoched → the same ·
+`EventEditor`*
+
+Corrects the event table: renames codes, removes the codes that are not
+stimuli, shifts latencies to correct a known delay, and fixes single events
+by hand. Doing this inside the tree, rather than in another program before
+import, keeps the correction in the record of the analysis and in an
+exported script.
+
+![**EventEditor**: the event table on the left, the list of corrections on the right. A correction in the list replays on every dataset; a hand edit in the table belongs to this recording.](images/eventeditor-dialog.png){#fig-eventeditor-dialog}
+
+| Correction | Effect |
+|-----------------------|-------------------------------------------|
+| **Rename** *code* **to** *code* | Every event of one type becomes another. |
+| **Types** > **Delete** | Remove every event of the chosen types. |
+| **Types** > **Keep only** | Remove every event not of the chosen types. |
+| **Shift** *types* by *n* **ms** | Move the chosen events (or all) in time. |
+| a cell of the table | Change one event's type or latency. |
+
+: EventEditor's corrections, applied in the order listed. {#tbl-eventeditor}
+
+What is stored is the list of **operations**, not the resulting table.
+Replayed onto another recording, "rename 112 to 121, then shift every 121 by
+-16 ms" applies the same correction to that recording's own events, which is
+what a trigger fault (a property of the recording set-up) calls for. A shift
+is stored in milliseconds and converted with each recording's own sampling
+rate. A hand edit is stored with the event's original type and latency, and
+is applied on replay only to an event that still matches them.
+
+**Export table** writes the event table to a file.
+
+Not recalculable: the dialog opens on the dataset's own events.
+
+## Photodiode {#sec-tr-photodiode}
+
+*Tools > 1. Preprocessing > Photodiode · continuous → the same ·
+`Photodiode`*
+
+A photodiode taped over a patch that changes with the stimulus records when
+the display actually changed. This step reads that channel and does one of
+two things: **Measure** (the default) pairs each light onset with the
+trigger that preceded it and reports the delay, changing nothing; **Events**
+adds the onsets to the event table, as EEGLAB's `pop_chanevent` does, each
+named after its trigger with a suffix.
+
+Measuring is the more useful of the two. A display adds a delay between the
+trigger and the change on the screen, typically of one or more frames, which
+shifts every latency in the study by the same amount, and only a photodiode
+can tell how large it is. The median delay is the value to correct by, with
+EventEditor's latency shift (@sec-tr-eventeditor), since a dropped frame
+moves the mean but hardly the median. The report gives the number of pairs,
+the median, interquartile range and range of the delay, for all triggers and
+per trigger code.
+
+![**Photodiode** on a RIFT recording. The diode here follows a 60 Hz flicker rather than a patch that turns on and off, and after smoothing the signal has no two distinct states, so the step reports that, instead of reporting onsets.](images/photodiode-dialog.png){#fig-photodiode-dialog}
+
+### Detecting onsets
+
+Finding a step in a diode signal is easy; not finding one where there is
+none is the difficult part. A diode channel with no patch still swings at the
+mains frequency, and a plain threshold turns that into fifty onsets a second.
+Detection therefore has three stages:
+
+1. The signal is **smoothed** with a moving average (25 ms by default), long
+   enough to remove 50 and 60 Hz flicker while leaving a sustained change of
+   level nearly intact.
+2. The smoothed signal is **tested for two states**: split at the midpoint of
+   its range, the distance between the two halves' means, divided by the sum
+   of their standard deviations, must be at least 3. A signal without
+   patches is unimodal and fails the test, and the step then says so rather
+   than reporting onsets. A threshold set by hand overrides the test.
+3. **Onsets** are the crossings of a level a quarter of the way up the
+   range, kept when the high state lasts at least **Min high** and the onset
+   is at least **Min gap** after the previous one. Each is paired with the
+   last trigger (of the listed codes, or any) within **Max lag** before it,
+   or up to 5 ms after it, for a trigger sent at the moment of the display
+   change rather than before it.
+
+| Option | Default | Meaning |
+|----------------|-------|-------------------------------------------------------|
+| **Channel** | | The photodiode channel. |
+| **Threshold** | auto | The detection level; a number overrides the automatic level and the two-state test. |
+| **Triggers** | all | The event codes an onset may be paired with. |
+| **Edge** | Rising | Whether light onset is a rising or a falling edge on this rig. |
+| **Onset** | Foot | Time the onset at the foot of the edge, or at half height. |
+| **Smooth** | 25 ms | The moving-average window. |
+| **Min high** | 20 ms | How long the high state must last. |
+| **Min gap** | 100 ms | The least time between two onsets. |
+| **Max lag** | 200 ms | How far before an onset its trigger may be. |
+| **Measure** / **Events** | Measure | Report the delay, or add the onsets as events. |
+| **Suffix** | PD | Appended to the trigger's code to name an added onset event. |
+
+: Photodiode's options. {#tbl-photodiode}
+
+Not recalculable: the dialog opens on the dataset's own signal.
+
+## Eye tracking {#sec-tr-eyetracking}
+
+*Tools > 1. Preprocessing > EyeTracking · continuous → continuous ·
+`EyeTracking`*
+
+Joins the EyeLink recording of the same session onto the EEG, using EYE-EEG
+[@dimigen2011]: the tracker's clock is aligned with the EEG's through the
+triggers both received, its gaze and pupil signals are added as channels of
+type `EYE` (which nothing treats as scalp EEG), and its saccades, fixations
+and blinks are added as events. Those events can then be binned like any
+other (fixation-related potentials) and modelled as covariates in
+deconvolution (@sec-deconvolution).
+
+The eye-tracking file is found by name: `subject1.set` goes with
+`subject1.asc` beside it, which is what lets one set of options be replayed
+on every subject. When only an `.edf` is present and SR Research's
+`edf2asc` is installed, it is converted first.
+
+![**Eye tracking** on EYE-EEG's reading example: the triggers found in the tracker's messages and in the EEG, the codes in both, and the columns to import.](images/eyetracking-dialog.png){#fig-eyetracking-dialog}
+
+| Option | Default | Meaning |
+|-------------------------------------------------------|---------|-------------------------------------------------------|
+| **Message keyword** | blank | The keyword of the EyeLink messages that carry the triggers (`MYKEYWORD 123`); blank reads the parallel-port input lines instead. |
+| **Start trigger**, **End trigger** | automatic | The codes the alignment is anchored on (the first of the one, the last of the other); automatic takes the first and last code both recordings share. |
+| **Import the tracker's own saccades, fixations and blinks** | on | Add them as events. |
+| **Filter at Nyquist when resampling** | off | EYE-EEG's own option, and its default. |
+| **Fewest shared triggers** | 10 | Refuse a join with fewer. |
+| **Least % within one sample** | 90 | Refuse a join in which fewer of the shared triggers end up within one sample of their partner. |
+| **Search radius** | 4 samples | How far either side of an EEG trigger to look for its partner (EYE-EEG's default). |
+| **Columns to import** | all | The tracker's columns to add as channels, by name. |
+
+: Eye tracking's options. {#tbl-eyetracking}
+
+A poor synchronisation is silent: every event lands a little away from the
+EEG it belongs to, and nothing downstream can tell. The join is therefore
+checked. EYE-EEG returns the dataset unchanged when it finds no shared
+triggers, and that is refused; its record of how far each shared trigger
+landed from its partner is summarised and refused below the two limits
+above; and the summary is kept, so that the data-quality report states the
+synchronisation for every subject (@sec-data-quality).
+
+![The reading example after the join: the gaze and pupil channels (`L-GAZE-X` to `R-AREA`) below the EEG.](images/eyetracking-result.jpg){#fig-eyetracking-result}
+
+## Resample {#sec-tr-resample}
+
+*Tools > 1. Preprocessing > Resample · continuous → continuous ·
+`Resample`*
+
+Changes the sampling rate with EEGLAB's `pop_resample`, which applies an
+anti-aliasing filter before decimating. Event latencies are rescaled with the
+data. Resampling is refused on epoched data: it belongs before segmentation,
+where every later step inherits the new rate.
+
+![**Resample**. The field is prefilled with 256 Hz for faster recordings, and half the current rate otherwise.](images/resample-dialog.png){#fig-resample-dialog}
+
+| Option | Default | Meaning |
+|-----------------|-------------------------------------------------|-------------|
+| **New sampling rate** | 256 Hz, or half the current rate if that is lower | The new rate. |
+
+: Resample's option. {#tbl-resample}
+
+## Filter {#sec-tr-filter}
+
+*Tools > 1. Preprocessing > Filter · any time-domain format → the same ·
+`Filter`*
+
+High-pass, low-pass and notch filtering with a zero-phase, linear-phase FIR
+filter: a windowed sinc with a Kaiser window, designed and applied by
+EEGLAB's `firfilt` plugin [@widmann2015]. Each filter is specified by two
+numbers only, a frequency and an attenuation; the order, the transition band
+and the window follow from them. The filter is applied with its group delay
+compensated, so it shifts no latency, and it does not filter across the
+boundaries of a discontinuous recording.
+
+![**Filter**, as the N400 template uses it: a 0.1 Hz high-pass at 40 dB.](images/filter-dialog.png){#fig-filter-dialog}
+
+| Option | Default | Meaning |
+|--------------------|------------------|-------------------------------------------------------|
+| **High-pass** | off; 0.1 Hz, 40 dB | Remove frequencies below the cutoff. |
+| **Low-pass** | off; 30 Hz, 40 dB | Remove frequencies above the cutoff. |
+| **Notch** | off; 50 Hz, 40 dB | Remove a narrow band around the frequency (line noise). |
+| **Per-channel settings** | off | Give each channel its own three filters; channels are matched by label on replay. |
+
+: Filter's options. The attenuation is the stopband attenuation in dB. {#tbl-filter}
+
+### The design
+
+The cutoff is the frequency at which the response is -6 dB, the centre of
+the transition band, which is how `firfilt` defines it [@widmann2015]. The
+transition band is chosen from the cutoff *f*:
+
+- **high-pass**: 0.25*f*, but at least 1 Hz, and at most 0.9*f*;
+- **low-pass**: 0.25*f*, but at least 2 Hz, and at most 90% of the distance
+  to the Nyquist frequency;
+- **notch**: a stop band of *f* ± 1 Hz, with 1 Hz transitions.
+
+The ripple follows from the attenuation *A*: the stopband deviation is
+10^-A/20^, and the Kaiser window's order and $\beta$ are computed from it and the
+transition band. @tbl-filter-design shows what that means at 250 Hz and
+40 dB.
+
+| Filter | Transition band | Pass from | Stop at | Order | Length |
+|-----------------|---------------|-------------------------|---------------|------|------|
+| high-pass 0.05 Hz | 0.045 Hz | 0.073 Hz | 0.028 Hz | 12 384 | 49.5 s |
+| high-pass 0.1 Hz | 0.09 Hz | 0.145 Hz | 0.055 Hz | 6 194 | 24.8 s |
+| high-pass 0.5 Hz | 0.45 Hz | 0.725 Hz | 0.275 Hz | 1 240 | 5.0 s |
+| high-pass 1 Hz | 0.9 Hz | 1.45 Hz | 0.55 Hz | 622 | 2.5 s |
+| low-pass 20 Hz | 5 Hz | 17.5 Hz | 22.5 Hz | 114 | 0.46 s |
+| low-pass 30 Hz | 7.5 Hz | 26.25 Hz | 33.75 Hz | 76 | 0.31 s |
+| notch 50 Hz | 1 Hz | below 48.5, above 51.5 Hz | 49.5 to 50.5 Hz | 560 | 2.2 s |
+
+: The filters Alakazam designs at 250 Hz and 40 dB stopband attenuation. {#tbl-filter-design}
+
+Two consequences follow. First, a low high-pass cutoff needs a very long
+filter: at 0.1 Hz, 25 seconds. **Filter the continuous recording, before
+epoching**; on data shorter than the filter, the step refuses and says so.
+Second, for high-pass cutoffs below about 1 Hz the transition band is 90% of
+the cutoff, so the passband begins well above the nominal frequency.
+
+### Choosing the cutoffs
+
+High-pass filtering is the step most capable of creating effects that are
+not in the data: a cutoff that is too high attenuates and distorts slow
+components and can produce deflections of opposite polarity before and after
+them [@tanner2015; @acunzo2012]. A high-pass of about 0.1 Hz and, where one
+is wanted, a low-pass of about 30 Hz are the usual starting point for
+cognitive ERPs [@luckApplied]. @zhang2024a give a principled way to choose
+cutoffs for a given component and measure, trading the standardised
+measurement error against waveform distortion, and @zhang2024b apply it to
+the seven ERP CORE components; their recommendations are the best current
+basis for a choice. Peak measures are more sensitive to high-frequency noise
+than mean amplitudes, and so benefit more from a low-pass. A notch filter is
+rarely needed after a 30 Hz low-pass.
+
+## DC-Detrend {#sec-tr-dcdetrend}
+
+*Tools > 1. Preprocessing > DC-Detrend · continuous or epoched → the same ·
+`DCDetrend`*
+
+Removes a slow drift from each channel by fitting a low-order polynomial and
+subtracting it: per trial on epoched data, over the whole recording on
+continuous data. Order 0 removes the mean, order 1 a linear drift and order 2
+a slow curvature, such as an electrode settling.
+
+![**DC-Detrend**, fitting a robust linear trend on the prestimulus interval only.](images/dcdetrend-dialog.png){#fig-dcdetrend-dialog}
+
+| Option | Default | Meaning |
+|--------------------|-------------------|-------------------------------------------------------|
+| **Channels** | all | The channels to detrend. |
+| **Polynomial order** | 1 (linear) | 0 (mean), 1 (linear) or 2 (quadratic). |
+| **Fitting method** | Least squares | Or **Robust (Huber)**. |
+| **Fit over** start, stop | 0 to 0 (everything) | The interval, in ms, over which the trend is **estimated**. It is always subtracted from the whole epoch. |
+
+: DC-Detrend's options. {#tbl-dcdetrend}
+
+The usual two-interval detrend (BrainVision Analyzer's, for instance) runs a
+line through the means of a start and an end interval. This one differs in
+four respects:
+
+- **It fits every sample in the fitting range**, so one blink in the end
+  interval no longer tilts the whole trend.
+- **The fitting range and the subtraction range are separate.** Fitting
+  across the evoked response lets the response pull on the trend, so that
+  the drift estimate absorbs part of the signal being measured. Fitting on
+  the prestimulus interval, perhaps with a late tail, and extrapolating
+  across the response avoids that.
+- **A robust fit is offered**: iteratively reweighted least squares with
+  Huber's weights [@huber1964] (tuning constant 1.345, scale from the median
+  absolute deviation, five iterations), so that a large transient counts
+  like a moderate one.
+- **Rejected samples are left out of the fit** and stay rejected. A channel
+  with too few samples left to determine the fit is left untouched, and the
+  count is reported.
+
+## ReRef {#sec-tr-reref}
+
+*Tools > 1. Preprocessing > ReRef · any time-domain format → the same ·
+`ReRef`*
+
+Re-references the data to the average of all channels, or to the mean of
+chosen channels, with EEGLAB's `pop_reref`.
+
+![**ReRef**, re-referencing the ERP CORE N400 recording to the average of the mastoid-adjacent sites P9 and P10.](images/reref-dialog.png){#fig-reref-dialog}
+
+| Option | Default | Meaning |
+|-----------------------------------------|-------|-------------------------------------------------------|
+| **Reference** | Average | **Average** of all channels, or **Specific channels**. |
+| **Reference channel(s)** | | For specific channels: the channels whose mean is the new reference. |
+| **Exclude from reference** | none | Channels left out of the reference and left unchanged (an EOG or a photodiode channel). |
+| **Keep the reference channel(s) in the data** | off | Keep the reference channels, which are flat zero for a single reference and not for a mean of several. |
+| **Reconstruct implicit reference channel** | off | Add back the channel the data were recorded against (below). |
+
+: ReRef's options. {#tbl-reref}
+
+Channels are stored by label, so a stored reference replays on recordings
+whose channels differ in order.
+
+**The implicit reference.** Many amplifiers record against one active
+electrode, often a mastoid or Cz, whose own signal is not saved because it is
+zero relative to itself. Re-referencing recovers it: if *w* is the waveform
+subtracted from every channel, then the old reference, which read zero,
+reads -*w* after re-referencing. Alakazam reads *w* back from a channel that
+was re-referenced, rather than recomputing it, so the reconstruction is
+right for any reference and any exclusions. The channel is inserted next to
+its nearest neighbour on the 10-5 template.
+
+With an **average** reference, the reconstructed channel is not part of the
+average, which is taken over the recorded channels only. For an average
+reference that includes the original reference site, run ReRef twice:
+first to any reference with the implicit channel reconstructed, then to the
+average.
+
+The choice of reference changes the shape of every waveform and map, and
+should follow the literature on the component studied, so that results can
+be compared [@luckApplied; @kappenman2021]. An average reference assumes
+dense and even coverage of the head, which a 32-channel cap only
+approximates [@dien1998].
+
+## Interpolate {#sec-tr-interpolate}
+
+*Tools > 1. Preprocessing > Interpolate · continuous or epoched → the same ·
+`Interpolate`*
+
+Rebuilds bad channels from the good channels around them, over the whole
+recording, with EEGLAB's `pop_interp`. The number of channels does not
+change. For channels that are bad in some trials only, use the **interpolate**
+action of ArtefactDetect or ManualReject instead (@sec-ref-artefacts).
+
+![**Interpolate**: the method, and the channels to rebuild.](images/interpolate-dialog.png){#fig-interpolate-dialog}
+
+| Option | Default | Meaning |
+|-----------------------|----------------|-------------------------------------------------------|
+| **Method** | Spherical spline | **Spherical spline** [@perrin1989], **Inverse distance**, or EEGLAB's **spacetime** method. |
+| **Channels to interpolate** | none | The bad channels. Stored by label. |
+
+: Interpolate's options. {#tbl-interpolate}
+
+Interpolation needs electrode positions (@sec-formats). An interpolated
+channel carries no information of its own, which reduces the rank of the
+data by one per channel: take this into account before ICA, and do not count
+an interpolated channel as an independent observation in a statistical test.
+
+## SelectData {#sec-tr-selectdata}
+
+*Tools > 1. Preprocessing > SelectData · continuous or epoched → the same ·
+`SelectData`*
+
+Keeps or removes channels, a time range, a range of samples, or trials,
+with EEGLAB's `pop_select`. Each of the four can be set to **Keep**,
+**Remove**, or left off.
+
+![**SelectData**: channels from a list, time in seconds, points in samples, and trials by index.](images/selectdata-dialog.png){#fig-selectdata-dialog}
+
+| Option | Default | Meaning |
+|----------------|-------|-------------------------------------------------------|
+| **Channels** | off | Keep or remove the chosen channels. Stored by label. |
+| **Time (s)** | off | Keep or remove a time range, in seconds. |
+| **Points (samples)** | off | Keep or remove a range of samples. |
+| **Trials (indices)** | off | Keep or remove trials, written as MATLAB indices: `1:10, 15`. |
+
+: SelectData's options. {#tbl-selectdata}
+
+Selecting trials by index is tied to one recording's trial order; to select
+trials by condition, use bins (@sec-tr-definebins).
+
+## Derive Channels {#sec-tr-derivechannels}
+
+*Tools > 1. Preprocessing > Derive Channels · any time-domain format → the
+same · `DeriveChannels`*
+
+Adds channels computed from existing ones, one `let` statement per line:
+
+```
+let LRP      = C3 - C4
+let midline  = (Fz + Cz + Pz) / 3
+let RMSfront = sqrt((Fz*Fz + Cz*Cz) / 2)
+```
+
+The grammar is small and is parsed, never evaluated as MATLAB: `+ - * /` on
+channels and numbers, unary minus, parentheses, `abs()` and `sqrt()`, and `%`
+for a comment. The arithmetic is elementwise, so the step runs on continuous,
+epoched and averaged data alike.
+
+![**Derive Channels** on the ERP CORE LRP epochs, adding `C34 = C4 - C3`, the lateral motor pair; C4 is contralateral to a left-hand response.](images/derivechannels-dialog.png){#fig-derivechannels-dialog}
+
+Channel arithmetic and bin arithmetic are different operations, as in
+ERPLAB: a bin says which events go into an average (`bin 3 = bin 1 - bin 2`,
+in DefineBins), a derived channel says how to combine the channels of each
+of them. A derived channel has type `derived` and no scalp position: it is
+drawn in the waveform view and carried into grand averages, but left out of
+scalp maps.
+
+![The derived channel `C34` in the response-locked LRP average: before a left-hand response (blue) C4 turns negative relative to C3, before a right-hand response (red) positive, and the LRP bin (teal), half their difference, is the contralateral-minus-ipsilateral negativity.](images/derivechannels-result.jpg){#fig-derivechannels-result}
+
+ERP Measure has a field for `let` statements too (@sec-tr-measure). Each of
+the two replaces every derived channel when it runs, which is what makes a
+recalculation or a replay idempotent, so use one place or the other: derive
+here and leave Measure's field empty.
+
+## Rectify {#sec-tr-rectify}
+
+*Tools > 1. Preprocessing > Rectify · any time-domain format → the same ·
+`Rectify`*
+
+Replaces the chosen channels with their magnitude or their square: the
+rectification step of an EMG-envelope analysis (rectify, smooth, measure).
+
+![**Rectify**: the channels, and the mode.](images/rectify-dialog.png){#fig-rectify-dialog}
+
+| Option | Default | Meaning |
+|--------|---------|-------------------------------------------------------|
+| **Channels** | | The channels to rectify; required. |
+| **Mode** | Full wave | **Full wave** (\|*x*\|), **Half wave** (negative values set to zero) or **Squared** (*x*^2^, in µV^2^). |
+
+: Rectify's options. {#tbl-rectify}
+
+Rectification does not commute with averaging. Rectifying single trials and
+averaging them gives a positive envelope whose baseline sits above zero,
+because it accumulates the magnitude of the noise; rectifying an average
+measures only the magnitude of the evoked response. For the squared mode the
+two orders have names: the average of squares is **total** power, including
+activity that is not phase-locked, and the square of the average is
+**evoked** power. Both orders are legitimate, and the step records with the
+dataset which channels it rectified, which order applied and, for the
+squared mode, the change of unit. Rejected samples stay rejected.
+
+## Baseline {#sec-tr-baseline}
+
+*Tools > 1. Preprocessing > Baseline · epoched → epoched · `Baseline`*
+
+Subtracts from every trial and channel the mean of a baseline interval.
+
+![**Baseline**: the interval, in ms relative to the time-locking event.](images/baseline-dialog.png){#fig-baseline-dialog}
+
+| Option | Default | Meaning |
+|------|-------|-------------------------------|
+| **Start** | -100 ms | Start of the baseline interval. |
+| **Stop** | 0 ms | End of the baseline interval. |
+
+: Baseline's options. {#tbl-baseline}
+
+Baseline correction is linear and so commutes with averaging: correcting
+the trials and then averaging gives the same waveform as averaging and then
+correcting [@luckOrder]. It is applied to the trials here, so that
+threshold-based artefact detection, which follows it, tests amplitudes
+relative to the baseline. An interval of 100 to 200 ms before the event is
+usual; a longer interval reduces noise in the correction, provided nothing
+event-related falls within it [@luckApplied].
+
+## Collapse Hemispheres {#sec-tr-collapsehemispheres}
+
+*Tools > 1. Preprocessing > Collapse Hemispheres · averaged → averaged ·
+`CollapseHemispheres`*
+
+Produces the contralateral and ipsilateral waveforms of a lateralised
+component, the N2pc [@luck1994; @eimer1996] or the LRP [@coles1989],
+collapsed across every pair of lateral electrodes at once. Each bin is marked
+by the side of its stimulus (or the hand that responded), and two bins are
+added:
+
+$$
+\text{contra} = \tfrac12\left(\bar L_{\text{right el.}} + \bar R_{\text{left el.}}\right),
+\qquad
+\text{ipsi} = \tfrac12\left(\bar L_{\text{left el.}} + \bar R_{\text{right el.}}\right)
+$$
+
+where $\bar L$ and $\bar R$ are the averages of the left-side and right-side
+bins. Each side is averaged before the two are combined, so the sides weigh
+equally however many bins each has; with one bin a side this is ERPLAB's
+expression.
+
+![**Collapse Hemispheres** on an ERP CORE N2pc average: the left-target and right-target bins marked by side, the difference bin ignored, and the electrode pairs found by geometry.](images/collapse-dialog.png){#fig-collapsehemispheres-dialog}
+
+| Option | Default | Meaning |
+|------------------|------------|-------------------------------------------------------|
+| **Side** of each bin | ignore | **Left**, **Right**, or **ignore**. |
+| **Pair electrodes by** | auto | **geometry** (mirroring positions through the midline), **labels** (10-20 odd and even numbers, or an L/R letter), or **auto**, geometry when positions exist. |
+| **Name the new bins** | Contra, Ipsi | The labels of the two added bins. |
+
+: Collapse Hemispheres' options. {#tbl-collapsehemispheres}
+
+The collapsed waveform of each pair is written to **both** of its electrodes,
+so that the new bins have the same channels as the old ones: the Contra bin
+at PO7 and at PO8 is the same contralateral waveform, scalp maps still draw,
+and a measurement window defined on PO7 keeps working. Midline and unpaired
+electrodes carry the plain mean of the two sides. Standard errors are
+propagated as for any combination bin (@sec-tr-average).
+
+![The N2pc of one ERP CORE subject at PO7: the contralateral waveform (orange) runs more negative than the ipsilateral one (black) from about 200 to 300 ms.](images/collapse-result.jpg){#fig-collapsehemispheres-result}
+
+The contra-minus-ipsi **difference** alone can also be had without side
+assignments, by combining Derive Channels (`let C34 = C4 - C3`) with a
+difference bin (`bin 3 = 0.5 bin 1 - 0.5 bin 2`), which agrees with ERPLAB
+to within 10^-14^ µV. What that route cannot give is contra and ipsi
+separately, or every pair at once.

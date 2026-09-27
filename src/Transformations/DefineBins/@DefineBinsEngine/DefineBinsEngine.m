@@ -37,6 +37,7 @@ classdef DefineBinsEngine
         checkComboReferences(bins)
         bin = parseBinStatement(stmt, script, aliases)
         [name, node] = parseLetStatement(stmt, aliases)
+        win = parseEpochStatement(stmt)
         combo = parseCombo(T, binIndex, label)
         [iv, k] = scanRtWindow(T, k, binIndex)
         [rel, k] = parseTimelock(T, kStart, aliases, binIndex)

@@ -124,9 +124,53 @@ classdef ViewFocusTest < matlab.unittest.TestCase
             testCase.verifyEqual(narrow.Channel, 4, ...
                 'The remembered label must be resolved in the new montage.');
         end
+
+        function aSpectralViewAdoptsARememberedBin(testCase)
+        %ASPECTRALVIEWADOPTSAREMEMBEREDBIN  The spectral view used to take
+        %   the channel from the focus but not the bin, so the next node
+        %   opened on the first condition while every other view kept the
+        %   one being looked at. The bin is matched by label, like the
+        %   channel, since two nodes need not order their bins alike.
+            [view, fig] = testCase.spectralView({'Oz', 'O1'}, {'RIFT 64Hz', 'SSVEP 30Hz', 'RIFT 60Hz'});
+            closeFig = onCleanup(@() delete(fig)); %#ok<NASGU>
+
+            view.applyFocus(struct('Channel', 'O1', 'Bin', 'RIFT 60Hz'));
+
+            testCase.verifyEqual(view.Channel, 2);
+            testCase.verifyEqual(view.CurrentBin, 3);
+            reported = view.currentFocus();
+            testCase.verifyEqual(reported.Bin, 'RIFT 60Hz', ...
+                'What the view reports back must be the condition it shows.');
+        end
+
+        function aBinTheSpectralViewLacksLeavesItAlone(testCase)
+            [view, fig] = testCase.spectralView({'Oz'}, {'A', 'B'});
+            closeFig = onCleanup(@() delete(fig)); %#ok<NASGU>
+
+            view.applyFocus(struct('Channel', 'Oz', 'Bin', 'C'));
+
+            testCase.verifyEqual(view.CurrentBin, 1);
+        end
     end
 
     methods (Access = private)
+        function [view, fig] = spectralView(testCase, labels, bins)
+        %SPECTRALVIEW  A real SpectralMeasureView over a spectrum with LABELS
+        %   as channels and BINS as conditions, and no measurement markers.
+            eeg = struct();
+            eeg.srate = 1000;
+            eeg.chanlocs = struct('labels', labels);
+            eeg.specFreqs = 0:0.5:100;
+            eeg.spectrum = rand(numel(labels), numel(eeg.specFreqs), numel(bins));
+            eeg.spectralMeasures = {};
+            eeg.bindesc = struct('label', bins, 'index', num2cell(1:numel(bins)));
+
+            fig = uifigure('Visible', 'off');
+            tab = uitab(uitabgroup(fig));
+            view = SpectralMeasureView(tab, eeg);
+            testCase.assertNotEmpty(view);
+        end
+
         function [view, fig] = averageView(testCase, labels)
         %AVERAGEVIEW  A real AverageView over a dataset with LABELS.
             eeg = makeTestEEG('nbchan', numel(labels), 'labels', labels, 'trials', 1);

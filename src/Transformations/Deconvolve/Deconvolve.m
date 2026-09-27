@@ -169,7 +169,7 @@ function EEG = applyBins(EEG, options)
         Unfold.binModel(EEG);   % no script and no tags: says which is missing
         return;
     end
-    EEG = DefineBins(EEG, struct('script', script));
+    EEG = DefineBins(EEG, struct('script', script, 'tagsOnly', true));
 end
 
 % ======================================================================= %

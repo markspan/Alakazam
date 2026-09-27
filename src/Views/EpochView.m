@@ -306,6 +306,12 @@ classdef EpochView < AlakazamView
             this.HeatImage.XData = this.Times;
             this.HeatImage.YData = 1:nRows;
             this.HeatImage.CData = ordered;
+            % A rejected sample is NaN, which an image otherwise draws in the
+            % colour scale's lowest colour: a rejected trial looked like a
+            % trial at the most negative voltage. Transparent, it shows as a
+            % gap in the axes' own background instead.
+            this.HeatImage.AlphaData = double(~isnan(ordered));
+            this.HeatImage.AlphaDataMapping = 'none';
             group = this.ChannelGroup{this.Channel};
             lim = this.GroupColorLimit(group);
             this.HeatAxes.CLim = [-lim, lim];

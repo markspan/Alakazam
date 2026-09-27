@@ -1,0 +1,81 @@
+# Installation {#sec-installation}
+
+## Requirements
+
+Alakazam runs in MATLAB on Windows, macOS and Linux. It needs:
+
+- **MATLAB** with `uifigure` support (the interface is built entirely on that
+  component family), a recent release;
+- the **Signal Processing Toolbox**, used by the filters and the taper windows
+  of the spectral transformations;
+- the **Statistics and Machine Learning Toolbox**, used by EEGLAB and some of
+  its plugins;
+- **EEGLAB** [@delorme2004], which Alakazam initialises for itself when it is
+  not already on the path, leaving the saved MATLAB path unchanged.
+
+The **Parallel Computing Toolbox** is advised but not required. Three things
+use it, and each runs serially without it, only more slowly: **Apply to All
+Raw Files** processes several recordings at once (on nine RIFT recordings,
+215 s on three workers against 364 s one at a time); cluster statistics split
+their permutations across workers; and GEDAI uses a GPU when one is present.
+The workers are local processes, so no cluster or MATLAB Parallel Server is
+involved.
+
+For the statistical reports, **Quarto** and **R** are needed (see
+@sec-statistics). Quarto is bundled with RStudio; the R packages a report uses
+are installed by the report itself the first time it renders. Without them
+the report's source and its data are still written, and can be rendered later.
+
+## Toolboxes installed on first use
+
+Several methods rely on toolboxes that are not bundled with Alakazam. Each is
+downloaded the first time a transformation needs it, after a dialog that
+names the toolbox, its licence and its size and asks for consent. Each is
+pinned to a specific version, so that a result can be reproduced on another
+machine later.
+
+| Toolbox | Used by | Version | Licence |
+|---------------------|------------------------------------|--------|----------------------------|
+| ICLabel, bva-io | AutoICA, ICA; BrainVision import | current | EEGLAB plugins |
+| FastICA [@hyvarinen2000] | AutoICA, when present | 2.5 | GPL |
+| GEDAI [@ros2025] | AutoGEDAI | 1.7 | PolyForm Noncommercial 1.0.0 |
+| FieldTrip [@oostenveld2011] | source estimates, cluster statistics | 20260812 | GPL |
+| Unfold [@ehinger2019] | Deconvolve | 1.3.1 | GPL |
+| EYE-EEG [@dimigen2011] | EyeTracking | 1.01 | GPL |
+
+: Toolboxes Alakazam installs when first needed. {#tbl-toolboxes}
+
+GEDAI's licence allows personal and noncommercial research use only;
+commercial use needs a separate licence from its authors.
+
+## Getting Alakazam
+
+Either clone the repository or download a packaged release from
+[the releases page](https://github.com/markspan/Alakazam/releases). A release
+is the same source tree with this manual already built for the **Help**
+button; a clone builds it on the first press of **Help**, which needs Quarto.
+
+## Starting it
+
+From the repository root, in MATLAB:
+
+```matlab
+startAlakazam
+```
+
+`startAlakazam` adds Alakazam's source folder to the path and opens the
+application, which then adds the toolkits it needs. At startup it checks for
+the Signal Processing and Statistics toolboxes and warns, without stopping,
+if either is missing.
+
+To start with a particular workspace rather than the default one, name it:
+
+```matlab
+startAlakazam('MyStudy.wksp')
+```
+
+## Updating
+
+The **Update** button on the **Alakazam** tab checks for a newer release.
+When there is one it downloads it, and the new version takes over the next
+time `startAlakazam` runs. A git clone is not updated this way; use git.

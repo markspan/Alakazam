@@ -20,9 +20,12 @@ define **derived channels** with `let` statements (e.g. `let LRP = C3 - C4`) and
 measure those like any electrode; see
 [Derived channels](#derived-channels-let-statements).
 
-`Measure` runs on an **averaged** dataset only: a subject `Average` or a
-`Grand Average`. Run `Average` (or Grand Average, for a group waveform) first;
-on anything else `Measure` reports that it needs an averaged ERP and stops.
+`Measure` runs on an **averaged** dataset (a subject `Average` or a `Grand
+Average`), where every window yields one value per bin, or on an **epoched**
+one, where the same windows yield one value per trial (stored as
+`EEG.trialMeasurements`), for the single-trial models of the statistical
+report. On anything else it reports that it needs an averaged ERP or epochs,
+and stops.
 
 This document builds the window table up one column at a time, with examples,
 then covers what comes out and how to reuse a set of windows. For a one-screen
@@ -135,9 +138,11 @@ P3 peak 250    500   Peak     Positive  Pz
 N2      200    350   Peak     Negative  FCz, Cz
 ```
 
-The peak is the **single most extreme sample** in the window: there is no
-local-maximum or centroid search. Keep the window tight enough that its
-extreme really is the component you mean, not the shoulder of an adjacent one.
+With **Local pts** at 0 the peak is the **single most extreme sample** in
+the window; a positive value asks for a local peak instead (see
+[More measures](#more-measures)). Either way, keep the window tight enough
+that its extreme really is the component you mean, not the shoulder of an
+adjacent one.
 
 ## 5. Area
 
@@ -451,8 +456,8 @@ describes the error on a specific score, so it is reported per window and per
 measure type rather than once per recording. See
 [Data quality](../../../README.MD#data-quality).
 
-To get the numbers into a statistics package, use the **ERP** export button
-on the ribbon's **Measurements** tab. It walks the whole workspace, every
+To get the numbers into a statistics package, use the **ERP & Report**
+button on the ribbon's **Export/Report** tab. It walks the whole workspace, every
 subject branch and every Grand Average that carries a `Measure` result, and
 writes one long-format, R-friendly CSV: one row per
 dataset × window × bin × channel × measure type.

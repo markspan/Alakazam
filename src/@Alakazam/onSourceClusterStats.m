@@ -14,10 +14,11 @@ function onSourceClusterStats(this)
 %   report is markdown only). And the figures are rendered in MATLAB before
 %   the report is assembled, because the report links to them rather than
 %   drawing them itself.
-    [candidateFiles, candidateLabels, candidateKinds] = this.findGrandAverageCandidates();
+    [candidateFiles, candidateLabels, candidateKinds, candidateIncluded] = this.findGrandAverageCandidates();
     erpMask = strcmp(candidateKinds, 'ERP');
     candidateFiles  = candidateFiles(erpMask);
     candidateLabels = candidateLabels(erpMask);
+    candidateIncluded = candidateIncluded(erpMask);
 
     if numel(candidateFiles) < 2
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
@@ -34,7 +35,7 @@ function onSourceClusterStats(this)
     % The epoch is read here, not in the dialog, so the time window can
     % default to the data rather than to a number someone once typed.
     spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBins, ...
-        candidateGroups, 'source', this.candidateEpochMs(candidateFiles));
+        candidateGroups, 'source', this.candidateEpochMs(candidateFiles), candidateIncluded);
     if isempty(spec)
         return; % cancelled
     end

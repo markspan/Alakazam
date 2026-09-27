@@ -228,7 +228,7 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 
     q.byWindowChannel = windowSME(epoched, windows, bins, labels, nChan);
 
-    q.provenance = provenanceRows(epoched, nChan, nTrials);
+    q.provenance = provenanceRows(epoched, nChan, nTrials, averaged);
 
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
@@ -431,7 +431,7 @@ function labels = channelLabels(EEG, nChan)
     end
 end
 
-function rows = provenanceRows(EEG, nChan, nTrials)
+function rows = provenanceRows(EEG, nChan, nTrials, averaged)
 %PROVENANCEROWS  What each cleaning step in this branch actually did, one
 %   row per step per item. See blankProvenanceRow for the column list.
 %
@@ -571,6 +571,78 @@ function rows = provenanceRows(EEG, nChan, nTrials)
         row.enova_channel_max  = vecMax(fieldOrEmpty(g, 'ENOVA_per_channel'));
         row.n_excluded         = numel(fieldOrEmpty(g, 'excludedChannels'));
         rows(end + 1) = row; %#ok<AGROW>
+    end
+
+    % --- transformation: rectification ------------------------------------ %
+    % Read from the AVERAGE when there is one: Rectify may have run after
+    % averaging, and the record travels down the chain, so the average
+    % carries it whichever side of Average the step ran on.
+    if nargin < 4
+        averaged = [];
+    end
+    rect = rectifyRow(averaged, blankProvenanceRow('', '', NaN, NaN));
+    if isempty(rect)
+        rect = rectifyRow(EEG, blankProvenanceRow('', '', NaN, NaN));
+    end
+    if ~isempty(rect)
+        rows(end + 1) = rect;
+    end
+end
+
+function row = rectifyRow(EEG, template)
+%RECTIFYROW  What Rectify did, from its record on EEG (etc.alz.rectified,
+%   rectifyMode, rectifiedBeforeAveraging), or [] when there is none.
+%
+%   A rectified channel is no longer a signed voltage, and nothing in the
+%   numbers says so: which channels, which mode and which side of averaging
+%   are exactly the facts a reader of the results needs and cannot recover.
+%   The order has names for the squared mode (total power from squared
+%   single trials, evoked power from a squared average), so it is spelled
+%   out there, with the change of unit.
+    row = [];
+    if isempty(EEG) || ~isstruct(EEG)
+        return;
+    end
+    alz = alzStruct(EEG);
+    if ~isfield(alz, 'rectified') || ~islogical(alz.rectified) || ~any(alz.rectified(:))
+        return;
+    end
+    mask = reshape(alz.rectified, 1, []);
+    labels = channelLabels(EEG, numel(mask));
+
+    modes = struct('full', 'full wave (|x|)', 'half', 'half wave (negatives to zero)', ...
+        'squared', 'squared (x^2)');
+    mode = char(string(fieldOrEmpty(alz, 'rectifyMode')));
+    if isfield(modes, mode)
+        item = modes.(mode);
+    else
+        item = 'rectified';
+    end
+
+    row = template;
+    row.step    = 'Rectify';
+    row.item    = item;
+    row.n       = nnz(mask);
+    row.n_total = numel(mask);
+    row.pct     = pct(row.n, row.n_total);
+    before = fieldOrEmpty(alz, 'rectifiedBeforeAveraging');
+    if isempty(before)
+        row.scope = '';
+    elseif logical(before)
+        row.scope = 'single trials, before averaging';
+    else
+        row.scope = 'the average';
+    end
+    row.detail = strjoin(labels(mask), ', ');
+    if strcmp(mode, 'squared')
+        if isempty(before)
+            power = '';
+        elseif logical(before)
+            power = ', total power';
+        else
+            power = ', evoked power';
+        end
+        row.detail = sprintf('%s; unit uV^2%s', row.detail, power);
     end
 end
 

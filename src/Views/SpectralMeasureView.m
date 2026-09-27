@@ -157,31 +157,53 @@ classdef SpectralMeasureView < AlakazamView
 
     methods
         function focus = currentFocus(this)
-        %CURRENTFOCUS  The channel this view is showing, by label.
-        %   See ViewFocus for why the label rather than the index.
+        %CURRENTFOCUS  The channel and the bin this view is showing, by
+        %   label. See ViewFocus for why the label rather than the index.
             focus = struct();
-            if isempty(this.EEG) || ~isfield(this.EEG, 'chanlocs') || ...
-                    this.Channel < 1 || this.Channel > numel(this.EEG.chanlocs)
+            if isempty(this.EEG)
                 return;
             end
-            focus.Channel = char(string(this.EEG.chanlocs(this.Channel).labels));
+            if isfield(this.EEG, 'chanlocs') && this.Channel >= 1 && ...
+                    this.Channel <= numel(this.EEG.chanlocs)
+                focus.Channel = char(string(this.EEG.chanlocs(this.Channel).labels));
+            end
+            if isfield(this.EEG, 'bindesc') && numel(this.EEG.bindesc) >= this.CurrentBin
+                focus.Bin = binLabel(this.EEG, this.CurrentBin);
+            end
         end
 
         function applyFocus(this, focus)
-        %APPLYFOCUS  Show FOCUS.Channel if this dataset has it.
-        %   A label this montage does not carry leaves the view on its own
-        %   default, which is the ordinary case when moving between
-        %   datasets with different channel sets.
-            if ~isstruct(focus) || ~isfield(focus, 'Channel') || isempty(this.EEG) || ...
-                    ~isfield(this.EEG, 'chanlocs') || isempty(this.EEG.chanlocs)
+        %APPLYFOCUS  Show FOCUS.Channel and FOCUS.Bin where this dataset has
+        %   them. A label it does not carry leaves that part of the view on
+        %   its own default, the ordinary case when moving between datasets
+        %   with different channels or conditions. The bin used to be left
+        %   out, so stepping to the next node reset the view to the first
+        %   condition while the other views kept theirs.
+            if ~isstruct(focus) || isempty(this.EEG)
                 return;
             end
-            idx = ViewFocus.indexOfLabel({this.EEG.chanlocs.labels}, focus.Channel);
-            if isempty(idx) || idx == this.Channel
-                return;
+            changed = false;
+            if isfield(focus, 'Channel') && isfield(this.EEG, 'chanlocs') && ...
+                    ~isempty(this.EEG.chanlocs)
+                idx = ViewFocus.indexOfLabel({this.EEG.chanlocs.labels}, focus.Channel);
+                if ~isempty(idx) && idx ~= this.Channel
+                    this.Channel = idx;
+                    changed = true;
+                end
             end
-            this.Channel = idx;
-            this.redraw();
+            if isfield(focus, 'Bin') && isfield(this.EEG, 'bindesc') && ...
+                    ~isempty(this.EEG.bindesc)
+                labels = arrayfun(@(b) binLabel(this.EEG, b), 1:numel(this.EEG.bindesc), ...
+                    'UniformOutput', false);
+                k = ViewFocus.indexOfLabel(labels, focus.Bin);
+                if ~isempty(k) && k <= size(this.EEG.spectrum, 3) && k ~= this.CurrentBin
+                    this.CurrentBin = k;
+                    changed = true;
+                end
+            end
+            if changed
+                this.redraw();
+            end
         end
     end
 end

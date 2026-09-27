@@ -275,34 +275,52 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
             TransTools.progressbar(bi / total);
             continue;
         end
+        % REJECTED TRIALS ARE LEFT OUT. Rejection writes NaN and leaves the
+        % trial in its bin, and one NaN sample makes a trial's whole
+        % transform NaN, which summed into the spectra made the channel's
+        % coherence NaN everywhere. A trial counts for a channel only where
+        % both it and the reference are intact, and the reference power in
+        % that channel's denominator runs over the same trials as its cross
+        % spectrum, or the ratio would no longer be a coherence.
         estimable = numel(trials) >= 2;
         Sxy = zeros(nChan, nF, nTime);
         Sxx = zeros(nChan, nF, nTime);
+        SyyCh = zeros(nChan, nF, nTime);
+        nUsed = zeros(nChan, 1);
         Syy = zeros(nF, nTime);
+        nRef = 0;
         for tr = trials(:)'
+            if ~all(isfinite(input.data(refIdx, :, tr)))
+                continue;
+            end
             R = analytic(input.data(refIdx, :, tr));
             Syy = Syy + abs(R).^2;
+            nRef = nRef + 1;
             if ~estimable
                 continue;
             end
             for ch = 1:nChan
-                if ch == refIdx; continue; end
+                if ch == refIdx || ~all(isfinite(input.data(ch, :, tr))); continue; end
                 X = analytic(input.data(ch, :, tr));
                 Sxy(ch, :, :) = squeeze(Sxy(ch, :, :)) + X .* conj(R);
                 Sxx(ch, :, :) = squeeze(Sxx(ch, :, :)) + abs(X).^2;
+                SyyCh(ch, :, :) = squeeze(SyyCh(ch, :, :)) + abs(R).^2;
+                nUsed(ch) = nUsed(ch) + 1;
             end
         end
         if estimable
             for ch = 1:nChan
-                if ch == refIdx; continue; end
+                if ch == refIdx || nUsed(ch) < 2; continue; end
                 num = abs(squeeze(Sxy(ch, :, :))).^2;
-                den = squeeze(Sxx(ch, :, :)) .* Syy;
+                den = squeeze(Sxx(ch, :, :)) .* squeeze(SyyCh(ch, :, :));
                 c = num ./ den;
                 c(den == 0) = NaN;
                 coh(ch, :, :, b) = c;
             end
         end
-        refPower(:, :, b) = Syy / numel(trials);
+        if nRef > 0
+            refPower(:, :, b) = Syy / nRef;
+        end
         TransTools.progressbar(bi / total);
     end
     if isempty(binsToDo)

@@ -59,9 +59,12 @@ function settings = TransformOptionsDialog(varargin)
     end
 
     headerHeight = 40;
+    % The description gets the lines its text needs. It used to get two
+    % whatever it said, so a longer one (Artefact detection, Covariance,
+    % Rectify) stopped mid-sentence.
     descHeight = 0;
     if strlength(string(description)) > 0
-        descHeight = 36;
+        descHeight = 12 + 17 * descriptionLines(description);
     end
     fieldsHeight = sum(cell2mat(rowHeight)) + (nRows - 1) * 8 + 16;
     buttonHeight = 46;
@@ -171,6 +174,14 @@ function settings = TransformOptionsDialog(varargin)
         % anything but onOK) -- nothing to do beyond closing the window.
         delete(fig);
     end
+end
+
+function n = descriptionLines(text)
+%DESCRIPTIONLINES  How many lines the description wraps to in this dialog's
+%   width: about 55 characters a line at the label's 388 pixels, each
+%   paragraph starting a line of its own.
+    paragraphs = strsplit(char(string(text)), newline);
+    n = sum(max(1, ceil(cellfun(@numel, paragraphs) / 55)));
 end
 
 function tf = isMultiSelect(default)

@@ -1,0 +1,77 @@
+# Grand averages {#sec-grand-averages}
+
+A grand average combines several subjects' averages into one waveform per
+bin. It is not a transformation of any one recording, so it does not hang
+under one: grand averages have their own tree, and their own ribbon tab.
+
+## Defining a grand average
+
+**Grand Average > Group Averages > Define Grand** opens a dialog listing
+every dataset in the workspace that can be combined.
+
+![**Define Grand**: a name, the type of result to combine, the weighting, and the subjects to include.](images/ga-define.png){#fig-ga-define}
+
+| Field | Default | Meaning |
+|----------------------|----------------------|-------------------------------------------------------|
+| **Name** | | The grand average's label in the tree and in every export. |
+| **Type** | the first type present | **ERP waveforms** (Average or Deconvolve results), **Time-frequency maps** or **Coherence maps**. One grand average combines datasets of one type; the list shows that type's datasets only. |
+| **Weighting** | Unweighted | ERP waveforms only (below). |
+| **Include these subjects** | none | The datasets to combine. |
+
+: The fields of **Define Grand**. {#tbl-ga-define}
+
+The subjects must agree: the same number of channels and samples, and the
+same set of bin labels. Bins are matched by label, not by position, so a
+subject whose bins were defined in a different order combines correctly,
+and one missing a bin is reported rather than combined with the wrong one.
+The list shows every recording's datasets, including recordings taken out of
+the study under **Grouping** (@sec-design); leave those unticked, or use
+**Per Design Cell** below, which leaves them out.
+
+### Weighting
+
+- **Unweighted** (the default, and the usual ERP convention): every subject
+  counts equally, however many trials it kept.
+- **Weighted**: the mean is weighted by each subject's trial count, as in
+  ERPLAB's weighted grand average, so that a subject with more trials counts
+  more. A combination bin has no trial count of its own and falls back to
+  equal weights.
+
+Either way, the standard error drawn around each waveform is the
+across-subject standard error of the mean, the standard deviation of the
+subjects' averages divided by $\sqrt{N}$: it describes how much subjects
+vary, which does not depend on how the mean was weighted. The unweighted
+mean is the right default for inference, since the subject, not the trial,
+is the unit of observation.
+
+![A grand average of the ten ERP CORE N400 subjects at Pz: the four conditions and the N400 difference bin, each with its across-subject standard error.](images/ga-view.jpg){#fig-ga-view}
+
+A grand average is drawn like any average (@sec-plot-area), and every
+averaged-data step applies to it: ERP Measure, Scalp, Brain (3D), Derive
+Channels, Collapse Hemispheres.
+
+## One grand average per design cell
+
+**Grand Average > Group Averages > Per Design Cell** builds one grand
+average for every cell of the design declared under **Grouping** (for
+instance, one per group), named after its cell and recording the cell it
+came from. It is the quick way to the waveforms of a between-subjects
+comparison, and it replaces picking the right files out of a list once per
+group. Existing grand averages are kept: a cell whose name matches one
+already in the tree gets a new node rather than replacing it.
+
+## Exporting grand averages
+
+**Grand Average > Group Averages > Export Grand** writes every grand average
+in the workspace to one long-format CSV, with a row per grand average, bin,
+channel and sample:
+
+```
+grand_average,bin,channel,time_ms,amplitude,sem,n_subjects
+GA all,Target unrelated,Pz,400,-2.31,0.58,10
+```
+
+This is the shape R's `read.csv` and `ggplot2` expect without reshaping, for
+instance `ggplot(df, aes(time_ms, amplitude, colour = bin)) + geom_line() +
+facet_wrap(~channel)`. The statistical reports use the same file to draw the
+waveforms behind their numbers (@sec-statistics).

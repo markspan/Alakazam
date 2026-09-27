@@ -71,12 +71,12 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     aSME  = nan(nchan, nbin);   % analytic standardized measurement error, per channel/bin
     for b = 1:nbin
         idx = TransTools.BinTrials(input, b);
-        EEG.bindesc(b).n = numel(idx);
+        EEG.bindesc(b).n = keptTrials(input.data(:, :, idx));
         if isempty(idx)
             continue;
         end
         data(:, :, b)  = mean(input.data(:, :, idx), 3, 'omitnan');
-        stErr(:, :, b) = std(input.data(:, :, idx), 0, 3, 'omitnan') / sqrt(numel(idx));
+        stErr(:, :, b) = standardError(input.data(:, :, idx));
         aSME(:, b)     = windowedSME(input.data(:, :, idx));
     end
 
@@ -130,9 +130,35 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
 else
     % No bins: average across every trial.
     EEG.data  = mean(input.data, 3, 'omitnan');
-    EEG.stErr = std(input.data, 0, 3, 'omitnan') / sqrt(ntrials);
+    EEG.stErr = standardError(input.data);
     EEG.aSME  = windowedSME(input.data);
 end
+end
+
+function n = keptTrials(trials)
+%KEPTTRIALS  How many trials of a bin went into its average: those not
+%   rejected as a whole epoch (every sample NaN). This is the count the
+%   legend shows, averagedToErpset exports as ERPLAB's accepted trials, and
+%   a weighted grand average weights by; it used to count the rejected
+%   trials too. A trial rejected on some channels only still counts, since
+%   the other channels' averages include it.
+    if isempty(trials)
+        n = 0;
+        return;
+    end
+    n = nnz(any(~isnan(reshape(trials, [], size(trials, 3))), 1));
+end
+
+function se = standardError(trials)
+%STANDARDERROR  Standard error of the mean across trials, per channel and
+%   sample. The divisor is the number of trials that were KEPT there, not the
+%   number in the bin: rejection writes NaN and leaves the trial in place
+%   (ArtefactDetect, ManualReject), so dividing by every trial in the bin
+%   made the band too narrow by sqrt(kept/total) -- 13% at a quarter of the
+%   trials rejected -- while std itself already left the NaNs out. With
+%   one channel rejected in one trial, that channel's count drops and no
+%   other's does. erpScoreSME counts the same way.
+    se = std(trials, 0, 3, 'omitnan') ./ sqrt(sum(~isnan(trials), 3));
 end
 
 function sme = windowedSME(trials)
@@ -142,13 +168,12 @@ function sme = windowedSME(trials)
 %   This is the SME ERPLAB reports for a mean-amplitude score, here summarised
 %   over the full epoch (the per-time-point counterpart is EEG.stErr, the
 %   shaded band in AverageView). TRIALS is channels x time x trials.
-    n = size(trials, 3);
-    if n < 2
-        sme = nan(size(trials, 1), 1);
-        return;
-    end
     % reshape, not squeeze: with one channel, squeeze turns channels x 1 x
     % trials into a trials x 1 column, and the SME came out one per trial.
     perTrialMean = reshape(mean(trials, 2, 'omitnan'), size(trials, 1), []);   % channels x trials
-    sme = std(perTrialMean, 0, 2, 'omitnan') / sqrt(n);
+    % n counts the trials KEPT on each channel (a rejected trial's mean is
+    % NaN), for the reason standardError gives.
+    n = sum(~isnan(perTrialMean), 2);
+    sme = std(perTrialMean, 0, 2, 'omitnan') ./ sqrt(n);
+    sme(n < 2) = NaN;
 end

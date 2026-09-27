@@ -9,10 +9,11 @@ function onClusterStats(this)
 %   generateXReport + renderQuartoReport + persistReportNode" flow
 %   onExportMeasurements/onExportSpectral already use) with plots of
 %   where/when each cluster sits.
-    [candidateFiles, candidateLabels, candidateKinds] = this.findGrandAverageCandidates();
+    [candidateFiles, candidateLabels, candidateKinds, candidateIncluded] = this.findGrandAverageCandidates();
     erpMask = strcmp(candidateKinds, 'ERP');
     candidateFiles  = candidateFiles(erpMask);
     candidateLabels = candidateLabels(erpMask);
+    candidateIncluded = candidateIncluded(erpMask);
 
     if numel(candidateFiles) < 2
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
@@ -26,7 +27,8 @@ function onClusterStats(this)
     candidateBins   = this.candidateBinLabels(candidateFiles);
     candidateGroups = this.candidateGroupLabels(candidateFiles);
 
-    spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBins, candidateGroups);
+    spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBins, candidateGroups, ...
+        'scalp', [], candidateIncluded);
     if isempty(spec)
         return; % cancelled
     end

@@ -1,0 +1,130 @@
+# Introduction {#sec-introduction}
+
+Alakazam is an interactive MATLAB workbench for the analysis of EEG and
+event-related potentials (ERPs). It loads a recording, lets the researcher
+apply a sequence of processing steps to it, and keeps the whole processing
+history as an explorable tree rather than as the one-off result of a script.
+Every step can be inspected, revised, replayed on other recordings, and
+written out as code.
+
+It is built on EEGLAB's `EEG` data structure [@delorme2004], so every
+intermediate result can be handed to EEGLAB, ERPLAB [@lopezcalderon2014] or
+FieldTrip [@oostenveld2011] unchanged, and its methods follow established
+practice for ERP research as described by @luck2014, in Luck's open textbook
+[@luckApplied] and in the field's publication guidelines [@keil2014;
+@pernet2020].
+
+![The main window: the ribbon along the top, the three trees on the left (here one recording and the branch the N400 template built from it) and the selected Average node's waveforms at CPz on the right.](images/ui-main.jpg){#fig-main}
+
+## What it does
+
+The analyses Alakazam supports, and where this manual describes each:
+
+- **The ERP pipeline**: filtering, re-referencing, artefact correction and
+  rejection, epoching by a small language for describing conditions,
+  baseline correction, averaging, and measurement of amplitudes, areas and
+  latencies (@sec-ref-preprocessing to @sec-ref-plots).
+- **Statistics**: design-aware reports that choose the test the design calls
+  for, from paired *t*-tests to linear mixed models with Bayes factors
+  (@sec-statistics), and cluster-based permutation tests over the scalp or
+  the cortical surface (@sec-cluster-statistics).
+- **Data quality**: per-subject and per-condition trial loss, noise, the
+  standardised measurement error and the dependability of each score
+  (@sec-data-quality).
+- **Frequency tagging** and steady-state responses: power, signal-to-noise
+  ratio, phase-locking and coherence to a photodiode, time-resolved coherence
+  maps and spatial filters (@sec-frequency-tagging).
+- **Overlapping responses**: regression-based deconvolution for designs in
+  which one event's response overlaps the next, such as free viewing,
+  reading or fast presentation (@sec-deconvolution), and co-registration
+  with an eye tracker.
+- **Source estimation** on a template cortex, with the limits of what such an
+  estimate can show stated alongside it (@sec-source-estimation).
+- **Reproducibility**: templates that replay a pipeline on new recordings,
+  and export of the whole analysis as a runnable MATLAB script
+  (@sec-reproducibility).
+
+## Principles
+
+A few decisions run through the whole application, and knowing them makes
+its behaviour predictable.
+
+**The raw data is never modified.** Each recording is a root in the tree.
+Every processing step produces a new node beneath the node it was applied
+to, and its result is written to a cache folder, never to the folder that
+holds the recordings.
+
+**Every result knows how it was made.** A node records the transformation
+that produced it and the exact options it used. That record is what lets a
+step be revised (**Recalculate**), replayed on another recording (drag and
+drop, **Apply to All Raw Files**), saved as a template, and written out as
+code. Steps that change what the numbers mean without changing how they
+look, such as interpolating a channel or removing ICA components, also
+record what they did, so that the data-quality report can show it.
+
+**The tree branches.** A second preprocessing choice does not replace the
+first; it becomes a second branch from the same node, and the two results
+can be compared side by side. Robustness to a preprocessing choice is
+something to be checked rather than assumed [@luckgaspelin2017].
+
+**Numbers are shown with the signal they came from.** The statistical
+reports draw the waveforms and spectra behind every measurement, with the
+measurement window marked, so that a window over the wrong peak or a
+component that is not there cannot hide behind a well-formed test.
+
+**Library calls where they are faithful.** Where EEGLAB, FieldTrip or another
+established toolbox implements a method, Alakazam calls it rather than
+reimplementing it, and says so; where it implements a method itself, the
+method and its validation are described (see the provenance notes in each
+transformation's section).
+
+## Who this manual is for
+
+The manual assumes a reader who knows what an ERP is, what a filter does to
+one and why trials are averaged, and who wants to know precisely what each
+step in Alakazam computes, with which defaults, and on what methodological
+grounds. It does not assume any familiarity with MATLAB programming; the
+chapter on reproducibility is the only one that shows code.
+
+Conventions used throughout:
+
+- Interface elements are in **bold**: a ribbon tab, a button, a field.
+- A path such as **Tools > 1. Preprocessing > Filter** names a ribbon tab,
+  a group on it, and a button in the group.
+- Transformations are named by their ribbon label; where the internal name
+  differs (the one a template or an exported script uses), both are given
+  once, in the transformation's own section.
+- Times are in milliseconds relative to the time-locking event, and voltages
+  in microvolts, unless stated otherwise.
+
+## The data in this manual
+
+Every figure in this manual was made by Alakazam itself from openly
+available recordings, regenerated by a script that drives the application
+(see the developer guide). The datasets are:
+
+- **ERP CORE** [@kappenman2021]: the N400, LRP, N2pc and MMN experiments, as
+  distributed with Luck's textbook [@luckApplied].
+- **Rapid invisible frequency tagging (RIFT)** recordings with a photodiode
+  [@dimigen2025].
+- **Ehinger and Dimigen's face data**: one participant of a face
+  discrimination task with involuntary saccades and button presses
+  [@ehinger2019].
+- **EYE-EEG's reading data**: natural sentence reading with a co-registered
+  eye tracker [@dimigen2011].
+
+The recordings are not part of the Alakazam repository; `DATA.md` there
+says where to obtain each.
+
+## Citing Alakazam and the methods it runs
+
+When a publication reports an analysis made with Alakazam, cite the
+software and, more importantly, the methods the analysis used: EEGLAB
+[@delorme2004] for the data structure and the preprocessing functions it
+wraps, and the specific methods named in each transformation's section of
+this manual (for instance ICLabel [@piontonachini2019] for automatic
+component classification, the Unfold toolbox [@ehinger2019] for
+deconvolution, or FieldTrip [@oostenveld2011] for cluster statistics and
+source estimates). **Export as Code** (@sec-export-code) writes the complete
+pipeline with the options actually used, which is the most precise methods
+description available.

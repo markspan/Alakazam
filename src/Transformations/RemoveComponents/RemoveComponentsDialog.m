@@ -139,7 +139,10 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
     %   concatenates its trials first -- more data, a better-resolved
     %   estimate, and a component's spectral shape does not depend on trial
     %   boundaries the way its time course does).
-        act = squeeze(icaact(ic, :, :));   % pnts x trials (or a plain pnts x 1 vector when continuous)
+        % pnts x trials, and pnts x 1 when continuous. Not squeeze: a
+        % continuous 1 x pnts x 1 slice squeezes to a 1 x pnts ROW, whose
+        % first column is a single sample, so the preview drew one point.
+        act = reshape(icaact(ic, :, :), size(icaact, 2), []);
         try
             snippet = act(:, 1);
             nShow   = min(numel(snippet), round(10 * srate));

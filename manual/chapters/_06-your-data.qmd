@@ -1,0 +1,123 @@
+# Your data and your design {#sec-your-data}
+
+This chapter covers what Alakazam reads, how a workspace is set up and
+cleaned, and how the design of a study (groups, persons and sessions) is
+declared so that grand averages and the statistical reports can use it.
+
+## File formats {#sec-formats}
+
+Every file directly inside the raw folder becomes a root node. The format is
+recognised by its extension:
+
+| Extension | Format | Arrives as | Notes |
+|------------------------|-------------------|---------------------|-------------------------------------------------------|
+| `.set` (with `.fdt`) | EEGLAB dataset | continuous or epoched | Read with EEGLAB's `pop_loadset`. |
+| `.vhdr` (with `.eeg`, `.vmrk`) | BrainVision | continuous | Read with the bva-io plugin, installed on first use. |
+| `.erp` | ERPLAB erpset | averaged | Read directly, without ERPLAB; a root at the ERP stage, so only ERP-domain steps apply. |
+| `.mat` | an Alakazam dataset | as saved | A dataset saved by Alakazam or exported from its cache. |
+
+: File formats read from the raw folder. {#tbl-file-formats}
+
+The first time a recording is opened, it is read and its imported copy
+written to the cache; later openings read the copy, unless the raw file has
+become newer, in which case it is read again. An EyeLink file (`.asc`, or
+`.edf` when SR Research's converter is installed) is not a recording in its
+own right: it lies beside the recording it belongs to and is joined onto it
+by the eye-tracking step (@sec-tr-eyetracking).
+
+### What Alakazam expects of a recording
+
+- **Channel labels.** Interpolation, ICA and the source estimates need
+  electrode positions. When a recording carries positions they are used as
+  they are; when it carries only labels, positions are looked up in the 10-5
+  template by label. Scalp maps always place a channel by its label on the
+  10-5 template, so a channel whose label is not a 10-5 name is left out of
+  them. **ChannelEditor** (@sec-tr-channeleditor) sets or corrects labels and
+  positions.
+- **Channel types.** A channel is taken to be peripheral rather than scalp
+  EEG when its type, or failing a type its label, says so: `EOG`, `HEOG`,
+  `VEOG`, `ECG`, `EMG`, `EYE`, a photodiode, a trigger channel and similar.
+  Peripheral channels do not set the colour range of scalp maps, have their
+  own colour range in the ERP image, are excluded by the "scalp EEG only"
+  choices of artefact detection, and are left out of ICA.
+- **Event codes.** DefineBins reads the event `type` field. Numeric codes and
+  strings (`S 12`, `stim/face`) both work; the bin language matches them with
+  wildcards (@sec-tr-definebins).
+
+## Setting up a workspace
+
+A workspace is set up with **Edit WorkSpace** (@fig-workspace-editor), or
+by writing its `.wksp` file directly (@sec-workspaces). Changing the raw
+folder rescans it and rebuilds the tree at once. **Save WorkSpace** records
+the folders together with the last options of every transformation and the
+design; **Open WorkSpace** restores all three.
+
+A cache folder can be shared by several workspaces: each recording's results
+live in a subfolder named after it, and a workspace touches only its own
+recordings' subfolders.
+
+## Cleaning a workspace {#sec-clear}
+
+**Clear WorkSpace** asks for one of two levels:
+
+- **Normal** removes every transformation result of every recording in the
+  workspace, and every grand average built only from them, but keeps each
+  recording's imported copy, so reopening a recording stays quick. This is
+  the one to use before rerunning a revised pipeline.
+- **Deep** also removes the imported copies, so that every recording is read
+  again from its raw file.
+
+Either way the raw recordings are left alone, as are other workspaces'
+recordings in a shared cache. The operation cannot be undone.
+
+**Clear Other** keeps one recording's branch (the selected root) and removes
+every other recording's results: the usual step before replaying a revised
+pipeline from the recording it was developed on.
+
+## Declaring the design {#sec-design}
+
+A workspace starts as a within-subjects design: every recording is a
+different subject, and every bin a condition measured in each. Anything else
+is declared in **Alakazam > Design > Grouping** (@fig-grouping), which has
+one row per recording:
+
+| Column | Default | Meaning |
+|---------|-------------------------------------------------------|-------------------------------------------------------|
+| **Person ID** | the part of the file name that differs between recordings | Recordings with the same Person ID are one person measured more than once. |
+| **Session** | blank | A label for the repeated measurement: `Pre`, `Post`, `Day 1`. |
+| **Group** | blank | A between-subjects group: `patient`, `control`. Blank means no group. |
+| **In study** | ticked | Unticked takes the recording out of every grand average, report and statistic, and lists it wherever the design is shown. |
+
+: The columns of **Grouping**. {#tbl-grouping}
+
+![**Grouping**: one row per recording, with its person, session, group and whether it is in the study.](images/ga-grouping.png){#fig-grouping}
+
+The Person ID default is found by removing from every file name the parts
+common to all of them (an experiment name, a suffix such as
+`_preprocessed`), since those cannot tell subjects apart.
+
+What each column changes in the statistics:
+
+- The random effects of the mixed models are grouped by **Person ID**, so a
+  person recorded twice counts once.
+- **Session** becomes a within-subjects factor, crossed with bin, when the
+  recordings support one: at least two session labels, at least two people
+  measured in more than one session, and no empty cell. When they do not,
+  the report fits the simpler model and says why.
+- **Group** turns each test into its between-subjects or mixed counterpart
+  as soon as two different labels are in use (@sec-statistics).
+
+Group and session assignments are kept for the session only until **Save
+WorkSpace** writes them.
+
+### Checking the design before analysing
+
+**Alakazam > Design > Show Design** (@fig-show-design) shows the design as
+the statistics will read it: the number of recordings and people, each
+factor with its levels, and a table of cells with the subjects in each.
+Above them it lists what is wrong, before any statistic is run: an empty
+cell, markedly unbalanced cells, a person with recordings in more than one
+group or with a group on only some of them, two recordings of one person in
+the same session, and subjects left without a group once groups are in use.
+
+![**Show Design** for the ten N400 recordings: one within-subjects factor (bin), no sessions and no groups, and one cell with every subject in it.](images/ga-design.png){#fig-show-design}

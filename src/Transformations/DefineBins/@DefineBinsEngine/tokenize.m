@@ -1,7 +1,7 @@
 function toks = tokenize(s)
 %TOKENIZE  Lex a DefineBins script into a token stream.
 %#ok<*AGROW>
-    keywords = ["bin","let","rt","timelock","and","or","not", ...
+    keywords = ["bin","let","epoch","rt","timelock","and","or","not", ...
                 "next","prev","adjacent","any","within","ms","samples","events"];
     toks = struct('kind', {}, 'val', {}, 'pos', {}, 'len', {});
     i = 1; n = numel(s);

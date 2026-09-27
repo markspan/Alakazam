@@ -177,6 +177,23 @@ if (nrow(ged) > 0) {
 ```
 
 ```{r}
+#| label: provenance-rectify-table
+#| results: asis
+rec <- prov %>% filter(step == "Rectify")
+if (nrow(rec) > 0) {
+  cat("\n\n### Channels rectified\n\n")
+  cat("Rectification replaces a signal with its magnitude (full wave), keeps its positive half (half wave), or squares it. The result is no longer a signed voltage, and nothing in the numbers says so. Nor does it commute with averaging: rectifying single trials and then averaging accumulates the magnitude of the noise, so the baseline sits above zero, whereas rectifying the average measures the evoked response alone; for the squared mode the two are total and evoked power. Which channels, which mode and which side of averaging are therefore stated here, since none of them can be recovered from the data.\n\n")
+  tab <- rec %>%
+    mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.0f%%", pct))) %>%
+    select(Subject = dataset, Mode = item, `Channels rectified` = n,
+           `of channels` = n_total, Share = share, `Applied to` = scope,
+           `Which ones` = detail) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "Channels Rectified"))))
+}
+```
+
+```{r}
 #| label: provenance-nothing
 #| results: asis
 if (nrow(prov) == 0) {

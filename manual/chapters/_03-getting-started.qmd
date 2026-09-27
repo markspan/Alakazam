@@ -1,0 +1,175 @@
+# Getting started {#sec-getting-started}
+
+This chapter is a guided first session. By the end of it you will have
+loaded a recording, filtered it, cut it into epochs, averaged it, done the
+same for everybody else in your sample, and produced a report: a whole
+study's analysis in outline. The first time it takes about twenty minutes.
+
+If you would rather see a finished pipeline for a specific paradigm, the
+worked examples in @sec-worked-examples give exact settings for P300, LRP,
+MMN and N400 designs, and @sec-deconvolution works through an overlap
+correction on published data. Come back here for the ideas they assume.
+
+## First, give your recordings a folder of their own
+
+Before you start, make a folder that contains your raw recordings **and
+nothing else**. Alakazam treats every file directly inside that folder as one
+recording and gives each a root node in its tree. Point it at a folder that
+also holds stimulus scripts, a spreadsheet and three drafts of a poster, and
+it will try to make sense of all of them; point it at a clean folder of
+twenty `.set` files and you get twenty subjects, in order.
+
+It reads EEGLAB `.set` files, BrainVision `.vhdr` files with their `.eeg` and
+`.vmrk` companions, ERPLAB erpsets (`.erp`, which arrive already averaged) and
+sessions Alakazam saved earlier (`.mat`). @sec-your-data describes each.
+
+A workspace is three folders:
+
+| Folder | What lives there | Who writes to it |
+|------------------------|----------------------------------------------|--------------------|
+| **Raw** | the recordings, as they came off the amplifier | you, once |
+| **Intermediate** (the cache) | every result Alakazam computes | Alakazam |
+| **Exports** | CSV files, reports and scripts you asked for | Alakazam, when asked |
+
+: The three folders of a workspace. {#tbl-folders}
+
+The separation is deliberate, and it is why you can experiment freely:
+results never land in the raw folder. A layout that works well:
+
+```
+MyExperiment/
+    raw/        <- point Alakazam here
+    cache/      <- the Intermediate folder; safe to delete, costs recomputation
+    exports/    <- CSVs and reports
+```
+
+## Launching, and the one question you will be asked
+
+Run `startAlakazam` from the repository root (@sec-installation). On a
+machine that has never run Alakazam there is no workspace yet, so a
+**Welcome** dialog asks for the raw data folder. The field starts blank and
+**OK** is refused until you have chosen one: a plausible-looking placeholder
+would be a worse start than an obviously empty box. The dialog is the same as
+**Edit WorkSpace** on the **Alakazam** tab (@fig-workspace-editor), so you
+already know where to change it when you move to another study.
+
+## What you are looking at
+
+The window has three regions (@fig-main).
+
+**Across the top, the ribbon.** Four tabs: **Alakazam** holds the workspace
+itself (opening, saving, editing it, the experimental design, settings, the
+view mode, help); **Tools** holds the analysis steps, grouped in the order an
+analysis proceeds; **Grand Average** combines subjects; **Export/Report**
+turns results into files and reports. @sec-interface describes each.
+
+**Down the left, three trees.** A **Data & Analyses** node belongs to exactly
+one recording. A **Grand Average** is made from many subjects, so nesting it
+under any one of them would misrepresent it; a **Report** can summarise the
+whole sample. Each therefore has its own tree, and the dividers between them
+can be dragged.
+
+**On the right, the plots.** One tab per open dataset. The **View** group on
+the **Alakazam** tab switches between **Tabs** (one at a time), **Grid** and
+**Stack** (all at once, for comparison), and a right-click on a tab can
+**Undock** it into a window of its own.
+
+## Opening a recording
+
+Click a root node in the **Data & Analyses** tree. A single click loads and
+draws it; a double click reloads it. Continuous data opens in a scrolling
+view with the events marked (@fig-continuous). Spend a minute here before
+doing anything else: check that the events are where you expect them, that
+no channel is flat, and whether there is drift you will want to filter.
+Alakazam will compute a clean-looking grand average from bad data, and the
+cheapest moment to catch bad data is now.
+
+![A continuous recording (ERP CORE N400, after a 0.1 Hz high-pass filter): channels stacked, events marked as vertical lines with their codes, and the zoom, pan and magnification sliders below.](images/ui-continuous.jpg){#fig-continuous}
+
+## Your first transformation
+
+With the recording selected, open **Tools > 1. Preprocessing > Filter**, set
+a high-pass filter and confirm. Two things happen, and both matter more than
+the filter does.
+
+First, **a new node appears beneath the recording**. The original file has
+not been touched and will not be. What you are building is a history: the raw
+recording at the root and each step hanging below the step it was applied to.
+
+Second, **the result is written to the Intermediate folder**. When you close
+Alakazam and open it again next week, the filtered dataset is still there,
+and clicking it is instant.
+
+## The tree branches, and that is the point
+
+Select the filtered node and run another transformation: it lands beneath
+that node. Now select the **raw** node again and run something else: a second
+branch grows from the root. You never choose between two preprocessing
+routes and lose one. Filter at 0.1 Hz on one branch and 0.5 Hz on the other,
+run both through to an average, and put the two side by side with **Grid**.
+Either the effect survives the choice, which is reassuring, or it does not,
+which is more important to know [@tanner2015].
+
+## Doing it again for everybody else
+
+Twenty subjects with six steps each would be a hundred and twenty dialogs.
+There are three ways out, in increasing order of ambition.
+
+**Drag a node onto another recording.** Alakazam replays that step, and every
+step below it, onto the other recording, including branches where the
+analysis forked. One drag can reproduce a whole pipeline. As a special case,
+dropping one averaged dataset onto another of the same shape overlays the two
+plots instead of transforming anything: the quickest way to compare two
+conditions or two subjects on the same axes.
+
+**Right-click a node and choose Apply to All Raw Files.** The same replay, to
+every recording in the workspace at once. With the Parallel Computing Toolbox
+several recordings are processed simultaneously, and their results appear as
+each finishes.
+
+**Right-click and Save Template**, then **Apply Template** later. The pipeline
+goes into a file, which is what you want when the next batch of subjects
+arrives, or when a colleague asks what exactly you did (@sec-reproducibility).
+
+## From continuous data to an ERP
+
+**Tools > 3. Epoching and Averaging** holds the step that turns event codes
+into conditions and cuts epochs around them, **DefineBins**
+(@sec-tr-definebins), and **Average** (@sec-tr-average). Along the way you
+will usually apply a **Baseline** correction and some artefact handling,
+either threshold-based rejection with **ArtefactDetect** or one of the
+correction methods in **2. Artifact Rejection / Reduction**.
+
+![The epochs DefineBins cut from the filtered N400 recording, as an ERP image at CPz: one row per trial, grouped by bin, with the average of all trials below.](images/definebins-result.jpg){#fig-first-epochs}
+
+The order of these steps matters, and in places it is a contested question
+rather than a matter of taste. The principle that settles most of it is
+Luck's: linear operations (filtering, re-referencing, baseline correction,
+averaging) commute and may be done in any order, whereas non-linear ones
+(artefact rejection, and correction by ICA) do not, and have to come where
+their input is what they assume it to be [@luckOrder]. The worked examples
+give a defensible order for each common paradigm.
+
+## Combining subjects, and getting numbers out
+
+Once several subjects have an average, the **Grand Average** tab combines them
+(@sec-grand-averages), and the result appears in its own tree. To get from
+waveforms to numbers, run **ERP Measure** (@sec-tr-measure) to say which
+windows, channels and measures you care about, then use **Export/Report >
+ERP & Report**. It writes a CSV and, beside it, a report that runs the test
+your design calls for rather than a generic one, with the results written out
+in prose (@sec-statistics).
+
+A rendered report gets a node in the **Reports** tree and opens inside the
+application. It carries its own copy of the CSV it was built from, so it stays
+reproducible even if you later overwrite the export.
+
+## Saving, and what "saved" means here
+
+Nothing about the workspace is written to disk automatically. **Save
+WorkSpace** on the **Alakazam** tab records your three folders, the last
+settings of every transformation you have run, and the design (groups,
+persons, sessions). Your *results* look after themselves: they are in the
+Intermediate folder as soon as they are computed. Deleting that folder costs
+computation time and nothing else, which is why **Clear WorkSpace** is safe
+to use when an analysis has become a tangle.

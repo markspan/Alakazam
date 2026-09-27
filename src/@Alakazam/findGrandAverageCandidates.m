@@ -1,4 +1,4 @@
-function [files, labels, kinds] = findGrandAverageCandidates(this)
+function [files, labels, kinds, included] = findGrandAverageCandidates(this)
 %FINDGRANDAVERAGECANDIDATES  Every grand-averageable dataset in the cache
 %   directory that is not itself a grand average -- the pool a grand average
 %   can be built from. Three kinds qualify: an Averaged ERP (.data), a
@@ -25,9 +25,17 @@ function [files, labels, kinds] = findGrandAverageCandidates(this)
 %   whose raw files are long gone. The tree holds exactly the datasets
 %   reachable from a raw recording that is actually in this workspace,
 %   which is the right definition of "available to grand-average".
-    files  = {};
-    labels = {};
-    kinds  = {};
+%
+%   INCLUDED says, per candidate, whether its recording is in the study
+%   (WorkSpace.includedFor, the Grouping dialog's "In study"). An excluded
+%   recording is still offered, since choosing one by hand is the user's
+%   decision, but its label starts with "(not in study)", and the cluster
+%   tests leave it unselected, so it is never combined without anyone
+%   having seen that it was taken out.
+    files    = {};
+    labels   = {};
+    kinds    = {};
+    included = false(1, 0);
     nodes = this.Workspace.Tree.allNodes();
     for i = 1:numel(nodes)
         file = nodes(i).UserData;
@@ -42,11 +50,12 @@ function [files, labels, kinds] = findGrandAverageCandidates(this)
         if isempty(tag) || isempty(info.bindescLabels)
             continue;
         end
+        recording = rootNameFor(this.Workspace.Tree, nodes(i));
+        inStudy = this.Workspace.includedFor(recording);
         files{end + 1}  = file; %#ok<AGROW>
-        labels{end + 1} = sprintf('%s: %s (%s)', ...
-            rootNameFor(this.Workspace.Tree, nodes(i)), info.id, ...
-            strjoin(info.bindescLabels, ', ')); %#ok<AGROW>
+        labels{end + 1} = candidateLabel(recording, info.id, info.bindescLabels, inStudy); %#ok<AGROW>
         kinds{end + 1}  = tag; %#ok<AGROW>
+        included(end + 1) = inStudy; %#ok<AGROW>
     end
 end
 
@@ -68,6 +77,15 @@ function name = rootNameFor(tree, node)
     end
     if isempty(name)
         name = node.Name;
+    end
+end
+
+function label = candidateLabel(recording, id, binLabels, inStudy)
+%CANDIDATELABEL  "<recording>: <node> (<bins>)", marked when the recording
+%   has been taken out of the study under Grouping.
+    label = sprintf('%s: %s (%s)', recording, id, strjoin(binLabels, ', '));
+    if ~inStudy
+        label = ['(not in study) ' label];
     end
 end
 

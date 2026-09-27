@@ -1,0 +1,114 @@
+# Glossary {#sec-glossary}
+
+**aSME**
+: The analytic standardised measurement error of the mean amplitude over
+  the whole epoch, computed by Average per channel and bin (@sec-tr-average).
+
+**Averaged (format)**
+: A dataset of channels × samples × bins, one waveform per bin: the output
+  of Average, Deconvolve and Grand Average (@tbl-formats).
+
+**Bin**
+: A condition: the events that belong together and the epochs cut around
+  them, defined in DefineBins' language (@sec-tr-definebins).
+
+**Branch**
+: A node and everything below it in the tree; what is replayed, templated or
+  deleted together.
+
+**Cache**
+: The workspace's Intermediate folder, holding every computed node
+  (@sec-nodes).
+
+**Cluster (statistics)**
+: A set of contiguous channel-time (or vertex-time) points above a threshold,
+  tested as a whole by permutation (@sec-cluster-statistics).
+
+**Coherence**
+: The magnitude-squared coherence between a channel and a reference across
+  trials: 1 when their phase relation is constant from trial to trial, near 0
+  when it is random.
+
+**Combination bin**
+: A bin defined as arithmetic on other bins' averages, such as a difference
+  wave; it has no trials of its own.
+
+**Continuous (format)**
+: A dataset of channels × samples, before segmentation.
+
+**Deconvolution**
+: The regression-based separation of overlapping responses to successive
+  events (@sec-deconvolution).
+
+**Dependability**
+: The reliability of a score in generalizability theory: the share of what
+  an average measures that reflects stable differences between people
+  (@sec-dependability).
+
+**Design**
+: Which recordings belong to which group, person and session, declared under
+  **Grouping** (@sec-design).
+
+**dSPM, eLORETA, sLORETA**
+: Distributed inverse methods for source estimation (@tbl-inverse-methods).
+
+**Epoched (format)**
+: A dataset of channels × samples × trials, cut around events.
+
+**ERSP**
+: Event-related spectral perturbation: the change in power over time and
+  frequency relative to a baseline, in decibels (@sec-tr-timefrequency).
+
+**Grand average**
+: The average of several subjects' averages, in its own tree
+  (@sec-grand-averages).
+
+**ITC**
+: Inter-trial phase coherence: how consistent the phase of a response is
+  across trials, between 0 and 1.
+
+**Node**
+: One dataset in the tree: a raw recording, or the result of a
+  transformation applied to its parent.
+
+**Overlap-corrected trials**
+: Deconvolve's single trials, each with every other event's fitted response
+  subtracted.
+
+**Provenance**
+: The record a node keeps of how it was made: the transformation, its
+  options, and for some steps what they changed.
+
+**RESS**
+: Rhythmic entrainment source separation: a spatial filter that combines the
+  scalp channels to maximise the response at a tagging frequency
+  (@sec-tr-ress).
+
+**RIFT**
+: Rapid invisible frequency tagging: flicker too fast to see, measured by its
+  coherence with a photodiode (@sec-frequency-tagging).
+
+**SME**
+: The standardised measurement error: the standard error of a score for one
+  subject, in the units of the score (@sec-sme).
+
+**SNR (frequency tagging)**
+: The power at a tagged frequency divided by the mean power at neighbouring
+  frequencies.
+
+**Template**
+: A branch saved to an `.alztemplate` file, to be replayed on other
+  recordings (@sec-templates).
+
+**TFCE**
+: Threshold-free cluster enhancement: scoring each point by the support it
+  gathers across all thresholds, instead of forming clusters at one
+  (@sec-cluster-statistics).
+
+**Transformation**
+: A processing step: a function that takes a dataset and options and returns
+  a new dataset, shown as a button on the **Tools** tab.
+
+**Workspace**
+: A raw folder, a cache folder and an exports folder, with the design and
+  the last options of every step, saved as a `.wksp` file (@sec-workspaces).

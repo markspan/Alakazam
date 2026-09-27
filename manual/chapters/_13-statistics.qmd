@@ -1,0 +1,177 @@
+# Statistical reports {#sec-statistics}
+
+**Export/Report > Batch Export > ERP & Report** collects every ERP Measure
+result in the workspace, subjects and grand averages alike, into one CSV and
+writes a statistical report beside it; **Spectral & Report** does the same
+for Spectral Measure results (@sec-frequency-tagging). The report is a
+Quarto document, rendered by R, that tests what the design calls for and
+says so in prose, with the signal behind every number drawn next to it.
+
+## The export
+
+The CSV has one row per dataset, window, bin, channel and measure type, in
+the long format R reads directly:
+
+```
+dataset,dataset_type,bin,channel,window,measure_type,window_start_ms,window_stop_ms,value
+s01,subject,Rare,Pz,P3 mean,mean_amplitude,300,600,4.21
+s01,subject,Rare,Pz,P3 peak,peak_amplitude,250,500,6.83
+s01,subject,Rare,Pz,P3 peak,peak_latency,250,500,372
+```
+
+A measure with two values (a peak's amplitude and latency) contributes two
+rows, so the `value` column stays numeric; a missing value is written `NA`.
+For a subject, `dataset` is the name of the raw recording, not of the
+Measure node. Once groups, persons or sessions are assigned
+(@sec-design), `group`, `person_id` and `session` columns are added.
+
+Two companion files are written when their material exists:
+`..._grandaverages.csv`, the waveforms the measurements were read from
+(@sec-grand-averages), and `..._trials.csv`, one row per trial, when ERP
+Measure was also run on an epoched node. The report reads both.
+
+## The report
+
+The report is written to a **Reports** folder inside the workspace's Exports
+folder, with a private copy of its CSV, so that it can be rendered again
+after the export has been overwritten. It gets a node in the **Reports** tree
+and opens inside the application; **Open in browser** gives it a full window,
+and **Open in Word** converts the rendered report into a `.docx` beside it,
+for copying results into a manuscript.
+
+![Part of a rendered report: a linear mixed model's fixed-effect test, the Holm-corrected pairwise comparisons, the Friedman robustness check, and the per-subject distribution of the measure. (An earlier version of the report, which drew violins where it now draws rainclouds.)](images/statistics-report.jpg){#fig-statistics-report}
+
+Rendering needs Quarto and R. The R packages the report uses (`tidyverse`,
+`rstatix`, `ggpubr`, `gt`, `BayesFactor`, `lme4`, `lmerTest`, `emmeans`,
+`performance`, `effectsize`) are installed by the report the first time it
+renders. Without Quarto or R the document and its CSV are still written, and
+the export's closing message gives the command to render them later.
+
+## Which test, for which design
+
+The report is built in MATLAB, where the bins and the design are known, so
+it chooses per window and measure the test that fits rather than leaving one
+generic script to rediscover the design from a flat file.
+
+| Design | Test | Question |
+|-------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------|
+| One ordinary bin | Descriptive statistics | What is the measure's mean and SD? |
+| Ordinary bins, a circular measure (phase, phase lag) | Circular descriptives: mean angle with a bootstrap CI, resultant length $\bar R$; no test | Where does the phase cluster, and how tightly? |
+| Two ordinary bins | Paired *t*-test, Cohen's $d_z$ with a bootstrap CI, Bayes factor; Wilcoxon signed-rank check; Shapiro-Wilk note | Do the two conditions differ within subjects? |
+| Three or more ordinary bins | Linear mixed model (random intercept and slope per person, falling back to intercept only), partial $\eta^2$ with CI, Holm-corrected pairwise contrasts; Friedman check | Do the conditions differ, and which pairs? |
+| One ordinary bin, two groups | Welch *t*-test, Cohen's *d* with a bootstrap CI, Bayes factor; Mann-Whitney check | Do the groups differ? |
+| One ordinary bin, three or more groups | Welch's ANOVA, Games-Howell pairwise comparisons | Do the groups differ, and which pairs? |
+| Two or more ordinary bins, groups | Linear mixed model with condition × group, partial $\eta^2$, Holm-corrected within- and between-group contrasts | Does the condition effect differ between groups? |
+| Two or more ordinary bins, sessions | Linear mixed model with condition × session | Does the condition effect change between sessions? |
+| Bins, sessions and groups | Linear mixed model with every main effect and two-way interaction | As above, without a three-way term the sample rarely supports |
+| A combination bin (amplitude, area, power, SNR, ITC, coherence) | One-sample *t*-test against zero (and Wilcoxon), $d_z$, Bayes factor | Is the effect present? |
+| A combination bin, a latency | Descriptive statistics | (a latency has no natural zero to test against) |
+| A combination bin, groups | One-sample test within each group, and a between-group test of the difference | Is the effect present in each group, and does its size differ? |
+
+: The test the report runs for each design. {#tbl-statistics-tests}
+
+**Linear mixed models, not repeated-measures ANOVA**, for three or more
+conditions: a subject missing one condition still contributes the others,
+where a repeated-measures ANOVA drops the subject altogether. The maximal
+random-effects structure is tried first [@barr2013] and reduced only when it
+does not converge to a non-singular fit [@bates2015]; the report says which
+structure was fitted. **Welch's** tests are used for group comparisons
+because between-subject EEG samples rarely have equal variances.
+
+**A combination bin is tested apart from the ordinary bins.** Its scores are
+a linear combination of theirs, not an independent condition, so folding it
+into the same model would be invalid. A **latency** keeps the between-group
+test but drops the test against zero, since zero means nothing for a point in
+time. A **circular** quantity, an angle that wraps around at ±π, drops every
+test: the arithmetic mean of 179° and -179° is 0°, the direction opposite to
+where the data are.
+
+Every *t*-test is backed by a Bayes factor [@rouder2009], and every effect
+size by a bootstrapped (BCa, 200 resamples) confidence interval. The omnibus
+tests report partial $\eta^2$ with a confidence interval rather than a
+marginal $R^2$, which has none.
+
+### Between-subjects designs
+
+A between-subjects question ("do patients and controls differ") needs care
+beyond the test itself [@kappenmanluck2016]. Assign groups under
+**Grouping**; as soon as two different labels are in use, every relevant
+section switches to its between-subjects or mixed counterpart. A recording
+without a group is left out of the grouped tests, and the report counts it.
+**Show Design** (@sec-design) states what Alakazam believes the design to be
+before anything is run.
+
+## The signal behind the numbers
+
+Every test is a statistic on a measurement: a mean amplitude over 300 to
+500 ms at Cz, or power at 10 Hz. A window over the wrong peak, a flipped
+polarity, a missing baseline or a component that is not there produces a
+number that tests perfectly well and means nothing, and each is obvious on
+the waveform. The report therefore draws:
+
+- for an ERP export, the **grand-average waveforms** of each condition with
+  the measurement window shaded, read from the export itself so that it
+  cannot drift from the interval measured, and for two conditions the
+  **difference wave**. The ribbons around the conditions are each
+  condition's own standard error; whether they overlap says nothing about a
+  within-subject effect, which is why the difference is drawn separately;
+- for a Spectral export, the **evoked amplitude spectra** with the tested
+  frequencies marked, which catches a tag that is absent (its SNR is still a
+  number near 1) or measured one bin from where the response is.
+
+### Seeing the effect
+
+Plots of conditions answer what each condition looked like; they do not
+answer how large the difference is and how well it is pinned down, which is
+what the tests are about. A paired comparison and a combination bin each get
+a second panel: the bootstrap distribution of the mean difference with its
+95% interval, on an axis whose zero is always drawn. The condition plots are
+**rainclouds**, a density, a narrow box and the individual subjects side by
+side, so that bimodality or one subject carrying an effect is visible.
+
+## Single-trial models
+
+Where the per-trial export exists, the report also fits the measure to the
+individual trials, `value ~ bin + trial_c + (1 + bin | person_id)`, rather
+than to subject averages. Averaging first discards the within-subject
+variance and weights a subject with 12 trials like one with 90; fitting the
+trials does neither, and is the current standard for ERP inference
+[@fromer2018; @volpert2021]. Trial order enters as a covariate centred within
+person, since amplitude drifts over a session with fatigue and habituation,
+and the drift is confounded with condition whenever order is not perfectly
+counterbalanced. The random structure starts maximal and is reduced,
+correlation first, slope after [@barr2013; @bates2015].
+
+To get the per-trial export, run ERP Measure on the **epoched** node as well
+as on the average: the same windows then give one value per trial.
+
+## Primary and secondary tests
+
+A correction for multiple comparisons assumes a family of distinct tests,
+and not all the rows a report produces are distinct. A two-condition design
+yields an omnibus test on the conditions, a test of the difference bin that
+restates the same contrast, and possibly a single-trial model of the same
+data: three rows, one hypothesis. The planned condition comparisons are
+therefore the **primary** family, corrected together by Benjamini and
+Hochberg's false discovery rate [@benjamini1995]; difference-bin tests,
+their between-group follow-ups and single-trial re-analyses are
+**secondary**, reported with their uncorrected *p* and no adjusted value.
+Pairwise comparisons within a section are Holm-corrected [@holm1979].
+
+Each result is stated estimate first: which condition was larger, by how
+much, and with what interval, before any test decision. A section at the top
+of every report says how to read it, including that where windows and
+channels were chosen after looking at the data, the *p*-values are
+optimistic in a way no correction repairs [@luckgaspelin2017]. The report
+closes with a summary table of every test and a forest plot of every effect
+size with its interval.
+
+## It is R and Quarto underneath
+
+The report is an ordinary Quarto document over a table read from its own
+CSV. Every test is a plain call to `rstatix`, `lme4`, `emmeans` or
+`BayesFactor`, and the document can be edited like any other: a Bayesian
+model with `brms`, another random-effects structure, a covariate joined in
+from elsewhere, a different plot. Render it again with `quarto render` or
+RStudio's **Render** button. The generated report is a considered starting
+point for this design, not the last word on it.

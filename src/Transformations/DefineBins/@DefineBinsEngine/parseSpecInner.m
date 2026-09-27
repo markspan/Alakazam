@@ -2,12 +2,13 @@ function spec = parseSpecInner(script)
 %PARSESPECINNER  The actual parse (see parseSpec for the friendly-error wrapper).
     toks = DefineBinsEngine.tokenize(script);
 
-    % Statements start at a 'let', or at a 'bin <num> "<label>"' (a bare
-    % 'bin <num>' inside a combination, = bin 1 - bin 2, is not a statement).
+    % Statements start at a 'let', an 'epoch', or a 'bin <num> "<label>"' (a
+    % bare 'bin <num>' inside a combination, = bin 1 - bin 2, is not a
+    % statement).
     isStart = false(1, numel(toks));
     for i = 1:numel(toks)
         if toks(i).kind ~= "kw"; continue; end
-        if toks(i).val == "let"
+        if toks(i).val == "let" || toks(i).val == "epoch"
             isStart(i) = true;
         elseif toks(i).val == "bin"
             isStart(i) = (i + 2 <= numel(toks)) ...
@@ -23,6 +24,18 @@ function spec = parseSpecInner(script)
             '    bin <number> "<label>" <expression>' newline newline ...
             'for example:' newline newline ...
             '    bin 1 "Targets" 112']);
+    end
+
+    % NOTHING BEFORE THE FIRST STATEMENT. Tokens there used to be dropped
+    % without a word, which is how "epoch [-200,800] ms" was silently ignored
+    % before it was a statement: text a reader believes is doing something
+    % must either do it or say that it does not.
+    if starts(1) > 1
+        DefineBinsEngine.throwParseError(toks(1).pos, [ ...
+            'I''m afraid I don''t recognise this: a script is a series of statements, ' ...
+            'each starting with bin, let or epoch, and this comes before the first ' ...
+            'of them. Would you turn it into one of those, or into a comment by ' ...
+            'starting the line with %?']);
     end
 
     stmts = cell(1, numel(starts));
@@ -47,6 +60,19 @@ function spec = parseSpecInner(script)
                     'definition if it was a leftover?'], name));
             end
             aliases.(name) = node;
+        end
+    end
+
+    % The epoch, when the script sets one (at most once).
+    spec.epoch = [];
+    for s = 1:numel(stmts)
+        if stmts{s}(1).val == "epoch"
+            if ~isempty(spec.epoch)
+                DefineBinsEngine.throwParseError(stmts{s}(1).pos, [ ...
+                    'This script sets the epoch twice, I''m afraid; every bin shares one ' ...
+                    'epoch window. Would you keep just one epoch line?']);
+            end
+            spec.epoch = DefineBinsEngine.parseEpochStatement(stmts{s});
         end
     end
 

@@ -511,6 +511,56 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function rectificationIsReportedWithItsModeAndOrder(testCase)
+        %RECTIFICATIONISREPORTEDWITHITSMODEANDORDER  Rectify records which
+        %   channels it rectified, how, and on which side of averaging, and
+        %   the report now shows it: none of it is visible in the numbers.
+            EEG = testCase.epochedFixture();
+            EEG.etc.alz.rectified = [true false];
+            EEG.etc.alz.rectifyMode = 'squared';
+            EEG.etc.alz.rectifiedBeforeAveraging = true;
+            EEG.etc.alz.rectifySquared = true;
+
+            rows = dataQualityMetrics(EEG).provenance;
+            r = rows(strcmp({rows.step}, 'Rectify'));
+
+            testCase.assertNumElements(r, 1);
+            testCase.verifyEqual(r.item, 'squared (x^2)');
+            testCase.verifyEqual([r.n, r.n_total], [1 2]);
+            testCase.verifyEqual(r.scope, 'single trials, before averaging');
+            testCase.verifySubstring(r.detail, 'Fz');
+            testCase.verifySubstring(r.detail, 'uV^2, total power');
+        end
+
+        function rectificationAfterAveragingIsReadOffTheAverage(testCase)
+        %RECTIFICATIONAFTERAVERAGINGISREADOFFTHEAVERAGE  Rectify can run on
+        %   the Average, whose record the epochs behind it never see.
+            EEG = testCase.epochedFixture();
+            avg = EEG;
+            avg.data = mean(EEG.data, 3);
+            avg.etc.alz.rectified = [false true];
+            avg.etc.alz.rectifyMode = 'full';
+            avg.etc.alz.rectifiedBeforeAveraging = false;
+
+            rows = dataQualityMetrics(EEG, avg).provenance;
+            r = rows(strcmp({rows.step}, 'Rectify'));
+
+            testCase.assertNumElements(r, 1);
+            testCase.verifyEqual(r.item, 'full wave (|x|)');
+            testCase.verifyEqual(r.scope, 'the average');
+            testCase.verifyEqual(r.detail, 'Cz');
+        end
+
+        function theReportHasARectificationTable(testCase)
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'provenance-rectify-table'));
+            testCase.verifyTrue(contains(qmd, '`Channels rectified` = n'), ...
+                'The heading names its own unit, as the other tables do.');
+        end
+    end
+
     methods (Access = private)
         function EEG = epochedFixture(~)
             EEG = makeTestEEG('nbchan', 2, 'trials', 10, 'labels', {'Fz', 'Cz'});

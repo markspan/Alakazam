@@ -64,21 +64,26 @@ function [EEG, options] = DefineBins(input, varargin)
 %                immune to jitter in the interval itself, e.g. from variable
 %                RTs). Windows are signed, so [-1200,-200) means "before".
 %
-% The epoch window to cut around every matched event is NOT part of this
-% script language -- it is a separate parameter, .epoch (a struct with
-% .lo/.hi/.unit), passed alongside the script rather than written as a
-% statement inside it: interactively, the "Epoch start (ms)"/"Epoch stop
-% (ms)" fields above the script editor in the DefineBins dialog;
-% programmatically, struct('script', ..., 'epoch', struct('lo', -200,
-% 'hi', 800, 'unit', 'ms')). It applies to ALL bins (they share one
-% window). With it, DefineBins returns a segmented (channels x time x
-% trials) dataset that plots in EpochView; without it (both fields left
-% blank) the data stays continuous and only the bin tags are added.
+% THE EPOCH, the window cut around every matched event, is shared by all
+% bins and comes from one of two places:
+%
+%   * an epoch statement in the script, in the same interval notation as a
+%     relation's window:  epoch [-200,800] ms  (or [lo,hi] samples);
+%   * the "Epoch start (ms)"/"Epoch stop (ms)" fields above the script
+%     editor, or programmatically struct('script', ..., 'epoch',
+%     struct('lo', -200, 'hi', 800, 'unit', 'ms')).
+%
+% The script's statement wins when both are given, and the post-run summary
+% says so when it overrode a different window. With neither (the fields
+% both blank and no epoch line) the data stays continuous and only the bin
+% tags are added; with tagsOnly true (Deconvolve) any epoch is ignored for
+% the same result. With an epoch, DefineBins returns a segmented
+% (channels x time x trials) dataset that plots in EpochView.
 %
 % Example (the N400-style case: a target whose response falls in a plausible
-% reaction-time window; the epoch window itself, e.g. -200 to 800 ms, is set
-% separately as described above, not written into the script):
+% reaction-time window):
 %
+%   epoch [-200,800] ms
 %   bin 1 "Related"   : 112 and next(118) within (200,1200] ms
 %   bin 2 "Unrelated" : 122 and next(118) within (200,1200] ms
 %   bin 3 "No response": (112|122) and not next(118) within (0,2000] ms
@@ -140,6 +145,7 @@ function [EEG, options] = DefineBins(input, varargin)
     % opts-default-to-'Init'/interactive-flag half of what it does, kept
     % separate from DefineBins' own more specific "needs a dataset" message.
     [options, interactive] = TransTools.InitGuard(nargin, 'Alakazam:DefineBins', varargin{:});
+    epochNote = '';
 
     if interactive
         template = [ ...
@@ -178,8 +184,9 @@ function [EEG, options] = DefineBins(input, varargin)
         end
 
         script   = result.script;
-        epochWin = DefineBinsEngine.parseEpochBounds(result.start, result.stop);   % may throw parse errors
+        fieldWin = DefineBinsEngine.parseEpochBounds(result.start, result.stop);   % may throw parse errors
         spec     = DefineBinsEngine.parseSpec(script);                            % may throw parse errors
+        [epochWin, epochNote] = effectiveEpoch(spec.epoch, fieldWin);
 
         % Remember the epoch bounds regardless of whether the script itself
         % turns out to be valid -- a typo in the script is no reason to
@@ -194,10 +201,17 @@ function [EEG, options] = DefineBins(input, varargin)
         options = struct('script', script, 'bins', spec.bins, 'epoch', epochWin);
     elseif isstruct(options) && isfield(options, 'script') && ~isfield(options, 'bins')
         % Script mode: parse a supplied script without a dialog (for scripting
-        % and tests). Optionally carries an 'epoch' window struct.
+        % and tests). Optionally carries an 'epoch' window struct, which an
+        % epoch statement in the script overrides; with tagsOnly true, any
+        % epoch is ignored and the data stay continuous (Deconvolve, which
+        % fits its own window against the continuous recording).
         script = char(options.script);
         spec   = DefineBinsEngine.parseSpec(script);
-        if isfield(options, 'epoch'); epochWin = options.epoch; else; epochWin = []; end
+        if isfield(options, 'epoch'); passedWin = options.epoch; else; passedWin = []; end
+        epochWin = effectiveEpoch(spec.epoch, passedWin);
+        if logical(TransTools.FieldOr(options, 'tagsOnly', false))
+            epochWin = [];
+        end
         options = struct('script', script, 'bins', spec.bins, 'epoch', epochWin);
     else
         if ~isstruct(options) || ~isfield(options, 'bins')
@@ -246,14 +260,39 @@ function [EEG, options] = DefineBins(input, varargin)
 
     %% Interactive summary
     if interactive
-        reportBins(bindesc, EEG);
+        reportBins(bindesc, EEG, epochNote);
     end
 end
 
-function reportBins(bindesc, EEG)
+function [win, note] = effectiveEpoch(scriptWin, otherWin)
+%EFFECTIVEEPOCH  The epoch to cut: the script's epoch statement when there is
+%   one, otherwise OTHERWIN (the dialog's fields, or an epoch passed in).
+%   NOTE says so when the script overrode a different window, for the
+%   post-run summary: a field that was ignored should not look as though
+%   it counted.
+    note = '';
+    if isempty(scriptWin)
+        win = otherWin;
+        return;
+    end
+    win = scriptWin;
+    if ~isempty(otherWin) && ~(otherWin.lo == scriptWin.lo && otherWin.hi == scriptWin.hi ...
+            && strcmpi(otherWin.unit, scriptWin.unit))
+        note = sprintf(['The script''s epoch line (%g to %g %s) was used; the Epoch ' ...
+            'start/stop fields (%g to %g %s) were not.'], scriptWin.lo, scriptWin.hi, ...
+            scriptWin.unit, otherWin.lo, otherWin.hi, otherWin.unit);
+    end
+end
+
+function reportBins(bindesc, EEG, epochNote)
 %REPORTBINS  Post-run summary popup (interactive mode only): per-bin match
-%   counts and mean reaction times, plus the resulting segmentation shape.
+%   counts and mean reaction times, plus the resulting segmentation shape,
+%   and EPOCHNOTE when the script's epoch line overrode the dialog's fields.
     lines = strings(0, 1);
+    if nargin >= 3 && ~isempty(epochNote)
+        lines(end+1) = string(epochNote);
+        lines(end+1) = "";
+    end
     for b = 1:numel(bindesc)
         d = bindesc(b);
         valid = ~isnan(d.rt);

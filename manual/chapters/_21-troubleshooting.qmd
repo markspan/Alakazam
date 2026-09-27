@@ -1,0 +1,104 @@
+# Troubleshooting {#sec-troubleshooting}
+
+Most problems have a message that says what went wrong and what to do; this
+chapter collects the ones worth knowing in advance, grouped by where they
+show up.
+
+## The workspace
+
+**Nothing appears in the tree.** The raw folder is empty, holds formats
+Alakazam does not read, or is not the folder you think it is. Check
+**Edit WorkSpace** (@fig-workspace-editor) and @tbl-file-formats. Every file
+directly inside the raw folder is taken as a recording; subfolders are not
+searched.
+
+**Old results appear after the pipeline changed.** A node keeps what it was
+computed with. Recalculate the step, or use **Clear WorkSpace** (normal) and
+replay the pipeline (@sec-clear). The same applies after an update to
+Alakazam that changes what a step computes: nodes computed before it keep
+their old values until recomputed.
+
+**A template or a drag-and-drop replay fails on some recordings.** The
+stored options name channels or bins by label, and the recording lacks one.
+The message names it. Replays continue on the other recordings.
+
+## Transformations
+
+**A step refuses the dataset.** Each step says what shape of data it needs.
+Baseline, ArtefactDetect, Average, Spectral Measure and the coherence steps
+need epoched data; Resample, Welch, Deconvolve and Eye tracking need
+continuous data; ERP Measure needs an average or epochs; Scalp and Brain (3D)
+need an average.
+
+**DefineBins left the data continuous.** Both **Epoch start** and **Epoch
+stop** were blank, which means "tag the events with their bins and do not
+cut epochs" (@sec-tr-definebins). The epoch is set in those fields, not in the
+script: text before the first `let` or `bin` statement is ignored.
+
+**Filter reports that the data are too short.** A low high-pass cutoff needs
+a long filter, 25 s at 0.1 Hz (@tbl-filter-design). Filter the continuous
+recording, before epoching.
+
+**A channel is missing from scalp maps.** Its label is not a 10-5 name
+(an EOG, a derived channel, a custom label), or it has no position. Rename or
+position it with ChannelEditor (@sec-tr-channeleditor).
+
+**Recalculate is greyed out.** The step cannot reopen with its stored
+options: a raw root, a step without options, EventEditor, Photodiode or ICA
+(@sec-nodes).
+
+**Rejection breakdown says the node has no record.** The node was computed
+before ArtefactDetect kept its per-detector record. Recalculate it.
+
+**Deconvolve warns that the solver did not converge.** The design is close to
+collinear: often two event types at a nearly constant lag are both modelled
+(a fixation and the saccade just before it, a trial marker and the stimulus
+a fixed time later), or a formula has more terms than its events support.
+Model one of each such pair (@sec-tr-deconvolve).
+
+**TimeFrequency or the Coherence Map is empty after artefact rejection.**
+An earlier version let one rejected trial blank the whole map; recalculate
+nodes computed with it.
+
+## Reports and statistics
+
+**The report is written but not rendered.** Quarto or R is missing, or R
+could not install a package. The document and its CSV are there; the
+closing message gives the command to render them once Quarto and R are
+available (@sec-statistics).
+
+**A test is missing from the report.** The design does not support it: a
+single condition gets descriptive statistics only, a latency difference is
+not tested against zero, a circular measure is not tested at all
+(@tbl-statistics-tests). The report says why in each case.
+
+**The between-groups contrast is not offered.** Fewer than two groups are
+assigned under **Grouping** (@sec-design).
+
+**A stored source estimate is not reused.** Its settings or its data differ
+from what the analysis needs, most often because subjects have different
+montages (@tbl-source-reuse). The report says how many were reused.
+
+## Installation and toolboxes
+
+**A toolbox download is requested.** FieldTrip, GEDAI, the Unfold toolbox,
+EYE-EEG and FastICA are installed on first use, after consent
+(@tbl-toolboxes). Declining leaves the step unavailable, with instructions
+for a manual installation.
+
+**Apply to All Raw Files runs out of memory.** Each parallel worker holds a
+whole recording and its intermediate results. Lower **Most recordings at
+once**, or turn parallel processing off (@sec-settings).
+
+**The Help button offers the README instead of this manual.** The manual has
+not been built on this machine. A release includes it; a clone builds it when
+Quarto is installed.
+
+## Where to look next
+
+- **Export as Code** writes the whole analysis as a script: the most exact
+  answer to what was done (@sec-export-code).
+- The **Data Quality Report** shows per subject and condition what survived
+  and how noisy it was (@sec-data-quality).
+- Alakazam's issue tracker on GitHub is the place to report a problem, with
+  the exported script and the message attached.

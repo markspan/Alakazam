@@ -130,15 +130,27 @@ This is a **post-filter** on the already-computed RT, not another relation ,
 a match with no RT (a pure anchor bin, or one reached through `not`) is
 dropped by an `rt within` filter.
 
-## 7. Cutting epochs (the GUI fields, not the language)
+## 7. Cutting epochs
 
-The time window to cut around each matched event is **not** written in the
-script , it's the two **Epoch start (ms)** / **Epoch stop (ms)** fields
-above the editor, shared by every bin, e.g. `-200` and `800`. Leave both
-blank to keep the data continuous (tag bins only, no segmenting); fill both
-to get a segmented (`channels × time × trials`) dataset. The values, and the
-script, are remembered between runs; **Save.../Load...** write/read both
-together as a `.binscript` file.
+```
+epoch [-200,800] ms
+bin 1 "Targets" 112
+```
+
+An `epoch` line sets the window cut around every matched event, shared by
+all bins, in the same interval notation as a relation's window: `ms` (the
+default) or `samples`, never `events`. An epoch keeps both of its ends, so
+round and square brackets mean the same here. It can stand anywhere in the
+script, once.
+
+The two **Epoch start (ms)** / **Epoch stop (ms)** fields above the editor
+do the same job; when the script has an `epoch` line, the line wins, and the
+summary after the run says so if the fields held something else. With no
+`epoch` line and both fields blank, the data stays continuous: bins are
+tagged, nothing is segmented. The fields and the script are remembered
+between runs; **Save.../Load...** write/read both together as a `.binscript`
+file. (Deconvolve, which fits against the continuous recording, ignores an
+`epoch` line in its bins.)
 
 ## 8. Response-locking with `timelock`
 
@@ -281,8 +293,9 @@ Work anywhere a code is allowed, including inside a relation:
 bin <n> "<label>" = [+|-] bin <n2> ( [+|-] bin <n3> )*
 ```
 
-A signed sum of bin numbers (integer coefficients allowed, written next to
-the term with no operator: `2 bin 1 - bin 2`), each of which may itself be
+A signed sum of bin numbers (numeric coefficients allowed, whole or
+fractional, written next to the term with no operator: `2 bin 1 - bin 2`,
+`0.5 bin 1 + 0.5 bin 2`), each of which may itself be
 an ordinary or a combination bin. See
 [§11](#11-difference-bins) and [§12](#12-interaction-effects-combination-bins-referencing-combination-bins).
 
@@ -301,7 +314,10 @@ may still lock to a preceding event.)
 
 ### Comments
 
-`%` or `#` to end of line, on their own line or after an expression.
+`%` or `#` to end of line, on their own line or after an expression. Apart
+from comments, nothing may come before the first `bin`, `let` or `epoch`
+statement: anything else there is an error, where it used to be dropped
+without a word.
 
 ### Save.../Load...
 
@@ -337,10 +353,10 @@ single column to point at.
 
 Prime–target pairs with a button-press response; `112`/`113` = related
 (expected/unexpected block), `122`/`123` = unrelated, `118` = response.
-Epoch fields: `-200` / `800`.
 
 ```
 % --- N400 bins, expected vs. unexpected block -----------------------------
+epoch [-200,800] ms
 let answered = next(118) within (200,1200] ms
 
 bin 1 "Related, expected"     112 and answered
@@ -365,7 +381,8 @@ bin 9 "Related, response-locked" 112 and answered timelock next(118)
 ## Quick reference
 
 ```
-script      : ( <let> | <bin> )+                        % epoch set in the GUI fields
+script      : ( <let> | <bin> | <epoch> )+              % comments only before the first
+epoch       : epoch <window>                            % ms or samples; at most once
 let         : let <name> = <expr>                       % may use earlier let names
 bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
             | bin <int> "<label>" = <combo>              % combination bin (may nest)

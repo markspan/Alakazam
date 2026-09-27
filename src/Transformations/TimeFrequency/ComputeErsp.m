@@ -102,7 +102,13 @@ function [ersp, freqs] = ComputeErsp(input, opts)
                 chanData = chanData'; % squeeze can transpose a single-trial slice
             end
             power = zeros(opts.NumFreqs, nT);
-            for tr = 1:numel(trials)
+            % REJECTED TRIALS ARE LEFT OUT, per channel. Rejection writes NaN
+            % and leaves the trial in its bin (ArtefactDetect, ManualReject),
+            % and one NaN sample turns a trial's whole convolution into NaN:
+            % summed in, it made every map of that channel and bin NaN, so
+            % TimeFrequency after artefact rejection drew nothing at all.
+            kept = find(all(isfinite(chanData), 1));
+            for tr = kept
                 trialFFT = fft(chanData(:, tr)', nfft);
                 for fi = 1:opts.NumFreqs
                     convResult = ifft(trialFFT .* waveletFFTs{fi});
@@ -111,7 +117,12 @@ function [ersp, freqs] = ComputeErsp(input, opts)
                     power(fi, :) = power(fi, :) + abs(analytic).^2;
                 end
             end
-            power = power / numel(trials);
+            if isempty(kept)
+                done = done + 1;                 % every trial rejected: stays NaN
+                TransTools.progressbar(done / total);
+                continue;
+            end
+            power = power / numel(kept);
             logPower = 10 * log10(power);
             baseline = mean(logPower(:, baseIdx), 2);
             ersp(ch, :, :, b) = logPower - baseline;

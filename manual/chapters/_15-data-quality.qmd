@@ -1,0 +1,134 @@
+# Data quality {#sec-data-quality}
+
+**Export/Report > Data Quality > Data Quality Report** reports the condition
+of the data every result was computed from. For each subject it follows the
+average back to the epochs behind it, measures what survived artefact
+rejection and how noisy the surviving trials were, and writes a Quarto
+report beside the others in the **Reports** tree. It has no dialog: it runs
+on every averaged subject in the workspace.
+
+![The opening of a data-quality report: what it measures and why, with its sections listed on the right.](images/ga-report.jpg){#fig-dataquality-report}
+
+## The principle: even loss matters more than total loss
+
+How much data was lost matters less than whether the loss was even across
+conditions. An even rejection rate costs statistical power. An uneven one
+threatens validity, because the trials surviving in one condition are no
+longer a representative sample of it. The report's principal figure is
+therefore the rejection rate per bin per subject, one line per subject, with
+a Friedman test across subjects. The metric set is adapted from the
+data-quality assessment Mathôt and Vilotijević propose for pupillometry, and
+the argument is theirs [@mathot2023].
+
+| Metric | What it tells you |
+|-------------------------|-------------------------------------------------------|
+| % trials rejected | How much of the recording survived rejection. |
+| % trials rejected **per bin** | Whether the loss is even: the one metric that can invalidate a result rather than weaken it. |
+| % trials truncated | Epochs that ran off the start or end of the recording. |
+| % channel-epochs flagged | Loss confined to single channels, usually one bad electrode; given per channel and subject, which is what a decision to interpolate or exclude a channel rests on. |
+| Prestimulus SD | Per-trial noise. (The prestimulus *mean* is zero by construction after Baseline, so its variability is used instead.) |
+| % baseline outlier trials | Trials whose noise is extreme for that subject ($\lvert z\rvert > 2$). |
+| SME | The standardised measurement error of each score [@luck2021]. |
+| Dependability | The reliability of a score, and the trials a target reliability would need [@clayson2017]. |
+
+: What the data-quality report measures. {#tbl-dq-metrics}
+
+The report also has a per-subject overview, the distribution of per-trial
+noise (pooled, and standardised within subject), noise against trial number
+across the session, a subject-by-channel noise map, and, where groups are
+assigned, the same even-loss comparison between groups: a systematic
+difference in noise or rejection between groups is an alternative
+explanation for any group difference in the ERP.
+
+## Measurement error {#sec-sme}
+
+The standardised measurement error (SME) is the standard error a score would
+have if the same subject were recorded again under the same condition; it
+combines single-trial noise and trial count in the units of the measurement
+[@luck2021]. It is reported at two grains:
+
+- **Whole-epoch SME**, from Average's aSME (@sec-tr-average): one value per
+  subject and channel, useful for a first comparison.
+- **Per-window SME**, computed for each ERP Measure window on the score that
+  window produces, from the trials behind each average. This is the value to
+  report in a methods section, since an SME describes the error of a
+  particular score.
+
+The estimator follows the score:
+
+- **Analytic**, for mean amplitude: the mean amplitude of the average is the
+  average of the trials' mean amplitudes, so its standard error is
+  $\mathrm{SD}/\sqrt{n}$ exactly.
+- **Bootstrapped**, for peaks, latencies, areas and fractional latencies,
+  which are not linear in the trials (the peak of the average is not the
+  average of the peaks): trials are resampled with replacement, averaged and
+  scored again, and the spread of the scores is the SME. Bootstrapped values
+  change slightly each time the report is made.
+
+A window whose peak is found on a **reference channel**, and any channel a
+window did not measure, is skipped rather than approximated.
+
+### Precision against trial count
+
+A figure plots each subject's SME against the trials that survived, with the
+$1/\sqrt{n}$ curve through it. The rest of the report says how much was lost;
+this says what the loss cost. Losing 40 of 200 trials barely moves the
+estimate, while losing 20 of 40 changes what the average means. A subject on
+the curve is short of trials; one above it is noisy within them, and
+collecting more trials would not help.
+
+## Dependability {#sec-dependability}
+
+Dependability answers the question the rest of the report only circles:
+whether a score is reliable enough to correlate with anything. Single-trial
+amplitude varies between people, which is the signal a correlation or a group
+difference rests on, and within a person from trial to trial, which is noise
+that averaging reduces. Dependability is the between-person variance as a
+share of what an average of $n$ trials measures, from generalizability
+theory [@clayson2017]. The report inverts it into the number wanted: how
+many trials per person a dependability of .70 or .80 would take, for this
+measure, at this channel, in this condition. The variance components come
+from a random-intercept model rather than from ANOVA mean squares, because
+trial counts differ between people after rejection.
+
+It needs every trial's score, so it appears only where ERP Measure was also
+run on the **epoched** node; otherwise the section says so and names the step
+that would produce it.
+
+## What the cleaning steps did {#sec-dq-provenance}
+
+Several steps change what the numbers mean while leaving them looking
+ordinary, and each records what it did, so that the report can show it
+per subject:
+
+- interpolation of single channels in single trials by ArtefactDetect or
+  ManualReject: how much of each subject's data is reconstructed rather than
+  recorded;
+- which ArtefactDetect detector rejected which trials (@sec-tr-artefactdetect);
+- the ICA components removed and their ICLabel classes (@sec-tr-autoeyeica);
+- GEDAI's SENSAI score and the share of noise per epoch and channel
+  (@sec-tr-autogedai);
+- the synchronisation of an eye-tracking join (@sec-tr-eyetracking);
+- for deconvolved subjects, the overlap-corrected trials' noise and the
+  events dropped at gaps in the model (@sec-tr-deconvolve).
+
+## Worth a look, and what is not done
+
+The report opens with a callout listing everything that crossed a
+threshold, titled with the count, so that a subject at 38% rejection or a
+channel interpolated in a third of the trials cannot be scrolled past:
+
+| Criterion | Why |
+|-------------------------------------------------------|-------------------------------------------------------|
+| More than 25% of trials discarded | Beyond about a quarter, the surviving trials are unlikely to be a random subset: whatever removed them is systematic and may correlate with condition or time. |
+| Fewer than 20 surviving trials in a bin that began with more | Below about 20, a typical ERP average is visibly unstable; the SME is the better guide. |
+| A channel flagged or interpolated in more than 20% of trials | The channel is closer to missing than to recorded. |
+| A subject more than 3 MAD noisier than the sample median | The median absolute deviation, because with few subjects the outliers sought would inflate an SD enough to hide inside it. |
+| Any trial truncated at a recording boundary | The epoch holds less data than its neighbours. |
+
+: The thresholds of the report's *Worth a Look* list. {#tbl-dq-thresholds}
+
+**No data is excluded.** Exclusion criteria should be fixed in advance and
+reported, so the report flags rather than acts, and none of these thresholds
+is a standard: they are conventional starting points, chosen as values that
+merit a second look.

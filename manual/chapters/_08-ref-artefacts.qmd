@@ -1,0 +1,258 @@
+# Reference: artefact rejection and correction {#sec-ref-artefacts}
+
+The transformations of **Tools > 2. Artifact Rejection / Reduction** deal
+with signal that is not brain activity: blinks and eye movements, muscle,
+drifts, bad electrodes. They fall into two families. **Rejection** removes
+the contaminated data, by trial or by channel within a trial
+(ArtefactDetect, ManualReject). **Correction** estimates the contaminating
+signal and subtracts it, keeping the trial (AutoICA, ICA, AutoGEDAI).
+
+Correction keeps more trials, and so more power, but it changes the data in
+ways that are harder to verify, and for time-locked ERPs of good quality
+aggressive correction does not reliably improve the result [@delorme2023].
+Rejection loses trials, but what remains is the recording as it was. A
+common and defensible pipeline corrects blinks with ICA, then rejects what
+remains above a threshold [@luckApplied]. Whichever is used, the
+data-quality report shows its cost per subject and condition
+(@sec-data-quality).
+
+Rejection in Alakazam is **marking, not deleting**: rejected samples are set
+to `NaN`, the trial keeps its place, and Average leaves the `NaN` values out.
+This keeps trial numbers stable across the pipeline, which is what lets
+per-trial measures and single-trial models relate a trial to its neighbours.
+
+## ArtefactDetect {#sec-tr-artefactdetect}
+
+*Tools > 2. Artifact Rejection / Reduction > ArtefactDetect · epoched →
+epoched · `ArtefactDetect`*
+
+Flags epochs with four detectors that match, and extend, ERPLAB's
+[@lopezcalderon2014]:
+
+| Detector | Flags a channel of a trial when |
+|--------------------------|-------------------------------------------------------|
+| **Absolute threshold** | any sample lies outside [**Minimum**, **Maximum**] µV. |
+| **Step function** | in a moving **Window**, advanced by **Window step**, the means of the first and second halves differ by more than **Threshold** µV: the signature of a saccade or the onset of a blink. |
+| **Moving-window peak-to-peak** | the range (maximum minus minimum) within a moving **Window** exceeds **Threshold** µV. |
+| **Sample-to-sample** | the difference between two consecutive samples exceeds **Threshold** µV: a single-sample jump. |
+
+: ArtefactDetect's detectors. Several can be ticked; a channel trips if any of them flags it. {#tbl-artefactdetect-detectors}
+
+![**ArtefactDetect**: the detectors, their thresholds and windows, the test interval, the channels tested, and what is done with a hit.](images/artefactdetect-dialog.png){#fig-artefactdetect-dialog}
+
+| Option | Default | Meaning |
+|-------------------|--------------------|-------------------------------------------------------|
+| **Detectors** | Absolute threshold | One or more of the four. |
+| **Minimum**, **Maximum** | -100, 100 µV | The absolute threshold's limits. |
+| **Threshold** | 100 µV | The limit of the other three detectors. |
+| **Window**, **Window step** | 200, 50 ms | The moving window of the step and peak-to-peak detectors. |
+| **Test** start, stop | 0 to 0 (whole epoch) | The interval tested, in ms. |
+| **Channels** | All channels | **All channels**, or **Scalp EEG only**. |
+| **Reject** | Whole epoch | What to do with a hit (below). |
+
+: ArtefactDetect's options. {#tbl-artefactdetect}
+
+**What happens to a hit** is chosen separately from the detection:
+
+- **Whole epoch** rejects every channel of the trial: the standard ERP
+  practice, and the default.
+- **This channel only** rejects the offending channel of that trial and
+  keeps the others, so that a noisy electrode does not cost the whole trial.
+- **Interpolate this channel** rebuilds the offending channel of that trial
+  from its neighbours with spherical splines [@perrin1989]. A channel
+  without a scalp position (an EOG channel) cannot be interpolated and is
+  rejected instead.
+
+**Channels to test** decides which channels can trip a trial. **All
+channels** includes the EOG channels, which is what makes a blink on VEOG
+reject the trial it falls in, and for ERP work that is usually the point.
+**Scalp EEG only** leaves the peripheral channels untested, for when a
+threshold chosen for the scalp would be wrong for them.
+
+Interpolation deserves caution. Unlike rejection, an interpolated channel
+looks like ordinary data, so Alakazam records which channel of which trial
+it rebuilt, and the data-quality report shows how much of each subject's
+data is reconstructed rather than recorded. And a spatially broad artefact,
+such as a blink, is present on the neighbours too, so interpolating the
+worst channel copies the artefact rather than removing it: interpolation
+suits a single bad electrode, not a blink.
+
+![The epochs of the ERP CORE N400 recording at FP1 after ArtefactDetect, grouped by bin in recording order. Rejected trials are blank rows.](images/artefactdetect-result.jpg){#fig-artefactdetect-result}
+
+### Which detector cost which trials
+
+With several detectors ticked, knowing that a trial was rejected is not
+knowing why. ArtefactDetect records, per detector, the epochs it would have
+rejected on its own and the epochs **only** it caught. A node's context menu
+**Rejection breakdown** shows them (@fig-rejection-breakdown), here for the
+N400 epochs of @fig-artefactdetect-result tested with three detectors (±100
+µV, a 100 µV step, and 100 µV peak-to-peak, both in a 200 ms window stepped
+by 50 ms, on all channels).
+
+![**Rejection breakdown** for three detectors: 93 of 231 epochs rejected in all, and per detector the epochs it would have rejected on its own, those no other detector caught, and the channel-epochs it flagged.](images/rejectionbreakdown-dialog.png){#fig-rejection-breakdown}
+
+The per-detector counts overlap, since one blink trips several detectors, so
+they do not add up to the total. The "only this one" column is the number to
+read before switching a detector off or moving its threshold: here the step
+detector rejected 82 epochs, but none that the other two did not also
+reject, so switching it off would change nothing.
+
+### Choosing thresholds
+
+Fixed thresholds of ±100 µV, or 100 µV peak-to-peak, are the usual
+starting point, but the right value depends on the recording and the
+subject, and Luck recommends choosing per subject from the data, by looking
+at which trials a threshold catches and which it misses [@luckApplied]. The
+standardised measurement error gives an objective criterion: the threshold
+that minimises the SME of the score being analysed, which trades the noise
+removed against the trials lost [@luck2021]. A rejection rate above about 25%
+of the trials in any condition is the conventional point at which a subject
+is excluded, and the data-quality report flags it.
+
+## ManualReject {#sec-tr-manualreject}
+
+*Tools > 2. Artifact Rejection / Reduction > ManualReject · epoched →
+epoched · `ManualReject`*
+
+The manual counterpart of ArtefactDetect: a browser that shows every channel
+of one trial at a time, in columns of at most 16 channels, where a click on a
+channel's trace or label flags that channel of that trial. **Prev** and
+**Next**, or the left and right arrow keys, walk through the trials; flags
+persist while paging. **Scale** sets the amplitude gain for every trace, on
+top of one robust starting scale shared by all channels and trials, so that
+paging between trials remains a comparison by eye.
+
+![**ManualReject** on the ERP CORE MMN data: one trial's channels in two columns, with the scope and the treatment of single channels at the bottom.](images/manualreject-dialog.png){#fig-manualreject-dialog}
+
+| Option | Default | Meaning |
+|------------------------|-----------|-------------------------------------------------------|
+| **Reject** | Whole epoch | **Whole epoch**: a flag rejects the trial. **This channel only**: it rejects that channel of that trial. |
+| **Single-channel treatment** | NaN | For **This channel only**: leave the flagged cell rejected, or **Interpolate** it from its neighbours. |
+
+: ManualReject's options. {#tbl-manualreject}
+
+The flags are specific to this dataset's trials, and a replay onto a dataset
+with a different number of trials is refused rather than applied to the
+wrong ones. Recalculating the node reopens the browser with the same flags,
+since recomputing its input leaves the trials where they were.
+
+## AutoICA {#sec-tr-autoeyeica}
+
+*Tools > 2. Artifact Rejection / Reduction > AutoICA · continuous or epoched
+→ the same · `AutoEyeICA`*
+
+Decomposes the data with independent component analysis (ICA), classifies
+the components with ICLabel [@piontonachini2019], and subtracts every
+component whose probability of being an eye component exceeds a threshold.
+ICA separates the recording into maximally independent sources with fixed
+scalp maps [@jung2000]; blinks and eye movements form a few
+components with a characteristic frontal map, and subtracting them removes
+the ocular signal from every channel while keeping the trials.
+
+![**AutoICA**: the ICLabel eye probability above which a component is removed.](images/autoeyeica-dialog.png){#fig-autoeyeica-dialog}
+
+| Option | Default | Meaning |
+|-----------|-------|-------------------------------------------------------|
+| **Probability** | 0.8 | Remove components whose ICLabel eye probability exceeds this. |
+
+: AutoICA's option. {#tbl-autoeyeica}
+
+**The algorithm.** FastICA [@hyvarinen2000] is used when it is installed
+(it is offered on first use); otherwise EEGLAB's ICA dialog opens, whose
+default is `runica`, extended Infomax [@bell1995]. Classification uses ICLabel's `beta` classifier.
+Only channels with a scalp position on the 10-5 template, and not typed as
+peripheral, are decomposed; EOG, ECG and other channels are set aside and
+put back unchanged.
+
+**Reproducibility.** ICA starts from a random point, so two runs on the same
+data give slightly different components. The decomposition and the
+classification do not depend on the threshold, so they are kept with the
+node: changing the threshold with **Recalculate** re-prunes the components
+already found instead of decomposing again, and rerunning on unchanged data
+reuses the earlier decomposition. A new decomposition can be forced by
+setting `Redecompose` to true in the stored options.
+
+**Preparing the data.** ICA finds better-separated components on data
+high-pass filtered at 1 to 2 Hz [@winkler2015], a cutoff too high for most
+ERP analyses (@sec-tr-filter). One way to have both is to run AutoICA on a
+branch filtered at 1 Hz for inspection, and to compare the result with the
+same pruning on a 0.1 Hz branch. Interpolated channels and an average
+reference each reduce the rank of the data by one, and a decomposition
+cannot have more components than the rank.
+
+## ICA {#sec-tr-removecomponents}
+
+*Tools > 2. Artifact Rejection / Reduction > ICA · continuous or epoched →
+the same · `RemoveComponents`*
+
+The manual counterpart of AutoICA: a table of every component with the class
+ICLabel gave it and that class's probability, followed by the probability of
+every class, and a preview of the selected component's scalp map, the start
+of its time course, and its power spectrum. Tick the components to subtract.
+The dataset's existing decomposition is used when it has one (after AutoICA,
+say); otherwise ICA is run first, as in AutoICA.
+
+![**ICA** on the ERP CORE MMN recording: each component's ICLabel class and probabilities, sortable by any column, and a preview of the selected component.](images/removecomponents-dialog.png){#fig-removecomponents-dialog}
+
+The per-class probabilities are shown because a component labelled "Brain
+53%" against a close runner-up is a different proposition from one labelled
+"Brain 99%". Sorting by a class's column brings all the eye or muscle
+components together. When dipole fitting is available, a **Dipole RV**
+column gives the share of the component's scalp map that a single equivalent
+dipole cannot explain. Components of cortical origin tend to be close to
+dipolar [@delorme2012]; the dialog treats a residual variance above about 15%
+as a sign that a component is not one compact cortical source, and "no fit"
+as a stronger sign still.
+
+Not recalculable: component numbers belong to one decomposition, and a new
+decomposition numbers its components differently.
+
+## AutoGEDAI {#sec-tr-autogedai}
+
+*Tools > 2. Artifact Rejection / Reduction > AutoGEDAI · continuous or
+epoched → the same · `AutoGEDAI`*
+
+Denoises with GEDAI [@ros2025], which separates brain signal from artefacts
+by a generalised eigenvalue decomposition of the data's covariance against a
+reference covariance derived from a head model's leadfield: activity whose
+spatial structure a cortical source could produce is kept, and the rest is
+removed, with the boundary between the two chosen automatically by GEDAI's
+SENSAI criterion. It is broadband, so it addresses muscle and electrode noise
+as well as ocular artefacts, and it can be used instead of AutoICA or after
+it.
+
+![**AutoGEDAI**: the denoising strength, the leadfield, the low cut, and optional rejection of epochs and channels by their ENOVA.](images/autogedai-dialog.png){#fig-autogedai-dialog}
+
+| Option | Default | Meaning |
+|--------------------------------------------|-----------|-------------------------------------------------------|
+| **Denoising strength** | auto | **auto**; **auto+** removes more noise at some cost to signal, **auto-** keeps more signal at some cost in noise. |
+| **Leadfield matrix** | precomputed | GEDAI's precomputed leadfield, matched by channel label, or **interpolated** to the montage. |
+| **Low-cut frequency** | 0.5 Hz | Wavelet bands below this frequency are removed, which high-pass filters the output. |
+| **Reject bad epochs**, **Epoch ENOVA threshold** | no, 0.9 | Reject GEDAI's internal epochs whose share of variance explained as noise (ENOVA) exceeds the threshold. |
+| **Reject bad channels**, **Channel ENOVA threshold** | no, 0.9 | The same for channels, which GEDAI then interpolates back. |
+| **Use parallel processing** | | Honoured only when a GPU is present (below). |
+
+: AutoGEDAI's options. GEDAI's other settings are left at its own defaults. {#tbl-autogedai}
+
+Three properties of the output are easy to miss:
+
+- **It is average-referenced.** GEDAI re-references the scalp channels to
+  their average (in a form that does not reduce the rank of the data) before
+  denoising, and returns them that way.
+- **It is high-pass filtered** at the low cut, by the removal of the wavelet
+  bands below it.
+- **Rejected epochs are marked, not cut.** GEDAI removes a rejected stretch
+  from the data; Alakazam puts it back as rejected (`NaN`) on every channel,
+  so that the recording keeps its length and its events their latencies.
+  Rejected channels are interpolated by GEDAI and keep their place.
+
+Only channels in GEDAI's 10-5 template are denoised; the others are set aside
+and put back unchanged. GEDAI's diagnostics (the SENSAI score and the ENOVA
+per epoch and per channel) are kept with the result.
+
+GEDAI is not bundled: it is downloaded on first use, after consent, and its
+licence (PolyForm Noncommercial 1.0.0) allows noncommercial research use
+only (@tbl-toolboxes). Its parallel processing on the CPU can silently
+corrupt the output when one of its frequency bands fails and is retried, so
+Alakazam uses parallel processing only on a GPU; the problem has been
+reported to its authors.

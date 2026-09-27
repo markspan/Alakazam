@@ -103,6 +103,32 @@ classdef AverageTest < matlab.unittest.TestCase
                 'AbsTol', 1e-10);
         end
 
+        function standardErrorCountsOnlyTheTrialsKept(testCase)
+        %STANDARDERRORCOUNTSONLYTHETRIALSKEPT  Rejection writes NaN and
+        %   leaves the trial in its bin. The standard error and the aSME
+        %   must divide by the trials that were kept, not by every trial in
+        %   the bin: they used to divide by all of them, which made the
+        %   confidence band too narrow by sqrt(kept/total).
+            EEG = makeTestEEG('nbchan', 2, 'trials', 5);
+            EEG.data(:, :, 2) = NaN;        % trial 2 rejected whole (Whole epoch)
+            EEG.data(1, :, 4) = NaN;        % trial 4 rejected on channel 1 only
+            EEG.bindesc(1) = struct('index', 1, 'label', 'A', 'trials', 1:5, 'combo', []);
+
+            [result, ~] = Average(EEG);
+
+            kept1 = [1 3 5];                % channel 1 lost trials 2 and 4
+            kept2 = [1 3 4 5];              % channel 2 lost trial 2 only
+            testCase.verifyEqual(result.stErr(1, :, 1), ...
+                std(EEG.data(1, :, kept1), 0, 3) / sqrt(3), 'AbsTol', 1e-10);
+            testCase.verifyEqual(result.stErr(2, :, 1), ...
+                std(EEG.data(2, :, kept2), 0, 3) / sqrt(4), 'AbsTol', 1e-10);
+            perTrial1 = squeeze(mean(EEG.data(1, :, kept1), 2));
+            testCase.verifyEqual(result.aSME(1, 1), std(perTrial1) / sqrt(3), 'AbsTol', 1e-10);
+            testCase.verifyEqual(result.bindesc(1).n, 4, ...
+                ['The bin''s count is the trials averaged: trial 2 was rejected whole, ' ...
+                 'trial 4 on one channel only, so four of the five went in.']);
+        end
+
         function rejectsContinuousData(testCase)
             EEG = makeTestEEG('DataFormat', 'CONTINUOUS');
             testCase.verifyError(@() Average(EEG), 'Alakazam:Average');

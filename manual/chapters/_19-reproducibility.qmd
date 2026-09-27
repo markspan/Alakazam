@@ -1,0 +1,157 @@
+# Reproducibility {#sec-reproducibility}
+
+An analysis is reproducible when someone else, or you in a year, can obtain
+the same numbers from the same data. Alakazam keeps the whole record needed
+for that: every node knows the step that made it and the options it used,
+and there are four ways to put that record to work, from replaying a branch
+on the next subject to a script that runs without the application.
+
+## Replay within a workspace
+
+A node's options are stored by channel and bin **label**, never by position,
+so a stored step means the same on a recording whose channels are in a
+different order. A recording that lacks a stored channel says so rather than
+computing on the wrong one.
+
+- **Drag and drop** a node onto another recording's root: the step and every
+  step below it are replayed there, forks included.
+- **Apply to All Raw Files** (a node's context menu): the same, onto every
+  recording in the workspace. With the Parallel Computing Toolbox, several
+  recordings are processed at once (**Settings > Processing**,
+  @sec-settings); on nine RIFT recordings that took 215 s on three workers
+  against 364 s one at a time.
+- **Recalculate**: reopen a step's dialog with its stored options, change
+  them, and recompute it and everything below it. Grand averages built from
+  a recalculated node are rebuilt with their own sources and weighting.
+
+## Templates {#sec-templates}
+
+**Save Template** (a node's context menu) writes the node's branch to an
+`.alztemplate` file: a plain JSON list of steps, each with its
+transformation, its options and its parent, independent of the workspace's
+cache. **Apply Template**, on any dataset node, replays it there. A template
+is the unit to keep with a study, share with a colleague, or apply to the
+next batch of subjects. The repository includes templates for the analyses
+in this manual: the ERP CORE chapters of Luck's textbook, the N400 worked
+example, the RIFT study, the face and reading deconvolutions, and an ICA
+pipeline.
+
+## Export as Code {#sec-export-code}
+
+**Export/Report > Reproducibility > Export as Code** writes the whole
+workspace as one MATLAB script: every recording's chain in order, with the
+options actually used, through to the grand averages, with each DefineBins
+script beside it as a `.binscript` file. It can be read, edited, kept under
+version control, quoted in a methods section, and run without the
+application.
+
+The script is built from the tree, not from the cache folder: a cache
+outlives the workspaces that wrote it, and a script built from stale files
+would describe an analysis this workspace never performed. Four things make
+it worth keeping rather than merely correct:
+
+- Recordings processed identically are written **once, as a loop**. Grouping
+  is by exact equality of the chain, so a subject who genuinely differs keeps
+  their own block.
+- Every step's options are **named variables** in one block at the top: the
+  head of the script is the settings, the body the pipeline.
+- Each recording runs inside `try`/`catch`, and failures are collected and
+  reported at the end, so one bad subject does not end a batch of forty.
+- `%%` sections structure it, so MATLAB's editor can fold and run them.
+
+**Library calls where they are faithful.** Where a step is a thin wrapper
+around EEGLAB, the script spells it as the EEGLAB call, which anyone in the
+field can read and run:
+
+| Step | Written as |
+|-----------|--------------------------------------------------|
+| Resample | `pop_resample` |
+| ReRef | `pop_reref`, with the reference resolved from labels |
+| Interpolate | `pop_interp`, the same way |
+| SelectData | `pop_select`, when it selects channels only |
+
+: The steps exported as EEGLAB calls. {#tbl-export-native}
+
+Each keeps what its transformation does around the library call, which is
+the part that is easy to get wrong: Resample's time axis in seconds,
+Interpolate's and SelectData's handling of a stored channel the dataset does
+not have, and ReRef's refusal of an empty reference, which `pop_reref` would
+otherwise silently read as the average. Every step that is exported this way
+is checked by a test that runs both routes and compares every field of the
+result. Where a native spelling would have to re-derive something (Filter's
+kernel design, a SelectData time range that needs a unit conversion, the
+AutoICA and AutoGEDAI pipelines), the script calls the transformation and
+names in a comment the library function that does the work.
+
+The exported script reads each recording from the workspace cache, as it
+stood just after import; comments in its setup section give the lines that
+read the raw files instead, for EEGLAB, BrainVision and ERPLAB formats.
+
+## Scripting {#sec-scripting}
+
+Every transformation is an ordinary MATLAB function with the same contract:
+
+```matlab
+[EEG, options] = Filter(EEG)            % opens the dialog, returns what was chosen
+[EEG, options] = Filter(EEG, options)   % replays stored options, no dialog
+```
+
+Given an options struct, a transformation runs without the interface, which
+is what replay and the exported script use. The easiest way to obtain an
+options struct is to make the step once in the application and take it from
+an exported script, or from the node's record. With Alakazam's `src` folder
+and EEGLAB on the path:
+
+```matlab
+hp = struct('highpass', struct('enabled', true,  'freq', 0.1, 'db', 40), ...
+            'lowpass',  struct('enabled', false, 'freq', 30,  'db', 40), ...
+            'notch',    struct('enabled', false, 'freq', 50,  'db', 40));
+EEG = pop_loadset('sub01.set', rawDir);
+[EEG, ~] = Filter(EEG, hp);
+```
+
+The cluster tests are functions too, returning a summary and writing no
+report unless asked:
+
+```matlab
+files    = {'sub01/Average.mat', 'sub02/Average.mat'};   % averaged datasets
+contrast = struct('mode', 'paired', 'binA', 'Related', 'binB', 'Unrelated');
+opts     = struct('TimeWindow', [250 450], 'ResampleHz', 200, ...
+                  'SourceSpace', 5124, 'numrandomization', 1000);
+summary  = SourceClusterStats(files, contrast, opts);
+```
+
+`contrast` takes one of three shapes, matching the dialog's three contrasts:
+
+```matlab
+struct('mode', 'vsZero',      'bin',  'N400')
+struct('mode', 'paired',      'binA', 'Related', 'binB', 'Unrelated')
+struct('mode', 'independent', 'bin',  'N400', 'groupOf', {{'A','A','B','B'}})
+```
+
+Every field of `opts` is optional; the defaults are those of the dialog
+(@tbl-source-cluster), with `Method` (`'mne'` for dSPM, or `'sloreta'`),
+`Orientation` (`'normal'` or `'magnitude'`), `correctm` (`'tfce'` or
+`'cluster'`), `alpha`, `tail`, `clusteralpha` and `Workers` besides. The
+summary holds the clusters sorted by *p*, FieldTrip's statistics structure,
+the cortical sheet, and the options as they were resolved. The developer guide
+documents the functions behind both tests.
+
+## What to report
+
+A methods section built from Alakazam should name, beyond the steps
+themselves:
+
+- the software: Alakazam's version (**About**), MATLAB's, EEGLAB's, and
+  those of the toolboxes a step used (@tbl-toolboxes);
+- the methods each step ran, with the references given in this manual's
+  sections (ICLabel for AutoICA, the Unfold toolbox for Deconvolve, FieldTrip
+  for the cluster tests and source estimates);
+- the numbers of trials kept per condition and subject, and the SME of the
+  scores analysed (@sec-data-quality);
+- for a statistical report, the model actually fitted (which the report
+  states) and, for a cluster test, every parameter its report lists.
+
+The COBIDAS MEEG recommendations [@pernet2020] and the publication
+guidelines of @keil2014 give the full list. An exported script, deposited
+with the data, answers most of these questions at once.

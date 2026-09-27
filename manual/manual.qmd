@@ -1,0 +1,89 @@
+---
+title: "Alakazam"
+subtitle: "User manual for EEG and ERP analysis"
+date: last-modified
+date-format: "D MMMM YYYY"
+lang: en-GB
+bibliography: references.bib
+link-citations: true
+number-sections: true
+toc: true
+toc-depth: 3
+toc-title: "Contents"
+crossref:
+  chapters: true
+format:
+  html:
+    embed-resources: true
+    toc-location: left
+    theme: cosmo
+    fontsize: 1rem
+    linestretch: 1.5
+    fig-cap-location: bottom
+    tbl-cap-location: top
+    anchor-sections: true
+    smooth-scroll: true
+    reference-location: document
+  # The PDF, typeset with Typst (bundled with Quarto: no LaTeX needed) in the
+  # application's own look. The design is _typst/typst-template.typ; the
+  # fonts are in fonts/ (see fonts/README.md).
+  typst:
+    papersize: a4
+    fontsize: 10pt
+    section-numbering: "1.1.1"
+    toc-depth: 2
+    citeproc: true
+    font-paths:
+      - fonts
+    template-partials:
+      - _typst/typst-template.typ
+---
+
+{{< include chapters/_01-introduction.qmd >}}
+
+{{< include chapters/_02-installation.qmd >}}
+
+{{< include chapters/_03-getting-started.qmd >}}
+
+{{< include chapters/_04-concepts.qmd >}}
+
+{{< include chapters/_05-interface.qmd >}}
+
+{{< include chapters/_06-your-data.qmd >}}
+
+{{< include chapters/_07-ref-preprocessing.qmd >}}
+
+{{< include chapters/_08-ref-artefacts.qmd >}}
+
+{{< include chapters/_09-ref-epoching.qmd >}}
+
+{{< include chapters/_10-ref-frequency.qmd >}}
+
+{{< include chapters/_11-ref-plots.qmd >}}
+
+{{< include chapters/_12-grand-averages.qmd >}}
+
+{{< include chapters/_13-statistics.qmd >}}
+
+{{< include chapters/_14-cluster-statistics.qmd >}}
+
+{{< include chapters/_15-data-quality.qmd >}}
+
+{{< include chapters/_16-frequency-tagging.qmd >}}
+
+{{< include chapters/_17-deconvolution.qmd >}}
+
+{{< include chapters/_18-source-estimation.qmd >}}
+
+{{< include chapters/_19-reproducibility.qmd >}}
+
+{{< include chapters/_20-worked-examples.qmd >}}
+
+{{< include chapters/_21-troubleshooting.qmd >}}
+
+{{< include chapters/_22-glossary.qmd >}}
+
+# References {.unnumbered}
+
+::: {#refs}
+:::

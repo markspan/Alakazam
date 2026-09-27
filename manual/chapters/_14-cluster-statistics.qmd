@@ -1,0 +1,155 @@
+# Cluster-based permutation tests {#sec-cluster-statistics}
+
+The statistical reports of @sec-statistics test one chosen channel and
+window at a time, which is right when the literature says where and when an
+effect should appear. **Export/Report > Cluster Statistics > Cluster Test**
+answers a different question: is there an effect anywhere across the scalp
+and the epoch, without committing to a channel or window in advance? That
+is the question of an exploratory analysis, of a new paradigm, or of a
+replication that cannot assume an effect lands at the same site and latency.
+
+## The method
+
+Testing every channel and time point separately means thousands of tests,
+and every correction for that many is either very conservative or
+underpowered [@groppe2011]. Cluster-based permutation testing uses a
+property of EEG instead: a real effect is not one isolated point but spread
+over neighbouring electrodes and adjacent samples [@maris2007]. Contiguous
+points above a threshold form clusters, the test statistic is summed within
+each (its mass), and each cluster's mass is compared with the distribution
+of the largest mass under repeated random relabelling of conditions or
+groups. The result is one family-wise corrected *p*-value per cluster rather
+than one per point.
+
+**Threshold-free cluster enhancement** (TFCE) avoids choosing a
+cluster-forming threshold at all, by scoring each point by the support it
+gathers across all thresholds [@smith2009]. It is the default; the classic
+fixed-threshold procedure of @maris2007 is offered as an alternative.
+
+The engine is FieldTrip's [@oostenveld2011], downloaded with consent on first
+use, rather than a reimplementation: EEGLAB's own cluster statistics also
+delegate to it. Channels need positions the 10-5 system recognises; rename
+or exclude any it does not.
+
+**What a significant cluster means.** A cluster test controls the error of
+concluding that the conditions differ somewhere. It does not establish that
+the effect begins or ends where the cluster does, nor that it is absent
+outside it: the extent of a cluster in time and space is not itself tested
+[@sassenhagen2019]. Report "an effect, most pronounced at centro-parietal
+sites between about 300 and 500 ms", not "an effect from 312 to 486 ms at
+these channels".
+
+## Setting up a test
+
+![**Cluster Test**: the contrast, its bins, the cluster-forming threshold, the number of permutations, the correction method, and the subjects.](images/ga-cluster.png){#fig-cluster-dialog}
+
+| Contrast | Question |
+|-------------------------------------|-------------------------------------------------------|
+| **One bin against zero, within subjects** | Usually a difference bin: is this effect present anywhere? |
+| **Two bins, within subjects (paired)** | Do conditions A and B differ anywhere? |
+| **One bin, between two groups** | Offered once two groups are assigned: do the groups differ anywhere? |
+
+: The contrasts of a cluster test. {#tbl-cluster-contrasts}
+
+| Option | Default | Meaning |
+|----------------------|---------------------|-------------------------------------------------------|
+| **Cluster-forming p** | 0.05 | The threshold that forms clusters; ignored by TFCE. |
+| **Permutations** | 1000 | Random relabellings. A within-subject test permutes by flipping each subject's sign, so there are $2^N$ distinct relabellings for $N$ subjects; a request above half of that runs all of them. |
+| **Correction method** | TFCE | **TFCE** or the classic cluster mass. |
+| **Include these subjects** | all averaged datasets | The same list Grand Average offers. |
+
+: A cluster test's options. {#tbl-cluster-options}
+
+Tests of three or more bins or groups at once (an omnibus or interaction
+test) are not yet supported. The smallest *p* a test can return is
+$1/(P+1)$ for $P$ permutations, so "*p* < .001" from 1000 permutations is the
+resolution of the test, not a vanishingly small probability.
+
+## The report
+
+The test first shows every cluster found on screen, significant or not,
+since a near miss is worth seeing, and then writes a Quarto report: the test
+that ran in prose, a table of every cluster, a heat map of the statistic over
+the whole channel-by-time grid with the clusters outlined, and for the
+strongest clusters a scalp map (where) and the cluster's window shaded on
+each condition's grand average (when).
+
+It also draws the **permutation null distribution** itself, per tail, with
+the observed cluster masses marked: the comparison the *p*-value came from.
+It shows how far into the tail a cluster lies and whether the largest cluster
+is exceptional or only the largest of several similar ones. Under TFCE there
+are no discrete clusters and so no mass to distribute, and the section says
+so rather than drawing an empty panel. The report and its four CSVs (the
+statistic, the waveforms, the cluster outlines and the null distribution)
+land in the **Reports** tree as `Cluster Stats (<contrast>) - <time>`.
+
+## The same test in source space {#sec-source-cluster}
+
+**Source Cluster** asks the same question over the cortical surface: not
+which electrodes and samples, but which cortical vertices and samples. Each
+subject's average is inverted onto FieldTrip's template cortical sheet, and
+the source waveforms are tested across subjects by permutation, with the
+family-wise error controlled over the whole vertex-by-time volume. The
+contrasts, subjects and correction options are those of the scalp test.
+What the estimate itself can and cannot show is set out in
+@sec-source-estimation.
+
+| Setting | Default | Why |
+|---------------------|------------------------|-------------------------------------------------------|
+| **Inverse method** | dSPM | dSPM and sLORETA are noise-normalised or standardised, so vertices are comparable. eLORETA is not offered: an excellent localiser of one source, and the wrong input to a vertex-wise group test. |
+| **Orientation** | Signed (cortical normal) | A magnitude is positive everywhere, so testing it against zero would find the whole cortex; the signed projection has a meaningful null, and signs are comparable across subjects on one template. |
+| **Time window** | whole epoch | The largest lever on run time and on sensitivity. |
+| **Sampling for the test** | 200 Hz | Cost grows with vertices × samples × permutations, and a 1000 Hz epoch oversamples an effect tens of milliseconds wide. |
+| **Cortical sheet** | 20 484 vertices | Not only a speed setting: TFCE counts extent in vertices, so a denser sheet raises the statistic for the same data. Choose it once per study and report it. |
+
+: The settings of a source cluster test. {#tbl-source-cluster}
+
+Adjacency is taken from the mesh triangulation rather than from distance, so
+two banks of a sulcus that nearly touch are not neighbours. The dialog shows
+a running estimate of the run time as settings change, fitted to measured
+runs and accurate to about 30%. Stored estimates from Source Estimate
+(@sec-tr-sourceestimate) are reused when their settings and data match, and
+the report says how many subjects were reused. A compiled TFCE kernel and
+parallel permutations shorten long runs; on 18 subjects the full-resolution
+run without them took 257 s and the 5 124-vertex run with them 28 s.
+
+### What the source report states
+
+The source report is written to the reporting items of COBIDAS MEEG
+[@pernet2020], and leads with what the test does not show: a significant
+cluster establishes that an effect exists somewhere in a region of space and
+time, not which gyrus it occupies. Clusters are named by atlas region and
+peak MNI coordinate. Each significant cluster gets four cortical views (each
+hemisphere laterally and medially, on one scale, so that a medial cluster is
+not hidden) and its time course. Beyond the results it records:
+
+- every free parameter of the inverse, including the regularisation and the
+  noise covariance (a scaled identity, not an estimate from the data);
+- every free parameter of the correction;
+- the forward model in full, and how many of the channels were used;
+- per subject, the trials in the contrast and the share of the scalp data
+  the fitted sources fail to reproduce;
+- the unthresholded statistic, once, in an appendix;
+- **how much detail the map can carry**: an *N*-electrode montage,
+  average-referenced, gives a leadfield of rank at most $N-1$, so a
+  29-channel recording on the 5 124-vertex sheet carries about 28 independent
+  numbers spread over 5 124 vertices;
+- the same limit as a picture: the **point spread function** of the vertex
+  the strongest cluster peaks at, the estimate a single active vertex would
+  produce through this analysis's own inverse, which covers a large part of
+  a lobe [@hauk2011; @hauk2022];
+- the software versions, including the Alakazam commit and whether the
+  working tree had uncommitted changes.
+
+| | Scalp (**Cluster Test**) | Source (**Source Cluster**) |
+|----------------|--------------------------------------|-------------------------------------------------------|
+| Unit of the test | channels × time | cortical vertices × time |
+| Adjacency | electrode positions | mesh triangulation |
+| Document | Quarto with R plots from exported CSVs | Markdown, figures rendered in MATLAB, no R needed |
+| Where | a scalp map per cluster | four cortical views per cluster, the unthresholded map, the point spread |
+| Named by | channel labels | atlas region and peak MNI coordinate |
+
+: The scalp and the source report compared. {#tbl-cluster-compare}
+
+Both tests can also be run from a script, without the interface
+(@sec-reproducibility).

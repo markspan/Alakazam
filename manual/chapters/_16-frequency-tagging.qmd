@@ -1,0 +1,112 @@
+# Frequency tagging {#sec-frequency-tagging}
+
+In a frequency-tagging design a stimulus flickers at a known frequency and
+the brain's response at that frequency (and its harmonics) is measured: a
+steady-state visual evoked potential (SSVEP) when the flicker is visible
+[@norcia2015], or rapid invisible frequency tagging (RIFT) when it is too fast
+to see [@zhigalov2019; @dimigen2025]. A photodiode taped over the flickering
+patch records the stimulation itself, which makes the coherence between each
+channel and the photodiode the natural read-out.
+
+This chapter describes how the frequency steps fit together. Each is
+documented in its own section: Spectral Measure (@sec-tr-spectralmeasure),
+RESS (@sec-tr-ress), Coherence Map (@sec-tr-coherencemap) and CohTopo
+(@sec-tr-coherencetopography).
+
+## A tagging pipeline
+
+The repository's RIFT template (`dimigen-rift.alztemplate`) builds this
+pipeline:
+
+1. **SelectData**, then **ReRef** to the average reference, on the
+   continuous recording.
+2. **Resample** to 960 Hz, a rate at which the coherence frames are long
+   enough to separate 60 from 64 Hz (@sec-tr-coherencemap).
+3. **Filter**.
+4. **DefineBins**, one bin per condition (60 Hz and 64 Hz central, 60 Hz
+   peripheral, a 30 Hz SSVEP control), epoched around stimulus onset.
+5. **AutoICA**, removing eye components.
+6. **Coherence Map** and **CohTopo** on the epochs, for the time-resolved
+   and the topographic pictures.
+7. **SelectData** to the steady-state part of each epoch, leaving out the
+   onset response, then **Spectral Measure** at the tagged frequencies with
+   the photodiode as the reference.
+8. **Export/Report > Spectral & Report** for the statistics.
+
+**RESS** (@sec-tr-ress), when it is used, goes before Spectral Measure, so
+that its components can be measured like electrodes.
+
+## What is measured
+
+For each frequency, channel and bin, Spectral Measure reports power and
+amplitude of the evoked response, its SNR against neighbouring frequencies,
+inter-trial phase coherence, phase, and, against the photodiode, coherence and
+phase lag (@tbl-spectralmeasure-quantities). Frequencies are expressions over
+named fundamentals, so harmonics (`2*f1`) and intermodulation terms
+(`f1+f2`, `2*f1-f2`) are measured exactly even when they fall between the
+bins of the epoch's spectrum. An amplitude-based SNR is the classic SSVEP
+read-out, used for instance to track the deployment of attention
+[@toffanin2009]; coherence to the photodiode is the RIFT read-out
+[@dimigen2025].
+
+### Which coherence
+
+Coherence to a reference depends heavily on how it is estimated, and the
+three estimators Alakazam offers are not interchangeable. The default, used by
+Spectral Measure and CohTopo and drawn by the Coherence Map, is the
+**frame-averaged** coherence: overlapping frames, each read at the exact
+frequency, coherence across trials per frame, averaged over frames. On ten
+RIFT recordings it agreed with EEGLAB's `newcrossf` to 0.001, without needing
+EEGLAB. The single-window estimator reads 2.4 to 2.9 times higher, because it
+is biased upwards, and is kept only as an option; `newcrossf` itself is kept
+as the reference implementation. Every report states which estimator its
+coherence values used, and a node made with one estimator keeps it when
+recalculated.
+
+### A component instead of an electrode
+
+Reading the response at Oz, or at wherever it looks strongest, is a choice
+that differs between people and frequencies and is circular when made on the
+response itself. RESS replaces it with a spatial filter per recording and
+frequency [@cohen2017]. Built from the pooled trials of the bins at its
+frequency and applied to every trial, it gives the other bins as its null.
+Alakazam's filter agrees with the authors' own code to a correlation of
+0.9999 or better over the twenty filters of the ten RIFT recordings; the
+remaining difference lies in two constants of the reference code (its
+frequency grid and its conversion of filter widths), which Alakazam corrects.
+
+On those ten recordings, the component's coherence to the photodiode beat
+Oz's in every recording at both central frequencies: 0.39 against 0.16 at
+64 Hz and 0.44 against 0.19 at 60 Hz, with the same gain when the filter was
+built on half the trials and measured on the other half. In the peripheral
+60 Hz condition both sat near the noise floor (0.039 against 0.031), because
+there was little response to separate.
+
+## The report
+
+**Spectral & Report** writes one long-format CSV of every Spectral Measure
+result and a statistical report with the same design-aware tests as the ERP
+report (@sec-statistics). Power, amplitude, SNR, ITC and coherence get the
+full within-subject, between-subject or mixed treatment; phase and phase lag,
+being angles, get circular descriptive statistics only.
+
+Companion files let the report show the signal behind the numbers:
+
+- `..._spectra.csv`: the evoked amplitude spectrum behind every value, drawn
+  per bin with the tested frequencies marked. A tag that is absent still
+  yields a power and an SNR near 1, and a response one bin away from where it
+  was measured looks like a weak effect; both are obvious on the spectrum.
+- `..._coherence_trace.csv`: coherence against time at the tagged frequency
+  for every channel, drawn per condition. Rise, plateau and fall are visible,
+  so a measurement window that starts inside the fade-in is apparent. The
+  tagged frequency is read from the map itself.
+- `..._coherence_map.csv`: the full time-by-frequency plane for the channels
+  with the strongest response, drawn as the faceted heat map a tagging paper
+  prints.
+
+Both coherence figures follow the electrodes named in the Spectral Measure
+rows: with rows on Oz, they show Oz alone, and the report says that the
+channel was named in advance rather than picked for its response. For RESS,
+the report sets each component beside its null bins, names a bin that is not
+a clean null (a 30 Hz condition drives a 60 Hz harmonic), and names any
+recording whose component map is inverted or whose filter separated nothing.

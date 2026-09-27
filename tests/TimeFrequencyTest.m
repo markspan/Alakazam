@@ -114,6 +114,26 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(duringBurst, duringBaseline + 3); % clearly higher, generous margin (dB)
         end
 
+        function aRejectedTrialIsLeftOutNotSpreadAsNaN(testCase)
+        %AREJECTEDTRIALISLEFTOUTNOTSPREADASNAN  Rejection writes NaN and
+        %   leaves the trial in its bin. One such trial used to turn the
+        %   whole map NaN, so TimeFrequency after ArtefactDetect drew
+        %   nothing; it must be left out, and the map be that of the trials
+        %   kept.
+            EEG = erspFixture(4);
+            opts = defaultOpts();
+            kept = EEG;
+            kept.data = EEG.data(:, :, 1:3);
+            kept.bindesc(1).trials = 1:3;
+            EEG.data(:, :, 4) = NaN;
+
+            [ersp, ~] = ComputeErsp(EEG, opts);
+            [expected, ~] = ComputeErsp(kept, opts);
+
+            testCase.verifyFalse(any(isnan(ersp(:))), 'One rejected trial made the map NaN.');
+            testCase.verifyEqual(ersp, expected, 'AbsTol', 1e-9);
+        end
+
         function rejectsBaselineWindowOutsideEpochRange(testCase)
             EEG = erspFixture(3);
             opts = defaultOpts();

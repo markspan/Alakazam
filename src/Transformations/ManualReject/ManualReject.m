@@ -15,14 +15,14 @@ function [EEG, options] = ManualReject(input, varargin)
 %   trial at a time so a channel flagged bad in trial 12 is untouched in
 %   every other trial).
 %
-%   Because the flagged (channel, trial) cells are specific to one
-%   dataset's own trial count and order, this transform is inspection-
-%   driven and is not registered as recalculable -- the same reasoning
-%   RemoveComponents.m gives for its own component indices being specific
-%   to one ICA decomposition. The stored options record the flags (and the
-%   two settings) for provenance; replaying them onto a differently-shaped
+%   The flagged (channel, trial) cells are specific to one dataset's own
+%   trial count and order, so replaying them onto a differently-shaped
 %   dataset is rejected with a friendly error rather than silently
-%   misapplying them.
+%   misapplying them. Recalculate is offered all the same (see
+%   WorkSpaceTree.RecalculableTransforms): recomputing this node's own
+%   input leaves its trials and channels where they were, so the dialog
+%   reopens with the same cells flagged. RemoveComponents is the contrast:
+%   a fresh ICA numbers its components differently.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ManualReject(input)        % interactive browser

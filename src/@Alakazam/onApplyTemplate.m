@@ -1,8 +1,10 @@
-function onApplyTemplate(this)
+function onApplyTemplate(this, templateFile)
 %ONAPPLYTEMPLATE  Context-menu callback: apply a previously saved
 %   template (see onSaveTemplate) to the selected node -- replaying
 %   its saved sequence of (transformId, params) steps in order,
 %   exactly as if each had been run interactively from the ribbon.
+%   ONAPPLYTEMPLATE(THIS, TEMPLATEFILE) applies that file without
+%   asking for one, for a script driving the app.
 %   Available on any node in Tree or GrandAveragesTree (root or not):
 %   the common case is running a whole saved pipeline on a freshly
 %   imported raw recording in one action, but applying a partial
@@ -30,14 +32,21 @@ function onApplyTemplate(this)
         return;
     end
 
-    exportsDir = this.Workspace.ExportsDirectory;
-    if isempty(exportsDir) || ~isfolder(exportsDir)
-        exportsDir = pwd;
-    end
-    [fileName, pathName] = uigetfile({'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, ...
-        'Apply Template', exportsDir);
-    if isequal(fileName, 0)
-        return; % cancelled
+    % A script (the manual's screenshot tool, for one) names the template
+    % file itself; the context menu asks for it.
+    if nargin >= 2 && ~isempty(templateFile)
+        [pathName, fileName, ext] = fileparts(char(templateFile));
+        fileName = [fileName ext];
+    else
+        exportsDir = this.Workspace.ExportsDirectory;
+        if isempty(exportsDir) || ~isfolder(exportsDir)
+            exportsDir = pwd;
+        end
+        [fileName, pathName] = uigetfile({'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, ...
+            'Apply Template', exportsDir);
+        if isequal(fileName, 0)
+            return; % cancelled
+        end
     end
 
     try

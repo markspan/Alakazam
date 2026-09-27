@@ -38,6 +38,41 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
         end
 
+        function aRejectedTrialIsLeftOut(testCase)
+        %AREJECTEDTRIALISLEFTOUT  Rejection writes NaN and leaves the trial
+        %   in its bin; one such trial used to make every channel's
+        %   coherence NaN. Left out, the two intact trials still give a
+        %   scalar multiple of the reference a coherence of 1.
+            EEG = coherenceFixture();
+            EEG.data(:, :, 3) = NaN;
+            EEG.bindesc.trials = 1:3;
+            opts = waveletOpts();
+
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
+
+            testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6);
+            testCase.verifyFalse(any(isnan(coh(3, :, :, 1)), 'all'));
+        end
+
+        function aChannelRejectedInOneTrialKeepsItsOtherTrials(testCase)
+        %ACHANNELREJECTEDINONETRIALKEEPSITSOTHERTRIALS  "This channel only"
+        %   rejection blanks one channel of one trial. That channel is
+        %   estimated from its other trials, with the reference power in its
+        %   denominator taken over the same trials, and the other channels
+        %   keep every trial.
+            EEG = coherenceFixture();
+            EEG.data(:, :, 3) = EEG.data(:, :, 1);
+            EEG.data(2, :, 3) = NaN;
+            EEG.bindesc.trials = 1:3;
+            opts = waveletOpts();
+
+            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
+
+            testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6, ...
+                'With the reference power over the same two trials, this is still exactly 1.');
+            testCase.verifyFalse(any(isnan(coh(3, :, :, 1)), 'all'));
+        end
+
         function referenceChannelRowIsNaN(testCase)
             EEG = coherenceFixture();
             opts = waveletOpts();

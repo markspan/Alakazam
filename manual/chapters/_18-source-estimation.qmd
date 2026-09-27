@@ -1,0 +1,128 @@
+# Source estimation {#sec-source-estimation}
+
+Three parts of Alakazam estimate cortical sources: the source projections of
+the 3D brain view (@sec-tr-brain3d), the Source Estimate step that stores an
+estimate on a node (@sec-tr-sourceestimate), and the source cluster test
+(@sec-source-cluster). They share one forward model and one inverse, and this
+chapter describes both, and above all what their result can and cannot mean.
+
+## The forward model
+
+Alakazam uses template anatomy throughout: FieldTrip's template boundary
+element head model, template 10-5 electrode positions matched by channel
+label, and a template cortical sheet of 20 484, 8 196 or 5 124 vertices
+[@oostenveld2011]. No individual MRI and no digitised electrode positions are
+used, and there is no co-registration. Channels whose label the 10-5 system
+does not know are dropped rather than placed by guesswork. The leadfield is
+built on first use and cached per channel set and source space.
+
+Template anatomy and template electrode positions are a known and
+substantial source of localisation error [@akalinacar2013]. They make every
+subject's estimate comparable on one sheet, which is what a group test needs,
+at the price of placing no subject's sources exactly.
+
+## The inverse
+
+The inverse is a **distributed** solution [@hamalainen1994]: one dipole at
+every vertex of the sheet, its orientation fixed to the local cortical
+normal or left free and reduced to a magnitude, and only its amplitude
+estimated. It is not dipole fitting, in which the number, position and
+orientation of a few generators are themselves estimated [@michel2019].
+
+| Method | What it is | Offered in |
+|-------|-------------------------------------------------------|---------------------------------------------|
+| **dSPM** | Minimum norm, with each vertex divided by its own noise standard deviation [@dale2000] | 3D view, Source Estimate, source cluster test |
+| **sLORETA** | Minimum norm standardised by its resolution matrix [@pascualmarqui2002] | 3D view, Source Estimate, source cluster test |
+| **eLORETA** | Exact low-resolution tomography, zero localisation error for a single source, not noise-normalised [@pascualmarqui2007] | 3D view only |
+
+: The inverse methods. {#tbl-inverse-methods}
+
+FieldTrip computes the spatial filter; Alakazam projects the data through it
+and applies the method's scaling and the orientation along one shared path,
+which keeps the dSPM normalisation explicit. An independent implementation
+is kept as a reference, and the two agree to floating-point precision on the
+test data.
+
+The noise covariance behind the regularisation and the dSPM normalisation
+is a **scaled identity**, not a covariance estimated from data: at the stage
+where Alakazam inverts, the data are already averaged, and there is no
+single-trial baseline left to estimate one from. The regularisation is
+reported both as the dimensionless setting and as the absolute value the
+solver used.
+
+## What the estimate is, and is not
+
+**It does not locate sources.** The source positions are fixed before any
+data are seen; only an amplitude per vertex is estimated.
+
+**It is not unique.** With many more vertices than electrodes, infinitely
+many source distributions reproduce the scalp data exactly
+[@baillet2001; @grech2008]. Minimum-norm estimation picks the one with the
+smallest total power. That choice is a prior, not a property of the data, and
+a different prior gives a different estimate that fits equally well.
+
+**It carries no more patterns than there are channels.** The number of
+distinguishable spatial patterns is bounded by the channel count, not by the
+vertex count. For a 29-channel recording, the leadfield with orientations on
+the cortical normal has rank 28 after average referencing, and 90% of its
+energy lies in 6 components. The vertex count decides how smooth the map
+looks, not how much it says, which is why a coarser sheet changes the run
+time far more than the result: a whole-epoch estimate left 5.62% of the
+scalp data unexplained on the 5 124-vertex sheet and 5.58% on the 20 484-vertex
+sheet.
+
+**Its values are not currents.** dSPM divides by a noise standard deviation
+and sLORETA by an estimated source variance; both give a noise-normalised
+statistic. The group test then replaces that with a *t* statistic across
+subjects. A source cluster map is two transformations away from any physical
+quantity. The three methods' scales are not comparable with each other, nor
+with the scalp maps' microvolts, and each map carries its own label.
+
+**Its resolution is limited by point spread.** Every vertex's estimate is a
+weighted mixture of activity over a surrounding region, described by the
+point-spread and cross-talk functions of the resolution matrix
+[@hauk2011; @hauk2022]. Measured on a 29-channel montage and the 5 124-vertex
+sheet, the spatial dispersion runs from about 34 to 63 mm depending on where
+a vertex sits, and dSPM's peak is displaced by a median of about 41 mm.
+eLORETA places a single source exactly, as its definition requires, and
+spreads just as widely: displacement and spread are separate limits, and a
+method can avoid one without avoiding the other. The source cluster report
+draws the point spread of its strongest cluster's peak vertex for this
+reason.
+
+**What a result supports.** A significant source cluster supports the
+statement that the conditions differ, and that the model attributes the
+difference to approximately this region of a template cortex. It does not
+establish a focal generator at the reported coordinate. The peak MNI
+coordinate is given beside the atlas region so that the distinction stays
+visible.
+
+## Orientation
+
+A free-orientation estimate gives three dipole components per vertex,
+reduced by default to their length, which is always positive and so cannot
+show polarity. **Signed (cortical normal)** takes the component along the
+normal instead, keeping the sign. Pyramidal cells lie perpendicular to the
+cortical sheet, which makes the normal the usual orientation constraint for
+EEG, and in a group test a signed estimate has a meaningful null where a
+magnitude would make the whole cortex differ from zero.
+
+## Storing estimates
+
+Source Estimate (@sec-tr-sourceestimate) stores an estimate on a node, and
+the 3D view and the source cluster test use it instead of inverting again,
+but only after two checks:
+
+| Check | What it catches |
+|----------------|-------------------------------------------------------|
+| Settings | An estimate made with different channels, mesh, method, orientation, regularisation, time window or rate: a different answer, not a different precision. |
+| Data fingerprint | The settings match but the data do not. Every step below Source Estimate copies the stored estimate forward, so a Baseline after it would otherwise carry an estimate of its parent's data. |
+
+: The checks before a stored estimate is reused. {#tbl-source-reuse}
+
+On a mismatch the estimate is computed again, and the report says how many
+subjects were reused. The channel set is part of the key, so estimates are
+reused across a study only when every subject has the same montage, which is
+worth arranging for the analysis itself in any case. A whole-epoch estimate
+at full rate takes about 500 MB per subject on the 20 484-vertex sheet and
+130 MB on the 5 124-vertex one; the dialog shows the size before computing.

@@ -1,0 +1,266 @@
+# The interface {#sec-interface}
+
+This chapter is a reference to the window: the four ribbon tabs, the trees,
+the plot area and the controls each kind of plot offers, and the settings
+that apply to all of them.
+
+## The ribbon
+
+The ribbon has four tabs. A button that cannot act on the current selection
+is disabled rather than hidden, so the layout never shifts.
+
+### Alakazam
+
+![The **Alakazam** tab.](images/ui-ribbon-home.png){#fig-ribbon-home}
+
+| Group | Button | Action |
+|---------|-----------------|-------------------------------------------------------|
+| Workspace | **Open WorkSpace** | Load a `.wksp` file: its folders, the last options of every transformation, and the design. |
+| | **Save WorkSpace** | Write the same to a `.wksp` file. The only moment workspace state is saved. |
+| | **Edit WorkSpace** | Change the three folders (@fig-workspace-editor). |
+| | **Clear WorkSpace** | Remove this workspace's computed results, normal or deep (@sec-clear). |
+| | **Clear Other** | Keep one recording's branch and remove every other recording's. |
+| Design | **Grouping** | Assign recordings to groups, persons and sessions (@sec-design). |
+| | **Show Design** | Show the design as the statistics will read it. |
+| Settings | **Global** | The application's preferences (@sec-settings). |
+| View | **Tabs**, **Grid**, **Stack** | How the open plots are arranged (@sec-plot-area). |
+| Help | **Help** | This manual, inside the application. |
+| About | **About**, **Update** | Version and licence; check for a newer release. |
+
+: The **Alakazam** tab. {#tbl-ribbon-home}
+
+![**Edit WorkSpace**: the three folders of a workspace, each with a folder browser.](images/ui-workspace-editor.png){#fig-workspace-editor}
+
+### Tools
+
+![The **Tools** tab. A group whose buttons do not fit shows a **more** count and opens a menu with the rest.](images/ui-ribbon-tools.png){#fig-ribbon-tools}
+
+The **Tools** tab holds every transformation, grouped in the order an
+analysis usually proceeds. The groups are the chapters of the reference
+part of this manual:
+
+| Group | Transformations | Reference |
+|-----------------------------------|-------------------------------------------------------|-----------------------------|
+| 1. Preprocessing | Baseline, ChannelEditor, Collapse Hemispheres, DC-Detrend, Derive Channels, EventEditor, Eye tracking, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData | @sec-ref-preprocessing |
+| 2. Artifact Rejection / Reduction | ArtefactDetect, AutoGEDAI, AutoICA, ICA, ManualReject | @sec-ref-artefacts |
+| 3. Epoching and Averaging | Average, Deconvolve, DefineBins | @sec-ref-epoching |
+| 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, RESS, Source Estimate, Spectral Measure, Welch PSD | @sec-ref-frequency |
+| 5. Plots | Brain (3D), CohTopo, Coherence Map, Scalp, TimeFrequency | @sec-ref-plots |
+
+: The groups of the **Tools** tab. {#tbl-ribbon-tools}
+
+The ribbon is built from the transformations it finds at startup, so a
+transformation added to the source tree appears without further
+configuration (see the developer guide).
+
+### Grand Average
+
+![The **Grand Average** tab.](images/ui-ribbon-grandaverage.png){#fig-ribbon-grandaverage}
+
+**Define Grand** combines subjects' averages into one; **Per Design Cell**
+makes one grand average for every cell of the design (each group, for
+instance) at once; **Export Grand** writes every grand average's waveforms
+to a CSV. @sec-grand-averages describes all three.
+
+### Export/Report
+
+![The **Export/Report** tab.](images/ui-ribbon-export.png){#fig-ribbon-export}
+
+| Group | Button | Action |
+|------------------|-------------------|-------------------------------------------------------|
+| Batch Export | **ERP & Report** | Collect every ERP Measure result into one CSV, and write the statistical report (@sec-statistics). |
+| | **Spectral & Report** | The same for Spectral Measure results (@sec-frequency-tagging). |
+| Cluster Statistics | **Cluster Test** | A cluster-based permutation test over channels and time (@sec-cluster-statistics). |
+| | **Source Cluster** | The same test over the cortical surface (@sec-source-cluster). |
+| Data Quality | **Data Quality Report** | Trial loss, noise and measurement error per subject and condition (@sec-data-quality). |
+| Reproducibility | **Export as Code** | The whole workspace as a MATLAB script (@sec-export-code). |
+
+: The **Export/Report** tab. {#tbl-ribbon-export}
+
+## The trees
+
+The three trees on the left hold results of three different kinds:
+
+- **Data & Analyses**: one root per recording, and below it every
+  transformation applied to it (@sec-nodes).
+- **Grand Averages**: results combined over subjects, which belong to no
+  single recording.
+- **Reports**: every rendered report, which opens inside the application.
+
+Selecting a node in one tree clears the selection in the other two, so
+there is never doubt about which dataset a ribbon button will act on. A
+single click on a node draws it; a double click forces it to be read from
+the cache again. The dividers between the trees can be dragged.
+
+A node's icon says what it holds: a person for a raw recording, a waveform
+for a time-domain result, bars for a frequency-domain result, and a fan for
+a grand average. Its right-click menu is described in @tbl-context-menu.
+
+### Dragging nodes
+
+Dragging a node onto a recording's root replays the step, and every step
+below it, onto that recording (@sec-replay). Dragging an averaged dataset
+onto another averaged dataset of the same shape does not transform anything:
+it overlays the first on the second's plot, the quickest way to compare two
+subjects, two conditions or two preprocessing branches on the same axes.
+
+## The plot area {#sec-plot-area}
+
+Each dataset that is drawn gets a tab in the plot area. The **View** group on
+the **Alakazam** tab chooses how the tabs are shown:
+
+- **Tabs**: one plot at a time.
+- **Grid**: every open plot at once, in a grid.
+- **Stack**: every open plot at once, one above the other.
+
+Right-clicking a plot's tab offers **Undock**, which moves the plot into a
+window of its own (for a second monitor); its tab remains, with a **Dock**
+button, and closing the window puts the plot back. **Close** and **Close
+others** close plots; closing a plot discards nothing, and selecting the node
+again reopens it.
+
+### The channel and bin follow you
+
+When a new plot opens, it shows the channel that was showing in the plot
+before it, and in most views the bin as well. Stepping down a branch from filter to epochs to average
+therefore keeps showing Pz, rather than returning to the first channel at
+every step. The match is by label, so it holds when the channels are in a
+different order or some are missing; a dataset without that channel keeps
+its own default. This is a convenience of the session and is not saved.
+
+## Plot types
+
+Which view draws a dataset follows from its format (@tbl-formats) and the
+transformation that made it.
+
+### Continuous data
+
+![Continuous data: the channels stacked, events as labelled vertical lines, a scroll bar that pages through the channels on the right, and the pan, zoom and magnification sliders below.](images/ui-continuous.jpg){#fig-continuous-ref}
+
+Continuous data is drawn by a renderer that precomputes a pyramid of
+per-bucket minima and maxima, so that a redraw reads about one value pair per
+screen pixel, whatever the length of the recording. Because minima and maxima
+combine exactly, the decimated trace never hides a spike or a brief artefact,
+which a plotting routine that subsamples would.
+
+| Control | Action |
+|-----------------------|-------------------------------------------------------|
+| **pan** slider, mouse wheel | Move through time. |
+| **zoom** slider | The length of time shown. |
+| **mag** slider | The amplitude scale. |
+| Vertical slider (right) | Page through the channels, when there are more than fit legibly. |
+
+: Controls of the continuous view. {#tbl-continuous-controls}
+
+Events are drawn as vertical lines with their codes; intervals marked by
+artefact detection are shaded.
+
+### Epoched data: the ERP image
+
+![The ERP image of an epoched dataset at one channel: one row per trial, colour for amplitude, grouped by bin, and the trial average below.](images/definebins-result.jpg){#fig-erp-image}
+
+Epoched data is drawn as an ERP image [@jung2001]: one row per trial, time
+across, colour for amplitude, with the average of the shown trials below.
+The up and down arrow keys, or the mouse wheel, step the channel.
+
+| Control | Action |
+|--------|-------------------------------------------------------|
+| **Channel** | Jump to a channel. |
+| **Bin** | Show one bin's trials only, with their average below; or all. |
+| **Sort by** | Order the rows by a value each trial carries (below). |
+| **Colour ±** | The colour range for this channel's type (EEG, EOG, other); **Auto** takes the 98th percentile of the absolute amplitude. |
+
+: Controls of the ERP image. {#tbl-epoch-controls}
+
+**Sort by** orders the trials by a value each one carries: the time to the
+next or the previous event of any type (**Next saccade**, **Previous
+stimonset**), measured when the trials were cut; the reaction time
+DefineBins captured for the trial's bin; or any numeric field of the
+trial's own event, such as a fixation's duration or a saccade's amplitude
+from an eye tracker. When the value is a time, it is drawn across the image
+as a line. That line is how overlapping activity is told from a response:
+activity locked to the time-locking event runs straight down the image,
+while activity that belongs to the next event bends with the line
+(@sec-deconvolution).
+
+The smallest value is at the top, or the largest with **Reverse the sort**
+(@sec-settings); trials without a value go last. With **Plot trials by bin**
+on, the sort happens within each bin. Rejected trials are drawn blank.
+
+### Averaged data: ERP waveforms
+
+![Averaged data: one line per bin at the chosen channel, each with its confidence band, and a tick box per bin on the right.](images/average-result.jpg){#fig-average-view}
+
+An averaged dataset is drawn as one waveform per bin, each with a band of
+*n* standard errors of the mean around it (the width is set in
+@sec-settings). The tick boxes on the right show and hide bins; the up and
+down arrow keys, or the mouse wheel, step the channel for every line at
+once. When the dataset carries ERP Measure results, the measurement windows
+are drawn on the waveforms: the window shaded, and the measured value marked
+(a peak, a fractional latency, or the area filled).
+
+### Spectra
+
+A frequency-domain result (Fourier, Welch) is drawn as a spectrum, with the
+named frequency bands of @sec-settings shaded beneath it. Below the plot, a
+row of buttons steps and pans:
+
+| Button | Key | Action |
+|------------------|-----------|-------------------------------------------------------|
+| **C^**, **Cv** | up, down | Previous, next channel. |
+| **Channel** | | Jump to a channel. |
+| **P<**, **P>** | | Pan the frequency axis. |
+| **B<**, **B>** (or **T<**, **T>**) | left, right | Previous, next bin of an averaged spectrum (or trial of an epoched one). |
+| **x zoom**, **y zoom** | | Zoom the frequency and power axes. |
+| | P | Switch between magnitude and phase, for a complex spectrum. |
+
+: Controls of the spectrum view. {#tbl-spectrum-controls}
+
+The x zoom is anchored at the left edge of the window, so that 0 Hz stays in
+view unless the axis has been panned.
+
+### The other views
+
+Scalp maps and the 3D brain have a bin menu, a time readout, a slider that
+scrubs through time and a **Play** button; the map redraws as the slider
+moves. Time-frequency, coherence, covariance and cross-correlation results
+have their own views, described with the transformations that produce them
+in @sec-ref-frequency and @sec-ref-plots.
+
+## Settings {#sec-settings}
+
+**Alakazam > Settings > Global** opens the preferences. They apply to every
+workspace, and **Save** writes them at once, to a preference file that is
+separate from any workspace.
+
+::: {layout-ncol=3}
+![Graphics](images/ui-settings-graphics.png){#fig-settings-graphics}
+
+![Processing](images/ui-settings-processing.png){#fig-settings-processing}
+
+![Frequency bands](images/ui-settings-bands.png){#fig-settings-bands}
+
+The three tabs of the settings dialog, as set on the machine that made this
+manual's figures (which differs from the defaults of @tbl-settings in the
+colour map, the band width, and the ERP image's grouping and sort order).
+:::
+
+| Tab | Setting | Default | Effect |
+|---------------|-----------------------------------------|------------------|-------------------------------------------------------|
+| Graphics | **Positive up** | on | ERP polarity. Off draws negative up, the convention of much of the older literature. |
+| | **Clamp y-axis to largest** | off | One y range for every channel, taken from the largest, so that amplitudes can be compared across channels by eye. Off rescales per channel. |
+| | **Show confidence interval**, **Confidence band** | on, 3 | The band around each waveform, in standard errors of the mean. |
+| | **Plot trials by bin** | off | Group an ERP image's rows by bin; a trial in two bins then appears twice. |
+| | **Reverse the sort** | off | Put the largest sort value at the top of the ERP image, as EEGLAB's `erpimage` does. |
+| | **Colour map** | diverging | The map of every signed, zero-centred plot: ERP image, time-frequency power, scalp maps. **diverging** is a blue-white-red scale centred on zero; the alternatives are MATLAB's **parula**, **jet**, **turbo**, **hot** and **cool**. |
+| | **Smooth spectrum** | off | Smooth a spectrum with a light moving average before drawing it. The data are not changed. |
+| Processing | **Process recordings in parallel** | on | Whether **Apply to All Raw Files** uses parallel workers, when the Parallel Computing Toolbox is installed. |
+| | **Most recordings at once** | 0 | The number of workers; 0 takes the smallest of the number of recordings, the physical cores and what free memory allows for the largest recording. |
+| Frequency bands | label, start, stop, colour | sub-delta to gamma | The bands shaded beneath a spectrum: sub-delta 0 to 0.5 Hz, delta 0.5 to 3.5, theta 3.5 to 7.5, alpha 7.5 to 12.5, beta 12.5 to 30, gamma 30 to 100. |
+
+: The global settings. {#tbl-settings}
+
+A zero-centred diverging map is the safer choice for signed data: zero is
+white, and the sign of an effect is read from the hue rather than from a
+position along a rainbow. Rainbow maps such as **jet** introduce apparent
+boundaries that are not in the data [@borland2007].

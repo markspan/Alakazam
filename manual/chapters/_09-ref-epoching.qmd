@@ -1,0 +1,334 @@
+# Reference: epoching and averaging {#sec-ref-epoching}
+
+**Tools > 3. Epoching and Averaging** turns a continuous recording into
+event-related responses. DefineBins says which events belong to which
+condition and cuts epochs around them; Average averages each condition; and
+Deconvolve is the alternative to both when the responses to successive
+events overlap in time.
+
+## DefineBins {#sec-tr-definebins}
+
+*Tools > 3. Epoching and Averaging > DefineBins · continuous → epoched, or
+continuous with bin tags · `DefineBins`*
+
+Assigns events to **bins** with a small event-selection language, and cuts
+an epoch around every matched event. It replaces ERPLAB's EventList and
+BINLISTER steps [@lopezcalderon2014]. Each bin is one statement, a condition
+on the events of the recording; every event that meets it becomes a
+time-locking point (0 ms) of that bin.
+
+![**DefineBins** with the ERP CORE N400 bins: primes and targets by relatedness, a target counted only when a correct response follows within 200 to 1500 ms, and the N400 difference as a combination bin.](images/definebins-dialog.png){#fig-definebins-dialog}
+
+| Option | Default | Meaning |
+|-----------------------|-------|-------------------------------------------------------|
+| **Epoch start**, **Epoch stop** | | The epoch around each matched event, in ms. Both blank: tag the events with their bins and leave the data continuous. |
+| script | | The bin definitions, in the language below. |
+| **Save**, **Load** | | Write or read the script and the epoch together, as a `.binscript` file. |
+| **Import BDF** | | Translate an ERPLAB bin descriptor file into the language (below). |
+| **Syntax** | | Open the language reference. |
+
+: DefineBins' options. {#tbl-definebins}
+
+The script is compiled when the dialog closes, and the compiled form, not
+the text, is what a replay evaluates on another recording's events. Every
+error is reported with its line, a caret under the mistake and an
+explanation of how to fix it.
+
+### The bin language, in eleven steps
+
+**A bin** is a number, a quoted label, and a condition. The simplest
+condition is an event code:
+
+```
+bin 1 "Targets" 112
+```
+
+**Several codes** are written with a pipe, or as a braced list; a quoted code
+may use the wildcards `?` (one character) and `*` (any run). Matching is
+case-insensitive.
+
+```
+bin 1 "Targets or probes"   112|122
+bin 2 "Any of five stimuli" {"s11" "s22" "s33" "s44" "s55"}
+bin 3 "Any two-digit s"     "s??"
+```
+
+**A relation** constrains a neighbouring event:
+
+| Relation | True when |
+|------------------|-------------------------------------------------------|
+| `next(code)` | a following event of that code exists (the nearest one) |
+| `prev(code)` | a preceding event of that code exists (the nearest one) |
+| `adjacent(code)` | the very next event, whatever it is, has that code |
+| `any(code) within W` | an event of that code lies inside window `W` |
+
+: The relations of the bin language. {#tbl-bin-relations}
+
+**A window** restricts a relation in time. Windows are signed (positive is
+after the event) and explicit about open and closed bounds:
+
+```
+bin 1 "Answered in time" 112 and next(118) within (200,1200] ms
+```
+
+```
+within (200,1200] ms     % more than 200 and at most 1200 ms after
+within [-1200,-200) ms   % before the event
+within (0,300] samples   % in samples
+within [-2,-2] events    % exactly two events back
+```
+
+The `events` unit counts positions in the event stream rather than elapsed
+time. In a strict stimulus, response, stimulus design, `prev(112) within
+[-2,-2] events` finds the stimulus of the previous trial whatever the
+interval was, where a time window wide enough to absorb variable reaction
+times could reach into the trial before.
+
+**Terms combine** with `and`, `or` and `not` (in that order of precedence,
+`not` binding tightest), grouped with parentheses. Adjacent terms are joined
+by `and` even without the keyword, which reads well for exclusions:
+
+```
+bin 2 "Related, no answer" 112 and not next(118) within (0,2000] ms
+bin 4 "Unrelated" "s??" not {"s11" "s22" "s33"} and next("S201") within (200,1200] ms
+```
+
+**Reaction times come for free.** When a bin matches through a forward
+relation, the delay to that neighbour is recorded as the trial's reaction
+time, and `rt within` filters on it:
+
+```
+bin 1 "Fast" 112 and next(118) rt within (200,500] ms
+bin 2 "Slow" 112 and next(118) rt within (500,1200] ms
+```
+
+The reaction time is the delay to the neighbour found by the first forward
+relation that contributed to the match; a backward relation such as
+`prev(cue)` never provides it. A match without one is dropped by `rt
+within`. The reaction time also becomes a sort key of the ERP image
+(@sec-plot-area).
+
+**Response-locking** moves time zero to a neighbour with `timelock`, while
+membership is still decided by the condition:
+
+```
+bin 1 "Response-locked" 112 and next(118) timelock next(118)
+```
+
+**Names.** `let` names any piece of a condition, a set of codes or a whole
+relation, which is the way to write a relation once and use it in every bin:
+
+```
+let related  = {"s11" "s22" "s33" "s44" "s55"}
+let answered = next("S201") within (200,1200] ms
+
+bin 1 "Related"   related and answered
+bin 2 "Unrelated" "s??" not related and answered
+```
+
+A name may use names defined before it, and a relation inside a name means
+exactly what it would mean written out where the name is used.
+
+**Difference bins** are arithmetic on other bins' averages, with integer or
+fractional coefficients:
+
+```
+bin 3 "N400 effect" = bin 2 - bin 1
+bin 4 "Mean of two" = 0.5 bin 1 + 0.5 bin 2
+```
+
+They have no trials of their own. Average forms them from the averages of
+the bins they name, and their standard error from those bins' standard
+errors (@sec-tr-average).
+
+**Interactions** are combination bins of combination bins, nested to any
+depth, in any order of declaration:
+
+```
+bin 5 "Relatedness, expected"    = bin 2 - bin 1
+bin 6 "Relatedness, unexpected"  = bin 4 - bin 3
+bin 7 "Relatedness x Expectancy" = bin 6 - bin 5
+```
+
+A cycle, or a reference to a bin that does not exist, is an error when the
+script is compiled.
+
+### Codes and matching
+
+| Written as | Matches |
+|----------|-------------------------------------------------------|
+| `112` | the markers `112`, `"112"`, `S112` and `S 112` |
+| `"R201"` | the marker `R201`; text must be quoted, since a bare word is a name |
+| `21-30` | every code from 21 to 30, with or without the `S` prefix |
+| `"1??"` | a pattern: wildcards work inside quotes only |
+
+: How codes are matched. {#tbl-bin-codes}
+
+A leading `S` before digits is dropped on both sides, so BrainVision's
+`S 12` and a plain `12` are the same code; a response marker keeps its `R`,
+since `R 12` usually reuses the number of the stimulus it answers. Spaces
+inside a marker are ignored. A range is expanded to every code it covers, up
+to 1000 codes.
+
+### Importing ERPLAB bin descriptors
+
+**Import BDF** reads a BINLISTER bin descriptor file and translates it: the
+time-locking event `.{a;b}` becomes the code set `a|b`, a preceding bracket
+`{c}.{...}` becomes `prev(c)`, and a following bracket with a time condition
+`.{...}{r:200<t<=800}` becomes `next(r) within (200,800] ms`. What has no
+equivalent (write-back flags, flag conditions, open-ended times) is imported
+as far as it goes and marked with a `% WARNING:` line to finish by hand.
+
+### Grammar
+
+```
+script   : ( let | bin )+
+let      : let <name> = <expr>
+bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
+         | bin <int> "<label>" = <combo>
+combo    : [coeff] bin <int> ( (+|-) [coeff] bin <int> )*
+expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation>
+relation : next(<codes>) [within <window>] | prev(<codes>) [within <window>]
+         | adjacent(<codes>) [within <window>] | any(<codes>) within <window>
+codes    : <code> ( | <code> )* | { <code> [,] <code> ... } | <name>
+code     : <integer> | <integer>-<integer> | "<marker>"
+window   : ( or [ <num> , <num> ) or ] [ms | samples | events]
+comment  : % or # to the end of the line
+```
+
+### The result
+
+With an epoch, DefineBins returns an epoched dataset: one epoch per matched
+event, a trial in several bins stored once and listed in each. Without one,
+the data stay continuous and each event carries its bin membership, which is
+what Deconvolve fits against. The time to the next and to the previous event
+of every type is measured for each trial as it is cut, and becomes a sort key
+of the ERP image (@fig-first-epochs).
+
+## Average {#sec-tr-average}
+
+*Tools > 3. Epoching and Averaging > Average · epoched → averaged ·
+`Average`*
+
+Averages the trials of each bin, separately, giving one waveform per bin
+with its standard error; without bins it averages all trials. A trial in
+several bins contributes to each. Average has no options.
+
+![The N400 recording's average at CPz: one waveform per bin with its ±*n* SE band, the trial counts in the legend, and each bin's aSME on the right.](images/average-result.jpg){#fig-average-result}
+
+For each bin, channel and time point, with $x_i$ the kept trials:
+
+- the **average** is the mean over the trials that were not rejected;
+- the **standard error** is $s/\sqrt{n}$, with $s$ the standard deviation
+  over the kept trials and $n$ their number there, so that a channel
+  rejected in some trials only has the larger error it should have;
+- the **analytic standardised measurement error** (aSME) of the mean
+  amplitude over the whole epoch is the standard deviation of the trials'
+  mean amplitudes divided by $\sqrt{n}$ [@luck2021];
+- the **trial count** shown in the legend is the number of trials not
+  rejected as a whole.
+
+A **combination bin** $c = \sum_k w_k b_k$ is computed from its bins'
+averages, $\bar x_c = \sum_k w_k \bar x_{b_k}$, and its standard error as
+$\sqrt{\sum_k w_k^2\,\mathrm{SE}_{b_k}^2}$. This treats the bins as
+independent, which is exact when they hold different trials, as they
+usually do. Its legend shows the counts it was formed from, such as
+`n=57-54`.
+
+The aSME describes one score, the mean amplitude over the whole epoch. The
+data-quality report computes the SME of the scores actually measured, in
+their own windows and by bootstrap where no formula exists
+(@sec-data-quality).
+
+## Deconvolve {#sec-tr-deconvolve}
+
+*Tools > 3. Epoching and Averaging > Deconvolve · continuous → averaged,
+epoched, or averaged terms · `Deconvolve`*
+
+The alternative to epoching and averaging where responses overlap. Averaging
+assumes that each epoch holds the response to its own event and nothing
+else. When events follow each other faster than a response decays, in
+reading, free viewing, fast presentation or with a response after every
+stimulus, the same samples carry the end of one response and the start of
+the next, and each bin's average carries a smear of its neighbours'.
+Deconvolve fits all bins at once against the whole continuous recording, as
+a linear regression on a time-expanded design matrix, so that a sample
+explained by two events is shared between them [@smith2015; @ehinger2019;
+@dimigen2021]. The fitting is done by the Unfold toolbox [@ehinger2019].
+@sec-deconvolution works through a complete example on published data.
+
+![**Deconvolve** with the model of Ehinger and Dimigen's Figure 11: three bins, a spline of saccade amplitude for the saccade, the fields a formula can use on the right, and the events in no bin below.](images/deconvolve-dialog.png){#fig-deconvolve-dialog}
+
+| Option | Default | Meaning |
+|-------------------------------------------------------|--------------------------|-------------------------------------------------------|
+| **Define bins** | the dataset's own bin tags | The bins, in DefineBins' language and editor. |
+| **Window** start, stop | -200, 800 ms | The response window fitted around every event. |
+| **Baseline** start, stop, **Baseline-correct the result** | the pre-event window, on | The interval the fitted waveforms are baseline-corrected over. |
+| **Result** | One waveform per bin | **One waveform per bin** (shaped like Average), **overlap-corrected trials** (shaped like DefineBins' epochs), or **the model's terms**. |
+| **Terms evaluated at** | five quantiles | For the terms: where continuous and spline terms are evaluated, as `sac_amplitude = 0.5 1 2; rt = 300 500`. |
+| **Formula** per bin | `y ~ 1` | What explains the bin's response, in Unfold's notation (below). |
+| **Events in no bin, modelled and dropped** | all | Event codes outside the bins to model as nuisance, so that their overlap is removed too. |
+| **Artefact threshold**, **Measured in a window of**, **Stepped by** | 150 µV, 2000 ms, 100 ms | Stretches whose peak-to-peak amplitude in the moving window exceeds the threshold are left out of the model; 0 turns this off. |
+
+: Deconvolve's options. {#tbl-deconvolve}
+
+### Formulas
+
+Each bin has a formula in Unfold's Wilkinson notation. The dialog lists the
+event fields a formula can use, by kind, with their counts, and shows the
+columns the toolbox builds for each formula before anything is fitted.
+
+| Formula | Meaning |
+|---------------------------------|-------------------------------------------------------|
+| `y ~ 1` | the bin's own waveform, nothing else |
+| `y ~ 1 + rt` | plus a waveform that scales linearly with `rt` |
+| `y ~ 1 + spl(rt, 5)` | plus a smooth, non-linear effect of `rt`, with 5 spline functions |
+| `y ~ 1 + circspl(angle, 5, 0, 360)` | a circular spline, for an angle |
+| `y ~ 1 + cat(side)` | a factor, coded against its first level |
+| `y ~ 1 + cat(side) * rt` | a factor, a linear term and their interaction |
+
+: Formulas in Unfold's notation. {#tbl-deconvolve-formulas}
+
+**A term is a control.** Every bin's waveform is the model's prediction with
+each continuous and spline term held at the same value for every bin (for a
+spline, over the range the bins share), and each factor at the bin's own mix.
+So a reaction time or saccade size that differs between bins does not appear
+as a difference between them, which is the point of including it
+[@dimigen2021].
+
+### What to model
+
+Overlap is removed only where it is modelled. A response to an event outside
+the bins still overlaps the bins' responses unless that event is modelled as
+nuisance, which is why **Events in no bin** defaults to all of them. There is
+one exception, and the dialog's list is where to decide it: an event that
+follows another at a nearly constant lag (a fixation 12 ms after its
+saccade, or a trial-start marker a fixed time before each stimulus) cannot be
+told apart from it, and modelling both makes the regression ill-conditioned,
+so that the solver may fail to converge. Model one of the pair.
+
+**Artefacts** are handled by leaving stretches out of the model rather than
+by dropping epochs, so an event next to a bad stretch keeps the rest of its
+data. The defaults are the toolbox's. In reading and free viewing, where the
+eye movements are the task, it is usually better to set the threshold to 0
+and model the saccades and blinks instead.
+
+### The three results
+
+- **One waveform per bin** has Average's shape, so ERP Measure, scalp maps,
+  grand averages and the reports read it unchanged. A fitted waveform has no
+  trial-to-trial standard error of its own.
+- **Overlap-corrected trials** are one epoch per binned event, shaped like
+  DefineBins' epochs, each the recording around its event with every other
+  event's fitted response subtracted (Unfold's "modelled plus residuals").
+  Averaging them returns the fitted waveforms; what they add is the trials
+  themselves, for an ERP image without the overlap (@sec-plot-area) and for
+  the data-quality report's measures of trial-to-trial noise. A trial whose
+  window touches a stretch left out of the model had nothing subtracted there
+  and is dropped, and counted.
+- **The model's terms**: every factor level, and every continuous or spline
+  term at chosen values, each as a whole waveform with the other terms at
+  their means (Unfold's `uf_predictContinuous` and `uf_addmarginal`).
+
+Deconvolve needs continuous data without a DC offset, since the regression
+has no intercept for the recording as a whole: high-pass filter first.

@@ -11,14 +11,10 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 %   sample), chosen so every relation-window boundary in these tests
 %   lands well clear of an edge case rather than exactly on one.
 %
-%   NOTE: while writing this, DefineBins.m's own header comment (about a
-%   single "epoch [...] ms" statement inside the script) turned out to be
-%   stale -- the epoch window is actually a separate options.epoch struct
-%   (populated from the dialog's own start/stop fields, or passed directly
-%   in "script mode"), not parsed from the script text at all; the
-%   tokenizer's own keyword list has no "epoch" entry. This file tests the
-%   actual current behaviour; the stale doc comment is a separate,
-%   unrelated cleanup.
+%   THE EPOCH comes from an epoch statement in the script (epoch [-200,800]
+%   ms) or from options.epoch, and the statement wins; tagsOnly ignores
+%   both. Text before the first statement is refused rather than dropped,
+%   which is how an epoch line used to be ignored without a word.
 %
 %   Run with: runtests('tests/DefineBinsTest.m').
 %
@@ -313,6 +309,90 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyEqual(size(result.data), [2, 20, 2]); % 80ms window @ 250Hz = 20 samples
         end
 
+        function anEpochStatementSegmentsTheData(testCase)
+        %ANEPOCHSTATEMENTSEGMENTSTHEDATA  The script's own epoch line cuts
+        %   the trials, with nothing passed beside it.
+            EEG = epochFixture();
+
+            [result, opts] = DefineBins(EEG, struct('script', ...
+                ['epoch [-40,40] ms' newline 'bin 1 "Targets" 112']));
+
+            testCase.verifyEqual(result.DataFormat, 'EPOCHED');
+            testCase.verifyEqual(size(result.data), [2, 20, 2]);
+            testCase.verifyEqual(opts.epoch, struct('lo', -40, 'hi', 40, 'unit', 'ms'), ...
+                'The epoch actually cut is what is stored, so a replay cuts the same.');
+        end
+
+        function theScriptsEpochWinsOverAPassedOne(testCase)
+            EEG = epochFixture();
+
+            [result, opts] = DefineBins(EEG, struct('script', ...
+                ['bin 1 "Targets" 112' newline 'epoch [-40,40] ms'], ...
+                'epoch', struct('lo', -100, 'hi', 100, 'unit', 'ms')));
+
+            testCase.verifyEqual(size(result.data, 2), 20, ...
+                'The epoch line, anywhere in the script, decides the window.');
+            testCase.verifyEqual(opts.epoch.lo, -40);
+        end
+
+        function anEpochCanBeGivenInSamples(testCase)
+            EEG = epochFixture();
+
+            result = DefineBins(EEG, struct('script', ...
+                ['epoch [-10,10] samples' newline 'bin 1 "Targets" 112']));
+
+            testCase.verifyEqual(size(result.data, 2), 20);
+        end
+
+        function tagsOnlyIgnoresTheEpoch(testCase)
+        %TAGSONLYIGNORESTHEEPOCH  Deconvolve needs the continuous recording
+        %   with bin tags; an epoch line in its bins must not cut it.
+            EEG = epochFixture();
+
+            [result, opts] = DefineBins(EEG, struct('script', ...
+                ['epoch [-40,40] ms' newline 'bin 1 "Targets" 112'], 'tagsOnly', true));
+
+            testCase.verifyEqual(size(result.data), [2, 500]);
+            testCase.verifyEmpty(opts.epoch);
+        end
+
+        function aSecondEpochIsRefused(testCase)
+            testCase.verifyParseError( ...
+                ['epoch [-40,40] ms' newline 'epoch [-100,100] ms' newline 'bin 1 "A" 112'], ...
+                'sets the epoch twice');
+        end
+
+        function anEpochInEventsIsRefused(testCase)
+            testCase.verifyParseError( ...
+                ['epoch [-2,2] events' newline 'bin 1 "A" 112'], 'ms or samples');
+        end
+
+        function anEmptyEpochIsRefused(testCase)
+            testCase.verifyParseError( ...
+                ['epoch [100,100] ms' newline 'bin 1 "A" 112'], 'no data to cut');
+        end
+
+        function textAfterTheEpochWindowIsRefused(testCase)
+            testCase.verifyParseError( ...
+                ['epoch [-40,40] ms 112' newline 'bin 1 "A" 112'], 'nothing after it');
+        end
+
+        function textBeforeTheFirstStatementIsRefused(testCase)
+        %TEXTBEFORETHEFIRSTSTATEMENTISREFUSED  It used to be dropped without
+        %   a word, which is how the README's epoch lines did nothing.
+            testCase.verifyParseError( ...
+                ['window [-40,40] ms' newline 'bin 1 "A" 112'], 'don''t recognise this');
+        end
+
+        function commentsBeforeTheFirstStatementAreFine(testCase)
+            EEG = eegWithEvents({'112'}, 100);
+
+            [~, opts] = DefineBins(EEG, struct('script', ...
+                ['% a comment first' newline 'bin 1 "A" 112']));
+
+            testCase.verifyNumElements(opts.bins, 1);
+        end
+
         function unmatchedEventsGetAnExplicitInvalidEpochNumber(testCase)
         %UNMATCHEDEVENTSGETANEXPLICITINVALIDEPOCHNUMBER  An event that
         %   matched no bin belongs to no trial, and cutEpochs must leave it
@@ -597,6 +677,19 @@ classdef DefineBinsTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function verifyParseError(testCase, script, fragment)
+        %VERIFYPARSEERROR  SCRIPT is refused with a message containing
+        %   FRAGMENT.
+            EEG = eegWithEvents({'112'}, 100);
+            try
+                DefineBins(EEG, struct('script', script));
+                testCase.verifyFail('Expected DefineBins to refuse the script.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, fragment);
+            end
+        end
+
         function EEG = cueStimulusResponse(~)
         %CUESTIMULUSRESPONSE  Cue at -500 ms, stimulus at 0, response at
         %   +700 ms. 250 Hz, so one sample is 4 ms.
@@ -635,6 +728,14 @@ function EEG = eegWithEvents(types, latencies)
     EEG = struct();
     EEG.srate = 250;
     EEG.event = struct('type', types, 'latency', num2cell(latencies));
+end
+
+function EEG = epochFixture()
+%EPOCHFIXTURE  Two 112 events and a 122 on 500 samples of 2-channel data,
+%   long enough for an 80 ms window at 250 Hz around each.
+    EEG = eegWithEvents({'112', '122', '112'}, [100, 200, 300]);
+    EEG.data = zeros(2, 500);
+    EEG.pnts = 500;
 end
 
 function EEG = inBoundsUnmatchedFixture()

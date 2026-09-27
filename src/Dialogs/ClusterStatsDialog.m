@@ -1,4 +1,4 @@
-function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBins, candidateGroups, kind, epochMs)
+function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBins, candidateGroups, kind, epochMs, included)
 %CLUSTERSTATSDIALOG  Modal dialog: which subjects, which contrast, and what
 %   permutation-test options to use for a cluster-based permutation test
 %   (see ClusterStats.m).
@@ -16,6 +16,11 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
 %   none) -- the "between groups" contrast is only offered once at least 2
 %   distinct non-blank groups are present, the same "assign groups first"
 %   convention generateQuartoReport already uses.
+%
+%   INCLUDED, optional, is a logical per candidate: whether its recording is
+%   in the study (Grouping's "In study"). Only those are selected at the
+%   start; an excluded one stays in the list, marked by its label, for the
+%   user to add deliberately. Default: all selected.
 %
 %   Returns a struct with .sourceFiles, .contrast (see ClusterStats.m's own
 %   header for its shape) and .opts, or [] if cancelled.
@@ -194,15 +199,18 @@ function spec = ClusterStatsDialog(candidateFiles, candidateLabels, candidateBin
     listRow = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, 'Padding', [8 8 8 0]);
     listRow.Layout.Row = 5;
     uilabel(listRow, 'Text', 'Include these subjects:');
+    if nargin < 7 || numel(included) ~= numel(candidateFiles)
+        included = true(1, numel(candidateFiles));
+    end
     subjectList = uilistbox(listRow, 'Items', candidateLabels, 'ItemsData', candidateFiles, ...
-        'Value', candidateFiles, 'Multiselect', 'on', ...
+        'Value', candidateFiles(logical(included)), 'Multiselect', 'on', ...
         'ValueChangedFcn', @(~, ~) refreshEstimate());
 
     warnLabel = uilabel(outer, 'Text', '', 'WordWrap', 'on', 'FontColor', [0.75 0.35 0.1], 'FontSize', 11);
     warnLabel.Layout.Row = 6;
     if ~hasGroups
         warnLabel.Text = ['"One bin, between two groups" is hidden: fewer than two groups are assigned ' ...
-            '(Home tab, Design group, Grouping...).'];
+            '(Alakazam tab, Design group, Grouping...).'];
     end
 
     % Row 7: OK / Cancel.

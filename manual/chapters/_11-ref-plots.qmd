@@ -1,0 +1,180 @@
+# Reference: plots {#sec-ref-plots}
+
+**Tools > 5. Plots** holds the transformations whose result is a picture as
+much as a dataset: scalp maps and the 3D brain for averaged ERPs, and three
+time-resolved or topographic views of single-trial data. Each is a node like
+any other, so it is replayed, templated and recalculated with the rest of a
+branch.
+
+## Scalp {#sec-tr-scalpdistribution}
+
+*Tools > 5. Plots > Scalp · averaged → averaged, with scalp positions ·
+`ScalpDistribution`*
+
+A scalp topography of an averaged ERP, one bin at a time, scrubbable through
+the epoch. The map is a spherical-spline interpolation [@perrin1989] of a
+port of EEGLAB's `topoplot` [@delorme2004]. Scalp has no options: it resolves
+each channel's position once, by label on the 10-5 template
+[@oostenveld2001], and fixes one symmetric colour scale over every channel,
+bin and instant, so that a quiet moment does not look as saturated as a loud
+one while scrubbing. Channels whose label is not a 10-5 name, such as EOG or
+derived channels, are left out of the map.
+
+![**Scalp** on the N400 average: the N400 difference bin at 400 ms, a centro-parietal negativity, with the bin menu above and the time slider and **Play** button below.](images/scalp-result.jpg){#fig-scalpdistribution-result}
+
+The bin menu offers the bins ticked in the dataset's own waveform view, when
+that is open, and every bin otherwise. The slider redraws the map as it
+moves; **Play** runs through the epoch.
+
+## Brain (3D) {#sec-tr-brain3d}
+
+*Tools > 5. Plots > Brain (3D) · averaged → averaged, with scalp positions ·
+`Brain3D`*
+
+The same scrubbable ERP drawn on a rotatable brain surface (drag to orbit),
+with a **Projection** menu that decides what is drawn.
+
+![**Brain (3D)** on the N400 average in its default projection, the scalp topography drawn on the brain surface.](images/brain3d-result.jpg){#fig-brain3d-result}
+
+| Projection | What is drawn | Scale |
+|--------------------------|-------------------------------------------------------|-------------------|
+| **Scalp topography** (default) | The spherical-spline interpolation of the flat map, projected onto a brain-shaped surface for legibility. **Not a source estimate.** | µV, signed |
+| **Source estimate (dSPM)** | Noise-normalised minimum-norm estimate [@dale2000]. | a statistic, not µV |
+| **eLORETA** | Exact low-resolution tomography [@pascualmarqui2007]: zero localisation error for a single source, but an amplitude rather than a normalised statistic. | its own |
+| **sLORETA** | Standardised low-resolution tomography [@pascualmarqui2002]. | its own |
+
+: The projections of the 3D brain view. {#tbl-brain3d-projections}
+
+The three inverse methods are real computations on FieldTrip's template
+head model, template 10-5 electrode positions and a template cortical sheet
+[@oostenveld2011], downloaded with consent on first use. The leadfield
+belongs to the head and the electrodes, not to the method, so switching
+between the three re-solves without rebuilding it.
+
+**The three scales are not comparable, and none is in µV.** Each map carries
+its own colour-bar label from the inverse, so a map cannot be read on
+another method's scale. **Signed (cortical normal)** projects each vertex's
+free-orientation estimate onto the cortical normal, keeping polarity, and
+draws it on a diverging scale; the default is the magnitude, which is
+always positive and so cannot show polarity. Pyramidal cells lie
+perpendicular to the cortical sheet, which is why the normal is the usual
+orientation constraint for EEG.
+
+When the node carries a stored estimate from Source Estimate
+(@sec-tr-sourceestimate) that matches the view's settings and data, the
+view uses it and adopts the sheet it was computed on. What any of these
+estimates can and cannot show is set out in @sec-source-estimation; in
+short, this is a template-based approximation and not a localisation of an
+individual's generators.
+
+## TimeFrequency {#sec-tr-timefrequency}
+
+*Tools > 5. Plots > TimeFrequency · epoched → time-frequency maps ·
+`TimeFrequency`*
+
+An event-related spectral perturbation (ERSP) per bin [@makeig1993]: the
+power of each trial, by complex Morlet wavelet convolution
+[@tallonbaudry1996], averaged over the bin's trials and expressed in decibels
+relative to a baseline interval. The number of wavelet cycles grows linearly
+with frequency, the trade EEGLAB's `newtimef` makes: few cycles at low
+frequencies for temporal precision, more at high frequencies for spectral
+precision [@cohen2014].
+
+![**TimeFrequency**: the frequency range, the wavelet cycles at both ends of it, and the baseline.](images/timefrequency-dialog.png){#fig-timefrequency-dialog}
+
+| Option | Default | Meaning |
+|-------------------------------------------------|---------------------------------------------|------------------------------------------|
+| **Minimum frequency**, **Maximum frequency** | 2 Hz, 40 Hz (or a third of the sampling rate) | The range, log-spaced. |
+| **Number of frequencies** | 30 | |
+| **Cycles at minimum frequency**, **at maximum frequency** | 3, 10 | Interpolated linearly in between. |
+| **Baseline start**, **Baseline stop** | the epoch start to 0 ms | The interval the dB change is relative to. |
+
+: TimeFrequency's options. {#tbl-timefrequency}
+
+For each channel, frequency and bin, the map is
+$10\log_{10} P(f,t)$ minus its mean over the baseline interval, with
+$P$ the power averaged over the bin's trials. A combination bin is the
+weighted sum of its bins' maps: a difference of decibels, which is a log
+ratio of power. Rejected trials are left out, per channel.
+
+Power averaged over trials is **total** power: it includes activity that is
+not phase-locked to the event. The ERP itself contributes to it; to see
+induced activity alone, subtract the average from each trial first, which
+Alakazam does not do for you.
+
+![The ERSP of the N400 epochs at Oz, one map per bin, in dB relative to the prestimulus baseline.](images/timefrequency-result.jpg){#fig-timefrequency-result}
+
+The view shows one heat map per bin with a channel menu; the arrow keys and
+the mouse wheel step the channel. Maps from several subjects can be combined
+into a grand average (@sec-grand-averages).
+
+## Coherence Map {#sec-tr-coherencemap}
+
+*Tools > 5. Plots > Coherence Map · epoched → coherence maps ·
+`CoherenceMap`*
+
+The coherence of every channel to a reference channel, typically a
+photodiode recording the flicker, resolved over time and frequency: the
+read-out of the rapid invisible frequency tagging (RIFT) figures
+[@dimigen2025]. For each channel it is the magnitude-squared coherence to the
+reference across the bin's trials, at every time point and frequency, drawn
+as a heat map per bin.
+
+![**Coherence Map**: the reference (a channel, or a synthetic sine), the decomposition, the frequency range, and each decomposition's own settings.](images/coherencemap-dialog.png){#fig-coherencemap-dialog}
+
+| Option | Default | Meaning |
+|-------------------------------------------------|-------------------------------------------------|-------------------------------------------------------|
+| **Reference channel** | a photodiode-like channel, if any | The reference, or **Sine** at a chosen frequency for a recording without a photodiode. |
+| **Decomposition** | Wavelet | **Wavelet** (Morlet, variable cycles), **STFT** (a fixed window, as in the RIFT paper's `newcrossf`) or **FilterHilbert** (a band-pass around each frequency, then the analytic signal). |
+| **Minimum**, **Maximum frequency**, **Number of frequencies** | 2 Hz, 80 Hz (or a third of the sampling rate), 40 | The range. |
+| **Cycles** at each end | 3, 12 | Wavelet only. |
+| **Window length**, **Zero-padding ratio**, **Window taper** | 500 ms, 4, Hann | STFT only; the taper is Hann (low side lobes) or boxcar (narrow main lobe). |
+| **Bandwidth**, **Time step** | 2 Hz FWHM, 50 ms | FilterHilbert only. |
+
+: Coherence Map's options. {#tbl-coherencemap}
+
+A synthetic sine as the reference makes the map an inter-trial coherence:
+it measures something only when the stimulation started at the same phase on
+every trial. The reference's own spectrum and its strongest frequency are
+kept with the result, so that a condition tagged outside the chosen band is
+recognisable as such, and the tagging frequency in the reports is read from
+the reference rather than from a noisy channel's coherence to it. Rejected
+trials are left out, per channel.
+
+![The coherence of Oz to the photodiode in three RIFT conditions. In the 30 Hz SSVEP condition (middle), coherence appears at 30 Hz and its 60 Hz harmonic; the 60 and 64 Hz RIFT responses are weaker, and a line-noise band near 50 Hz runs through all three.](images/coherencemap-result.jpg){#fig-coherencemap-result}
+
+The frequency resolution of a short window is limited: at 2000 Hz, a
+510-sample frame lasts 255 ms and cannot separate 60 from 64 Hz, so that a
+64 Hz readout in 60 Hz trials is 60 Hz leaking through. Resampling to 960 Hz
+first, as the RIFT template does, makes the same frames 531 ms long.
+
+## CohTopo {#sec-tr-coherencetopography}
+
+*Tools > 5. Plots > CohTopo · epoched → coherence per channel and bin ·
+`CoherenceTopography`*
+
+A scalp map, per bin, of every channel's coherence to a reference at one
+frequency [@dimigen2025]. The frequency is read from the reference itself,
+so that a 60 Hz and a 64 Hz condition each get their own without typing: by
+default the reference's strongest spectral component, or its strongest
+evoked response within a search band; a fixed frequency overrides both.
+
+![**CohTopo**: the reference, the coherence estimator, where the frequency comes from, and the steady-state window.](images/coherencetopography-dialog.png){#fig-coherencetopography-dialog}
+
+| Option | Default | Meaning |
+|-----------------------|--------------------|-------------------------------------------------------|
+| **Reference channel** | | Required. |
+| **Estimator**, **Frame length** | frames, 510 ms | The frame-averaged coherence (@sec-tr-spectralmeasure), or one window over the whole analysis interval. |
+| **Source** | reference | Take the frequency from the reference's spectrum, or from a **band**. |
+| **Search band** | 55 to 68 Hz | Where to look, for **band**. |
+| **Fixed frequency** | 0 (from the source) | A frequency that overrides both. |
+| **Analysis window** | 0 to 0 (whole epoch) | The steady-state interval, to leave out the onset response. |
+
+: CohTopo's options. {#tbl-coherencetopography}
+
+The frame-averaged estimator is the default because it is the one Spectral
+Measure reports and the Coherence Map draws, so the three agree. Only
+channels with a 10-5 position are drawn; coherence is still computed for
+every channel, and kept for export.
+
+![Coherence to the photodiode at 64 Hz in the RIFT 64 Hz condition: an occipital focus.](images/coherencetopography-result.jpg){#fig-coherencetopography-result}

@@ -1,0 +1,201 @@
+# Worked examples {#sec-worked-examples}
+
+This chapter gives four complete pipelines: recipes for a P300, an LRP and
+an MMN design, and a full run on published data, the ERP CORE N400
+experiment, ending in a rendered report. The overlap-correction example is in
+@sec-deconvolution.
+
+Each recipe is an ordinary chain of transformations, so once built on one
+recording it replays across a study with **Apply to All Raw Files** or a
+template (@sec-reproducibility). The event codes are placeholders:
+substitute your own. In every recipe the epoch is set in the **Epoch start**
+and **Epoch stop** fields of the DefineBins dialog (@fig-definebins-dialog),
+not in the script; anything written before the first `let` or `bin`
+statement is ignored.
+
+## Tested templates for the ERP CORE paradigms
+
+The repository's `templates/luck` folder holds one pipeline per chapter of
+Luck's *Applied ERP Data Analysis* [@luckApplied]: the N400 for one and for
+ten participants, P3b, MMN (with and without ICA), N2pc and LRP, on the ERP
+CORE data [@kappenman2021]. They were checked against the book's and ERPLAB's
+own numbers [@lopezcalderon2014]. `downloadLuckData.m`, in the repository
+root, fetches the recordings. Where your study follows an ERP CORE paradigm,
+start from these rather than from the recipes below.
+
+## A P300 analysis (oddball) {#sec-example-p300}
+
+The P300 is a large centro-parietal positivity, 300 to 600 ms after rare
+target stimuli [@polich2007]. Stimulus-locked.
+
+1. **Filter** the continuous recording: a 0.1 Hz high-pass and, if wanted, a
+   30 Hz low-pass (@sec-tr-filter).
+2. **DefineBins**, epoch -200 to 800 ms, separating rare targets from
+   frequent standards and adding the difference wave. The rare bin also
+   requires a response in a plausible time, so misses and lapses are left
+   out; the epoch stays stimulus-locked:
+
+   ```
+   let responded = next("201") within (200,1200] ms
+   bin 1 "Rare"      : "S2?" and responded
+   bin 2 "Frequent"  : "S1?"
+   bin 3 "Rare-Freq" = bin 1 - bin 2
+   ```
+
+   `"S2?"` is any rare-target code and `"S1?"` any frequent one;
+   `responded` names a button press 200 to 1200 ms after the stimulus.
+3. **Baseline**, -200 to 0 ms, then **ArtefactDetect** (@sec-tr-artefactdetect).
+4. **Average**.
+5. **ERP Measure**: **Load** the `p300` preset (Pz, 300 to 600 ms, mean
+   amplitude). Read the `Rare` bin for the P300 and `Rare-Freq` for the
+   oddball effect.
+6. **Grand Average** (@sec-grand-averages), then **ERP & Report**
+   (@sec-statistics). With groups assigned under **Grouping**, the report
+   compares them.
+
+## An LRP analysis (response-locked) {#sec-example-lrp}
+
+The lateralised readiness potential is the difference between the motor
+cortices of the two hemispheres, building up before a response [@coles1989].
+It is a double subtraction: contralateral minus ipsilateral, averaged over
+left- and right-hand responses. Response-locked.
+
+1. **Filter** the continuous recording.
+2. **DefineBins**, epoch -800 to 200 ms. Each bin is defined on the
+   imperative stimulus, which carries the trial's condition, but locked to
+   the button press with `timelock`, so time zero is the press:
+
+   ```
+   let leftPress  = next("201") within (150,1500] ms
+   let rightPress = next("202") within (150,1500] ms
+   bin 1 "Left-hand"  : "S1?" and leftPress  timelock leftPress
+   bin 2 "Right-hand" : "S1?" and rightPress timelock rightPress
+   bin 3 "LRP"        = 0.5 bin 2 - 0.5 bin 1
+   ```
+
+   The response windows drop anticipations and misses; `next` finds the
+   nearest following press, which is the trial's own when trials are seconds
+   apart.
+3. **Derive Channels**: `let LRP = C3 - C4` (@sec-tr-derivechannels).
+4. **Baseline**, for instance -800 to -600 ms, then **ArtefactDetect**, and
+   **Average**.
+5. **ERP Measure** on the `LRP` bin at channel `LRP`: the `lrp` preset as a
+   start (mean amplitude, -100 to 0 ms).
+
+Why `0.5 bin 2 - 0.5 bin 1` on `C3 - C4` is the LRP: for a right-hand
+response C3 is contralateral, so `C3 - C4` is contra minus ipsi; for a
+left-hand response it is the negation. Half their difference is the mean over
+hands of contralateral minus ipsilateral. **Collapse Hemispheres**
+(@sec-tr-collapsehemispheres) gives the contralateral and ipsilateral
+waveforms separately, over every lateral pair at once. LRP amplitude is
+straightforward this way; LRP onset latency is better measured with a
+jackknife over subjects [@miller1998; @kiesel2008], which Alakazam does not
+yet do.
+
+## An MMN analysis (passive auditory oddball) {#sec-example-mmn}
+
+The mismatch negativity is a fronto-central negativity, about 150 to 250 ms,
+in the deviant-minus-standard difference wave, and needs no attention
+[@naatanen2007]. Stimulus-locked.
+
+1. **Filter** the continuous recording; a low-pass around 20 to 30 Hz is
+   common for the MMN.
+2. **DefineBins**, epoch -100 to 400 ms. The control is not any standard but
+   the one immediately before each deviant, which matches adaptation and
+   serial position between the two bins:
+
+   ```
+   let standard = "S1"
+   let deviant  = "S2"
+   bin 1 "Deviant"        : deviant
+   bin 2 "Std before dev" : standard and adjacent(deviant)
+   bin 3 "MMN"            = bin 1 - bin 2
+   ```
+
+   `adjacent(deviant)` is true when the very next event is a deviant.
+3. **Baseline**, -100 to 0 ms, then **ArtefactDetect**, and **Average**.
+4. **ERP Measure**: the `mmn` preset (Fz, 150 to 250 ms, mean amplitude), on
+   the `MMN` bin.
+5. **Grand Average** and **ERP & Report**. `MMN` is a difference bin, so the
+   report tests it against zero, which asks directly whether the mismatch
+   response is present.
+
+## The ERP CORE N400, start to finish {#sec-example-n400}
+
+A complete run on real data, with the repository's `N400.alztemplate`,
+ending in a rendered report.
+
+**The data.** The ERP CORE N400 experiment is a semantic-priming paradigm:
+each trial shows a prime word and then a target word that is either related
+to it (TABLE, CHAIR) or unrelated (RAKE, SPIDER), and the participant presses
+one of two buttons to judge which [@kappenman2021]. Luck's textbook works
+through one participant in chapter 2 and ten in chapter 3; this example uses
+the same ten, as preprocessed recordings ready to be epoched. The data are in
+the textbook's exercise archive (doi.org/10.18115/D50056) and the full ERP
+CORE release (doi.org/10.18115/D5JW4R). The textbook measures the N400 at CPz
+over about 200 to 600 ms; this template measures at Cz, 300 to 500 ms, its
+own choice.
+
+**The template.** Six steps, in the order they would first be run by hand:
+
+1. **AutoGEDAI**, with its automatic strength, the precomputed leadfield, a
+   0.4 Hz low cut, and no epoch or channel rejection: rejection is left to
+   ArtefactDetect, where it is explicit (@sec-tr-autogedai).
+2. **DefineBins**, epoch -200 to 800 ms, with bins imported from the
+   experiment's own ERPLAB bin descriptor file (**Import BDF**):
+
+   ```
+   bin 1 "Prime word, related to subsequent target word"   : 111|112
+   bin 2 "Prime word, unrelated to subsequent target word" : 121|122
+   bin 3 "Target word, related to previous prime, followed by correct response"   : 211|212 and next(201) within [200,1500] ms
+   bin 4 "Target word, unrelated to previous prime, followed by correct response" : 221|222 and next(201) within [200,1500] ms
+   bin 5 "N400" = bin 4 - bin 3
+   ```
+
+   A target counts only when a correct response (`201`) follows within 200
+   to 1500 ms. Bin 5 is the N400 contrast, unrelated minus related targets.
+3. **Baseline**, -100 to -10 ms.
+4. **ArtefactDetect**, absolute threshold ±100 µV, whole epoch.
+5. **Average**.
+6. **ERP Measure**, one window: `N400`, 300 to 500 ms, mean amplitude, at Cz.
+   Every bin is measured, the N400 difference bin included.
+
+The order follows Luck's principle: artefact correction, a non-linear step,
+comes before rejection and averaging, while the linear steps (filtering,
+re-referencing, baseline correction, averaging) commute [@luckOrder].
+
+**Running it.** Apply the template to the first recording (**Apply
+Template**), check the result, then **Apply to All Raw Files** on that
+branch to replay it on the other nine. **Define Grand** over all ten, then
+**ERP & Report**.
+
+**What was tested.** With no groups, the four ordinary bins get a linear
+mixed model, and the N400 difference bin its own test against zero. All ten
+subjects contributed a value in every condition:
+
+| Bin | *M* (µV) | *SD* | *n* |
+|-----------------|--------|-----|-----|
+| Prime, related | 0.178 | 1.647 | 10 |
+| Prime, unrelated | 0.186 | 2.027 | 10 |
+| Target, related | 3.563 | 2.247 | 10 |
+| Target, unrelated | 0.804 | 1.763 | 10 |
+
+: N400 mean amplitude at Cz, 300 to 500 ms, in the ten ERP CORE subjects. {#tbl-n400-results}
+
+The maximal mixed model (a random intercept and slope per subject) did not
+converge to a non-singular fit with ten subjects and four conditions, and the
+report fell back to a random intercept, saying so. That model found an
+effect of condition, *F*(3, 27) = 19.95, *p* < .001, partial
+$\eta^2$ = .689, 95% CI [.494, 1.000]. Holm-corrected pairwise contrasts
+located it: Target, related differed from each of the other three conditions
+(all *p* < .001), which did not differ from each other. A Friedman test on
+the same data agreed, $\chi^2$(3) = 18.12, *p* < .001. The N400 difference
+bin, tested against zero, was *M* = -2.79 µV, *SD* = 1.69, *t*(9) = -5.21,
+*p* < .001, Cohen's $d_z$ = -1.65.
+
+**What it means.** A semantically unrelated target elicits a larger
+centro-parietal negativity than a related one between 300 and 500 ms, the
+textbook N400 pattern [@kutas1980; @kappenman2021], while the two prime
+conditions, which carry no relation yet, sit near zero. The difference bin's
+test is the single-number version of the same finding. The wide interval on
+$\eta^2$ reflects the ten subjects, not a weak effect.
