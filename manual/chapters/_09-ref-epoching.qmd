@@ -326,6 +326,15 @@ saccade, or a trial-start marker a fixed time before each stimulus) cannot be
 told apart from it, and modelling both makes the regression ill-conditioned,
 so that the solver may fail to converge. Model one of the pair.
 
+The dialog finds such pairs for you. When an event in no bin that is ticked
+keeps a nearly constant lag to a bin or to another ticked event, for most
+events of both, with a spread under 20 ms and close enough for their
+responses to overlap, the model lists a warning that names the two and the
+lag, and an alert says so whenever the choice creates one. Unticking the
+event clears it; its response then stays in the bin's waveform, as it would
+in an average. The warning does not stop **OK**, and the fit notes it too,
+naming the pair as the likely cause if the solver then does not converge.
+
 **Artefacts** are handled by leaving stretches out of the model rather than
 by dropping epochs, so an event next to a bad stretch keeps the rest of its
 data. The defaults are the toolbox's. In reading and free viewing, where the

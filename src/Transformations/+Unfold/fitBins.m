@@ -168,6 +168,12 @@ function [EEG, info] = fitBins(input, varargin)
 
     srate = double(input.srate);
 
+    % Events in no bin that keep a near-constant lag to another modelled type
+    % make the design nearly collinear, the usual reason the solver does not
+    % converge; they are named in the notes before the fit, not only after it.
+    locked = Unfold.timeLockedEvents(plan, srate, opts.WindowMs);
+    plan.notes = [plan.notes, {locked.note}];
+
     % 1. The design: one event type per bin, each with its own formula (see
     %    Unfold.binModel).
     work = Unfold.designMatrix(input, plan);
@@ -218,6 +224,11 @@ function [EEG, info] = fitBins(input, varargin)
             'least one channel, so these waveforms are an unfinished estimate. That usually ' ...
             'means the design is close to collinear (bins whose events keep a near-constant ' ...
             'lag) or that a lot of the data was excluded as artefact.'];
+        if ~isempty(locked)
+            plan.notes{end} = sprintf('%s The likely cause here: %s.', plan.notes{end}, ...
+                strjoin(arrayfun(@(p) sprintf('"%s" locked to "%s"', p.code, p.other), ...
+                locked, 'UniformOutput', false), ', '));
+        end
     end
 
     % The waveforms are checked in every case: a fit that produced no
