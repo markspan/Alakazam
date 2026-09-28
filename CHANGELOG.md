@@ -117,8 +117,9 @@ bar. Dates are those of the tag.
   left the reference site out of its own average.** The channel is now added
   as a flat zero before re-referencing, as EEGLAB advises, so N recorded
   channels and the reference are averaged as N + 1 sites and the channels
-  sum to zero. Before, the subtracted average was N/(N + 1) of what it
-  should be (3% at 32 channels). Specific-channel references are unchanged.
+  sum to zero. Before, the subtracted average was (N + 1)/N of what it
+  should be (3% too large at 32 channels). Specific-channel references are
+  unchanged.
   Nodes computed before this fix keep the old result until recalculated.
 - **Fourier's Other resolution no longer drops samples.** A spacing coarser
   than the segment's own made the transform shorter than the segment, which
