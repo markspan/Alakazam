@@ -265,14 +265,14 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
         isCombo = ~cellfun(@isempty, {input.bindesc.combo});
     end
 
-    TransTools.progressbar;
+    TransTools.BusyGate('progress', 0);
     binsToDo = find(~isCombo);
     total = max(1, numel(binsToDo));
     for bi = 1:numel(binsToDo)
         b = binsToDo(bi);
         trials = input.bindesc(b).trials;
         if isempty(trials)
-            TransTools.progressbar(bi / total);
+            TransTools.BusyGate('progress', bi / total);
             continue;
         end
         % REJECTED TRIALS ARE LEFT OUT. Rejection writes NaN and leaves the
@@ -321,9 +321,9 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
         if nRef > 0
             refPower(:, :, b) = Syy / nRef;
         end
-        TransTools.progressbar(bi / total);
+        TransTools.BusyGate('progress', bi / total);
     end
-    if isempty(binsToDo)
-        TransTools.progressbar(1);
-    end
+    % Done, even when there were no bins to compute (every bin a combination
+    % bin): the indicator goes back to its spinner.
+    TransTools.BusyGate('progress', 1);
 end

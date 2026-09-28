@@ -23,8 +23,9 @@ function [ersp, freqs] = ComputeErsp(input, opts)
 %   (wavelet cycles at the frequency extremes, linearly interpolated in
 %   between), BaselineStart, BaselineStop (ms, for the dB correction).
 %
-%   Every channel and every bin is computed in one pass, with a progress
-%   bar (TransTools.progressbar) -- the caller (TimeFrequency.m) then
+%   Every channel and every bin is computed in one pass, reporting its
+%   progress to the app's busy indicator (TransTools.BusyGate) -- the
+%   caller (TimeFrequency.m) then
 %   only has to re-slice this already-computed array per channel step,
 %   an instant operation, rather than re-running the wavelet convolution
 %   live on every channel step.
@@ -79,21 +80,16 @@ function [ersp, freqs] = ComputeErsp(input, opts)
     ersp = nan(nChan, opts.NumFreqs, nT, nBins);
     total = max(1, sum(~isCombo) * nChan); % avoid a 0/0 if every bin is a combo bin
     done = 0;
-    TransTools.progressbar; % init/reset (no output, a self-contained
-                             % singleton popup; fractiondone==1 on the
-                             % final update below closes it automatically)
+    TransTools.BusyGate('progress', 0);
     for b = find(~isCombo)
         trials = input.bindesc(b).trials;
         if isempty(trials)
             % No matched events for this (ordinary, non-combo) bin: leave
             % its ersp(:,:,:,b) as NaN (imagesc will just show it blank)
-            % rather than erroring. Still has to advance/call progressbar
-            % here (not just bump done and rely on the next real update),
-            % or a dataset whose LAST processed bin happens to be empty
-            % would never send the fractiondone==1 call that closes the
-            % popup.
+            % rather than erroring. Its channels count as done, so the bar
+            % stays in step with the work that is left.
             done = done + nChan;
-            TransTools.progressbar(done / total);
+            TransTools.BusyGate('progress', done / total);
             continue;
         end
         for ch = 1:nChan
@@ -119,7 +115,7 @@ function [ersp, freqs] = ComputeErsp(input, opts)
             end
             if isempty(kept)
                 done = done + 1;                 % every trial rejected: stays NaN
-                TransTools.progressbar(done / total);
+                TransTools.BusyGate('progress', done / total);
                 continue;
             end
             power = power / numel(kept);
@@ -128,13 +124,12 @@ function [ersp, freqs] = ComputeErsp(input, opts)
             ersp(ch, :, :, b) = logPower - baseline;
 
             done = done + 1;
-            TransTools.progressbar(done / total);
+            TransTools.BusyGate('progress', done / total);
         end
     end
-
-    if sum(~isCombo) == 0
-        TransTools.progressbar(1); % nothing above ever reached fractiondone==1
-    end
+    % Done with the slow pass, even when it had no bins to compute (every bin
+    % a combination bin): the indicator goes back to its spinner.
+    TransTools.BusyGate('progress', 1);
 
     % Second pass: combo bins. A combo bin's ERSP is the coefficient-weighted
     % sum of the referenced bins' own (already dB-baseline-corrected) ERSP,

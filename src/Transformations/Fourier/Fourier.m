@@ -80,7 +80,7 @@ function [ output, options ] = Fourier( varargin )
 %   % Compute Fourier transform with default options
 %   [output, options] = Fourier(EEG);
 %
-%   See also: fft, TransTools.progressbar
+%   See also: fft, TransTools.BusyGate
 %
 %   Author: M.M.Span
 %
@@ -195,14 +195,13 @@ end
 
 output.trials = nseg;
 
-TransTools.progressbar;
+TransTools.BusyGate('progress', 0);
 
 output.freqs = input.srate/2*linspace(0,1,NFFT/2+1);
 
 for seg = 1:nseg
-        TransTools.progressbar(seg/nseg);
-        drawnow;
-        
+        TransTools.BusyGate('progress', seg/nseg);
+
         vunw = var(input.data(:,:,seg));
         vwin = var(fullwin.*input.data(:,:,seg));
         norm = vunw/vwin;

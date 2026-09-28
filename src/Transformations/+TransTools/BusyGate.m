@@ -1,9 +1,21 @@
 function BusyGate(action, varargin)
 %BUSYGATE  Drive the app's busy indicator from inside a transformation,
-%   when there is an app. ACTION is 'suspend', 'resume', or 'message' with
-%   the new text:
+%   when there is an app. ACTION is 'suspend', 'resume', 'message' with the
+%   new text, or 'progress' with the fraction of the work done:
 %
 %       TransTools.BusyGate('message', 'Building the head model...');
+%
+%       TransTools.BusyGate('progress', 0);        % before the loop
+%       for k = 1:n
+%           ...
+%           TransTools.BusyGate('progress', k / n);
+%       end
+%
+%   PROGRESS turns the app's indicator into a bar filled to that fraction,
+%   with the time left, and 1 turns it back into the spinner (busyGate has
+%   the details). Report on every pass: redraws are rate-limited there, so
+%   the loop is not slowed. A loop that may end without reaching 1 (every
+%   item skipped, say) reports 1 after it.
 %
 %   RELABELLING MATTERS for a transformation whose slow phase is not the
 %   one the app's own generic "Running <id>..." names -- building a source

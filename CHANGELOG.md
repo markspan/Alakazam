@@ -36,6 +36,12 @@ bar. Dates are those of the tag.
   as new files after a pull.
 - The Photodiode picture in the manual shows a recording with a diode
   patch; it is taken by hand, so the capture tool no longer makes it.
+- **Fourier, Welch, TimeFrequency and Coherence Map show their progress in
+  the app's own busy dialog**, as a bar that fills with the percentage done
+  and the time left, instead of in a separate small window. The dialog
+  turns back into its spinner when the computation is done. Run from a
+  script or a test, with no app, they show nothing. The old window
+  (`TransTools.progressbar`, from 2004) is removed.
 
 ### Fixed
 

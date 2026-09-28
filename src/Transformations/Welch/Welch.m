@@ -134,9 +134,9 @@ scale = srate * sum(win .^ 2);
 
 acc  = zeros(nchan, NFFT);
 used = 0;
-TransTools.progressbar;
+TransTools.BusyGate('progress', 0);
 for k = 1:numel(starts)
-    TransTools.progressbar(k / numel(starts));
+    TransTools.BusyGate('progress', k / numel(starts));
     seg = double(input.data(:, starts(k):starts(k)+segLen-1));
     if any(~isfinite(seg(:)))
         continue;   % a segment overlapping rejected or absent data
