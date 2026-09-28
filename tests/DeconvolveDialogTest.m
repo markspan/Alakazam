@@ -19,6 +19,13 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
 %   also pin that OK reads the controls themselves rather than a copy the
 %   callbacks keep; a copy would be stale here and could be stale for a user.
 %
+%   EVENTS LOCKED TOGETHER. A code in no bin kept at a near-constant lag to a
+%   bin is warned about in the model and in an alert (manual issue M10). The
+%   recording here gives its responses a reaction-time spread, so the other
+%   cases are not interrupted by that alert; the two cases about the warning
+%   use a recording whose responses come exactly 600 ms after every Frequent
+%   event instead.
+%
 %   The dialog is modal, so a timer changes the controls and presses OK once
 %   it is up, and Cancel if OK refused. Tagged Slow, and skipped where a
 %   uifigure cannot be made.
@@ -125,7 +132,7 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
         %   next to nothing to tell the two apart by (manual issue M10). The
         %   model says so, and names the remedy.
             shown = {};
-            testCase.runDialog(@(f) record(f));
+            testCase.runDialog(@(f) record(f), [], DeconvolveDialogTest.recording('locked'));
 
             testCase.verifyTrue(any(contains(shown, 'Warning: "response", in no bin, follows "Frequent"')), ...
                 'The model should warn that "response" is locked to "Frequent".');
@@ -137,7 +144,7 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
 
         function untickingTheLockedCodeClearsTheWarning(testCase)
             shown = {};
-            testCase.runDialog(@(f) untickAndRecord(f));
+            testCase.runDialog(@(f) untickAndRecord(f), [], DeconvolveDialogTest.recording('locked'));
 
             testCase.verifyFalse(any(contains(shown, 'Warning:')), ...
                 'With "response" no longer modelled there is no pair left to warn about.');
@@ -204,12 +211,16 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
-        function [options, kinds] = runDialog(testCase, act, stored)
-        %RUNDIALOG  Open the dialog on a recording with a numeric event field
-        %   and two unbinned codes, seeded from STORED (default none), let
-        %   ACT(fig) change the controls, press OK (and Cancel if OK refused).
+        function [options, kinds] = runDialog(testCase, act, stored, EEG)
+        %RUNDIALOG  Open the dialog on EEG (default: a recording with a
+        %   numeric event field and two unbinned codes, see recording),
+        %   seeded from STORED (default none), let ACT(fig) change the
+        %   controls, press OK (and Cancel if OK refused).
             if nargin < 3
                 stored = [];
+            end
+            if nargin < 4
+                EEG = DeconvolveDialogTest.recording();
             end
             try
                 probe = uifigure('Visible', 'off');
@@ -221,7 +232,7 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             timerObj = timer('StartDelay', 6, 'TimerFcn', @(~, ~) drive());
             cleanup = onCleanup(@() cleanupTimer(timerObj));
             start(timerObj);
-            options = DeconvolveDialog(DeconvolveDialogTest.recording(), stored);
+            options = DeconvolveDialog(EEG, stored);
             clear cleanup;
 
             function drive()
@@ -247,10 +258,22 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
     end
 
     methods (Static)
-        function EEG = recording()
+        function EEG = recording(variant)
         %RECORDING  Two bins, a numeric field (rt) on every event, and two
         %   codes in no bin: 'response' (90 events) and 'probe' (3).
+        %   The responses come 400 to 800 ms after their Frequent event, as
+        %   reaction times vary. RECORDING('locked') leaves them exactly
+        %   600 ms after it, as UnfoldBinsTest builds them, which the dialog
+        %   warns about.
             EEG = UnfoldCovariatesTest.recording();
+            if nargin < 1 || ~strcmp(variant, 'locked')
+                % Its own stream, so the jitter is the same on every run and
+                % the global generator other tests seed is left alone.
+                stream = RandStream('mt19937ar', 'Seed', 9);
+                for k = find(strcmp({EEG.event.type}, 'response'))
+                    EEG.event(k).latency = EEG.event(k).latency + randi(stream, [-20 20]);
+                end
+            end
             template = EEG.event(find(strcmp({EEG.event.type}, 'response'), 1));
             for latency = [5003 11007 17011]
                 extra = template;
