@@ -210,7 +210,7 @@ and the window follow from them. The filter is applied with its group delay
 compensated, so it shifts no latency, and it does not filter across the
 boundaries of a discontinuous recording.
 
-![**Filter**, as the N400 template uses it: a 0.1 Hz high-pass at 40 dB.](images/filter-dialog.png){#fig-filter-dialog}
+![**Filter**, here a combination with a.o., 0.1 Hz high-pass at 12 dB.](images/filter-dialog.png){#fig-filter-dialog}
 
 | Option | Default | Meaning |
 |--------------------|------------------|-------------------------------------------------------|
