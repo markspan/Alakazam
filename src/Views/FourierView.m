@@ -620,16 +620,22 @@ classdef FourierView < AlakazamView
             fmin = min(freqs);
             fmax = max(freqs);
             bands = AlakazamSettings.getBands();
+            stripes = gobjects(1, 0);
             for b = 1:numel(bands)
                 x0 = max(bands(b).loFreq, fmin);
                 x1 = min(bands(b).hiFreq, fmax);
                 if x1 <= x0
                     continue;
                 end
-                stripe = patch(ax, [x0, x1, x1, x0], [lo, lo, hi, hi], bands(b).color, ...
+                stripes(end + 1) = patch(ax, [x0, x1, x1, x0], [lo, lo, hi, hi], bands(b).color, ...
                     "EdgeColor", "none", "FaceAlpha", FourierView.StripeAlpha, ...
-                    "HandleVisibility", "off", "Tag", "BandStripe");
-                uistack(stripe, "bottom");
+                    "Tag", "BandStripe"); %#ok<AGROW>
+            end
+            % Behind everything drawn so far. The stripes are ordinary,
+            % visible handles because uistack moves an object by reordering
+            % its axes' Children, and a hidden handle is not among them.
+            if ~isempty(stripes)
+                uistack(stripes, "bottom");
             end
         end
 
@@ -981,12 +987,14 @@ end
 
 function drawBand(ax, freqs, yTop, yBottom, colour, alpha)
 %DRAWBAND  The shaded band between YBOTTOM and YTOP, with dotted edges, as
-%   AverageView draws its standard-error band.
+%   AverageView draws its standard-error band. Ordinary visible handles, as
+%   there, so that the stripes can be stacked behind them (drawBandStripes);
+%   the legend is built from the spectrum lines alone, so they stay out of it.
     ok = isfinite(yTop) & isfinite(yBottom);
-    plot(ax, freqs, yTop, "Color", colour, "LineStyle", ":", "HandleVisibility", "off");
-    plot(ax, freqs, yBottom, "Color", colour, "LineStyle", ":", "HandleVisibility", "off");
+    plot(ax, freqs, yTop, "Color", colour, "LineStyle", ":", "Tag", "ErrorBand");
+    plot(ax, freqs, yBottom, "Color", colour, "LineStyle", ":", "Tag", "ErrorBand");
     patch(ax, [freqs(ok), fliplr(freqs(ok))], [yTop(ok), fliplr(yBottom(ok))], colour, ...
-        "EdgeColor", "none", "FaceAlpha", alpha, "HandleVisibility", "off");
+        "EdgeColor", "none", "FaceAlpha", alpha, "Tag", "ErrorBand");
 end
 
 function [kind, label, phrase] = spectrumUnit(EEG)

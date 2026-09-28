@@ -144,7 +144,9 @@ classdef FourierViewBinsTest < matlab.unittest.TestCase
             eeg.stErr = ones(size(eeg.data));
             [view, cleanup] = testCase.openView(eeg); %#ok<ASGLU>
 
-            bands = findobj(view.Axes, 'Type', 'patch', '-not', 'Tag', 'BandStripe');
+            % findall, not findobj, so that the test sees what is drawn
+            % whatever its HandleVisibility.
+            bands = findall(view.Axes, 'Type', 'patch', 'Tag', 'ErrorBand');
             if AlakazamSettings.get('graphics', 'erpPlot', 'showConfInt')
                 n = AlakazamSettings.get('graphics', 'erpPlot', 'confIntN');
                 testCase.verifyNumElements(bands, 3, 'One band per bin.');
@@ -158,12 +160,16 @@ classdef FourierViewBinsTest < matlab.unittest.TestCase
 
         function theFrequencyBandsAreStripesBehindTheSpectra(testCase)
             testCase.assumeNotEmpty(AlakazamSettings.getBands(), 'No frequency bands are set.');
-            [view, cleanup] = testCase.openView(FourierViewBinsTest.spectra('Power')); %#ok<ASGLU>
+            eeg = FourierViewBinsTest.spectra('Power');
+            eeg.stErr = ones(size(eeg.data));   % error bands too, where the Settings draw them
+            [view, cleanup] = testCase.openView(eeg); %#ok<ASGLU>
 
-            stripes = findobj(view.Axes, 'Tag', 'BandStripe');
+            % allchild, not Children: the stacking order of everything drawn,
+            % bottom last, hidden handles included.
+            stack = allchild(view.Axes);
+            stripes = findall(view.Axes, 'Tag', 'BandStripe');
             testCase.assertNotEmpty(stripes);
-            children = view.Axes.Children;
-            testCase.verifyTrue(all(ismember(stripes, children(end - numel(stripes) + 1:end))), ...
+            testCase.verifyTrue(all(ismember(stripes, stack(end - numel(stripes) + 1:end))), ...
                 'The stripes are drawn behind everything else.');
         end
     end
