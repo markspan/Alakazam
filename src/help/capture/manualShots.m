@@ -25,13 +25,13 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
 %
 %   See also CAPTUREMANUALIMAGES.
     tpl = @(file, node) struct('template', file, 'node', node);
-    ch02 = 'templates/luck/ch02-N400-one-participant.alztemplate';
-    ch08 = 'templates/luck/ch08-N2pc.alztemplate';
-    ch09 = 'templates/luck/ch09-MMN-with-ICA.alztemplate';
-    ch10 = 'templates/luck/ch10-LRP.alztemplate';
-    rift = 'templates/dimigen-rift-simplified.alztemplate';
-    face = 'templates/FaceSaccadesDeconvolution.alztemplate';
-    reading = 'templates/ReadingDeconvolution.alztemplate';
+    ch02 = 'library/templates/luck/ch02-N400-one-participant.alztemplate';
+    ch08 = 'library/templates/luck/ch08-N2pc.alztemplate';
+    ch09 = 'library/templates/luck/ch09-MMN-with-ICA.alztemplate';
+    ch10 = 'library/templates/luck/ch10-LRP.alztemplate';
+    rift = 'library/templates/dimigen-rift-simplified.alztemplate';
+    face = 'library/templates/FaceSaccadesDeconvolution.alztemplate';
+    reading = 'library/templates/ReadingDeconvolution.alztemplate';
     init = struct('Param', 'Init');
 
     % ---- options the templates do not carry -------------------------------
@@ -183,7 +183,7 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
             'ArtefactDetect', app.MainFigure)), ...
         shot('manualreject-dialog', 'n400', 'dialog', 'transform', 'ManualReject', 'input', 'baseline', 'settle', 8), ...
         shot('autoeyeica-dialog', 'mmn', 'dialog', 'transform', 'AutoEyeICA', 'input', 'raw', 'seed', tpl(ch09, 1)), ...
-        shot('autogedai-dialog', 'mmn', 'dialog', 'transform', 'AutoGEDAI', 'input', 'raw', 'seed', tpl('templates/N400.alztemplate', 1)), ...
+        shot('autogedai-dialog', 'mmn', 'dialog', 'transform', 'AutoGEDAI', 'input', 'raw', 'seed', tpl('library/templates/N400.alztemplate', 1)), ...
         shot('removecomponents-dialog', 'mmn', 'dialog', 'transform', 'RemoveComponents', 'input', 'ica', 'settle', 10), ...
         ... % Epoching and averaging.
         shot('definebins-dialog', 'n400', 'dialog', 'transform', 'DefineBins', 'input', 'filtered', 'seed', tpl(ch02, 2)), ...

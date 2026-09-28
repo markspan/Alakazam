@@ -1,0 +1,89 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "MMN with ICA correction (Luck ch 9)",
+  "nodes": [
+    {
+      "transformId": "AutoEyeICA",
+      "parent": -1,
+      "params": {
+        "EyeThreshold": 0.6
+      }
+    },
+    {
+      "transformId": "DefineBins",
+      "parent": 1,
+      "params": {
+        "script": "% From the chapter's own BDF_MMN.txt. Codes verified in the recording:\n% 70 = deviant (200 events), 80 = standard (785).\nbin 1 \"Deviant\"                    : 70\nbin 2 \"Standard preceded by one\"   : 80 and prev(80)\n\n% The MMN: deviant minus standard.\nbin 3 \"MMN\" = bin 1 - bin 2",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "parent": 2,
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "parent": 3,
+      "params": {
+        "Method": [
+          "Absolute threshold"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 100,
+        "TestStart": -200,
+        "TestStop": 795,
+        "Channels": "All channels",
+        "Scope": "Whole epoch"
+      }
+    },
+    {
+      "transformId": "Average",
+      "parent": 4,
+      "params": {
+        "Param": "Init"
+      }
+    },
+    {
+      "transformId": "Measure",
+      "parent": 5,
+      "params": {
+        "windows": [
+          {
+            "label": "MMN amplitude",
+            "start": 125,
+            "stop": 225,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "Fz"
+          }
+        ],
+        "derivations": ""
+      }
+    },
+    {
+      "transformId": "ScalpDistribution",
+      "parent": 5,
+      "params": {
+        "Param": "Init"
+      }
+    }
+  ]
+}

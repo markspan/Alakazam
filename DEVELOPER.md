@@ -212,6 +212,27 @@ has none.
    `src/help/capture/manualShots.m`. `ManualTest` fails when a
    transformation has no section.
 
+## The library
+
+`library/` holds the files a user starts an analysis from, by kind:
+`templates/`, `binscripts/` and `measures/`. Apply Template and the
+DefineBins and ERP Measure **Load...** dialogs open there the first time in
+a session and remember the last folder per kind after that
+(`pickLibraryFile`; `libraryFolder` finds the folder from its own location).
+`library/README.md` sets the rules and indexes every file; `LibraryTest`
+enforces them:
+
+- every file loads the way the application reads it;
+- every measurement file has a `source` block (`reference`, `doi`,
+  `agreement`, `note`), with `agreement` one of `matches`, `partly`,
+  `differs`, `not compared` or `no source`, and a reference unless it is
+  `no source`;
+- every file is listed in the README.
+
+A measurement window from the library is an a priori choice only when its
+source is known, so a window with no source says so rather than borrowing a
+reference that does not describe it.
+
 ## Reports
 
 The statistical, cluster, source-cluster and data-quality reports are Quarto

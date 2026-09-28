@@ -1,0 +1,118 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "N400, one participant (Luck ch 2)",
+  "nodes": [
+    {
+      "transformId": "Filter",
+      "parent": -1,
+      "params": {
+        "highpass": {
+          "enabled": true,
+          "freq": 0.1,
+          "db": 40
+        },
+        "lowpass": {
+          "enabled": false,
+          "freq": 30,
+          "db": 40
+        },
+        "notch": {
+          "enabled": false,
+          "freq": 50,
+          "db": 40
+        },
+        "perChannel": false
+      }
+    },
+    {
+      "transformId": "DefineBins",
+      "parent": 1,
+      "params": {
+        "script": "% From the chapter's own BDF_N400.txt.\n% First digit 1 = prime, 2 = target; middle digit 1 = related, 2 = unrelated.\n% 201 is a correct response; a target counts only if one follows in 200-1500 ms.\nbin 1 \"Prime, related\"    : 111|112\nbin 2 \"Prime, unrelated\"  : 121|122\nbin 3 \"Target, related\"   : 211|212 and next(201) within [200,1500] ms\nbin 4 \"Target, unrelated\" : 221|222 and next(201) within [200,1500] ms\n\n% The N400: unrelated minus related targets.\nbin 5 \"N400\" = bin 4 - bin 3",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "parent": 2,
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "parent": 3,
+      "params": {
+        "Method": [
+          "Absolute threshold"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 100,
+        "TestStart": -200,
+        "TestStop": 795,
+        "Channels": "All channels",
+        "Scope": "Whole epoch"
+      }
+    },
+    {
+      "transformId": "Average",
+      "parent": 4,
+      "params": {
+        "Param": "Init"
+      }
+    },
+    {
+      "transformId": "Measure",
+      "parent": 5,
+      "params": {
+        "windows": [
+          {
+            "label": "N400 amplitude",
+            "start": 300,
+            "stop": 500,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "CPz"
+          },
+          {
+            "label": "N400 onset",
+            "start": 300,
+            "stop": 500,
+            "measure": "Fractional Area Latency",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Negative",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "CPz"
+          }
+        ],
+        "derivations": ""
+      }
+    },
+    {
+      "transformId": "ScalpDistribution",
+      "parent": 5,
+      "params": {
+        "Param": "Init"
+      }
+    }
+  ]
+}

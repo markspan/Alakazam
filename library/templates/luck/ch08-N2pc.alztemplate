@@ -1,0 +1,82 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "N2pc (Luck ch 8)",
+  "nodes": [
+    {
+      "transformId": "DefineBins",
+      "parent": -1,
+      "params": {
+        "script": "% From the chapter's own BDF_N2pc.txt.\nbin 1 \"Left target\"  : 111|112|211|212 and next(201) within [200,1000] ms\nbin 2 \"Right target\" : 121|122|221|222 and next(201) within [200,1000] ms\n\n% Contralateral minus ipsilateral, via the lateral channel derived below.\n% With lat = PO8 - PO7, bin 1 is contra-ipsi and bin 2 is its negative,\n% so halving and subtracting gives contra-ipsi. See Docs/luck.md.\nbin 3 \"N2pc (contra-ipsi)\" = 0.5 bin 1 - 0.5 bin 2",
+        "epoch": {
+          "lo": -200,
+          "hi": 800,
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "transformId": "DeriveChannels",
+      "parent": 1,
+      "params": {
+        "derivations": "% The lateral pair the N2pc is measured at.\nlet PO78 = PO8 - PO7"
+      }
+    },
+    {
+      "transformId": "Baseline",
+      "parent": 2,
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      }
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "parent": 3,
+      "params": {
+        "Method": [
+          "Absolute threshold"
+        ],
+        "Minimum": -100,
+        "Maximum": 100,
+        "Threshold": 100,
+        "Window": 200,
+        "Step": 100,
+        "TestStart": -200,
+        "TestStop": 795,
+        "Channels": "All channels",
+        "Scope": "Whole epoch"
+      }
+    },
+    {
+      "transformId": "Average",
+      "parent": 4,
+      "params": {
+        "Param": "Init"
+      }
+    },
+    {
+      "transformId": "Measure",
+      "parent": 5,
+      "params": {
+        "windows": [
+          {
+            "label": "N2pc amplitude",
+            "start": 200,
+            "stop": 275,
+            "measure": "Mean Amplitude",
+            "polarity": "Negative",
+            "width": 0,
+            "localPoints": 0,
+            "fraction": 0.5,
+            "areaMode": "Signed",
+            "baseline": "",
+            "refChannel": "",
+            "channels": "PO78"
+          }
+        ],
+        "derivations": ""
+      }
+    }
+  ]
+}

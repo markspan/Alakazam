@@ -6,6 +6,12 @@
     "meaning": "Indexes semantic processing and the ease of integrating an item into its context. Amplitude is larger for semantically incongruent, unexpected or unprimed items.",
     "task": "Sentence reading with semantic violations, semantic priming, and picture-word or word-word matching."
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465. With Luck, S. J. Applied Event-Related Potential Data Analysis. LibreTexts.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "partly",
+    "note": "The window matches ERP CORE and Luck's chapter 2 and 3 templates (300 to 500 ms). The site does not: they measure at CPz, where the N400 was largest in their data; this preset uses Cz."
+  },
   "rows": [
     {
       "label": "N400",

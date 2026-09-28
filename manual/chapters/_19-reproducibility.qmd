@@ -31,10 +31,27 @@ computing on the wrong one.
 transformation, its options and its parent, independent of the workspace's
 cache. **Apply Template**, on any dataset node, replays it there. A template
 is the unit to keep with a study, share with a colleague, or apply to the
-next batch of subjects. The repository includes templates for the analyses
-in this manual: the ERP CORE chapters of Luck's textbook, the N400 worked
+next batch of subjects. The library includes templates for the analyses in
+this manual: the ERP CORE chapters of Luck's textbook, the N400 worked
 example, the RIFT study, the face and reading deconvolutions, and an ICA
 pipeline.
+
+## The library {#sec-library}
+
+The `library` folder of the installation holds files to start an analysis
+from, by kind: templates in `library/templates`, bin scripts in
+`library/binscripts` and measurement windows in `library/measures`.
+**Apply Template**, and the **Load** buttons of DefineBins and ERP Measure,
+open in the matching folder the first time in a session, and in whichever
+folder a file of that kind was last loaded from after that.
+
+Every measurement file records where its windows and sites come from: the
+reference, and whether the file matches it, partly matches, differs, has not
+yet been compared, or has no published source. A window chosen after looking
+at the data makes the statistics optimistic in a way no correction repairs,
+so a window from the library is only an a priori choice when its source is
+known. `library/README.md` lists every file, with the data it was written
+for.
 
 ## Export as Code {#sec-export-code}
 

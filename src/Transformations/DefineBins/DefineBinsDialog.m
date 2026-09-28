@@ -154,7 +154,7 @@ function result = DefineBinsDialog(defaultScript, prevEpoch, opts)
     end
 
     function onLoad()
-        [file, path] = uiextras.uigetfile2('*.binscript', 'Load bin definitions');
+        [file, path] = pickLibraryFile('binscripts', '*.binscript', 'Load bin definitions');
         if isequal(file, 0); return; end
         try
             [startStr, stopStr, script] = readScriptFile(fullfile(path, file));

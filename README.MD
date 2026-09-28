@@ -28,7 +28,7 @@ The focus of Alakazam is on **education** and on **reusability in research**.
   results can be compared side by side.
 - **Follow the textbook in the application.** The ERP CORE chapters of
   Steven Luck's open textbook, *Applied Event-Related Potential Data
-  Analysis*, come as ready-made templates ([`templates/luck/`](templates/luck/README.md)),
+  Analysis*, come as ready-made templates ([`library/templates/luck/`](library/templates/luck/README.md)),
   on the same data the book uses.
 - **Follow a published protocol.** The workflow is the one Pütz, Span &
   Lorist (2025) set out step by step in *STAR Protocols*, from designing and
@@ -136,7 +136,8 @@ through a first analysis, from a raw recording to numbers you can analyse.
 |---|---|
 | [The manual](manual/manual.pdf) ([source](manual/manual.qmd)) | Researchers and students: every step, report and setting, with its background. Also behind the **Help** button. |
 | [`DATA.md`](DATA.md) | Where to get the example datasets the manual and templates use. |
-| [`templates/luck/`](templates/luck/README.md) | The textbook chapters as templates. |
+| [`library/`](library/README.md) | Ready-made templates, bin scripts and measurement windows. |
+| [`library/templates/luck/`](library/templates/luck/README.md) | The textbook chapters as templates. |
 | [`dependencies.md`](dependencies.md) | The toolkits Alakazam uses, their versions and licences. |
 | [`DEVELOPER.md`](DEVELOPER.md) | Contributors: the architecture, adding a transformation, the tests. |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release. |

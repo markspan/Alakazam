@@ -38,12 +38,10 @@ function onApplyTemplate(this, templateFile)
         [pathName, fileName, ext] = fileparts(char(templateFile));
         fileName = [fileName ext];
     else
-        exportsDir = this.Workspace.ExportsDirectory;
-        if isempty(exportsDir) || ~isfolder(exportsDir)
-            exportsDir = pwd;
-        end
-        [fileName, pathName] = uigetfile({'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, ...
-            'Apply Template', exportsDir);
+        % Opens in the library's templates the first time in a session, then
+        % wherever a template was last applied from (see pickLibraryFile).
+        [fileName, pathName] = pickLibraryFile('templates', ...
+            {'*.alztemplate', 'Alakazam Template (*.alztemplate)'}, 'Apply Template');
         if isequal(fileName, 0)
             return; % cancelled
         end

@@ -1,5 +1,5 @@
 classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
-%DIMIGENRIFTTEMPLATETEST  Regression coverage for templates/dimigen-rift.alztemplate.
+%DIMIGENRIFTTEMPLATETEST  Regression coverage for library/templates/dimigen-rift.alztemplate.
 %
 %   Two tests, deliberately split by cost:
 %
@@ -227,7 +227,7 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
         %   readTemplate does not use its own (unused) first argument and
         %   this test has no other need for a running app.
             root = fileparts(fileparts(mfilename('fullpath')));
-            file = fullfile(root, 'templates', testCase.TemplateFile);
+            file = fullfile(root, 'library', 'templates', testCase.TemplateFile);
             testCase.assertTrue(isfile(file), sprintf('Template not found: %s', file));
             raw = jsondecode(fileread(file));
             testCase.assertTrue(isfield(raw, 'nodes'), 'Template has no "nodes" list.');

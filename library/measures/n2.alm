@@ -6,6 +6,12 @@
     "meaning": "Linked to cognitive control: conflict monitoring, response inhibition, and the detection of novelty or mismatch. The posterior N2pc indexes the spatial selection of a target.",
     "task": "Go/NoGo, flanker and Stroop conflict tasks, visual search (N2pc), and oddball paradigms."
   },
+  "source": {
+    "reference": "",
+    "doi": "",
+    "agreement": "no source",
+    "note": "No published source is recorded for this window and site. Check them against the literature for your paradigm before using them as an a priori choice."
+  },
   "rows": [
     {
       "label": "N2",

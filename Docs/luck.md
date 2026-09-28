@@ -371,7 +371,7 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
 Plot the **Average** node for the waveforms with standard-error bands
 (AverageView), and add a **Scalp** plot for the N400 topography.
 
-**As a template.** `templates/N400.alztemplate` is this whole pipeline
+**As a template.** `library/templates/N400.alztemplate` is this whole pipeline
 pre-built (`AutoGEDAI -> DefineBins -> Baseline -> ArtefactDetect -> Average ->
 ERP Measure`); apply it to any raw node (Chapter 3).
 
@@ -1061,7 +1061,7 @@ the manual's bibliography,
 
 ## Appendix 3 -- The example pipeline, as a template
 
-`templates/N400.alztemplate`, applied on one subject and then
+`library/templates/N400.alztemplate`, applied on one subject and then
 **Apply to All Raw Files**, finished on the **Grand Average** tab:
 
 ```
@@ -1082,7 +1082,7 @@ the topography.
 
 ### The fullest chain, ready to run
 
-`templates/N400-complete.alztemplate` is the whole of chapters 2
+`library/templates/N400-complete.alztemplate` is the whole of chapters 2
 and 3 as one template, starting from the unfiltered `.set` files `ch3` actually
 ships and ending at the numbers the statistics read:
 
@@ -1123,11 +1123,11 @@ from the book's (70 of 230 epochs here against 67 with the book's own
 Butterworth high-pass), because Alakazam's Filter is a Kaiser FIR by design;
 see [Not validated](#not-validated-and-why).
 
-### A template per chapter, in `templates/luck`
+### A template per chapter, in `library/templates/luck`
 
 Seven chapters ship a ready template, so opening `ChapterN.wksp` and applying
 the matching `.alztemplate` builds that chapter's pipeline in one action. They
-live together in [`templates/luck/`](../templates/luck) rather than beside
+live together in [`library/templates/luck/`](../library/templates/luck) rather than beside
 each chapter's data, because `Data/` is gitignored and a template that only
 exists on the machine that made it is no use to anyone. Named chapter-first so
 a file dialog lists them in the book's own order:
@@ -1159,8 +1159,8 @@ gitignored, so a fresh clone has the seven templates but no recordings: run
 template names a file, so each one applies to whichever dataset the branch
 you drop it on already holds.
 
-`N400.alztemplate` and `N400-complete.alztemplate` sit in `templates/` itself
-rather than in `templates/luck/`: they are cross-chapter walkthroughs rather
+`N400.alztemplate` and `N400-complete.alztemplate` sit in `library/templates/` itself
+rather than in `library/templates/luck/`: they are cross-chapter walkthroughs rather
 than any one chapter's recipe.
 
 **Two caveats worth knowing before trusting a rejection count.**

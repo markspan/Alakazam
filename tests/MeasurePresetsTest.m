@@ -130,8 +130,7 @@ classdef MeasurePresetsTest < matlab.unittest.TestCase
     methods (Access = private)
         function files = presetFiles(~)
             root = fileparts(fileparts(mfilename('fullpath')));
-            files = dir(fullfile(root, 'src', 'Transformations', 'Measure', ...
-                'presets', '*.alm'));
+            files = dir(fullfile(root, 'library', 'measures', '*.alm'));
         end
 
         function raw = decode(testCase, file)

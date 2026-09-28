@@ -6,6 +6,12 @@
     "meaning": "A pre-attentive, automatic index of auditory deviance detection and echoic sensory memory, often framed as a prediction-error signal. It arises without attention to the sounds.",
     "task": "Auditory oddball paradigms, typically passive (attention directed away from the tones), including roving-standard designs; a marker of auditory discrimination."
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465. With Luck, S. J. Applied Event-Related Potential Data Analysis. LibreTexts.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "differs",
+    "note": "ERP CORE and Luck's chapter 7 template measure the MMN from 125 to 225 ms (the template at Fz). No published source is recorded for this preset's 150 to 250 ms."
+  },
   "rows": [
     {
       "label": "MMN",

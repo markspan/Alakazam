@@ -6,6 +6,12 @@
     "meaning": "Associated with early stimulus classification and feature detection, perceptual salience, and the allocation of attention to target features.",
     "task": "Target and feature detection, feature-based attention, and stimulus repetition or priming."
   },
+  "source": {
+    "reference": "",
+    "doi": "",
+    "agreement": "no source",
+    "note": "No published source is recorded for this window and site. Check them against the literature for your paradigm before using them as an a priori choice."
+  },
   "rows": [
     {
       "label": "P2",

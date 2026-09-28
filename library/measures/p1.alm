@@ -6,6 +6,12 @@
     "meaning": "Indexes early visual sensory and perceptual processing in extrastriate cortex. Amplitude is enhanced by spatial attention (sensory gain control) and grows with stimulus luminance and contrast.",
     "task": "Visual paradigms: spatial attention cueing (for example Posner), visual detection and discrimination, and passive viewing of visual stimuli."
   },
+  "source": {
+    "reference": "",
+    "doi": "",
+    "agreement": "no source",
+    "note": "No published source is recorded for this window and site. Check them against the literature for your paradigm before using them as an a priori choice."
+  },
   "rows": [
     {
       "label": "P1",
