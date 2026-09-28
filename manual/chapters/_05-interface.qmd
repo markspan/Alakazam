@@ -274,10 +274,12 @@ removes it.
 
 ### Spectra
 
-A frequency-domain result (Fourier, Welch) is drawn as a spectrum, over the
-named frequency bands of @sec-settings, shaded as pale stripes behind it.
-Above the plot are the channel and the log scale; below it, two sliders
-zoom.
+A frequency-domain result (Fourier, Welch) is drawn as a spectrum, with the
+named frequency bands of @sec-settings shaded: filled under the curve when
+one spectrum is drawn (from 0, or from the bottom of a log axis), and as
+pale stripes behind the lines when there are several, or a difference,
+since there is then no one curve to fill under. Above the plot are the
+channel and the log scale; below it, two sliders zoom.
 
 An **averaged spectrum overlays its bins**, as the ERP plot does
 (@sec-overlay): a tickbox for each bin beside the plot, each ticked bin a

@@ -1,10 +1,11 @@
 classdef FourierView < AlakazamView
 %FOURIERVIEW  Keyboard-driven view of a frequency-domain dataset.
 %
-%   FourierView draws one channel's spectra at a time, over the frequency
-%   bands shaded in the background (from AlakazamSettings.getBands,
-%   user-editable on the Settings dialog's own "Frequency bands" tab -- see
-%   drawBandStripes) and, optionally, a light moving-average smoothing over
+%   FourierView draws one channel's spectra at a time, with the frequency
+%   bands shaded (from AlakazamSettings.getBands, user-editable on the
+%   Settings dialog's own "Frequency bands" tab; filled under the curve when
+%   one spectrum is drawn, pale stripes behind several lines -- see
+%   shadeBands) and, optionally, a light moving-average smoothing over
 %   the plotted spectrum (the "Smooth spectrum" checkbox on the Settings
 %   dialog's "Graphics" tab -- see magnitudeOf), and steps through channels
 %   with the up/down arrow keys -- the same interaction model EpochView and
@@ -231,7 +232,7 @@ classdef FourierView < AlakazamView
                 lo = 0;
             end
             if ~phaseMode
-                this.drawBandStripes(ax, lo, hi);
+                this.shadeBands(ax, handles, lo, hi);
             end
             if this.DifferenceOn && ~phaseMode
                 yline(ax, 0, "Color", "k", "LineStyle", "--", "HandleVisibility", "off");
@@ -602,16 +603,56 @@ classdef FourierView < AlakazamView
             hi = hi + margin;
         end
 
+        function shadeBands(this, ax, handles, lo, hi)
+        %SHADEBANDS  Shade the frequency bands (AlakazamSettings.getBands, the
+        %   "Frequency bands" settings tab) behind what is drawn, in the way
+        %   that fits it. ONE SPECTRUM (a Welch spectrum, a single trial, one
+        %   ticked bin) is filled under its curve, band by band, as this view
+        %   always drew it (drawBandFills). SEVERAL LINES, or a difference,
+        %   get pale stripes instead (drawBandStripes): there is no one curve
+        %   to fill under, fills under each would pile up, and a difference
+        %   goes below zero, where a fill means little. The bands are read
+        %   fresh on every redraw, not cached on this view, so editing them in
+        %   Settings and saving takes effect immediately.
+            if ~this.DifferenceOn && isscalar(handles)
+                this.drawBandFills(ax, handles, ternary(strcmp(ax.YScale, 'log'), lo, 0));
+            else
+                this.drawBandStripes(ax, lo, hi);
+            end
+        end
+
+        function drawBandFills(~, ax, curve, base)
+        %DRAWBANDFILLS  Fill the area under CURVE (a drawn line) in each
+        %   frequency band's colour, from BASE up: 0 on a linear axis, where
+        %   the old fills began, and the bottom of a log axis, where 0 cannot
+        %   be drawn. Each band takes in the sample just before it, so that
+        %   neighbouring bands meet without a gap. Opaque, with a faint edge,
+        %   as they always were, and stacked behind everything else (see
+        %   drawBandStripes for why they are visible handles).
+            x = double(curve.XData);
+            y = double(curve.YData);
+            y(~isfinite(y)) = base;   % a gap in the curve (a log axis at or below 0) is left unfilled
+            fills = gobjects(1, 0);
+            bands = AlakazamSettings.getBands();
+            for b = 1:numel(bands)
+                idx = find(x > bands(b).loFreq & x <= bands(b).hiFreq);
+                if isempty(idx)
+                    continue;
+                end
+                sel = max(1, idx(1) - 1):idx(end);
+                fills(end + 1) = area(ax, x(sel), y(sel), base, "FaceColor", bands(b).color, ...
+                    "EdgeColor", "k", "EdgeAlpha", 0.33, "Tag", "BandFill"); %#ok<AGROW>
+            end
+            if ~isempty(fills)
+                uistack(fills, "bottom");
+            end
+        end
+
         function drawBandStripes(this, ax, lo, hi)
-        %DRAWBANDSTRIPES  Shade each frequency band (AlakazamSettings.getBands,
-        %   the "Frequency bands" settings tab) as a pale stripe from LO to
-        %   HI, behind whatever is drawn. Stripes rather than the area under
-        %   the curve, which is what this view used to shade: with several
-        %   spectra there is no one curve to fill under, and on a log axis
-        %   an area down to zero cannot be drawn. The y-zoom only ever
-        %   narrows the axis inside [LO, HI], so the stripes always fill it.
-        %   Read fresh on every redraw, not cached on this view, so editing
-        %   the bands in Settings and saving takes effect immediately.
+        %DRAWBANDSTRIPES  Shade each frequency band as a pale stripe from LO to
+        %   HI, behind whatever is drawn, for several lines or a difference
+        %   (see shadeBands). The y-zoom only ever narrows the axis inside
+        %   [LO, HI], so the stripes always fill it.
             if ~(isfinite(lo) && isfinite(hi) && hi > lo)
                 return;
             end
@@ -987,7 +1028,7 @@ end
 function drawBand(ax, freqs, yTop, yBottom, colour, alpha)
 %DRAWBAND  The shaded band between YBOTTOM and YTOP, with dotted edges, as
 %   AverageView draws its standard-error band. Ordinary visible handles, as
-%   there, so that the stripes can be stacked behind them (drawBandStripes);
+%   there, so that the band shading can be stacked behind them (shadeBands);
 %   the legend is built from the spectrum lines alone, so they stay out of it.
     ok = isfinite(yTop) & isfinite(yBottom);
     plot(ax, freqs, yTop, "Color", colour, "LineStyle", ":", "Tag", "ErrorBand");

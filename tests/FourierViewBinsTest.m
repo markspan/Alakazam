@@ -158,7 +158,7 @@ classdef FourierViewBinsTest < matlab.unittest.TestCase
             end
         end
 
-        function theFrequencyBandsAreStripesBehindTheSpectra(testCase)
+        function severalLinesGetTheBandsAsStripesBehindThem(testCase)
             testCase.assumeNotEmpty(AlakazamSettings.getBands(), 'No frequency bands are set.');
             eeg = FourierViewBinsTest.spectra('Power');
             eeg.stErr = ones(size(eeg.data));   % error bands too, where the Settings draw them
@@ -171,6 +171,46 @@ classdef FourierViewBinsTest < matlab.unittest.TestCase
             testCase.assertNotEmpty(stripes);
             testCase.verifyTrue(all(ismember(stripes, stack(end - numel(stripes) + 1:end))), ...
                 'The stripes are drawn behind everything else.');
+            testCase.verifyEmpty(findall(view.Axes, 'Tag', 'BandFill'), ...
+                'Several lines have no one curve to fill under.');
+        end
+
+        function oneLineIsFilledUnderItsCurveAsItAlwaysWas(testCase)
+            testCase.assumeNotEmpty(AlakazamSettings.getBands(), 'No frequency bands are set.');
+            [view, cleanup] = testCase.openView(FourierViewBinsTest.spectra('Power')); %#ok<ASGLU>
+
+            tick(view, 'Mid', false);
+            tick(view, 'High', false);
+
+            fills = findall(view.Axes, 'Tag', 'BandFill');
+            testCase.assertNotEmpty(fills);
+            testCase.verifyEmpty(findall(view.Axes, 'Tag', 'BandStripe'));
+            testCase.verifyEqual(unique([fills.YData]), 11, ...
+                'Filled up to the one curve drawn (channel 1, bin 1).');
+            testCase.verifyEqual(unique([fills.BaseValue]), 0, 'From 0 on a linear axis.');
+            stack = allchild(view.Axes);
+            testCase.verifyTrue(all(ismember(fills, stack(end - numel(fills) + 1:end))), ...
+                'The fills are drawn behind the curve.');
+        end
+
+        function onALogScaleTheFillStartsAtTheBottomOfTheAxis(testCase)
+        %ONALOGSCALETHEFILLSTARTSATTHEBOTTOMOFTHEAXIS  0 cannot be drawn on a
+        %   log axis, so the fill starts where the axis does. The curve rises
+        %   through four decades, so the axis has a range to span.
+            testCase.assumeNotEmpty(AlakazamSettings.getBands(), 'No frequency bands are set.');
+            eeg = FourierViewBinsTest.spectra('Power');
+            eeg.data(1, :, 1) = logspace(0, 4, size(eeg.data, 2));
+            [view, cleanup] = testCase.openView(eeg); %#ok<ASGLU>
+            tick(view, 'Mid', false);
+            tick(view, 'High', false);
+
+            setState(view.LogScaleBox, true);
+
+            testCase.assertEqual(char(view.Axes.YScale), 'log');
+            limits = ylim(view.Axes);
+            fills = findall(view.Axes, 'Tag', 'BandFill');
+            testCase.assertNotEmpty(fills);
+            testCase.verifyEqual(unique([fills.BaseValue]), limits(1), 'AbsTol', 1e-12);
         end
     end
 

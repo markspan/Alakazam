@@ -67,9 +67,10 @@ bar. Dates are those of the tag.
   there is one bin. The keys, the mouse wheel and a focus shared from
   another view still step, and the dropdowns follow them. The zoom sliders
   stay; the plot's toolbar pans, and the x zoom keeps a pan made with it.
-- The spectrum view shades the frequency bands as pale stripes behind the
-  spectra, instead of filling the area under the one curve, which several
-  curves or a log axis would not allow.
+- The spectrum view still fills the frequency bands under the curve when
+  one spectrum is drawn (from the bottom of the axis on a log scale), and
+  shades them as pale stripes behind the lines when there are several, or
+  a difference, where there is no one curve to fill under.
 - `src/help/node_modules/` and `src/help/dist/`, left behind by the old help
   builder, are removed from the repository (a clone that had built the old
   help page had committed them) and ignored again, so they do not show up
