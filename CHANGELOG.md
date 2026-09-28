@@ -104,6 +104,16 @@ bar. Dates are those of the tag.
 - The Filter dialog did not open for settings that stored a filter which is
   off with a frequency or attenuation of 0, as a script does; it now falls
   back to the defaults for those fields.
+- **ReRef with an Average reference and a reconstructed implicit reference
+  left the reference site out of its own average.** The channel is now added
+  as a flat zero before re-referencing, as EEGLAB advises, so N recorded
+  channels and the reference are averaged as N + 1 sites and the channels
+  sum to zero. Before, the subtracted average was N/(N + 1) of what it
+  should be (3% at 32 channels). Specific-channel references are unchanged.
+  Nodes computed before this fix keep the old result until recalculated.
+- The time-frequency and coherence views leave a cell with no value blank,
+  as the ERP image already did for a rejected trial, instead of drawing it
+  as the strongest decrease or as no coherence.
 
 ## V0.4.4.2 (2026-09-28)
 
