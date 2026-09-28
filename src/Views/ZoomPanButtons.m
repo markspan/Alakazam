@@ -1,7 +1,10 @@
 classdef ZoomPanButtons < handle
 %ZOOMPANBUTTONS  Axes zoom/pan controls: button row + zoom sliders.
-%   FourierView and SpectralMeasureView both build this at the bottom of
-%   their grid: an optional leading "C^"/"Cv" button pair that steps the
+%   SpectralMeasureView builds this at the bottom of its grid, and
+%   FourierView builds the zoom sliders alone (it picks the channel and the
+%   bin with dropdowns above its plot, like the other views, so it has no
+%   button row; see the constructor's ROWS). The button row is an optional
+%   leading "C^"/"Cv" button pair that steps the
 %   CHANNEL (via CHANNELSTEPFCN), pan buttons "<"/">" that shift the
 %   frequency axis, an optional trailing "<<"/">>" pair that steps
 %   whatever secondary dimension the owning view has (trial for
@@ -60,6 +63,10 @@ classdef ZoomPanButtons < handle
                 stepLabel, channelLabels, channelSelectFcn)
         %ZOOMPANBUTTONS  Build the button row into GRID's ROWS(1), the
         %   x-zoom slider into ROWS(2) and the y-zoom slider into ROWS(3).
+        %   With two ROWS there is no button row: the x-zoom slider goes into
+        %   ROWS(1) and the y-zoom slider into ROWS(2), and the arguments
+        %   after ACTIVATEDFCN, which only configure buttons, may be left
+        %   out.
         %   ACTIVATEDFCN(), if non-empty, is called before every button's
         %   own action, and before every slider drag/release (mirroring the
         %   owning view's own notifyActivated). STEPFCN(delta), if given and
@@ -80,6 +87,12 @@ classdef ZoomPanButtons < handle
         %   Built only when CHANNELSTEPFCN is also given (there is nothing
         %   to jump to on single-channel data); omit either (or pass empty)
         %   to skip it, matching CHANNELSTEPFCN's own opt-in convention.
+            if nargin < 6
+                stepFcn = [];
+            end
+            if nargin < 7
+                channelStepFcn = [];
+            end
             if nargin < 8 || isempty(stepLabel)
                 stepLabel = 'Trial';
             end
@@ -93,10 +106,13 @@ classdef ZoomPanButtons < handle
             this.Nyquist = nyquist;
             this.ActivatedFcn = activatedFcn;
 
-            this.buildButtonRow(grid, rows(1), stepFcn, channelStepFcn, char(stepLabel), ...
-                channelLabels, channelSelectFcn);
-            this.makeSliderRow(grid, rows(2), "x zoom", "Zoom the frequency axis", @(v) this.onXZoomChanged(v));
-            this.makeSliderRow(grid, rows(3), "y zoom", "Zoom the amplitude axis", @(v) this.onYZoomChanged(v));
+            sliderRows = rows(end - 1:end);
+            if numel(rows) >= 3
+                this.buildButtonRow(grid, rows(1), stepFcn, channelStepFcn, char(stepLabel), ...
+                    channelLabels, channelSelectFcn);
+            end
+            this.makeSliderRow(grid, sliderRows(1), "x zoom", "Zoom the frequency axis", @(v) this.onXZoomChanged(v));
+            this.makeSliderRow(grid, sliderRows(2), "y zoom", "Zoom the amplitude axis", @(v) this.onYZoomChanged(v));
 
             this.applyXLim();
         end

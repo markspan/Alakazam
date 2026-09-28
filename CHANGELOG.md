@@ -30,6 +30,12 @@ bar. Dates are those of the tag.
 
 ### Changed
 
+- **The spectrum view picks the channel and the bin with dropdowns above the
+  plot**, as the other views do, instead of a row of step and pan buttons
+  below it. On single-trial spectra the second dropdown picks the trial and
+  names its bin; with one spectrum per channel it is left out. The keys and
+  the mouse wheel still step, and the dropdowns follow them. The zoom
+  sliders stay; the plot's toolbar pans.
 - `src/help/node_modules/` and `src/help/dist/`, left behind by the old help
   builder, are removed from the repository (a clone that had built the old
   help page had committed them) and ignored again, so they do not show up

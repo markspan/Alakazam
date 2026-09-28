@@ -274,22 +274,21 @@ removes it.
 ### Spectra
 
 A frequency-domain result (Fourier, Welch) is drawn as a spectrum, with the
-named frequency bands of @sec-settings shaded beneath it. Below the plot, a
-row of buttons steps and pans:
+named frequency bands of @sec-settings shaded beneath it. Above the plot,
+dropdowns pick the channel and the bin, as in the other views; below it,
+two sliders zoom:
 
-| Button | Key | Action |
+| Control | Key | Action |
 |------------------|-----------|-------------------------------------------------------|
-| **C^**, **Cv** | up, down | Previous, next channel. |
-| **Channel** | | Jump to a channel. |
-| **P<**, **P>** | | Pan the frequency axis. |
-| **B<**, **B>** (or **T<**, **T>**) | left, right | Previous, next bin of an averaged spectrum (or trial of an epoched one). |
+| **Channel** | up, down | The channel shown. The mouse wheel also steps through the channels. |
+| **Bin** (or **Trial**) | left, right | The bin of an averaged spectrum, or the trial of an epoched one, with the bin it belongs to. Not shown when there is one spectrum per channel. |
 | **x zoom**, **y zoom** | | Zoom the frequency and power axes. |
 | | P | Switch between magnitude and phase, for a complex spectrum. |
 
 : Controls of the spectrum view. {#tbl-spectrum-controls}
 
 The x zoom is anchored at the left edge of the window, so that 0 Hz stays in
-view unless the axis has been panned.
+view unless the axis has been panned with the plot's toolbar.
 
 ### The other views
 

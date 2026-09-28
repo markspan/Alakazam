@@ -9,14 +9,19 @@ classdef FourierView < AlakazamView
 %   -- see redraw), and steps through channels with the up/down arrow keys
 %   -- left/right step the trial/bin, for multi-trial data -- the same
 %   interaction model EpochView and AverageView already use for time-domain
-%   data. Every one of those steps also has a visible,
-%   clickable button (see ZoomPanButtons' own header comment), not just a
-%   keyboard/wheel shortcut, so the control is discoverable without having
-%   to already know the keyboard convention. Replaces the previous
-%   grid-of-every-channel-at-once layout with click-to-drill-into-detail,
-%   which needed its own rebuild-in-place machinery (captureSlot/
-%   buildOuterGrid) that a single persistent axes, redrawn in place like
-%   EpochView/AverageView, does not.
+%   data. Replaces the previous grid-of-every-channel-at-once layout with
+%   click-to-drill-into-detail, which needed its own rebuild-in-place
+%   machinery (captureSlot/buildOuterGrid) that a single persistent axes,
+%   redrawn in place like EpochView/AverageView, does not.
+%
+%   CHANNEL AND BIN ARE DROPDOWNS ABOVE THE PLOT, as in EpochView and
+%   TimeFrequencyView, built by the same TransTools.BuildChannelDropdown and
+%   BuildBinDropdown: the whole choice is visible and one click away, where
+%   a row of step buttons below the plot showed neither what could be
+%   picked nor what was picked. The second dropdown reads "Trial:" on
+%   single-trial spectra and is left out when there is only one spectrum
+%   per channel (a continuous recording). The keys and the wheel still step
+%   through both, and the dropdowns follow them.
 %
 %   WHAT THE 3RD DIMENSION IS depends on whether the data has been
 %   averaged, and that is not the same question as whether it has bins.
@@ -33,17 +38,15 @@ classdef FourierView < AlakazamView
 %   the condition, which is usually the thing you actually want to know
 %   while stepping through.
 %
-%   X/y zoom are sliders, not buttons (frequency data commonly needs
+%   X/y zoom are sliders below the plot (frequency data commonly needs
 %   zooming into a specific band, clamped to [0, srate/2] -- something the
 %   generic axtoolbar zoom does not do), styled like SignalView's own
 %   zoom/pan/mag rows; a zoom level, once set, survives a channel/trial
 %   change instead of resetting (see ZoomPanButtons' own header comment on
-%   applyYZoom). Pan and the trial/bin-step and channel-step buttons
-%   remain alongside the arrow keys -- see ZoomPanButtons, shared with
-%   SpectralMeasureView (its near-twin: same interaction model, same
-%   button row, stepping bins there instead of trials). The mouse wheel
-%   also steps the channel, same direction as the arrow keys, matching
-%   SpectralMeasureView's own onWheel.
+%   applyYZoom). ZoomPanButtons is built with its zoom sliders alone; the
+%   axes toolbar pans. The mouse wheel also steps the channel, same
+%   direction as the arrow keys, matching SpectralMeasureView's own
+%   onWheel.
 %
 %   Style follows the project standard.
 %
@@ -56,9 +59,12 @@ classdef FourierView < AlakazamView
     properties (SetAccess = private)
         Figure          % owning figure
         EEG             % frequency-domain dataset (channels x freqs x trials)
-        Grid            % 4x1 uigridlayout: axes | buttons | x-zoom | y-zoom (built once, never rebuilt)
+        Grid            % 4x1 uigridlayout: dropdowns | axes | x-zoom | y-zoom (built once, never rebuilt)
+        ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1
+        StepDropdown    % "Bin:" or "Trial:" uidropdown (TransTools.BuildBinDropdown), row 1;
+                        % empty when there is only one spectrum per channel
         Axes            % the single axes the current channel's spectrum is drawn in
-        Buttons         % ZoomPanButtons, the zoom/pan/channel/trial-step row + sliders
+        Zoom            % ZoomPanButtons, the x/y zoom sliders alone (no button row)
         Channel = 1     % channel currently shown
         CurrentTrial = 1
         ShowPhase = false   % complex data only: plot angle() rather than abs()
@@ -76,30 +82,33 @@ classdef FourierView < AlakazamView
             % per-view KeyPressFcn would be overwritten by whichever view was
             % constructed last, breaking key navigation on every other open
             % tab.
-            this.Grid = uigridlayout(fig, [4 1], "RowHeight", {'1x', 30, 24, 24}, ...
+            this.Grid = uigridlayout(fig, [4 1], "RowHeight", {22, '1x', 24, 24}, ...
                 "Padding", [2 2 2 2], "RowSpacing", 2);
+
+            % Row 1: the channel and, with more than one spectrum per
+            % channel, the bin or trial, in EpochView's proportions.
+            controls = uigridlayout(this.Grid, [1 3], "ColumnWidth", {'1x', '1x', '1x'}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 12);
+            controls.Layout.Row = 1;
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(controls, 1, 1, ...
+                {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
+            if size(eeg.data, 3) > 1
+                if thirdDimIsBins(eeg)
+                    this.StepDropdown = TransTools.BuildBinDropdown(controls, 1, 2, ...
+                        arrayfun(@(b) binLabel(eeg, b), 1:size(eeg.data, 3), 'UniformOutput', false), ...
+                        @(idx) this.onStepSelected(idx));
+                else
+                    this.StepDropdown = TransTools.BuildBinDropdown(controls, 1, 2, ...
+                        trialItems(eeg), @(idx) this.onStepSelected(idx), "Trial:");
+                end
+            end
+
             this.Axes = uiaxes(this.Grid);
-            this.Axes.Layout.Row = 1;
+            this.Axes.Layout.Row = 2;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
 
-            stepFcn = [];
-            if size(eeg.data, 3) > 1
-                stepFcn = @(delta) this.trialStep(delta);
-            end
-            channelStepFcn = [];
-            channelLabels = {};
-            if size(eeg.data, 1) > 1
-                channelStepFcn = @(delta) this.channelStep(delta);
-                channelLabels = {eeg.chanlocs.labels};
-            end
-            if thirdDimIsBins(eeg)
-                stepLabel = 'Bin';
-            else
-                stepLabel = 'Trial';
-            end
-            this.Buttons = ZoomPanButtons(this.Grid, [2 3 4], this.Axes, eeg.srate / 2, ...
-                @() this.notifyActivated(), stepFcn, channelStepFcn, stepLabel, ...
-                channelLabels, @(idx) this.onChannelSelected(idx));
+            this.Zoom = ZoomPanButtons(this.Grid, [3 4], this.Axes, eeg.srate / 2, ...
+                @() this.notifyActivated());
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -197,16 +206,23 @@ classdef FourierView < AlakazamView
             % and the key is in the manual's table of keys.
             title(ax, titleStr);
 
-            % x-limits are owned by this.Buttons (persists zoom/pan across a
+            % x-limits are owned by this.Zoom (persists zoom across a
             % channel/trial change); y-limits go through applyYZoom so the
             % y-zoom slider's level, not just the absolute range, survives
             % too -- see ZoomPanButtons' own header comment.
             if phaseMode
-                this.Buttons.applyYZoom(pi, -pi);
+                this.Zoom.applyYZoom(pi, -pi);
             else
-                this.Buttons.applyYZoom(max(spectrum, [], "omitnan"));
+                this.Zoom.applyYZoom(max(spectrum, [], "omitnan"));
             end
-            this.Buttons.setChannelValue(this.Channel);
+
+            % The dropdowns show what is drawn, however it was chosen: a key,
+            % the wheel, a focus shared from another view, or the dropdown
+            % itself. Setting Value does not fire ValueChangedFcn.
+            this.ChannelDropdown.Value = this.Channel;
+            if ~isempty(this.StepDropdown)
+                this.StepDropdown.Value = this.CurrentTrial;
+            end
         end
 
         function onKey(this, event)
@@ -281,29 +297,20 @@ classdef FourierView < AlakazamView
             end
         end
 
-        function trialStep(this, delta)
-        %TRIALSTEP  Move to the previous / next trial or bin and redraw.
-            nseg = size(this.EEG.data, 3);
-            this.CurrentTrial = min(nseg, max(1, this.CurrentTrial + delta));
-            this.redraw();
-        end
-
-        function channelStep(this, delta)
-        %CHANNELSTEP  Move to the previous / next channel and redraw --
-        %   the button-row equivalent of the up/down arrow keys (see
-        %   onKey), for the "C^"/"Cv" pair ZoomPanButtons builds when given
-        %   a non-empty channelStepFcn.
-            nchan = size(this.EEG.data, 1);
-            this.Channel = min(nchan, max(1, this.Channel - delta));
-            this.redraw();
-        end
-
         function onChannelSelected(this, idx)
-        %ONCHANNELSELECTED  The channel dropdown's ValueChangedFcn (see
-        %   ZoomPanButtons.buildButtonRow): jump straight to the picked
-        %   electrode, the same effect as stepping there one channel at a
-        %   time with channelStep/onKey.
+        %ONCHANNELSELECTED  The channel dropdown's ValueChangedFcn: jump
+        %   straight to the picked electrode, the same effect as stepping
+        %   there one channel at a time with the up/down keys (onKey).
+            this.notifyActivated();
             this.Channel = idx;
+            this.redraw();
+        end
+
+        function onStepSelected(this, idx)
+        %ONSTEPSELECTED  The bin or trial dropdown's ValueChangedFcn: show
+        %   the picked spectrum, as the left/right keys step to it (onKey).
+            this.notifyActivated();
+            this.CurrentTrial = idx;
             this.redraw();
         end
     end
@@ -335,6 +342,22 @@ classdef FourierView < AlakazamView
             end
             this.Channel = idx;
             this.redraw();
+        end
+    end
+end
+
+function items = trialItems(EEG)
+%TRIALITEMS  The trial dropdown's items: each trial's number and, where it
+%   belongs to one, its bin, in the words the title uses ('37, in bin
+%   "Rare"'), since the number alone says nothing about the condition.
+    nseg = size(EEG.data, 3);
+    items = cell(1, nseg);
+    for t = 1:nseg
+        where = trialBinPhrase(EEG, t);
+        if isempty(where)
+            items{t} = sprintf('%d', t);
+        else
+            items{t} = sprintf('%d, %s', t, where);
         end
     end
 end
