@@ -47,6 +47,11 @@ src/webtree/dist/
 # committing it would put a large binary-ish diff in history with every
 # change to the text. Alakazam.onHelp prepares it when it is missing.
 src/AlakazamHelp.html
+# Left behind by the old Node.js help builder (removed in V0.4.4.1) in any
+# clone that had built it: a pull deletes the builder's tracked files but
+# not these, which would otherwise show up as hundreds of new files.
+src/help/node_modules/
+src/help/dist/
 
 # Commit-message scratch files (never part of a commit).
 _commit_msg.txt

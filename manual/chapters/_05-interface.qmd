@@ -154,7 +154,10 @@ which a plotting routine that subsamples would.
 : Controls of the continuous view. {#tbl-continuous-controls}
 
 Events are drawn as vertical lines with their codes; intervals marked by
-artefact detection are shaded.
+artefact detection are shaded. Zoomed in until every sample has two pixels
+or more to itself, that is with fewer samples in view than half the plot's
+width in pixels, each sample is marked with a small filled circle, which
+shows where the signal was measured and where the line only joins the dots.
 
 #### Overlaying a recording {#sec-overlay-continuous}
 

@@ -19,8 +19,11 @@ classdef ManualTest < matlab.unittest.TestCase
     properties (Constant)
         % Pictures the manual shows that are not made by the capture tool:
         % a rendered report, which the capture cannot make without writing
-        % into a real workspace (see manualShots).
-        NotCaptured = {'statistics-report'}
+        % into a real workspace (see manualShots), and the Photodiode dialog,
+        % taken by hand on a recording with a diode patch, which none of the
+        % datasets in DATA.md has (the capture could only show it declining
+        % a RIFT recording).
+        NotCaptured = {'statistics-report', 'photodiode-dialog'}
     end
 
     methods (TestClassSetup)

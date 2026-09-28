@@ -305,10 +305,13 @@ The plan as it was:
   (jet colour map, a band of 2 SE, trials grouped by bin, reversed sort),
   not the defaults. The manual's caption and table say so; retaking on
   default settings would change the look of every other figure.
-- `photodiode-dialog.png` shows the step declining a RIFT recording (the
+- ~~`photodiode-dialog.png` shows the step declining a RIFT recording (the
   diode follows a 60 Hz flicker, not a patch), because no recording with
-  photodiode patches is available. A recording with patches would show the
-  delay table instead.
+  photodiode patches is available.~~ Fixed 2026-09-28: you took it by hand on
+  a recording with a diode patch (205 onsets found). It is taken off the
+  capture list (`manualShots`) so a capture run cannot overwrite it, and
+  `ManualTest` names it as made by hand. It shows no delays: none of the
+  onsets had a trigger within the 200 ms maximum lag.
 - `eyetracking-result.jpg`: the gaze and pupil channels are drawn flat at
   the EEG's scale.
 

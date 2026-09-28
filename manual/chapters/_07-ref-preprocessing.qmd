@@ -94,7 +94,7 @@ moves the mean but hardly the median. The report gives the number of pairs,
 the median, interquartile range and range of the delay, for all triggers and
 per trigger code.
 
-![**Photodiode** on a RIFT recording. The diode here follows a 60 Hz flicker rather than a patch that turns on and off, and after smoothing the signal has no two distinct states, so the step reports that, instead of reporting onsets.](images/photodiode-dialog.png){#fig-photodiode-dialog}
+![**Photodiode** on a recording with a diode patch, where light onset is a falling edge. The step found 205 onsets (separability 12.3) and marks them PD; none had a trigger in the 200 ms before it, and the step says so under the plot, leaving the delay table on the right empty.](images/photodiode-dialog.png){#fig-photodiode-dialog}
 
 ### Detecting onsets
 

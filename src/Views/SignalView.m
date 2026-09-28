@@ -18,6 +18,10 @@ classdef SignalView < AlakazamView
 %   time vector. Sampling is assumed uniform (as it is for EEGLAB continuous
 %   data). Overlays are read from eeg.event when present.
 %
+%   Zoomed in until every sample has two pixels or more to itself (fewer
+%   samples in view than half the axes' width), each sample is marked with
+%   a small filled circle in its line's colour.
+%
 %   ANOTHER RECORDING CAN BE DRAWN UNDERNEATH (addDataset), to compare the
 %   same stretch before and after a step: each of its channels in the lane
 %   of the channel with the same name, at the same magnification, as a grey
@@ -308,6 +312,10 @@ classdef SignalView < AlakazamView
             for c = 1:size(yVis, 2)
                 set(this.Lines(c), "YData", yVis(:, c));
             end
+            % Zoomed in until every sample has two pixels or more to itself,
+            % each sample is marked, so it shows where the signal was measured
+            % and where the line only joins the dots.
+            this.markSamples(this.Lines, (endIndex - startIndex + 1) < this.AxWidthPx / 2);
 
             startTime = xVis(1);
             endTime   = xVis(end);
@@ -408,7 +416,10 @@ classdef SignalView < AlakazamView
         %SETOVERLAYOPACITY  How dark the overlaid recording is drawn (0.1 to 1).
             this.OverlayOpacity = min(1, max(0.1, value));
             if ~isempty(this.OverlaidDataset)
-                set(this.OverlaidDataset.lines, "Color", this.ghostColour());
+                lines = this.OverlaidDataset.lines;
+                set(lines, "Color", this.ghostColour());
+                marked = arrayfun(@(h) ~strcmp(h.Marker, 'none'), lines);
+                set(lines(marked), "MarkerFaceColor", this.ghostColour());
             end
         end
 
@@ -837,6 +848,9 @@ classdef SignalView < AlakazamView
             for j = 1:numel(o.lines)
                 set(o.lines(j), "XData", x, "YData", y(:, j));
             end
+            % Its own samples, by the same rule as this recording's: a
+            % resampled recording shows its sparser samples.
+            this.markSamples(o.lines, (i1 - i0 + 1) < targetColumns / 2);
         end
 
         function drawDifference(this, startIndex, endIndex, targetColumns, scale, xVis)
@@ -918,6 +932,21 @@ classdef SignalView < AlakazamView
                 background = [1 1 1];
             end
             colour = (1 - this.OverlayOpacity) * background;
+        end
+
+        function markSamples(~, lines, show)
+        %MARKSAMPLES  A small filled circle on every sample of LINES, in each
+        %   line's own colour, or none. The edge follows the line's colour by
+        %   itself ('auto'); the fill is set from it.
+            lines = lines(isgraphics(lines));
+            if ~show
+                set(lines, "Marker", "none");
+                return;
+            end
+            for h = lines(:)'
+                set(h, "Marker", "o", "MarkerSize", 3, "MarkerEdgeColor", "auto", ...
+                    "MarkerFaceColor", h.Color);
+            end
         end
 
         function removeOverlayLines(this)

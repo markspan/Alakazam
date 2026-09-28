@@ -4,6 +4,23 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- The continuous view marks every sample with a small filled circle once it
+  is zoomed in far enough that each sample has two pixels or more to itself;
+  an overlaid recording is marked by its own sampling rate.
+
+### Changed
+
+- `src/help/node_modules/` and `src/help/dist/`, left behind by the old help
+  builder, are removed from the repository (a clone that had built the old
+  help page had committed them) and ignored again, so they do not show up
+  as new files after a pull.
+- The Photodiode picture in the manual shows a recording with a diode
+  patch; it is taken by hand, so the capture tool no longer makes it.
+
 ## V0.4.4.2 (2026-09-28)
 
 ### Added
