@@ -85,8 +85,8 @@ classdef ZoomSlidersTest < matlab.unittest.TestCase
             testCase.Zoom.applyYZoom(1000, 1);
             testCase.verifyEqual(ylim(testCase.Axes), [1, 1000], 'AbsTol', 1e-9);
             testCase.slide('YZoom', 0.5);
-            testCase.verifyEqual(ylim(testCase.Axes), [1, sqrt(1000)], 'AbsTol', 1e-9, ...
-                'Half the decades, from the bottom up.');
+            testCase.verifyEqual(ylim(testCase.Axes), [1, 1000 ^ 0.1], 'AbsTol', 1e-9, ...
+                'A tenth of the decades, from the bottom up, as 0.5 is a tenth of a linear range.');
         end
 
         function theYZoomSurvivesARedrawOfAnotherChannel(testCase)
