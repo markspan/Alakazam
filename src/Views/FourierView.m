@@ -100,9 +100,11 @@ classdef FourierView < AlakazamView
         Strip           % uigridlayout right of the axes: tickboxes, Difference, overlay controls
         Zoom            % ZoomPanButtons, the x/y zoom sliders alone (no button row)
         SingleTrials    % true for epoched single-trial spectra, stepped one at a time
-        Series          % cell of line structs (spectrumSeries): the plot's own first, then
-                        % overlaid ones; empty for single trials
-        Visible         % logical row, one per series: is it drawn?
+        % Cell of line structs (spectrumSeries): the plot's own first, then
+        % overlaid ones. An empty CELL for single trials, not [], since every
+        % method treats it as a cell (cellfun over [] is an error).
+        Series = {}
+        Visible = false(1, 0)   % logical row, one per series: is it drawn?
         Channel = 1     % channel currently shown
         CurrentTrial = 1    % single-trial spectrum shown (SingleTrials only)
         ShowPhase = false   % complex data only: plot angle() rather than abs()
