@@ -6,6 +6,14 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Documentation
+
+- The manual and the README cite Pütz, Span & Lorist (2025) again, the
+  protocol whose workflow Alakazam follows; it had been lost when the
+  README became a landing page. The manual now also cites de Cheveigné &
+  Nelken (2019) on reporting filters, Dimigen (2020) on ICA for free
+  viewing, and Dandekar et al. (2012) on overlapping saccade responses.
+
 ### Added
 
 - The continuous view marks every sample with a small filled circle once it

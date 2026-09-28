@@ -2,9 +2,13 @@
 
 When events follow each other faster than a brain response decays, the
 average of one event's epochs contains parts of the responses to its
-neighbours. Deconvolve (@sec-tr-deconvolve) separates them by fitting every
-event's response at once, as a regression on the continuous recording
-[@smith2015; @ehinger2019; @dimigen2021]. This chapter works through a
+neighbours. For saccades during visual search, @dandekar2012 showed that
+averages are systematically distorted by this overlap, and recovered the
+responses with a general linear model instead. Deconvolve
+(@sec-tr-deconvolve) separates them with such a regression, fitting every
+event's response at once on the continuous recording [@smith2015;
+@ehinger2019; @dimigen2021]. This
+chapter works through a
 complete analysis on published data: Figure 11 of the Unfold toolbox paper
 [@ehinger2019], rebuilt from the authors' own recording with a template that
 ships with Alakazam (`FaceSaccadesDeconvolution.alztemplate`).

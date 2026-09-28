@@ -270,6 +270,13 @@ basis for a choice. Peak measures are more sensitive to high-frequency noise
 than mean amplitudes, and so benefit more from a low-pass. A notch filter is
 rarely needed after a 30 Hz low-pass.
 
+Every filter also spreads a brief event over the length of its impulse
+response, and its ringing can pass for an oscillation. A methods section
+should therefore describe each filter in enough detail to reproduce it,
+ideally with a plot of its impulse or step response [@decheveigne2019]; the
+type, cutoff, transition band and order in @tbl-filter-design are the
+details to give.
+
 ## DC-Detrend {#sec-tr-dcdetrend}
 
 *Tools > 1. Preprocessing > DC-Detrend · continuous or epoched → the same ·

@@ -180,6 +180,13 @@ same pruning on a 0.1 Hz branch. Interpolated channels and an average
 reference each reduce the rank of the data by one, and a decomposition
 cannot have more components than the rank.
 
+**Free viewing.** With many eye movements, as in reading or visual search,
+ICA trained with the usual settings leaves ocular artefacts in the data,
+among them the spike potential at saccade onset. Correction improves
+greatly when the training data are high-pass filtered and the stretches
+around saccade onsets are heavily overweighted [@dimigen2020]. AutoICA does
+neither of these for you: it decomposes the data as they come.
+
 ## ICA {#sec-tr-removecomponents}
 
 *Tools > 2. Artifact Rejection / Reduction > ICA · continuous or epoched →

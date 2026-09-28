@@ -30,6 +30,11 @@ The focus of Alakazam is on **education** and on **reusability in research**.
   Steven Luck's open textbook, *Applied Event-Related Potential Data
   Analysis*, come as ready-made templates ([`templates/luck/`](templates/luck/README.md)),
   on the same data the book uses.
+- **Follow a published protocol.** The workflow is the one Pütz, Span &
+  Lorist (2025) set out step by step in *STAR Protocols*, from designing and
+  recording an ERP task to preprocessing it and exporting the measures for
+  statistical analysis
+  ([doi:10.1016/j.xpro.2025.103835](https://doi.org/10.1016/j.xpro.2025.103835)).
 - **Understand why, not only how.** The [manual](manual/manual.pdf)
   explains what each step computes, with which defaults and on what
   grounds, with the literature behind it. The same manual is behind the

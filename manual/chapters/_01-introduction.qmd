@@ -11,8 +11,10 @@ It is built on EEGLAB's `EEG` data structure [@delorme2004], so every
 intermediate result can be handed to EEGLAB, ERPLAB [@lopezcalderon2014] or
 FieldTrip [@oostenveld2011] unchanged, and its methods follow established
 practice for ERP research as described by @luck2014, in Luck's open textbook
-[@luckApplied] and in the field's publication guidelines [@keil2014;
-@pernet2020].
+[@luckApplied], in the protocol of @putz2025, which walks through the same
+workflow from designing an ERP task and recording it to preprocessing and
+exporting the measures for statistical analysis, and in the field's
+publication guidelines [@keil2014; @pernet2020].
 
 ![The main window: the ribbon along the top, the three trees on the left (here one recording and the branch the N400 template built from it) and the selected Average node's waveforms at CPz on the right.](images/ui-main.jpg){#fig-main}
 
