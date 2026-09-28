@@ -144,7 +144,9 @@ classdef TimeFrequencyView < AlakazamView
                 climAbs = 1;
             end
             for b = 1:numel(this.Axes)
-                this.Images(b).CData = squeeze(ersp(ch, :, :, b));
+                % A cell with no value (a bin whose trials were all rejected)
+                % is left blank rather than drawn as the strongest decrease.
+                showImageData(this.Images(b), squeeze(ersp(ch, :, :, b)));
                 this.Axes(b).CLim = [-climAbs, climAbs];
             end
             this.ChannelLabel.Text = sprintf('(%d/%d)', ch, this.EEG.nbchan);
