@@ -35,7 +35,9 @@ function [f, gain] = filterFrequencyResponse(options, srate)
     [~, h] = filterImpulseResponse(options, srate);
     nfft = 2 ^ nextpow2(max(OVERSAMPLE * numel(h), MIN_POINTS));
 
-    spectrum = fft(h, nfft);
+    % Along the second dimension explicitly: with no filter enabled H is the
+    % scalar 1, which fft would otherwise pad into a column.
+    spectrum = fft(h, nfft, 2);
     gain = abs(spectrum(1:nfft / 2 + 1));
     f = (0:nfft / 2) * (srate / nfft);
 end

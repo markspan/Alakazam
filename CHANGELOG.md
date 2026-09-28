@@ -19,6 +19,11 @@ bar. Dates are those of the tag.
 - The Filter dialog plots the impulse response of the ticked filters
   together under the three filters, with its length, from the same kernels
   the step applies, and redraws it as the settings change.
+- Below it, at the bottom of the dialog, the Filter dialog plots the
+  frequency response of the ticked filters together: the gain in dB from
+  0 Hz to the Nyquist frequency, with a dotted line at -6 dB where each
+  cutoff sits. It is the gain of the same kernels, and is shown in global
+  mode only, like the impulse response.
 - The continuous view marks every sample with a small filled circle once it
   is zoomed in far enough that each sample has two pixels or more to itself;
   an overlaid recording is marked by its own sampling rate.
