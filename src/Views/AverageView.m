@@ -58,19 +58,6 @@ classdef AverageView < AlakazamView
         LastLimits = struct('x', [], 'y', [], 'mode', 'lines')   % what redraw last set
     end
 
-    properties (Constant, Access = private)
-        % Fixed per-line colours so a bin keeps its colour while stepping
-        % electrodes: bin 1 red, bin 2 blue, then a stable palette.
-        Palette = [ ...
-            0.00 0.00 1.00;   % blue
-            1.00 0.00 0.00;   % red
-            0.00 0.55 0.55;   % teal
-            0.85 0.55 0.00;   % orange
-            0.00 0.00 0.00;   % black
-            0.00 0.55 0.00;   % green
-            0.75 0.00 0.75]   % magenta
-    end
-
     methods
         function this = AverageView(fig, eeg)
         %AVERAGEVIEW  Build the view for an averaged dataset in FIG.
@@ -531,7 +518,9 @@ classdef AverageView < AlakazamView
                 if ~own(i)
                     opacity = this.OverlayOpacity;
                 end
-                colour = this.paleColour(this.Palette(mod(i - 1, size(this.Palette, 1)) + 1, :), opacity);
+                % The palette is shared with FourierView (lineColour), so a
+                % bin has the same colour in the ERP and in the spectrum.
+                colour = this.paleColour(lineColour(i), opacity);
                 t = reshape(double(s.times), 1, []);
 
                 % Force row vectors so the band arithmetic is unambiguous.

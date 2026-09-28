@@ -178,6 +178,22 @@ classdef FourierTest < matlab.unittest.TestCase
                 'abs(Complex) must reproduce Volt exactly: same quantity, one step earlier.');
         end
 
+        function theUnitIsStampedOnTheSpectrum(testCase)
+        %THEUNITISSTAMPEDONTHESPECTRUM  FourierView reads SpectrumUnit to
+        %   label its axis and to choose 10*log10 (power) or 20*log10
+        %   (amplitude) for a ratio in dB. Average starts from its input
+        %   (EEG = input), which is what carries it on to an averaged spectrum.
+            EEG = struct('data', testSignal(), 'srate', 250);
+            base = struct('FullSpectrum', true, 'Window', 'No', ...
+                'Window_Length', 100, 'Resolution', 'Max', 'ResVal', 1);
+            for unit = {'Volt', 'Power', 'VoltDens', 'PowerDens', 'Complex', 'PSD'}
+                opts = base;
+                opts.Output = unit{1};
+                [result, ~] = Fourier(EEG, opts);
+                testCase.verifyEqual(result.SpectrumUnit, unit{1});
+            end
+        end
+
         function complexOutputHasTheSignalsOwnPhase(testCase)
         %COMPLEXOUTPUTHASTHESIGNALSOWNPHASE  The phase is that of the DFT,
         %   exp(-i*2*pi*f*t) with t from the segment's first sample, and not

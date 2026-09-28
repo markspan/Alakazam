@@ -21,6 +21,10 @@ function [ output, options ] = Fourier( varargin )
 %       - freqs : Frequencies corresponding to the Fourier transform.
 %       - data : Transformed data in the specified format (volt, power, etc.).
 %       - pnts : Number of points in the transformed data.
+%       - SpectrumUnit : options.Output, what .data holds ('Volt', 'Power',
+%         ...). Average starts from its input, so an averaged spectrum keeps
+%         it, and FourierView reads it for the axis label and to tell power
+%         (10*log10 in a dB ratio) from amplitude (20*log10).
 %
 %   options : Struct
 %       Updated options struct after processing input arguments. Contains
@@ -153,6 +157,7 @@ input = varargin{1};
 output = input;
 
 output.DataType = 'FrequencyDomain';
+output.SpectrumUnit = char(options.Output);   % see the header: survives Average
 [nchan,nsamp,nseg] = size(input.data);
 
 %% use full spectrum: power * 2;

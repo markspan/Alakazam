@@ -273,22 +273,41 @@ removes it.
 
 ### Spectra
 
-A frequency-domain result (Fourier, Welch) is drawn as a spectrum, with the
-named frequency bands of @sec-settings shaded beneath it. Above the plot,
-dropdowns pick the channel and the bin, as in the other views; below it,
-two sliders zoom:
+A frequency-domain result (Fourier, Welch) is drawn as a spectrum, over the
+named frequency bands of @sec-settings, shaded as pale stripes behind it.
+Above the plot are the channel and the log scale; below it, two sliders
+zoom.
+
+An **averaged spectrum overlays its bins**, as the ERP plot does
+(@sec-overlay): a tickbox for each bin beside the plot, each ticked bin a
+line in the same colour it has in the ERP plot, and, where Average stored
+it, a band of standard errors, set by the ERP plot's own **Show confidence
+interval** settings. With exactly two bins ticked, **Difference** draws the
+first minus the second (**Swap** reverses it). **Ratio in dB** draws their
+ratio in decibels instead: 10·log~10~ of it for a power, 20·log~10~ for an
+amplitude. The ratio is the usual way to compare conditions in a spectrum,
+since it does not depend on the overall level, which falls steeply with
+frequency. With the phase shown (**P**), the difference is the phase of the
+first bin relative to the second.
+
+The single-trial spectra of an epoched recording are shown one at a time,
+picked by trial; average them to compare bins.
 
 | Control | Key | Action |
 |------------------|-----------|-------------------------------------------------------|
 | **Channel** | up, down | The channel shown. The mouse wheel also steps through the channels. |
-| **Bin** (or **Trial**) | left, right | The bin of an averaged spectrum, or the trial of an epoched one, with the bin it belongs to. Not shown when there is one spectrum per channel. |
+| **Trial** | left, right | The trial of an epoched spectrum, with the bin it belongs to. |
+| Bin tickboxes | | The bins of an averaged spectrum that are drawn. |
+| **Difference**, **Swap**, **Ratio in dB** | | Compare two ticked bins. |
+| **Log scale** | | Draw the magnitude on a logarithmic axis, six decades deep. Off by default; not for a phase, a difference or a ratio. |
 | **x zoom**, **y zoom** | | Zoom the frequency and power axes. |
 | | P | Switch between magnitude and phase, for a complex spectrum. |
 
 : Controls of the spectrum view. {#tbl-spectrum-controls}
 
 The x zoom is anchored at the left edge of the window, so that 0 Hz stays in
-view unless the axis has been panned with the plot's toolbar.
+view unless the axis has been panned with the plot's toolbar. On a log
+scale the y zoom keeps the bottom of the axis and brings its top down.
 
 ### The other views
 

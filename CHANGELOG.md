@@ -27,15 +27,34 @@ bar. Dates are those of the tag.
 - The continuous view marks every sample with a small filled circle once it
   is zoomed in far enough that each sample has two pixels or more to itself;
   an overlaid recording is marked by its own sampling rate.
+- **An averaged spectrum overlays its bins**, as the ERP plot does: a
+  tickbox per bin beside the plot, each ticked bin a line in the colour it
+  has in the ERP plot, with its standard-error band (the ERP plot's own
+  confidence-interval settings). With two bins ticked, **Difference** draws
+  the first minus the second, **Swap** reverses it, and **Ratio in dB** draws
+  their ratio in decibels (10·log10 for a power, 20·log10 for an
+  amplitude); with the phase shown, the difference is the phase of one
+  relative to the other.
+- **Log scale** in the spectrum view draws the magnitude on a logarithmic
+  axis, six decades deep; it is off by default. On a log scale the y zoom
+  keeps the bottom of the axis and brings its top down.
+- Fourier and Welch record what their spectrum holds (`EEG.SpectrumUnit`,
+  Fourier's Output, or PSD for Welch), which Average keeps. The spectrum
+  view labels its axis with it and takes the right factor for a ratio in
+  dB; a spectrum computed before this has no label and no ratio until it is
+  recalculated.
 
 ### Changed
 
-- **The spectrum view picks the channel and the bin with dropdowns above the
-  plot**, as the other views do, instead of a row of step and pan buttons
-  below it. On single-trial spectra the second dropdown picks the trial and
-  names its bin; with one spectrum per channel it is left out. The keys and
+- **The spectrum view picks the channel with a dropdown above the plot**, as
+  the other views do, instead of a row of step and pan buttons below it. On
+  single-trial spectra a second dropdown picks the trial and names its bin;
+  an averaged spectrum's bins are tickboxes instead (above). The keys and
   the mouse wheel still step, and the dropdowns follow them. The zoom
   sliders stay; the plot's toolbar pans.
+- The spectrum view shades the frequency bands as pale stripes behind the
+  spectra, instead of filling the area under the one curve, which several
+  curves or a log axis would not allow.
 - `src/help/node_modules/` and `src/help/dist/`, left behind by the old help
   builder, are removed from the repository (a clone that had built the old
   help page had committed them) and ignored again, so they do not show up

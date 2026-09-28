@@ -92,6 +92,14 @@ classdef WelchTest < matlab.unittest.TestCase
             end
         end
 
+        function theUnitIsStampedOnTheSpectrum(testCase)
+        %THEUNITISSTAMPEDONTHESPECTRUM  FourierView reads SpectrumUnit to
+        %   label its axis and to take 10*log10 of a ratio of powers.
+            W = Welch(testCase.continuousEEG(randn(1, testCase.Srate * 20)), ...
+                struct('SegmentSeconds', 4, 'Overlap', 50, 'Window', 'Hanning'));
+            testCase.verifyEqual(W.SpectrumUnit, 'PSD');
+        end
+
         function moreOverlapMeansMoreSegments(testCase)
             x = randn(1, testCase.Srate * 40);
             base = struct('SegmentSeconds', 4, 'Overlap', 0, 'Window', 'Hanning');

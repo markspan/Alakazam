@@ -35,7 +35,8 @@ function [EEG, options] = Welch(input, varargin)
 %     - Window : taper name, see TransTools.WindowByName.
 %
 %   Output fields mirror Fourier's: .data (nchan x nfreq x 1), .freqs, .pnts,
-%   .DataType = 'FrequencyDomain'. DataFormat is inherited unchanged, as
+%   .DataType = 'FrequencyDomain', and .SpectrumUnit = 'PSD', Fourier's name
+%   for the same calibrated units^2/Hz. DataFormat is inherited unchanged, as
 %   Fourier does, so AlakazamPlotter routes the result to FourierView.
 %
 %   See also FOURIER, AVERAGE, TRANSTOOLS.WINDOWBYNAME, PWELCH.
@@ -159,5 +160,6 @@ EEG.freqs    = srate/2 * linspace(0, 1, NFFT/2+1);
 EEG.pnts     = NFFT/2+1;
 EEG.trials   = 1;
 EEG.DataType = 'FrequencyDomain';
+EEG.SpectrumUnit = 'PSD';   % as Fourier's Output = 'PSD'; FourierView reads it
 EEG.WelchSegments = used;   % how many segments the estimate actually averaged
 end

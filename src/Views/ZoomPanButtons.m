@@ -138,6 +138,12 @@ classdef ZoomPanButtons < handle
         %   for a quantity that goes below zero: -pi for a phase in
         %   [-pi, pi]. Zooming scales both ends towards 0, so a magnitude
         %   keeps its 0 at the bottom and a phase stays centred on 0.
+        %
+        %   ON A LOG AXIS (YScale 'log'), NATURALBOTTOM must be positive, and
+        %   zooming keeps it and brings the top down by the same fraction of
+        %   the range in decades, which is what zooming in on a magnitude
+        %   means there; scaling both ends towards 0 would only slide the
+        %   window down.
             if ~isfinite(naturalTop) || naturalTop <= 0
                 naturalTop = 1;
             end
@@ -248,10 +254,15 @@ classdef ZoomPanButtons < handle
         end
 
         function applyYLim(this)
-        %APPLYYLIM  Apply the natural y-range, scaled towards 0 by the
-        %   y-zoom slider (see applyYZoom).
+        %APPLYYLIM  Apply the natural y-range, zoomed by the y-zoom slider:
+        %   towards 0 on a linear axis, and from the bottom up on a log axis
+        %   (see applyYZoom).
             f = this.zoomFraction(this.YZoomValue);
-            ylim(this.Axes, [this.YBottom, this.YTop] * f);
+            if strcmp(this.Axes.YScale, 'log') && this.YBottom > 0
+                ylim(this.Axes, [this.YBottom, this.YBottom * (this.YTop / this.YBottom) ^ f]);
+            else
+                ylim(this.Axes, [this.YBottom, this.YTop] * f);
+            end
         end
 
         function onButtonPushed(this, callback)

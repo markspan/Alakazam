@@ -1,6 +1,8 @@
 classdef FourierViewControlsTest < matlab.unittest.TestCase
-%FOURIERVIEWCONTROLSTEST  The spectrum view picks its channel and bin (or
-%   trial) with dropdowns above the plot, as the other views do, and has no
+%FOURIERVIEWCONTROLSTEST  The spectrum view picks its channel with a
+%   dropdown above the plot, as the other views do, and the trial of a
+%   single-trial spectrum with a second one; an averaged spectrum's bins are
+%   tickboxes instead (FourierViewBinsTest). There are no step or pan
 %   buttons.
 %
 %   The dropdowns and the keys are two ways to the same state, so each is
@@ -9,7 +11,8 @@ classdef FourierViewControlsTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/FourierViewControlsTest.m').
 %
-%   See also FOURIERVIEW, ZOOMPANBUTTONS, FOURIERVIEWPHASETEST.
+%   See also FOURIERVIEW, ZOOMPANBUTTONS, FOURIERVIEWPHASETEST,
+%   FOURIERVIEWBINSTEST.
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
@@ -22,34 +25,52 @@ classdef FourierViewControlsTest < matlab.unittest.TestCase
     end
 
     methods (Test)
-        function thereAreNoButtons(testCase)
-            [view, cleanup] = testCase.openView(FourierViewControlsTest.averaged()); %#ok<ASGLU>
-            testCase.verifyEmpty(findall(view.Figure, 'Type', 'uibutton'));
+        function thereAreNoStepOrPanButtons(testCase)
+            for eeg = {FourierViewControlsTest.averaged(), FourierViewControlsTest.epoched()}
+                [view, cleanup] = testCase.openView(eeg{1}); %#ok<ASGLU>
+                texts = string(get(findall(view.Figure, 'Type', 'uibutton'), 'Text'));
+                testCase.verifyEmpty(intersect(texts, ["C^", "Cv", "P<", "P>", "B<", "B>", "T<", "T>"]));
+            end
         end
 
-        function anAverageHasAChannelAndABinDropdown(testCase)
+        function anAverageHasAChannelDropdownAndATickboxPerBin(testCase)
             [view, cleanup] = testCase.openView(FourierViewControlsTest.averaged()); %#ok<ASGLU>
 
             testCase.verifyEqual(string(view.ChannelDropdown.Items), ["Fz", "Cz", "Pz"]);
-            testCase.verifyEqual(string(view.StepDropdown.Items), ["Frequent", "Rare"]);
-            testCase.verifyNotEmpty(findall(view.Figure, 'Type', 'uilabel', 'Text', 'Bin:'));
+            testCase.verifyEmpty(view.StepDropdown, 'Bins are ticked, not picked one at a time.');
+            ticks = findall(view.Strip, 'Type', 'uicheckbox');
+            testCase.verifyEqual(sort(string({ticks.Text})), ["Frequent", "Rare"]);
         end
 
-        function pickingInTheDropdownsChangesWhatIsDrawn(testCase)
+        function pickingAChannelDrawsItsSpectra(testCase)
             eeg = FourierViewControlsTest.averaged();
             [view, cleanup] = testCase.openView(eeg); %#ok<ASGLU>
 
             choose(view.ChannelDropdown, 3);
-            choose(view.StepDropdown, 2);
 
-            testCase.verifyEqual([view.Channel, view.CurrentTrial], [3, 2]);
-            curve = findobj(view.Axes, 'Type', 'line');
-            testCase.verifyEqual(curve(1).YData, eeg.data(3, :, 2), 'AbsTol', 1e-12, ...
-                'The spectrum of channel 3 in bin 2 is drawn.');
+            testCase.verifyEqual(view.Channel, 3);
+            for b = 1:2
+                curve = findobj(view.Axes, 'Tag', 'SpectrumLine', 'UserData', b);
+                testCase.verifyEqual(curve.YData, eeg.data(3, :, b), 'AbsTol', 1e-12, ...
+                    sprintf('Bin %d of channel 3 is drawn.', b));
+            end
+        end
+
+        function pickingATrialDrawsIt(testCase)
+            eeg = FourierViewControlsTest.epoched();
+            [view, cleanup] = testCase.openView(eeg); %#ok<ASGLU>
+
+            choose(view.ChannelDropdown, 2);
+            choose(view.StepDropdown, 3);
+
+            testCase.verifyEqual([view.Channel, view.CurrentTrial], [2, 3]);
+            curve = findobj(view.Axes, 'Tag', 'SpectrumLine');
+            testCase.verifyEqual(curve.YData, eeg.data(2, :, 3), 'AbsTol', 1e-12, ...
+                'Trial 3 of channel 2 is drawn.');
         end
 
         function theKeysMoveTheDropdownsAlong(testCase)
-            [view, cleanup] = testCase.openView(FourierViewControlsTest.averaged()); %#ok<ASGLU>
+            [view, cleanup] = testCase.openView(FourierViewControlsTest.epoched()); %#ok<ASGLU>
 
             view.onKey(struct('Key', 'downarrow'));
             view.onKey(struct('Key', 'rightarrow'));
