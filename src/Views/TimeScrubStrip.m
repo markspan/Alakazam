@@ -11,8 +11,8 @@ classdef TimeScrubStrip < handle
 %   its own SelectedBin property exactly as before this consolidation.
 %   Every user action here (drag the slider, press Play, switch the bin
 %   dropdown) is reported back to the owner via the callbacks passed into
-%   the constructor, the same closure-callback pattern ZoomPanButtons uses
-%   for FourierView/SpectralMeasureView's zoom/pan row:
+%   the constructor, the same closure-callback pattern ZoomSliders uses
+%   for FourierView/SpectralMeasureView's zoom sliders:
 %     ACTIVATEDFCN()        -- called before every action below, mirroring
 %                               the owning view's own notifyActivated
 %     REDRAWFCN(t)          -- called whenever the drawn instant should
@@ -38,7 +38,7 @@ classdef TimeScrubStrip < handle
 %   ScalpDistributionView/Brain3DView's own constructors for the full grid
 %   layout each one builds.
 %
-%   See also SCALPDISTRIBUTIONVIEW, BRAIN3DVIEW, ZOOMPANBUTTONS.
+%   See also SCALPDISTRIBUTIONVIEW, BRAIN3DVIEW, ZOOMSLIDERS.
 
     properties (SetAccess = private)
         BinDropdown     % uidropdown, only built when numel(binLabels) > 1

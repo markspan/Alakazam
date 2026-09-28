@@ -70,20 +70,19 @@ classdef FourierView < AlakazamView
 %   from the largest value shown. It does not apply to a phase, a
 %   difference, which can be negative, or a ratio, which is in dB already.
 %
-%   X/y zoom are sliders below the plot (frequency data commonly needs
-%   zooming into a specific band, clamped to [0, srate/2] -- something the
-%   generic axtoolbar zoom does not do), styled like SignalView's own
-%   zoom/pan/mag rows; a zoom level, once set, survives a channel/trial
-%   change instead of resetting (see ZoomPanButtons' own header comment on
-%   applyYZoom). ZoomPanButtons is built with its zoom sliders alone; the
-%   axes toolbar pans. The mouse wheel also steps the channel, same
-%   direction as the arrow keys, matching SpectralMeasureView's own
-%   onWheel.
+%   X/y zoom are sliders below the plot (ZoomSliders; frequency data
+%   commonly needs zooming into a specific band, clamped to [0, srate/2] --
+%   something the generic axtoolbar zoom does not do), styled like
+%   SignalView's own zoom/pan/mag rows; a zoom level, once set, survives a
+%   channel/trial change instead of resetting (see ZoomSliders' own header
+%   comment on applyYZoom). The axes toolbar pans. The mouse wheel also
+%   steps the channel, same direction as the arrow keys, matching
+%   SpectralMeasureView's own onWheel.
 %
 %   Style follows the project standard.
 %
 %   See also ALAKAZAMPLOTTER, EPOCHVIEW, AVERAGEVIEW, SPECTRALMEASUREVIEW,
-%   ZOOMPANBUTTONS, LINECOLOUR, DATASETOVERLAYPROBLEM, OVERLAYNAMES.
+%   ZOOMSLIDERS, LINECOLOUR, DATASETOVERLAYPROBLEM, OVERLAYNAMES.
 
     properties
     end
@@ -98,7 +97,7 @@ classdef FourierView < AlakazamView
         LogScaleBox     % "Log scale" uicheckbox, row 1
         Axes            % the single axes the spectra are drawn in
         Strip           % uigridlayout right of the axes: tickboxes, Difference, overlay controls
-        Zoom            % ZoomPanButtons, the x/y zoom sliders alone (no button row)
+        Zoom            % ZoomSliders, the x/y zoom sliders below the plot
         SingleTrials    % true for epoched single-trial spectra, stepped one at a time
         % Cell of line structs (spectrumSeries): the plot's own first, then
         % overlaid ones. An empty CELL for single trials, not [], since every
@@ -177,7 +176,7 @@ classdef FourierView < AlakazamView
                 this.Visible = true(1, numel(this.Series));
             end
 
-            this.Zoom = ZoomPanButtons(this.Grid, [3 4], this.Axes, eeg.srate / 2, ...
+            this.Zoom = ZoomSliders(this.Grid, [3 4], this.Axes, eeg.srate / 2, ...
                 @() this.notifyActivated());
             this.redraw();
             axtoolbar(this.Axes, "default");
@@ -260,7 +259,7 @@ classdef FourierView < AlakazamView
             % x-limits are owned by this.Zoom (persists zoom across a
             % channel/trial change); y-limits go through applyYZoom so the
             % y-zoom slider's level, not just the absolute range, survives
-            % too -- see ZoomPanButtons' own header comment.
+            % too -- see ZoomSliders' own header comment.
             this.Zoom.applyYZoom(hi, lo);
 
             % The controls show what is drawn, however it was chosen: a key,

@@ -16,7 +16,8 @@ function dropdown = BuildBinDropdown(grid, row, col, binLabels, valueChangedFcn,
 %   passes "Trial:" when the spectra it steps through are single trials.
 %   Any other label gets a column fitted to its own width.
 %
-%   See also TIMESCRUBSTRIP, COHERENCETOPOGRAPHYVIEW, FOURIERVIEW.
+%   See also TIMESCRUBSTRIP, COHERENCETOPOGRAPHYVIEW, FOURIERVIEW,
+%   SPECTRALMEASUREVIEW.
     labelWidth = 40;
     if nargin < 6 || isempty(label)
         label = "Bin:";

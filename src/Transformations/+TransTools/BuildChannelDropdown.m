@@ -1,8 +1,8 @@
 function dropdown = BuildChannelDropdown(grid, row, col, channelLabels, valueChangedFcn)
 %BUILDCHANNELDROPDOWN  The "Channel:" label + uidropdown row shared by every
 %   view that steps a single channel with the arrow keys/mouse wheel
-%   (EpochView, AverageView, TimeFrequencyView, CoherenceView, FourierView,
-%   and SpectralMeasureView via ZoomPanButtons) -- the channel
+%   (EpochView, AverageView, TimeFrequencyView, CoherenceView, FourierView
+%   and SpectralMeasureView) -- the channel
 %   counterpart of BuildBinDropdown, letting the user jump straight to an
 %   electrode instead of stepping to it one channel at a time.
 %
@@ -16,7 +16,7 @@ function dropdown = BuildChannelDropdown(grid, row, col, channelLabels, valueCha
 %   Value programmatically does not re-fire VALUECHANGEDFCN.
 %
 %   See also BUILDBINDROPDOWN, EPOCHVIEW, AVERAGEVIEW, TIMEFREQUENCYVIEW,
-%   COHERENCEVIEW, FOURIERVIEW, SPECTRALMEASUREVIEW, ZOOMPANBUTTONS.
+%   COHERENCEVIEW, FOURIERVIEW, SPECTRALMEASUREVIEW.
     dropdownGrid = uigridlayout(grid, [1, 2], ...
         "ColumnWidth", {70, '1x'}, "Padding", [0 0 0 0], "ColumnSpacing", 4);
     dropdownGrid.Layout.Row = row;

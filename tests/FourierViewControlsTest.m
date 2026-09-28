@@ -11,7 +11,7 @@ classdef FourierViewControlsTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/FourierViewControlsTest.m').
 %
-%   See also FOURIERVIEW, ZOOMPANBUTTONS, FOURIERVIEWPHASETEST,
+%   See also FOURIERVIEW, ZOOMSLIDERS, FOURIERVIEWPHASETEST,
 %   FOURIERVIEWBINSTEST.
 
     methods (TestClassSetup)

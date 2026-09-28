@@ -3,15 +3,21 @@ classdef SpectralMeasureView < AlakazamView
 %
 %   Draws one channel's evoked amplitude spectrum at a time (EEG.spectrum /
 %   EEG.specFreqs, computed by SpectralMeasure), with a dashed marker at each
-%   named frequency and its measured SNR annotated. Up/down arrows step the
-%   channel; left/right step the bin (for multi-bin data) -- the same
-%   interaction model FourierView/EpochView/AverageView use. Every step also
-%   has a visible, clickable button (channel and bin alike, not just
-%   keyboard/wheel), plus x/y zoom sliders (a zoom level, once set, survives
-%   a channel/bin change instead of resetting), pan and mouse-wheel channel
-%   stepping: see ZoomPanButtons/onWheel, shared with FourierView.
+%   named frequency and its measured SNR annotated.
 %
-%   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMPANBUTTONS.
+%   CHANNEL AND BIN ARE DROPDOWNS ABOVE THE PLOT, as in FourierView,
+%   EpochView and TimeFrequencyView, built by the same
+%   TransTools.BuildChannelDropdown and BuildBinDropdown, instead of the row
+%   of step and pan buttons below the plot it used to have. The bin dropdown
+%   is left out when there is one bin. Up/down arrows and the mouse wheel
+%   step the channel, left/right the bin, and a focus shared from another
+%   view sets both; the dropdowns follow all of them.
+%
+%   X/y zoom are the sliders below the plot (ZoomSliders, shared with
+%   FourierView): a zoom level, once set, survives a channel or bin change
+%   instead of resetting, and the axes toolbar pans.
+%
+%   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMSLIDERS.
 
     properties
     end
@@ -19,9 +25,12 @@ classdef SpectralMeasureView < AlakazamView
     properties (SetAccess = private)
         Figure
         EEG
-        Grid
+        Grid            % 4x1 uigridlayout: dropdowns | axes | x-zoom | y-zoom
+        ChannelDropdown % "Channel:" uidropdown (TransTools.BuildChannelDropdown), row 1
+        BinDropdown     % "Bin:" uidropdown (TransTools.BuildBinDropdown), row 1;
+                        % empty when there is one bin
         Axes
-        Buttons     % ZoomPanButtons, the zoom/pan/bin-step row + sliders
+        Zoom            % ZoomSliders, the x/y zoom sliders below the plot
         Channel = 1
         CurrentBin = 1
     end
@@ -30,24 +39,28 @@ classdef SpectralMeasureView < AlakazamView
         function this = SpectralMeasureView(fig, eeg)
             this.Figure = fig;
             this.EEG    = eeg;
-            this.Grid = uigridlayout(fig, [4 1], "RowHeight", {'1x', 30, 24, 24}, ...
+            this.Grid = uigridlayout(fig, [4 1], "RowHeight", {22, '1x', 24, 24}, ...
                 "Padding", [2 2 2 2], "RowSpacing", 2);
+
+            % Row 1: the channel and, with more than one, the bin, in
+            % EpochView's proportions.
+            controls = uigridlayout(this.Grid, [1 3], "ColumnWidth", {'1x', '1x', '1x'}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 12);
+            controls.Layout.Row = 1;
+            this.ChannelDropdown = TransTools.BuildChannelDropdown(controls, 1, 1, ...
+                {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
+            nBins = size(eeg.spectrum, 3);
+            if nBins > 1
+                this.BinDropdown = TransTools.BuildBinDropdown(controls, 1, 2, ...
+                    arrayfun(@(b) binLabel(eeg, b), 1:nBins, 'UniformOutput', false), ...
+                    @(idx) this.onBinSelected(idx));
+            end
+
             this.Axes = uiaxes(this.Grid);
-            this.Axes.Layout.Row = 1;
+            this.Axes.Layout.Row = 2;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
-            stepFcn = [];
-            if size(eeg.spectrum, 3) > 1
-                stepFcn = @(delta) this.binStep(delta);
-            end
-            channelStepFcn = [];
-            channelLabels = {};
-            if size(eeg.spectrum, 1) > 1
-                channelStepFcn = @(delta) this.channelStep(delta);
-                channelLabels = {eeg.chanlocs.labels};
-            end
-            this.Buttons = ZoomPanButtons(this.Grid, [2 3 4], this.Axes, eeg.srate / 2, ...
-                @() this.notifyActivated(), stepFcn, channelStepFcn, 'Bin', ...
-                channelLabels, @(idx) this.onChannelSelected(idx));
+            this.Zoom = ZoomSliders(this.Grid, [3 4], this.Axes, eeg.srate / 2, ...
+                @() this.notifyActivated());
             this.redraw();
             axtoolbar(this.Axes, "default");
         end
@@ -60,7 +73,7 @@ classdef SpectralMeasureView < AlakazamView
             spec  = reshape(this.EEG.spectrum(this.Channel, :, this.CurrentBin), 1, []);
 
             hold(ax, "on");
-            plot(ax, freqs, spec, "Color", "k", "LineWidth", 1);
+            plot(ax, freqs, spec, "Color", "k", "LineWidth", 1, "Tag", "SpectrumLine");
 
             top = max(spec, [], "omitnan");
             if ~isfinite(top) || top <= 0; top = 1; end
@@ -86,7 +99,7 @@ classdef SpectralMeasureView < AlakazamView
             nbin = size(this.EEG.spectrum, 3);
             if nbin > 1
                 % "i of N" alongside the label, not just the label alone --
-                % see FourierView's own redraw() for why (unambiguous even
+                % see FourierView's own titleText for why (unambiguous even
                 % when the label text does not obviously change).
                 titleStr = sprintf('%s   (Bin %i of %i: %s)', titleStr, ...
                     this.CurrentBin, nbin, binLabel(this.EEG, this.CurrentBin));
@@ -95,12 +108,19 @@ classdef SpectralMeasureView < AlakazamView
             xlabel(ax, "Frequency (Hz)");
             ylabel(ax, "Evoked amplitude");
 
-            % x-limits are owned by this.Buttons (persists zoom/pan across a
+            % x-limits are owned by this.Zoom (persists zoom across a
             % channel/bin change); y-limits go through applyYZoom so the
             % y-zoom slider's level, not just the absolute range, survives
-            % too -- see ZoomPanButtons' own header comment.
-            this.Buttons.applyYZoom(top);
-            this.Buttons.setChannelValue(this.Channel);
+            % too -- see ZoomSliders' own header comment.
+            this.Zoom.applyYZoom(top);
+
+            % The dropdowns show what is drawn, however it was chosen: a key,
+            % the wheel, a focus shared from another view, or the dropdown
+            % itself. Setting Value does not fire ValueChangedFcn.
+            this.ChannelDropdown.Value = this.Channel;
+            if ~isempty(this.BinDropdown)
+                this.BinDropdown.Value = this.CurrentBin;
+            end
         end
 
         function onKey(this, event)
@@ -130,27 +150,20 @@ classdef SpectralMeasureView < AlakazamView
     end
 
     methods (Access = private)
-        function binStep(this, delta)
-            nBins = size(this.EEG.spectrum, 3);
-            this.CurrentBin = min(nBins, max(1, this.CurrentBin + delta));
-            this.redraw();
-        end
-
-        function channelStep(this, delta)
-        %CHANNELSTEP  Button-row equivalent of the up/down arrow keys (see
-        %   onKey), for the "C^"/"Cv" pair ZoomPanButtons builds when given
-        %   a non-empty channelStepFcn.
-            nchan = size(this.EEG.spectrum, 1);
-            this.Channel = min(nchan, max(1, this.Channel - delta));
-            this.redraw();
-        end
-
         function onChannelSelected(this, idx)
-        %ONCHANNELSELECTED  The channel dropdown's ValueChangedFcn (see
-        %   ZoomPanButtons.buildButtonRow): jump straight to the picked
-        %   electrode, the same effect as stepping there one channel at a
-        %   time with channelStep/onKey.
+        %ONCHANNELSELECTED  The channel dropdown's ValueChangedFcn: jump
+        %   straight to the picked electrode, the same effect as stepping
+        %   there one channel at a time with the up/down keys (onKey).
+            this.notifyActivated();
             this.Channel = idx;
+            this.redraw();
+        end
+
+        function onBinSelected(this, idx)
+        %ONBINSELECTED  The bin dropdown's ValueChangedFcn: show the picked
+        %   bin, as the left/right keys step to it (onKey).
+            this.notifyActivated();
+            this.CurrentBin = idx;
             this.redraw();
         end
     end

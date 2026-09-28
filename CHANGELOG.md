@@ -61,6 +61,12 @@ bar. Dates are those of the tag.
   an averaged spectrum's bins are tickboxes instead (above). The keys and
   the mouse wheel still step, and the dropdowns follow them. The zoom
   sliders stay; the plot's toolbar pans.
+- **The Spectral Measure view picks the channel and the bin with dropdowns
+  above the plot**, as the spectrum view and the other views do, instead of
+  a row of step and pan buttons below it; the bin dropdown is left out when
+  there is one bin. The keys, the mouse wheel and a focus shared from
+  another view still step, and the dropdowns follow them. The zoom sliders
+  stay; the plot's toolbar pans, and the x zoom keeps a pan made with it.
 - The spectrum view shades the frequency bands as pale stripes behind the
   spectra, instead of filling the area under the one curve, which several
   curves or a log axis would not allow.
