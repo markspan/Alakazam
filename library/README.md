@@ -14,6 +14,11 @@ a file of its kind was last loaded from.
 1. **It loads as shipped.** `tests/LibraryTest.m` reads every file the way
    the application does: every template names only transformations that
    exist, every bin script parses, every measurement file reads.
+   `tests/LibraryReplayTest.m` goes further where the data is present: it
+   replays each template on the recording it was written for and compares
+   with the result recorded when it was checked, or, for the two with no
+   recorded result (`dimigen-rift-simplified`, `ReadingDeconvolution`),
+   checks that it runs end to end.
 2. **A measurement window says where it comes from.** A window taken from
    a library is an a priori choice only if its source is known; one chosen
    after looking at the data makes the statistics optimistic in a way no
@@ -33,7 +38,6 @@ a file of its kind was last loaded from.
 |---|---|---|
 | `N400.alztemplate` | N400, one recording: AutoGEDAI, bins, baseline, artefacts, average, N400 at Cz | ERP CORE N400 (Luck ch. 2) |
 | `N400-complete.alztemplate` | Chapters 2 and 3 of Luck's book end to end: filter to measurement and scalp map, N400 at CPz | ERP CORE N400 (Luck ch. 3) |
-| `AutoEyeICA.alztemplate` | The N400 pipeline with ICA eye correction first: AutoEyeICA, bins, baseline, artefacts, average, measure | ERP CORE N400 |
 | `dimigen-rift.alztemplate` | The RIFT study's pipeline, coherence with the photodiode through Spectral Measure | Dimigen et al. (2025) |
 | `dimigen-rift-simplified.alztemplate` | The same without resampling and ICA | Dimigen et al. (2025) |
 | `FaceSaccadesDeconvolution.alztemplate` | Figure 11 of Ehinger & Dimigen (2019): faces, saccades and button presses, deconvolved and plainly averaged | the authors' OSF recording |

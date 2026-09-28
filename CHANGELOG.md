@@ -18,7 +18,11 @@ bar. Dates are those of the tag.
   but uses Cz for CPz; the MMN set uses 150 to 250 ms for ERP CORE's 125 to
   225 ms). `library/README.md` indexes every file and the data it was written
   for, and `LibraryTest` checks that each loads, has its source and is
-  indexed.
+  indexed. `LibraryReplayTest` replays the templates on their own data, where
+  it is present, and compares with the results recorded when each was
+  checked (Docs/luck.md, Docs/dimigen.md, chapters 17 and 20 of the manual).
+  `AutoEyeICA.alztemplate`, which was never checked against its data, is not
+  in the library.
 
 ### Changed
 

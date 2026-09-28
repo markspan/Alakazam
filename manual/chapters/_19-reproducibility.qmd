@@ -33,8 +33,7 @@ cache. **Apply Template**, on any dataset node, replays it there. A template
 is the unit to keep with a study, share with a colleague, or apply to the
 next batch of subjects. The library includes templates for the analyses in
 this manual: the ERP CORE chapters of Luck's textbook, the N400 worked
-example, the RIFT study, the face and reading deconvolutions, and an ICA
-pipeline.
+example, the RIFT study, and the face and reading deconvolutions.
 
 ## The library {#sec-library}
 

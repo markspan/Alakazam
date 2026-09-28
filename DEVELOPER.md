@@ -229,6 +229,12 @@ enforces them:
   `no source`;
 - every file is listed in the README.
 
+`LibraryReplayTest` (tagged `Slow`, skipped where the data or a toolbox is
+missing) replays each template on its own data through `TransTools.invoke`,
+as Apply Template does, and compares with the numbers recorded in
+`Docs/luck.md`, `Docs/dimigen.md` and chapters 17 and 20 of the manual. A
+new template with a recorded result gets a case there.
+
 A measurement window from the library is an a priori choice only when its
 source is known, so a window with no source says so rather than borrowing a
 reference that does not describe it.
