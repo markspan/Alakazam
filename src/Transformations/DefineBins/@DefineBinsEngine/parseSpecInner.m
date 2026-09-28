@@ -81,7 +81,18 @@ function spec = parseSpecInner(script)
                   'expr', {}, 'combo', {}, 'rtWindow', {}, 'timelock', {});
     for s = 1:numel(stmts)
         if stmts{s}(1).val == "bin"
-            bins(end + 1) = DefineBinsEngine.parseBinStatement(stmts{s}, script, aliases); %#ok<AGROW>
+            bin = DefineBinsEngine.parseBinStatement(stmts{s}, script, aliases);
+            % ONE NUMBER, ONE BIN. A bin's number is how the tagged events, the
+            % averages and a combination such as "bin 3 = bin 1 - bin 2" refer
+            % to it, so two bins with the same number cannot be told apart.
+            % They used to be accepted without a word.
+            if any([bins.index] == bin.index)
+                DefineBinsEngine.throwParseError(stmts{s}(1).pos, sprintf([ ...
+                    'Bin %d is defined twice in this script, I''m afraid; each bin ' ...
+                    'number can be used once. Would you give this one a number of its ' ...
+                    'own?'], bin.index));
+            end
+            bins(end + 1) = bin; %#ok<AGROW>
         end
     end
     DefineBinsEngine.checkComboReferences(bins);

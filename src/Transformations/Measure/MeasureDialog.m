@@ -248,7 +248,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
     %   Loading the same file twice therefore duplicates its rows. That is
     %   visible in the table and removable with Remove Selected, which is a
     %   better failure than silently dropping a row somebody meant to have.
-        [file, path] = uiextras.uigetfile2('*.alm', 'Load measurement windows');
+        [file, path] = pickLibraryFile('measures', '*.alm', 'Load measurement windows');
         if isequal(file, 0); return; end
         try
             [loadedData, loadedDerivations] = readMeasuresFile(fullfile(path, file));

@@ -171,6 +171,24 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             end
         end
 
+        function aBinNumberUsedTwiceIsRejected(testCase)
+        %ABINNUMBERUSEDTWICEISREJECTED  Two bins with the same number cannot
+        %   be told apart by the events they tag or by a combination bin that
+        %   names them, so the second is refused rather than accepted as a
+        %   silent copy. The case was found in a shipped bin script.
+            EEG = eegWithEvents({'112', '122'}, [100, 200]);
+            opts = struct('script', [ ...
+                'bin 1 "A" 112' newline ...
+                'bin 1 "B" 122']);
+            try
+                DefineBins(EEG, opts);
+                testCase.verifyFail('Expected DefineBins to throw.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'Bin 1 is defined twice');
+            end
+        end
+
         function unknownAliasReferenceIsRejected(testCase)
         %UNKNOWNALIASREFERENCEISREJECTED  A bare word that is not a
         %   defined 'let' alias (and not a quoted marker) is rejected

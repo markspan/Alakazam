@@ -7,6 +7,12 @@
     "task": "Speeded choice tasks that induce errors (flanker, Stroop, Go/NoGo), scored on error trials, often as an error-minus-correct difference.",
     "note": "Assumes response-locked averages of error trials (time 0 = the response), so the window sits just after the response. Measured here against a pre-response baseline (-400 to -200 ms), the usual ERN convention; a sharper peak (negative) measure at FCz is a common alternative."
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "not compared",
+    "note": "ERP CORE gives an a priori window and site for the ERN (flankers task, error minus correct). This preset has not yet been compared with them."
+  },
   "rows": [
     {
       "label": "ERN",

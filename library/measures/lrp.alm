@@ -7,6 +7,12 @@
     "task": "Two-choice speeded reaction-time tasks with left- and right-hand responses (flanker, Simon and similar choice-RT designs).",
     "note": "Assumes response-locked averages (time 0 = the response), so the window sits at negative times just before the response. This preset measures the raw motor sites C3 and C4 (both must be present) over the pre-response interval. The LRP proper is a double subtraction, contralateral minus ipsilateral averaged across left- and right-hand responses: define the channel difference with a derivation (let LRP = C3 - C4), split the response-locked epochs into left- and right-hand bins in DefineBins, form the combination bin (0.5 binRight - 0.5 binLeft), and measure it on the derived LRP channel."
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465. With Luck, S. J. Applied Event-Related Potential Data Analysis. LibreTexts.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "matches",
+    "note": "ERP CORE and Luck's chapter 10 template measure the response-locked LRP from -100 to 0 ms at C3/C4. Both measure the contralateral-minus-ipsilateral difference, which needs a derived channel or a difference bin; this preset measures C3 and C4 as they are (see ch10-LRP.alztemplate for the difference)."
+  },
   "rows": [
     {
       "label": "LRP",

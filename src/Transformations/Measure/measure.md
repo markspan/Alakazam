@@ -530,8 +530,8 @@ reuse the same battery in a new workspace, or share it with a colleague. Save
 stores the table as-is (it does not require the rows to be valid first), so you
 can also use it to park a work-in-progress.
 
-Ready-made starting points live in
-[`presets/`](presets) (Load one, then adjust the channels/windows to your
+Ready-made starting points live in the library,
+[`library/measures/`](../../../library/measures) (Load one, then adjust the channels/windows to your
 montage and design). Multi-component **batteries**:
 
 - `erp_components_mean_amplitude`: P2, P300, N400, MMN as mean amplitude at

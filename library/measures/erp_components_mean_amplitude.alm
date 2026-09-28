@@ -26,6 +26,12 @@
       }
     }
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465. With Luck, S. J. Applied Event-Related Potential Data Analysis. LibreTexts.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "partly",
+    "note": "Per component: P300 matches ERP CORE (300 to 600 ms, Pz); N400 matches its window but not its site (ERP CORE uses CPz, this uses Cz); MMN differs (ERP CORE uses 125 to 225 ms); no published source is recorded for the P2."
+  },
   "rows": [
     {
       "label": "P2",

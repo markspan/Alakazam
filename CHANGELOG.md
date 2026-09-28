@@ -6,6 +6,50 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Added
+
+- **A library of ready-made files**, in `library/` at the root: templates
+  (`library/templates`), bin scripts (`library/binscripts`) and measurement
+  windows (`library/measures`), gathered from `templates/`, `binscripts/` and
+  the Measure presets, which moved there. Every measurement file now says
+  where its windows come from: the reference, and whether it matches it,
+  partly matches, differs, has not been compared yet, or has no published
+  source (the P300 and LRP sets match ERP CORE; the N400 set takes its window
+  but uses Cz for CPz; the MMN set uses 150 to 250 ms for ERP CORE's 125 to
+  225 ms). `library/README.md` indexes every file and the data it was written
+  for, and `LibraryTest` checks that each loads, has its source and is
+  indexed.
+
+### Changed
+
+- **Apply Template, and DefineBins' and ERP Measure's Load..., open in the
+  library** the first time in a session, and after that in whichever folder
+  a file of that kind was last loaded from. They used to share one folder
+  with each other and with EEGLAB, and Apply Template started in the
+  workspace's Exports folder.
+
+### Fixed
+
+- **A bin script could define the same bin number twice**, and both were
+  accepted without a word, although a bin's number is how events and
+  combination bins refer to it. It is now refused with a message naming the
+  number. A shipped P3b bin script did this; it is kept out of the library.
+
+- **Export as Code wrote a ReRef that reconstructs an implicit reference as a
+  plain `pop_reref`**, which drops the reconstructed channel and, under an
+  average reference, subtracts a different average. Such a step now keeps
+  ReRef's own call in the script, as Filter does.
+
+### Documentation
+
+- The documents in `Docs/` are brought up to date: the transformation
+  provenance re-verified for all 35 transformations, the RIFT companion with
+  RESS and the current templates, and the Luck companion with the current
+  ribbon, report and data download. The fifth pass of the capability review
+  is added as `Docs/where-alakazam-stands.md`.
+
+## V0.4.4.3 (2026-09-28)
+
 ### Documentation
 
 - The manual and the README cite Pütz, Span & Lorist (2025) again, the
@@ -117,8 +161,9 @@ bar. Dates are those of the tag.
   left the reference site out of its own average.** The channel is now added
   as a flat zero before re-referencing, as EEGLAB advises, so N recorded
   channels and the reference are averaged as N + 1 sites and the channels
-  sum to zero. Before, the subtracted average was N/(N + 1) of what it
-  should be (3% at 32 channels). Specific-channel references are unchanged.
+  sum to zero. Before, the subtracted average was (N + 1)/N of what it
+  should be (3% too large at 32 channels). Specific-channel references are
+  unchanged.
   Nodes computed before this fix keep the old result until recalculated.
 - **Fourier's Other resolution no longer drops samples.** A spacing coarser
   than the segment's own made the transform shorter than the segment, which

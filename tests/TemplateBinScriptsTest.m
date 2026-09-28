@@ -5,7 +5,7 @@ classdef TemplateBinScriptsTest < matlab.unittest.TestCase
 %   drop it silently) and knows an epoch statement, so a script that parsed
 %   before could, in principle, stop parsing. The templates are the scripts
 %   users start from, so each DefineBins script and Deconvolve bin script in
-%   templates/ is parsed here, and a DefineBins script must still compile to
+%   library/templates/ is parsed here, and a DefineBins script must still compile to
 %   as many bins as the template stored.
 %
 %   Run with: runtests('tests/TemplateBinScriptsTest.m').
@@ -25,7 +25,7 @@ classdef TemplateBinScriptsTest < matlab.unittest.TestCase
     methods (Test)
         function everyTemplateBinScriptParses(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
-            files = dir(fullfile(root, 'templates', '**', '*.alztemplate'));
+            files = dir(fullfile(root, 'library', 'templates', '**', '*.alztemplate'));
             testCase.assertNotEmpty(files, 'No templates found to check.');
 
             checked = 0;

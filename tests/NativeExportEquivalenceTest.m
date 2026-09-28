@@ -88,6 +88,23 @@ classdef NativeExportEquivalenceTest < matlab.unittest.TestCase
                 struct('mode', 'Channels', 'refChannels', {{'Oz'}}, 'keepref', true));
         end
 
+        function aReconstructedImplicitReferenceKeepsReRefsOwnCall(testCase)
+        %ARECONSTRUCTEDIMPLICITREFERENCEKEEPSREREFSOWNCALL  ReRef inserts
+        %   the implicit reference as a flat channel before pop_reref, so an
+        %   average reference includes it. A bare pop_reref would drop that
+        %   channel and subtract a different average, so there is no faithful
+        %   native spelling and the exporter must say so by returning {}.
+            for mode = {'Average', 'Channels'}
+                params = struct('mode', mode{1}, 'refChannels', {{'Oz'}}, ...
+                    'keepref', false, 'implicitRef', 'Cz');
+                testCase.verifyEmpty(nativeTransformCall('ReRef', params, 'EEG', 'out'), ...
+                    sprintf('A %s reference with an implicit channel was spelled natively.', mode{1}));
+            end
+            params.implicitRef = '';
+            testCase.verifyNotEmpty(nativeTransformCall('ReRef', params, 'EEG', 'out'), ...
+                'Without an implicit channel ReRef is still a plain pop_reref.');
+        end
+
         function interpolateMatchesPopInterp(testCase)
             EEG = testCase.positionedFixture();
             testCase.verifyEquivalent(EEG, 'Interpolate', ...

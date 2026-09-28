@@ -15,7 +15,7 @@ dialog, saved as a `.binscript` or kept in a template as it is, with the
 
 ## Tested templates for the ERP CORE paradigms
 
-The repository's `templates/luck` folder holds one pipeline per chapter of
+The repository's `library/templates/luck` folder holds one pipeline per chapter of
 Luck's *Applied ERP Data Analysis* [@luckApplied]: the N400 for one and for
 ten participants, P3b, MMN (with and without ICA), N2pc and LRP, on the ERP
 CORE data [@kappenman2021]. They were checked against the book's and ERPLAB's

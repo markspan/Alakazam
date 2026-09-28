@@ -10,6 +10,11 @@ analysis choices, and the reasoning behind them. Read his text first and keep it
 open; this guide only shows how to carry out, in a different tool, the analyses he
 teaches.
 
+*Last checked against the code: 28 September 2026 (V0.4.4.3). The step names,
+ribbon groups and report described below are the current ones; the validation
+figures were measured on 12 September and are marked where a later change bears
+on them.*
+
 > **Please read this before relying on anything below.**
 >
 > **Alakazam is young**, especially next to EEGLAB and ERPLAB, which are mature,
@@ -36,18 +41,21 @@ teaches.
 
 Like the book, each chapter first describes the **experiment** and the **data**,
 then the analysis. It does not paraphrase Luck's text; it points you to it. The
-repository ships the actual ERP CORE recordings and a ready-made workspace for
-every chapter, so the walkthrough is concrete down to the event codes, epoch
+repository ships a ready-made workspace for every chapter, and
+`downloadLuckData.m` fetches the ERP CORE recordings they open, so the
+walkthrough is concrete down to the event codes, epoch
 windows, baseline limits, artifact thresholds and measurement windows, values all
 taken from the book. Where Alakazam's chosen values differ from Luck's, both are
 given, and Luck's should be treated as correct.
 
 ## What is already in the repository
 
-- **Data:** [`Data/Luck/`](../Data/Luck), one folder per chapter that has its
-  own recordings (`ch1`-`ch3`, `ch5`-`ch11`; chapter 4 is about filtering and
-  reuses the N400 data, so there is no `ch4`), the ERP CORE recordings the book
-  uses, one component per chapter (N400, P3b, MMN, N2pc, LRP, N170).
+- **Data:** not in the repository itself (`Data/` is gitignored; the tree is
+  about 2.4 GB). Run `downloadLuckData.m` once and it fills `Data/Luck/` (see
+  [`DATA.md`](../DATA.md)): one folder per chapter that has its own recordings
+  (`ch1`-`ch3`, `ch5`-`ch11`; chapter 4 is about filtering and reuses the N400
+  data, so there is no `ch4`), the ERP CORE recordings the book uses, one
+  component per chapter (N400, P3b, MMN, N2pc, LRP, N170).
 - **A workspace per chapter:** `Chapter1.wksp` ... `Chapter11.wksp` in the
   repository root. Each points its *Raw* folder at the matching `Data/Luck/chN`
   and preloads bin, baseline, ICA and time-frequency settings.
@@ -97,19 +105,22 @@ common montage of scalp electrodes plus horizontal and vertical EOG. The book
 - You process by **building a tree**, not by running a script. A raw import is a
   root node; each ribbon transformation adds a child; a subject's whole analysis
   is a branch.
-- The ribbon groups transformations like the book's pipeline:
+- The **Tools** tab of the ribbon groups transformations like the book's
+  pipeline:
   *1. Preprocessing* (SelectData, ReRef, Resample, Filter, Baseline, Interpolate,
-  ChannelEditor, Average, Rectify, DC-Detrend, EventEditor, Photodiode,
-  Derive Channels),
+  ChannelEditor, Rectify, DC-Detrend, EventEditor, Photodiode, Derive Channels,
+  Collapse Hemispheres, EyeTracking),
   *2. Artifact Rejection / Reduction* (ArtefactDetect, AutoICA, ICA,
-  ManualReject, AutoGEDAI), *3. Segments* (DefineBins),
+  ManualReject, AutoGEDAI),
+  *3. Epoching and Averaging* (DefineBins, Average, Deconvolve),
   *4. Frequency and Component Analysis* (Fourier, Welch PSD, Spectral Measure,
-  ERP Measure, Covariance, Cross Correlation, Source Estimate),
-  *5. Plots* (Scalp, TimeFrequency, Coherence Map, CohTopo, Brain (3D)). A
-  **Grand Average** tab builds group results; a **Measurements** tab scores and
-  exports. The eye-correction step is labelled **AutoICA** on the ribbon, while
-  its function and its stored settings key are both `AutoEyeICA`, which is the
-  name a template or a `.wksp` file shows.
+  RESS, ERP Measure, Covariance, Cross Correlation, Source Estimate),
+  *5. Plots* (Scalp, TimeFrequency, Coherence Map, CohTopo, Brain (3D)). The
+  **Grand Average** tab builds group results; the **Export/Report** tab exports
+  the measurements with their statistics report, and runs the data-quality
+  report and the cluster statistics. The eye-correction step is labelled
+  **AutoICA** on the ribbon, while its function and its stored settings key are
+  both `AutoEyeICA`, which is the name a template or a `.wksp` file shows.
 - **Reproducibility is templates**, not `.m` files: any branch saves as a
   template and re-applies to other subjects, and any step's parameters can be
   edited and recomputed down the branch ("Recalculate", written back to disk so
@@ -304,7 +315,7 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
    recording is already low-passed). Tick High-pass, enter `0.1` Hz and a dB
    attenuation (e.g. 40). See Chapter 4.
 
-2. **DefineBins** (Segments) does EventList + BINLISTER + epoching in one
+2. **DefineBins** (Epoching and Averaging) does EventList + BINLISTER + epoching in one
    step. `Chapter2.wksp` preloads this script (the alias/wildcard form) with
    **Epoch start -200** and **stop 800**:
 
@@ -353,14 +364,14 @@ plus the ERPLAB `BDF_N400.txt`, its saved `BDF_N400.binscript`, and `n400.alm`.
    (`N400.alztemplate` and Appendix 3 use this order, and in the book the
    baseline is subtracted as the epochs are cut.)
 
-5. **Average** (Preprocessing) produces the four per-bin ERPs (plus the bin 5
+5. **Average** (Epoching and Averaging) produces the four per-bin ERPs (plus the bin 5
    difference wave), each with a standard error, an accepted trial count, and its
    **aSME** data-quality value (Chapter 6).
 
 Plot the **Average** node for the waveforms with standard-error bands
 (AverageView), and add a **Scalp** plot for the N400 topography.
 
-**As a template.** `templates/N400.alztemplate` is this whole pipeline
+**As a template.** `library/templates/N400.alztemplate` is this whole pipeline
 pre-built (`AutoGEDAI -> DefineBins -> Baseline -> ArtefactDetect -> Average ->
 ERP Measure`); apply it to any raw node (Chapter 3).
 
@@ -422,8 +433,12 @@ every frequency equally and does not smear component *shapes* the way a
 minimum-phase IIR filter can. You give each filter a **frequency** and a **dB**
 stopband attenuation; the filter order and transition bandwidth needed to reach
 that attenuation are computed for you. High-pass, low-pass and notch are
-independent toggles, with a **per-channel** mode. Filter the *continuous*
-recording before DefineBins.
+independent toggles, with a **per-channel** mode. Below the settings, the
+dialog plots the impulse response and the frequency response of the filters
+you have ticked, computed from the very kernels it will apply, from 0 Hz to
+the Nyquist frequency with a line at -6 dB, so you see what a cutoff and an
+attenuation mean before you run it. Filter the *continuous* recording before
+DefineBins.
 
 - N400 high-pass: High-pass, `0.1` Hz, e.g. 40 dB attenuation.
 - A cognitive low-pass: Low-pass, `30` Hz (or `20` Hz for publication smoothing).
@@ -469,12 +484,16 @@ references so you can see referencing change the waveforms.
 - **ReRef** on `..._unreferenced`: choose **Average** reference, or **Specific
   channels** (e.g. the mean of the two mastoids), exclude non-scalp channels from
   the reference, and optionally keep the reference channel. Plot it next to the
-  provided `CzRef` and `LmRef` versions to compare.
+  provided `CzRef` and `LmRef` versions to compare. For a recording made against
+  an electrode that was never saved (a mastoid, say), **Reconstruct implicit
+  reference channel** adds it back; it goes in as a flat channel before
+  re-referencing, as EEGLAB advises, so an Average reference includes that
+  site too.
 - **ChannelEditor** (Preprocessing) is the Alakazam counterpart of `pop_chanedit`:
   edit channel **labels**, **types** and **X/Y/Z coordinates** in a table.
   **Look up locations** fills coordinates by matching labels to a chosen
   **template** (a dropdown beside the button; Standard 10-5 by default, plus
-  whatever else `src/Electrodes/` carries -- an equidistant montage's labels
+  whatever else `src/Electrodes/` carries; an equidistant montage's labels
   carry no anatomy at all, so it needs a different template entirely, not a
   fallback), and, at the same time, guesses each channel's **type** from its
   label, so EOG/ECG/... are marked and no longer treated as scalp EEG. **Load
@@ -515,7 +534,11 @@ rare-minus-frequent difference wave.
 - **Baseline** does the prestimulus subtraction, on the segmented data, before
   averaging.
 - **Average** gives each bin's ERP with a standard error and trial counts and
-  evaluates the difference bins.
+  evaluates the difference bins. Both count only the trials kept: a trial that
+  ArtefactDetect or ManualReject rejected stays in its bin as NaN and is left
+  out. Before 26 September 2026 Average divided by every trial in the bin, so
+  after rejection its standard error and aSME were too small and its counts too
+  high (manual issue M1); recalculate Average nodes made before then.
 
 **Why data quality is its own step.** A grand-average waveform can look clean and
 still rest on a handful of noisy trials. Two subjects, or two conditions, can
@@ -623,7 +646,8 @@ can compare.
 - **Inspecting** is well covered: **SignalView** scrolls the continuous data
   (pan/zoom/magnify, mouse wheel), scales off the **EEG channels only**, and
   shows a **channel scrollbar** for dense montages. **EpochView** gives a
-  per-channel ERP-image (trials x time) for spotting bad trials.
+  per-channel ERP-image (trials x time) for spotting bad trials, sortable by
+  reaction time or by any event field, with rejected trials left blank.
 - **Interpolate** (Preprocessing) reconstructs a bad channel from its neighbours
   (`pop_interp`): pick the bad channel(s) from a multi-select list and a method
   (**spherical spline**, **inverse distance**, or **spacetime**). It needs channel
@@ -674,13 +698,13 @@ ERPLAB's rejection list exactly (see [Validation](#validation-against-lucks-own-
 records the one artefact Alakazam catches and ERPLAB misses). Tick **one or
 more** of:
 
-- **Absolute threshold** -- any sample outside [Minimum, Maximum] uV (default
+- **Absolute threshold**: any sample outside [Minimum, Maximum] uV (default
   **+/- 100 uV**).
-- **Step function** -- a moving window whose first-half vs second-half mean
+- **Step function**: a moving window whose first-half vs second-half mean
   differs by more than a threshold (blinks, saccades).
-- **Moving-window peak-to-peak** -- max-minus-min within a sliding window exceeds
+- **Moving-window peak-to-peak**: max-minus-min within a sliding window exceeds
   a threshold.
-- **Sample-to-sample** -- any single-sample jump exceeds a threshold (transients).
+- **Sample-to-sample**: any single-sample jump exceeds a threshold (transients).
 
 Ticking **none** leaves the data untouched and reports that it did so. Earlier
 versions silently fell back to the absolute threshold in that case, which meant
@@ -692,7 +716,10 @@ A channel is flagged if **any** ticked detector trips. Detection runs over a
 **test window** (blank = the whole epoch), and a hit either rejects the **whole
 epoch** (all channels, the ERP-standard default), marks **just that channel**,
 or **interpolates that channel** from its neighbours for that trial; rejected
-data is set aside so averaging omits it.
+data is set aside so averaging omits it. Right-click the node and choose
+**Rejection breakdown...** to see which detector rejected what: per detector,
+the epochs it rejected, the epochs only it caught, and the channel-epochs it
+flagged.
 
 **Which channels are tested** is a separate choice, and it matters more than it
 looks. The default is every channel, which is what makes a blink on VEOG reject
@@ -751,9 +778,12 @@ the decomposition and plots as a component sitting outside the head.
 - **ICA** (manual component removal) is the hands-on counterpart: it runs (or
   reuses) the decomposition, classifies with **ICLabel**, and opens a component
   selector showing every component's ICLabel class probabilities with a live
-  **scalp-topography preview**, so you tick exactly the components to subtract,
-  the way to remove a specific non-ocular component (muscle, heart, line noise) by
-  hand.
+  **scalp-topography preview** and the component's activation over the first
+  10 s, so you tick exactly the components to subtract, the way to remove a
+  specific non-ocular component (muscle, heart, line noise) by hand. When
+  dipole fitting is available, a **Dipole RV** column gives the share of each
+  component's map that a single equivalent dipole cannot explain, a physical
+  check on ICLabel's class.
 
 Both decompose the **scalp EEG channels only**: a channel needs a real 10-5 scalp
 position **and** must not be a peripheral, so EOG/ECG channels (recognised by
@@ -911,16 +941,20 @@ committing to a measure.
   template scores the N400 as: label `N400`, window **300 to 500 ms**, **Mean
   Amplitude**, polarity **Negative**, channel **Cz** (the book measures the N400
   at **CPz**; choose your electrode in the dialog).
-- Export from the **Measurements** tab: a long, tidy, R-ready CSV (one row per
-  measure x bin x channel) plus an HDF5 of the arrays.
+- Export from the **Export/Report** tab (**ERP & Report**): a long, tidy,
+  R-ready CSV (one row per measure x bin x channel), with the report below.
 
-**Statistics.** The Measurements export also renders a **Quarto report** beside
-the CSV, and it is design-aware rather than one generic loop: each window and
-measure is routed to the test its own bins support, a paired *t*-test for two
-conditions, a repeated-measures ANOVA for three or more, a one-sample test
-against zero for a difference bin, a mixed model where sessions or groups make
-one appropriate. Every result is stated **estimate first**, which condition was
-larger and by how much with a confidence interval, before any test decision.
+**Statistics.** The export also renders a **Quarto report** beside the CSV, and
+it is design-aware rather than one generic loop: each window and measure gets
+the one test its own bins support. Two conditions get a paired *t*-test with
+Cohen's *dz*, or a Wilcoxon signed-rank test when a Shapiro-Wilk check finds
+the differences non-normal; three or more conditions, or conditions with
+groups or sessions, get a linear mixed model rather than a repeated-measures
+ANOVA, so a subject missing one bin still contributes the others; each
+difference bin gets a one-sample test against zero. Each result is a table
+with its effect size, a confidence interval where one can be computed, and a
+one-sentence caption saying what the test tests; every *t*-test and every
+mixed-model section also carries a Bayes factor.
 
 Four things in it are worth knowing for this chapter:
 
@@ -929,9 +963,9 @@ Four things in it are worth knowing for this chapter:
   interval actually measured. A window over the wrong peak or a baseline never
   applied produces numbers that test perfectly well and mean nothing, and both
   are obvious on the wave.
-- **The effect gets its own panel**, a bootstrap distribution of the mean
-  difference with its interval and zero always drawn, next to raincloud plots of
-  the conditions themselves.
+- **The distributions are drawn**, as raincloud plots of the conditions
+  beside each test, and a closing summary puts every section's main test in
+  one table with a forest plot of the effect sizes.
 - **Single-trial models.** Where `Measure` was run on the epoched node, the
   report also fits the measure to individual trials rather than to per-subject
   averages (`value ~ bin + trial_c + (1 + bin | person_id)`), which is the
@@ -942,13 +976,23 @@ Four things in it are worth knowing for this chapter:
   reported as secondary with uncorrected *p*, because they re-express the same
   hypothesis rather than adding one.
 
-An **R analysis script** is still written alongside for anyone who wants to take
-the analysis over. Treat both as a **starting point**, not a finished analysis:
+The report is an ordinary Quarto document with its R in view, so anyone who
+wants to take the analysis over can edit it. Treat it as a **starting point**,
+not a finished analysis:
 they make default choices that may not match your design or the book's
 recommendations, so check them against Luck's guidance for this experiment
 before reporting anything, or take the tidy CSV into JASP / SPSS instead. The
 report says as much itself, including that windows and channels chosen after
 seeing the data make the *p*-values optimistic in a way no correction repairs.
+
+**Beyond the book: overlapping responses.** A response-locked LRP or ERN sits
+on the tail of the response to the stimulus a few hundred milliseconds
+earlier, and how much of that tail it carries depends on the reaction time.
+Averaging cannot separate the two; **Deconvolve** (Epoching and Averaging) can,
+by fitting the stimulus and the response bins at once on the continuous
+recording. Luck's book does not cover it, so this is an addition rather than a
+translation; chapter 17 of the manual works through an example on published
+data.
 
 ---
 
@@ -986,8 +1030,8 @@ than cars**, isolated as the face-minus-car difference at sites such as PO8.
   measurement window) and recomputes that node and everything below it, in place,
   written back to the cache so it survives a restart. A pipeline is a live,
   editable graph, not a one-shot script.
-- The **bin language** (`.binscript`), the exported **R script**, and template
-  files are all plain text you save, load, and version-control, the
+- The **bin language** (`.binscript`), the report's Quarto document, and
+  template files are all plain text you save, load, and version-control, the
   human-readable core of a "script".
 - The **exported analysis script** is MATLAB, and where a step is a faithful
   translation it names **EEGLAB's own functions** rather than Alakazam's:
@@ -998,11 +1042,13 @@ than cars**, isolated as the face-minus-car difference at sites such as PO8.
   keep their own call and carry a comment naming the library function that does
   the work: `Filter` designs its own Kaiser windowed-sinc kernel, and inlining
   that would copy the design logic into the script and diverge the day the
-  transformation changed.
+  transformation changed. A `ReRef` that reconstructs an implicit reference
+  keeps its own call too, because it adds that channel before `pop_reref`
+  runs.
 
 **Difference.** The unit of reuse is a template/tree, not a `.m` file: the same
 recipe applies across subjects without any code. For a genuinely bespoke
-statistical model, edit the generated R script.
+statistical model, edit the report's R.
 
 ---
 
@@ -1015,7 +1061,7 @@ the manual's bibliography,
 
 ## Appendix 3 -- The example pipeline, as a template
 
-`templates/N400.alztemplate`, applied on one subject and then
+`library/templates/N400.alztemplate`, applied on one subject and then
 **Apply to All Raw Files**, finished on the **Grand Average** tab:
 
 ```
@@ -1036,7 +1082,7 @@ the topography.
 
 ### The fullest chain, ready to run
 
-`templates/N400-complete.alztemplate` is the whole of chapters 2
+`library/templates/N400-complete.alztemplate` is the whole of chapters 2
 and 3 as one template, starting from the unfiltered `.set` files `ch3` actually
 ships and ending at the numbers the statistics read:
 
@@ -1054,7 +1100,7 @@ raw import (…_N400_preprocessed.set, ch3)
 ```
 
 Apply it to one subject, then **Apply to All Raw Files** for the other nine,
-then **Grand Average** and export from **Measurements** for the report. Four
+then **Grand Average** and export from **Export/Report** for the report. Four
 notes on it:
 
 - It **branches** under Average (a measurement leaf and a topography leaf), so
@@ -1067,7 +1113,7 @@ notes on it:
   than once, which makes the latency ambiguous, while a single-signed area is
   monotonic and its crossing unique.
 - Grand averaging and the statistics report are **not** template steps; they
-  are actions on the Grand Average and Measurements tabs, applied once the
+  are actions on the Grand Average and Export/Report tabs, applied once the
   per-subject branches exist. A template stops at the last per-subject node.
 
 Replayed on `ch3/1_N400_preprocessed.set`, all seven nodes run, the Average
@@ -1077,11 +1123,11 @@ from the book's (70 of 230 epochs here against 67 with the book's own
 Butterworth high-pass), because Alakazam's Filter is a Kaiser FIR by design;
 see [Not validated](#not-validated-and-why).
 
-### A template per chapter, in `templates/luck`
+### A template per chapter, in `library/templates/luck`
 
 Seven chapters ship a ready template, so opening `ChapterN.wksp` and applying
 the matching `.alztemplate` builds that chapter's pipeline in one action. They
-live together in [`templates/luck/`](../templates/luck) rather than beside
+live together in [`library/templates/luck/`](../library/templates/luck) rather than beside
 each chapter's data, because `Data/` is gitignored and a template that only
 exists on the machine that made it is no use to anyone. Named chapter-first so
 a file dialog lists them in the book's own order:
@@ -1113,8 +1159,8 @@ gitignored, so a fresh clone has the seven templates but no recordings: run
 template names a file, so each one applies to whichever dataset the branch
 you drop it on already holds.
 
-`N400.alztemplate` and `N400-complete.alztemplate` sit in `templates/` itself
-rather than in `templates/luck/`: they are cross-chapter walkthroughs rather
+`N400.alztemplate` and `N400-complete.alztemplate` sit in `library/templates/` itself
+rather than in `library/templates/luck/`: they are cross-chapter walkthroughs rather
 than any one chapter's recipe.
 
 **Two caveats worth knowing before trusting a rejection count.**
@@ -1307,6 +1353,13 @@ Alakazam/ERPLAB ratio has a median of exactly 1.00000000, which also rules out
 the obvious suspect: this is not an N versus N-1 normalisation that happens to
 be close, the two formulas are the same formula.
 
+This comparison was made on 12 September 2026. On 26 September a defect in
+Average was fixed (manual issue M1): when rejection had left NaN trials in a
+bin, Average divided its standard error and aSME by every trial in the bin
+rather than by the trials kept, and counted the rejected ones. Dividing by the
+trials kept is ERPLAB's rule too, so the fix should leave the agreement above
+as it is, but the comparison has not been re-run since.
+
 `Baseline Measure - SD` has no Alakazam counterpart (it is the SD across the
 baseline samples of the averaged waveform, not a measurement error), but it is
 a fresh function of the average, so reproducing it to 1.8e-05 uV re-confirms
@@ -1434,7 +1487,9 @@ number.
   deliberately different designs and cannot agree numerically, so there is no
   meaningful bit comparison to make. Validating Alakazam's filter means
   checking its realised magnitude response against its design specification,
-  not against `pop_basicfilter`.
+  not against `pop_basicfilter`. That check is now a test (`FilterTest`: the
+  realised gain is one half at each cutoff, and the plotted response is what
+  the filter does to a sinusoid), and the Filter dialog draws the response.
 - **ICA correction (Ch 9), and Ch 6's `*_P3_corrected.set`.** The data ships
   only corrected outputs, with no matching uncorrected file, so there is no
   single-step pair to compare.
@@ -1463,13 +1518,13 @@ alternative to check against it.
 | Channel / coordinate editor (Ch 5) | implemented | no reference pair | ChannelEditor: labels, types, X/Y/Z, 10-5 lookup, montage load |
 | Resampling (Ch 5) | implemented | wraps `pop_resample` | Resample (`pop_resample`), continuous |
 | Bins + averaging + baseline (Ch 6) | implemented | **yes**: bins exact, averages to 0.0004 uV | bin language + BDF import + difference bins |
-| Data quality / aSME (Ch 6) | implemented | **yes**: all 1080 aSME values match ERPLAB to 1.3e-05 uV | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
+| Data quality / aSME (Ch 6) | implemented | **yes**: all 1080 aSME values match ERPLAB to 1.3e-05 uV (measured before the M1 fix, not re-run) | analytic aSME + standard-error band + trial counts; Data Quality Report adds per-window SME, flagged-trial counts per channel, and dependability where per-trial scores exist |
 | EEG inspection (Ch 7) | implemented | n/a, a view | SignalView / EpochView |
 | Bad-channel interpolation (Ch 7) | implemented | **yes, bit-identical** | Interpolate (`pop_interp`): spline / invdist / spacetime |
 | Artifact detection (Ch 8) | implemented | **yes**, after fixing a tail blind spot; now catches one artefact ERPLAB misses | ArtefactDetect: absolute, step, moving-window p2p, sample-to-sample (multi-select); scope = whole epoch / this channel / interpolate, tested over all channels or scalp EEG only |
 | ICA artifact correction (Ch 9) | implemented | no reference pair (only corrected files ship) | automatic (AutoICA) + manual component removal (ICA), both ICLabel |
 | Amplitude / latency scoring (Ch 10) | implemented | **yes**: mean/peak amplitude, peak latency and area exact; fractional latencies within one sample, and where they differ Alakazam is the correct one | ERP Measure, incl. fractional-area latency |
-| Inferential statistics (Ch 10) | implemented | not yet | design-aware Quarto report (waveforms, estimation panels, single-trial mixed models, primary/secondary correction) + auto-generated R script + tidy CSV |
+| Inferential statistics (Ch 10) | implemented | not yet | design-aware Quarto report (waveforms, one test per comparison with effect size and Bayes factor, mixed models, single-trial models, primary/secondary correction), editable, + tidy CSV |
 | Reproducible pipeline (Ch 11) | implemented | n/a | templates + Recalculate |
 | MATLAB scripting (Ch 11) | implemented | n/a | exported MATLAB script naming EEGLAB's own functions where faithful (`pop_resample`, `pop_reref`, `pop_interp`, `pop_select`), plus templates and Recalculate |
 
@@ -1479,14 +1534,13 @@ pipeline: import, filtering, referencing, montage editing and resampling,
 bad-channel interpolation, bin definition, artifact detection, ICA correction
 (automatic and manual), epoching, averaging, grand-averaging, data quality (aSME),
 amplitude/latency scoring, and export, with a design-aware statistical report
-and a generated script for the statistics, and every chapter has a ready
-workspace over the real data.
+you can edit, and every chapter has a ready workspace over the real data.
 
 "Has a step for" is not "gets the same answer as", and the section above is the
 attempt to tell the two apart. Where Luck's data contains a single-step
 reference, the answer is now encouraging: referencing and interpolation are
 bit-identical, bin assignment matches BINLISTER on every one of 642 events, and
-the whole bin-to-average chain reproduces a published `.erp` to 0.0004 uV. That
+the whole bin-to-average chain reproduces a published `.erp` to 0.0004 uV.
 Measurement and data quality now check out against ERPLAB itself: mean and
 peak amplitude, peak latency and area are exact, and all 1080 of a subject's
 aSME values match to 1.3e-05 uV. That exercise also found two real bugs in

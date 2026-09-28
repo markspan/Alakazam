@@ -158,7 +158,9 @@ With **Average** and **Reconstruct implicit reference channel**, `pop_reref`
 averages over the recorded channels only, and the reconstructed channel is
 then placed relative to that average. The result is not a true average
 reference over all N+1 sites: the channels no longer sum to zero, and the
-subtracted average is N/(N+1) of what it should be (3% at 32 channels).
+subtracted average is (N+1)/N of what it should be (3% too large at 32
+channels; corrected 2026-09-28, the ratio was first written the wrong way
+round).
 EEGLAB's advice is to add the reference channel back first and then average.
 The manual documents a workaround (ReRef twice: first any reference with the
 channel reconstructed, then Average). **Decision needed:** leave as is, or

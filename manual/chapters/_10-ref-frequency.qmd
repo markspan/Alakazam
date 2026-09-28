@@ -52,7 +52,12 @@ channels** can be defined in a `let` field as in Derive Channels
 choice. **Save** and **Load** write and read a window set as an `.alm` file;
 Load adds to the table, so a battery can be assembled from several files.
 Ready-made sets for P1, N170, P2, MMN, visual MMN, N2, P300, N400, LPP, LRP
-and ERN are included, each at its customary site and window.
+and ERN are in the library (@sec-library), where Load opens the first time.
+Each says where its window and site come from and how it compares with that
+source: the P300 and LRP sets match ERP CORE [@kappenman2021], the N400 set
+takes its window but measures at Cz where ERP CORE uses CPz, and the MMN set
+uses 150 to 250 ms where ERP CORE uses 125 to 225 ms. Choose windows before
+looking at your data, and from a source you can cite.
 
 When a Measure result is drawn, the measurements are marked on the
 waveforms: a dot at a peak, the area shaded, a level line at a mean, and a

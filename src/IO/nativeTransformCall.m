@@ -40,8 +40,10 @@ function lines = nativeTransformCall(transformId, params, inputVar, outputVar)
 %   A SelectData carrying a time, point or trial range converts units
 %   (the dialog collects milliseconds on epoched data, pop_select always
 %   wants seconds), and restating a conversion is how two routes quietly
-%   disagree. Those keep the transformation call and a comment naming the
-%   library that does the work (see exportAnalysisScript's libraryNote).
+%   disagree. A ReRef that reconstructs an implicit reference inserts that
+%   channel before pop_reref runs (see rerefCall). Those keep the
+%   transformation call and a comment naming the library that does the work
+%   (see exportAnalysisScript's libraryNote).
 %
 %   See also EXPORTANALYSISSCRIPT, MATLABLITERAL,
 %   NATIVEEXPORTEQUIVALENCETEST.
@@ -92,8 +94,18 @@ function lines = rerefCall(params, inputVar, outputVar)
 %   The assert is not decoration: pop_reref reads an empty reference as
 %   "average reference" and would silently apply one, which is exactly the
 %   case ReRef refuses with an error.
+%
+%   A RECONSTRUCTED IMPLICIT REFERENCE HAS NO NATIVE SPELLING. ReRef then
+%   inserts the reference as a flat channel beside its nearest template
+%   neighbour before pop_reref, so an average reference includes it, and
+%   positions it afterwards. A bare pop_reref would drop the channel and,
+%   under an average reference, subtract a different average, so the step
+%   keeps ReRef's own call.
     lines = {};
     if ~isfield(params, 'mode') || isempty(params.mode)
+        return;
+    end
+    if isfield(params, 'implicitRef') && ~isempty(strtrim(char(string(params.implicitRef))))
         return;
     end
     keepref = 'off';

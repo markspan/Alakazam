@@ -1,5 +1,5 @@
 classdef FaceSaccadesTemplateTest < matlab.unittest.TestCase
-%FACESACCADESTEMPLATETEST  templates/FaceSaccadesDeconvolution.alztemplate,
+%FACESACCADESTEMPLATETEST  library/templates/FaceSaccadesDeconvolution.alztemplate,
 %   the analysis of Ehinger & Dimigen (2019, PeerJ, Fig. 11) on their face
 %   data (Data/opendata, not under version control).
 %
@@ -98,7 +98,7 @@ classdef FaceSaccadesTemplateTest < matlab.unittest.TestCase
         %READTEMPLATENODES  The node list as a cell array, parsed as
         %   Alakazam.readTemplate reads a version-2 template.
             root = fileparts(fileparts(mfilename('fullpath')));
-            file = fullfile(root, 'templates', testCase.TemplateFile);
+            file = fullfile(root, 'library', 'templates', testCase.TemplateFile);
             testCase.assertTrue(isfile(file), sprintf('Template not found: %s', file));
             raw = jsondecode(fileread(file));
             testCase.assertTrue(isfield(raw, 'nodes'), 'Template has no "nodes" list.');

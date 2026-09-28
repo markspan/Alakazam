@@ -6,6 +6,12 @@
     "meaning": "Reflects context updating in working memory and the allocation of attentional resources to stimulus evaluation. Amplitude grows with stimulus salience and rarity; latency tracks evaluation and categorisation time.",
     "task": "Oddball paradigms (rare targets among frequent standards), memory-updating and dual-task workload designs."
   },
+  "source": {
+    "reference": "Kappenman, E. S., Farrens, J. L., Zhang, W., Stewart, A. X., & Luck, S. J. (2021). ERP CORE: An open resource for human event-related potential research. NeuroImage, 225, 117465. With Luck, S. J. Applied Event-Related Potential Data Analysis. LibreTexts.",
+    "doi": "https://doi.org/10.1016/j.neuroimage.2020.117465",
+    "agreement": "matches",
+    "note": "ERP CORE and Luck's chapter 6 template (library/templates/luck/ch06-P3b.alztemplate) measure the P3b from 300 to 600 ms at Pz; ERP CORE found similar amplitudes at CPz and chose Pz as the site most used in the literature."
+  },
   "rows": [
     {
       "label": "P300",
