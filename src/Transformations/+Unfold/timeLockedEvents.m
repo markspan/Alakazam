@@ -102,12 +102,17 @@ function lags = lagsNearest(from, to, target)
 %   0 that is simply the nearest event. Signed, so a code that always
 %   follows by the same amount reads as one constant lag rather than two
 %   alternating ones.
-    lags = zeros(1, numel(from));
-    for k = 1:numel(from)
-        differences = from(k) - to;
-        [~, at] = min(abs(differences - target));
-        lags(k) = differences(at);
-    end
+%
+%   The partner closest to a time is found by sorting TO once: each partner
+%   owns the stretch of time up to halfway to its neighbours, so the one a
+%   time falls in is the nearest (discretize). That keeps the search linear
+%   in the events instead of comparing every event with every other: free
+%   viewing has thousands of saccades and fixations, and the dialog asks
+%   again on every change.
+    partners = unique(to);          % sorted; a repeated latency is one partner
+    edges = [-Inf, (partners(1:end - 1) + partners(2:end)) / 2, Inf];
+    nearest = discretize(from - target, edges);
+    lags = from - partners(nearest);
 end
 
 function text = noteFor(pair, otherIsCode)
