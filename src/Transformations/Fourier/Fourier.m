@@ -65,7 +65,10 @@ function [ output, options ] = Fourier( varargin )
 %         TransTools.WindowByName for the full list).
 %       - Window_Length : Length of the windowing function in percentage.
 %       - Resolution : Resolution mode ('Max' or 'Other').
-%       - ResVal : Resolution value (Hz) for the 'Other' mode.
+%       - ResVal : Resolution value (Hz) for the 'Other' mode. The spacing
+%         is at most ResVal (the FFT length is a power of two), and never
+%         coarser than the segment's own: a whole segment is always
+%         transformed, zero-padded when ResVal asks for a finer spacing.
 %
 %   Notes:
 %   ------
@@ -183,11 +186,16 @@ fullwin = [prev(1:floor(length(prev)/2)); additional; prev(floor(length(prev)/2+
 fullwin = fullwin(1:nsamp);
 
 %--------------------------------------------------------------------------
-if (strcmpi(options.Resolution, 'Max'))   
-    NFFT = 2^nextpow2(nsamp); 
-end
-if (strcmpi(options.Resolution, 'Other')) 
-    NFFT = 2^nextpow2(floor(input.srate/options.ResVal)); 
+% THE FFT LENGTH. Max: the segment's own length, padded to a power of two.
+% Other: the length that gives the requested spacing, but never shorter than
+% the segment. fft(x, NFFT) with NFFT below the segment's length transforms
+% only its first NFFT samples, so a spacing coarser than the segment's own
+% silently dropped the rest of every segment (at 200 Hz, a 1 s segment and
+% 2 Hz, 72 of its 200 samples; manual issue M9). Such a spacing is padded up
+% to the segment's own instead, which is then the same as Max.
+NFFT = 2^nextpow2(nsamp);
+if strcmpi(options.Resolution, 'Other')
+    NFFT = max(NFFT, 2^nextpow2(floor(input.srate/options.ResVal)));
 end
 
 if strcmpi(options.Output, 'Complex')

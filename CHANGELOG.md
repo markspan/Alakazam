@@ -111,6 +111,11 @@ bar. Dates are those of the tag.
   sum to zero. Before, the subtracted average was N/(N + 1) of what it
   should be (3% at 32 channels). Specific-channel references are unchanged.
   Nodes computed before this fix keep the old result until recalculated.
+- **Fourier's Other resolution no longer drops samples.** A spacing coarser
+  than the segment's own made the transform shorter than the segment, which
+  used only its first samples, silently: at 200 Hz, a 1 s segment and 2 Hz,
+  the first 128 of 200. The transform is now padded to at least the
+  segment's length, so such a spacing gives the same spectrum as Max.
 - The time-frequency and coherence views leave a cell with no value blank,
   as the ERP image already did for a rejected trial, instead of drawing it
   as the strongest decrease or as no coherence.
