@@ -4,6 +4,23 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Fixed
+
+- **Export as Code wrote a ReRef that reconstructs an implicit reference as a
+  plain `pop_reref`**, which drops the reconstructed channel and, under an
+  average reference, subtracts a different average. Such a step now keeps
+  ReRef's own call in the script, as Filter does.
+
+### Documentation
+
+- The documents in `Docs/` are brought up to date: the transformation
+  provenance re-verified for all 35 transformations, the RIFT companion with
+  RESS and the current templates, and the Luck companion with the current
+  ribbon, report and data download. The fifth pass of the capability review
+  is added as `Docs/where-alakazam-stands.md`.
+
 ## V0.4.4.3 (2026-09-28)
 
 ### Documentation
