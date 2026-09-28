@@ -16,6 +16,9 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- The Filter dialog plots the impulse response of the ticked filters
+  together under the three filters, with its length, from the same kernels
+  the step applies, and redraws it as the settings change.
 - The continuous view marks every sample with a small filled circle once it
   is zoomed in far enough that each sample has two pixels or more to itself;
   an overlaid recording is marked by its own sampling rate.
@@ -28,6 +31,12 @@ bar. Dates are those of the tag.
   as new files after a pull.
 - The Photodiode picture in the manual shows a recording with a diode
   patch; it is taken by hand, so the capture tool no longer makes it.
+
+### Fixed
+
+- The Filter dialog did not open for settings that stored a filter which is
+  off with a frequency or attenuation of 0, as a script does; it now falls
+  back to the defaults for those fields.
 
 ## V0.4.4.2 (2026-09-28)
 

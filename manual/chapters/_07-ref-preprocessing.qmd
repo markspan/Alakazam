@@ -275,7 +275,12 @@ response, and its ringing can pass for an oscillation. A methods section
 should therefore describe each filter in enough detail to reproduce it,
 ideally with a plot of its impulse or step response [@decheveigne2019]; the
 type, cutoff, transition band and order in @tbl-filter-design are the
-details to give.
+details to give. The dialog draws that plot: under the three filters it
+shows the impulse response of the ticked ones together, centred on the
+impulse, with its length, and redraws it whenever a filter is ticked or a
+frequency or attenuation changes. It is computed from the same kernels the
+step applies, so it is the response of the filtering that is done; with a
+0.1 Hz high-pass it is 25 seconds long, which is the plot's first lesson.
 
 ## DC-Detrend {#sec-tr-dcdetrend}
 

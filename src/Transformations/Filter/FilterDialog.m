@@ -22,6 +22,14 @@ function options = FilterDialog(srate, labels, stored)
 %       panel above, right now" action.
 %   Everything else about the FIR design is worked out by Filter.m.
 %
+%   In global mode, a small plot under the three filters shows the impulse
+%   response of the enabled ones together (filterImpulseResponse, from the
+%   same kernels Filter applies), with its length, and is redrawn whenever a
+%   filter is ticked or a frequency or dB changes: how far one sample is
+%   smeared and what ringing the filters add, which a methods section should
+%   report alongside the settings. A setting Filter would refuse is shown
+%   there instead, with the reason.
+%
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
 %   channel labels (for the per-channel table); STORED a previous run's options
 %   (or [] on first use). Returns the options struct (.perChannel, the global
@@ -51,7 +59,7 @@ function options = FilterDialog(srate, labels, stored)
     % visibility and even row HEIGHT change at runtime (see refreshMode),
     % which is only safe to reason about when nothing relies on an
     % implicit "next slot" placement alongside them.
-    outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
+    outer = uigridlayout(root, [7 1], 'RowHeight', {'fit', 'fit', 'fit', 190, 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
 
     descLabel = uilabel(outer, 'Text', [ ...
         'FIR windowed-sinc, zero-phase filtering. Give each filter a frequency and a dB rating ' ...
@@ -79,27 +87,40 @@ function options = FilterDialog(srate, labels, stored)
         cb = uicheckbox(globalPanel, 'Text', rowDefs(i).label, 'Value', seed.(key).enabled);
         f  = uieditfield(globalPanel, 'numeric', 'Value', seed.(key).freq, 'Limits', [0 Inf], 'LowerLimitInclusive', 'off');
         d  = uieditfield(globalPanel, 'numeric', 'Value', seed.(key).db,   'Limits', [0 Inf], 'LowerLimitInclusive', 'off');
-        cb.ValueChangedFcn = @(src, ~) setRowEnabled(f, d, src.Value);
+        cb.ValueChangedFcn = @(src, ~) onFilterToggled(f, d, src.Value);
+        f.ValueChangedFcn = @(~, ~) updateResponse();
+        d.ValueChangedFcn = @(~, ~) updateResponse();
         setRowEnabled(f, d, cb.Value);
         ctl.(key) = struct('cb', cb, 'freq', f, 'db', d);
     end
 
-    % --- "Copy settings" (row 4, per-channel mode only) ---
+    % --- Impulse response of the global filters together (row 4, global
+    % mode only; the per-channel table has a filter per channel instead) ---
+    responsePanel = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, ...
+        'RowSpacing', 2, 'Padding', [0 0 0 0]);
+    responsePanel.Layout.Row = 4;
+    responseCaption = uilabel(responsePanel, 'Text', '', 'WordWrap', 'on', 'FontSize', 11, ...
+        'Tag', 'ResponseCaption');
+    responseAxes = uiaxes(responsePanel, 'FontSize', 9, 'Tag', 'ResponseAxes');
+    xlabel(responseAxes, 'Time (s)');
+    box(responseAxes, 'on');
+
+    % --- "Copy settings" (row 5, per-channel mode only) ---
     copyRow = uigridlayout(outer, [1 2], 'ColumnWidth', {140, '1x'}, 'Padding', [0 0 0 0]);
-    copyRow.Layout.Row = 4;
+    copyRow.Layout.Row = 5;
     uibutton(copyRow, 'Text', 'Copy settings', ...
         'Tooltip', 'Copy the panel above to every channel below, replacing its current settings.', ...
         'ButtonPushedFcn', @(~, ~) onCopySettings());
     uilabel(copyRow, 'Text', '');
 
-    % --- Per-channel table (row 5, per-channel mode only) ---
+    % --- Per-channel table (row 6, per-channel mode only) ---
     chanTable = uitable(outer, 'ColumnName', COLS, 'ColumnEditable', [false true(1, 9)], ...
         'ColumnFormat', {'char', 'logical', 'numeric', 'numeric', 'logical', 'numeric', 'numeric', 'logical', 'numeric', 'numeric'}, ...
         'Data', seedTable(labels, seed, stored));
-    chanTable.Layout.Row = 5;
+    chanTable.Layout.Row = 6;
 
     buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, 'Padding', [0 4 0 0]);
-    buttons.Layout.Row = 6;
+    buttons.Layout.Row = 7;
     uilabel(buttons, 'Text', '');
     uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~, ~) onCancel());
     uibutton(buttons, 'Text', 'OK', 'BackgroundColor', accentColor, ...
@@ -107,6 +128,7 @@ function options = FilterDialog(srate, labels, stored)
     fig.CloseRequestFcn = @(~, ~) onCancel();
 
     refreshMode();
+    updateResponse();
     uiwait(fig);
 
     function refreshMode()
@@ -115,15 +137,45 @@ function options = FilterDialog(srate, labels, stored)
         % there would hide the very thing that button reads from.
         per = logical(perChanBox.Value);
         onoff = {'on', 'off'};
-        copyRow.Visible   = onoff{2 - per};
-        chanTable.Visible = onoff{2 - per};
+        copyRow.Visible       = onoff{2 - per};
+        chanTable.Visible     = onoff{2 - per};
+        responsePanel.Visible = onoff{1 + per};
         if per
-            outer.RowHeight{4} = 'fit';
-            outer.RowHeight{5} = '1x';
-        else
             outer.RowHeight{4} = 0;
+            outer.RowHeight{5} = 'fit';
+            outer.RowHeight{6} = '1x';
+        else
+            outer.RowHeight{4} = 190;
             outer.RowHeight{5} = 0;
+            outer.RowHeight{6} = 0;
         end
+    end
+
+    function onFilterToggled(freqField, dbField, on)
+        setRowEnabled(freqField, dbField, on);
+        updateResponse();
+    end
+
+    function updateResponse()
+    %UPDATERESPONSE  Redraw the impulse response of the ticked filters, or
+    %   say why it cannot be drawn: none ticked, or a setting Filter would
+    %   refuse (the message is Filter's own).
+        cla(responseAxes);
+        try
+            [t, h] = filterImpulseResponse(currentGlobalSeed(), srate);
+        catch err
+            responseCaption.Text = err.message;
+            return;
+        end
+        if isscalar(h)
+            responseCaption.Text = 'No filter is ticked, so the data are left as they are.';
+            return;
+        end
+        plot(responseAxes, t, h, 'Color', accentColor, 'LineWidth', 1);
+        xlim(responseAxes, [t(1), t(end)]);
+        responseCaption.Text = sprintf(['Impulse response of the ticked filters together: ' ...
+            '%d samples, %.3g s at %g Hz, centred on the impulse (zero-phase).'], ...
+            numel(h), numel(h) / srate, srate);
     end
 
     function onCopySettings()
@@ -284,8 +336,12 @@ function seed = mergeSeed(defaults, stored)
         if isfield(stored, k) && isstruct(stored.(k))
             s = stored.(k);
             if isfield(s, 'enabled'); seed.(k).enabled = logical(s.enabled); end
-            if isfield(s, 'freq') && isnumeric(s.freq) && ~isempty(s.freq); seed.(k).freq = s.freq; end
-            if isfield(s, 'db')   && isnumeric(s.db)   && ~isempty(s.db);   seed.(k).db   = s.db;   end
+            % Only a positive value is taken: the fields refuse 0, and a
+            % filter that is off is often stored with 0 by a script (Filter
+            % never reads the numbers of a filter that is off), which used
+            % to stop this dialog from opening at all.
+            if isfield(s, 'freq') && isnumeric(s.freq) && isscalar(s.freq) && s.freq > 0; seed.(k).freq = s.freq; end
+            if isfield(s, 'db')   && isnumeric(s.db)   && isscalar(s.db)   && s.db > 0;   seed.(k).db   = s.db;   end
         end
     end
 end

@@ -107,62 +107,17 @@ function labels = channelLabels(EEG)
 end
 
 function EEG = applyFir(EEG, type, freq, db, chanind)
-%APPLYFIR  Design a Kaiser windowed-sinc FIR for one filter (from FREQ and DB)
-%   and apply it zero-phase with EEGLAB's firfilt. CHANIND (a channel index, or
-%   [] for all channels) limits the filter to one channel for per-channel mode.
-    srate = EEG.srate;
-    nyq   = srate / 2;
-    freq  = double(freq);
-    db    = double(db);
-    if ~(freq > 0 && freq < nyq)
-        throw(MException('Alakazam:Filter', sprintf( ...
-            'Problem in Filter: the %s frequency (%.4g Hz) needs to sit between 0 and the Nyquist frequency (%.4g Hz) -- would you choose a value in that range?', ...
-            type, freq, nyq)));
-    end
-    if ~(db > 0)
-        throw(MException('Alakazam:Filter', ...
-            'Problem in Filter: the %s dB rating needs to be a positive number (the stopband attenuation) -- could you check that value?', type));
-    end
+%APPLYFIR  Design a Kaiser windowed-sinc FIR for one filter (from FREQ and DB,
+%   see designFilterKernel) and apply it zero-phase with EEGLAB's firfilt.
+%   CHANIND (a channel index, or [] for all channels) limits the filter to one
+%   channel for per-channel mode.
+    b = designFilterKernel(type, freq, db, EEG.srate);
 
-    dev  = 10 ^ (-db / 20);          % stopband deviation from the dB rating
-    beta = kaiserbeta(dev);          % EEGLAB firfilt helper
-
-    switch type
-        case 'high'
-            df    = min(max(freq * 0.25, 1), freq * 0.9);
-            fc    = freq / nyq;
-            ftype = 'high';
-        case 'low'
-            df    = min(max(freq * 0.25, 2), (nyq - freq) * 0.9);
-            fc    = freq / nyq;
-            ftype = '';              % lowpass (no type token)
-        case 'notch'
-            hbw = 1;                 % half stop-band width (Hz)
-            df  = 1;                 % transition bandwidth (Hz)
-            if freq - hbw <= 0 || freq + hbw >= nyq
-                throw(MException('Alakazam:Filter', ...
-                    'Problem in Filter: I''m afraid the notch frequency (%.4g Hz) sits too close to 0 or to Nyquist for a %.4g Hz notch.', ...
-                    freq, 2 * hbw));
-            end
-            fc    = [(freq - hbw) / nyq, (freq + hbw) / nyq];
-            ftype = 'stop';
-    end
-
-    m = firwsord('kaiser', srate, df, dev);   % order from transition bw + deviation
-    m = m + mod(m, 2);                         % firws needs an even order
-    w = windows('kaiser', m + 1, beta);
-
-    if m + 1 > size(EEG.data, 2)
+    if numel(b) > size(EEG.data, 2)
         throw(MException('Alakazam:Filter', sprintf([ ...
             'Problem in Filter: the %s filter needs %d samples, but this data is only %d long. ' ...
             'Filtering the continuous recording before epoching would help, or you could raise the cutoff or lower the dB.'], ...
-            type, m + 1, size(EEG.data, 2))));
-    end
-
-    if isempty(ftype)
-        b = firws(m, fc, w);
-    else
-        b = firws(m, fc, ftype, w);
+            type, numel(b), size(EEG.data, 2))));
     end
     EEG = firfiltBins(EEG, b, chanind);
 end

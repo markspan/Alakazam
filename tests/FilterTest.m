@@ -269,6 +269,128 @@ classdef FilterTest < matlab.unittest.TestCase
                 'notch', struct('enabled', false, 'freq', 0, 'db', 0));
             testCase.verifyError(@() Filter(EEG, opts), 'Alakazam:Filter');
         end
+
+        % ---- the impulse response the dialog plots ------------------------
+        function theImpulseResponseIsWhatFilterDoesToAnImpulse(testCase)
+        %THEIMPULSERESPONSEISWHATFILTERDOESTOANIMPULSE  The dialog plots
+        %   filterImpulseResponse; this pins that plot to the step itself.
+        %   Filtering a single impulse with all three filters must give
+        %   exactly that response, centred on the impulse.
+            srate = 250;
+            n = 3001;
+            centre = 1501;
+            EEG = struct('data', zeros(1, n), 'srate', srate, 'nbchan', 1, 'trials', 1, ...
+                'pnts', n, 'event', struct('type', {}, 'latency', {}), ...
+                'chanlocs', struct('labels', {'Ch1'}));
+            EEG.data(centre) = 1;
+            opts = filterOptions([1 40], [30 40], [50 40]);
+
+            [t, h] = filterImpulseResponse(opts, srate);
+            half = (numel(h) - 1) / 2;
+            testCase.assertLessThan(numel(h), n, 'The fixture must be longer than the response.');
+            result = Filter(EEG, opts);
+
+            testCase.verifyEqual(result.data(centre - half:centre + half), h, 'AbsTol', 1e-9, ...
+                'The plotted response must be what Filter does to an impulse.');
+            testCase.verifyEqual(t(half + 1), 0, 'AbsTol', 1e-12, 'The response is centred on the impulse.');
+            testCase.verifyEqual(h, fliplr(h), 'AbsTol', 1e-12, 'Zero-phase: the response is symmetric.');
+        end
+
+        function aLowPassPassesDCAndAHighPassBlocksIt(testCase)
+        %ALOWPASSPASSESDCANDAHIGHPASSBLOCKSIT  The sum of an impulse response
+        %   is its gain at 0 Hz: about 1 for a low-pass, about 0 for a
+        %   high-pass, within the stopband deviation of 40 dB (0.01).
+            [~, low] = filterImpulseResponse(filterOptions([], [30 40], []), 250);
+            [~, high] = filterImpulseResponse(filterOptions([1 40], [], []), 250);
+            testCase.verifyEqual(sum(low), 1, 'AbsTol', 0.02);
+            testCase.verifyEqual(sum(high), 0, 'AbsTol', 0.02);
+        end
+
+        function withNoFilterTheResponseIsTheImpulse(testCase)
+            [t, h] = filterImpulseResponse(filterOptions([], [], []), 250);
+            testCase.verifyEqual(h, 1);
+            testCase.verifyEqual(t, 0);
+        end
+
+        function aSettingFilterRefusesIsRefusedHereToo(testCase)
+            testCase.verifyError(@() filterImpulseResponse(filterOptions([125 40], [], []), 250), ...
+                'Alakazam:Filter');
+        end
+    end
+
+    methods (Test, TestTags = {'Slow'})
+        function theDialogPlotsTheResponseAndFollowsTheSettings(testCase)
+        %THEDIALOGPLOTSTHERESPONSEANDFOLLOWSTHESETTINGS  The dialog is modal,
+        %   so a timer finds it, reads the plot, unticks the high-pass, reads
+        %   it again, and presses Cancel. The timer repeats until the dialog
+        %   is up, so the test does not depend on how long that takes.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'Support')));
+            try
+                probe = uifigure('Visible', 'off');
+                delete(probe);
+            catch ME
+                testCase.assumeFail(['A uifigure could not be created here: ' ME.message]);
+            end
+            srate = 250;
+            stored = filterOptions([1 40], [30 40], []);
+            [~, both] = filterImpulseResponse(stored, srate);
+            [~, lowOnly] = filterImpulseResponse(filterOptions([], [30 40], []), srate);
+
+            seen = struct('both', [], 'lowOnly', [], 'caption', '');
+            timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
+                'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
+            cleanup = onCleanup(@() cleanupTimer(timerObj));
+            start(timerObj);
+            FilterDialog(srate, {'Ch1', 'Ch2'}, stored);
+            clear cleanup;
+
+            testCase.verifyEqual(seen.both, numel(both), 'The plot shows both filters together.');
+            testCase.verifySubstring(seen.caption, sprintf('%d samples', numel(both)));
+            testCase.verifyEqual(seen.lowOnly, numel(lowOnly), 'Unticking the high-pass redraws it.');
+
+            function drive(src)
+                f = findall(groot, 'Type', 'figure', 'Name', 'Filter');
+                if isempty(f)
+                    return;   % not up yet: the timer comes back
+                end
+                stop(src);
+                axesOf = findall(f(1), 'Tag', 'ResponseAxes');
+                seen.both = numel(findobj(axesOf, 'Type', 'line').XData);
+                seen.caption = findall(f(1), 'Tag', 'ResponseCaption').Text;
+                highPass = findall(f(1), 'Type', 'uicheckbox', 'Text', 'High-pass');
+                highPass.Value = false;
+                highPass.ValueChangedFcn(highPass, []);
+                seen.lowOnly = numel(findobj(axesOf, 'Type', 'line').XData);
+                cancel = findall(f(1), 'Type', 'uibutton', 'Text', 'Cancel');
+                cancel(1).ButtonPushedFcn(cancel(1), []);
+            end
+        end
+    end
+end
+
+function opts = filterOptions(highpass, lowpass, notch)
+%FILTEROPTIONS  Filter's global options: each argument [freq db] enables that
+%   filter, [] leaves it off.
+    opts = struct();
+    names = {'highpass', 'lowpass', 'notch'};
+    given = {highpass, lowpass, notch};
+    for k = 1:3
+        if isempty(given{k})
+            opts.(names{k}) = struct('enabled', false, 'freq', 0, 'db', 0);
+        else
+            opts.(names{k}) = struct('enabled', true, 'freq', given{k}(1), 'db', given{k}(2));
+        end
+    end
+end
+
+function cleanupTimer(t)
+    try
+        stop(t);
+        delete(t);
+    catch
+        % Already gone.
     end
 end
 
