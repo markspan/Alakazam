@@ -6,12 +6,12 @@ function overlayAverage(this, targetEEG, sourceEEG)
 %   AlakazamPlotter.plotCurrent).
 %
 %   The lines are named by where each dataset sits in the tree
-%   (erpTreePath), and when the two cannot share the axes (no channel or
-%   time in common, see erpOverlayProblem) the user is told why. The drop
+%   (treePathOf), and when the two cannot share the axes (no channel or
+%   time in common, see datasetOverlayProblem) the user is told why. The drop
 %   is not turned into a replay instead: replaying Average onto an average
 %   could only fail.
 %
-%   See also ALAKAZAM.ONOVERLAYERP, ALAKAZAM.ISOVERLAYABLEAVERAGE, AVERAGEVIEW.
+%   See also ALAKAZAM.ONOVERLAY, ALAKAZAM.ISOVERLAYABLEAVERAGE, AVERAGEVIEW.
     existingTab = findobj(this.PlotsTabGroup.Children, 'flat', 'Tag', targetEEG.File);
     if isempty(existingTab)
         this.Workspace.EEG = targetEEG;
@@ -26,8 +26,8 @@ function overlayAverage(this, targetEEG, sourceEEG)
 
     view = getappdata(existingTab(1), "AverageView");
     if ~isempty(view) && isvalid(view)
-        view.setDatasetPath(targetEEG.File, this.erpTreePath(targetEEG.File));
-        problem = view.addDataset(sourceEEG, this.erpTreePath(sourceEEG.File));
+        view.setDatasetPath(targetEEG.File, this.treePathOf(targetEEG.File));
+        problem = view.addDataset(sourceEEG, this.treePathOf(sourceEEG.File));
         if ~isempty(problem)
             uialert(this.MainFigure, sprintf('The dropped average cannot be overlaid on this plot. %s', ...
                 problem), 'Overlay on ERP plot', 'Icon', 'warning');

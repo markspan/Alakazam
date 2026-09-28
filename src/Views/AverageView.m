@@ -12,7 +12,7 @@ classdef AverageView < AlakazamView
 %   Each line keeps its own time axis and each channel is found by its label,
 %   so a resampled or re-referenced average overlays the original, and a
 %   montage in another order still shows the same electrode on every line
-%   (erpOverlayProblem says when an overlay is not possible). Lines are named
+%   (datasetOverlayProblem says when an overlay is not possible). Lines are named
 %   by what tells their datasets apart in the tree (overlayNames). Overlaid
 %   datasets are drawn underneath the plot's own and paler, by the Overlay
 %   opacity slider, so the plot's own lines stay readable, and Remove
@@ -27,7 +27,7 @@ classdef AverageView < AlakazamView
 %
 %   Style follows the project standard.
 %
-%   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW, ERPOVERLAYPROBLEM,
+%   See also ALAKAZAMPLOTTER, EPOCHVIEW, FOURIERVIEW, DATASETOVERLAYPROBLEM,
 %   OVERLAYNAMES.
 
     properties
@@ -113,7 +113,7 @@ classdef AverageView < AlakazamView
         %ADDDATASET  Overlay another averaged dataset.
         %   PROBLEM = addDataset(THIS, EEG, PATH) draws EEG's lines on these
         %   axes and returns '', or leaves the plot as it is and returns why:
-        %   no channel or time in common (erpOverlayProblem), or the dataset
+        %   no channel or time in common (datasetOverlayProblem), or the dataset
         %   is already here. PATH, optional, is the dataset's place in the
         %   tree (a cellstr of labels), which names its lines. EEG.id is just
         %   the transform name (e.g. "Average" for every averaged dataset in
@@ -144,7 +144,7 @@ classdef AverageView < AlakazamView
         function problem = overlayProblem(this, eeg)
         %OVERLAYPROBLEM  Why EEG cannot be overlaid here, or '' if it can.
             first = this.Series{1};
-            problem = erpOverlayProblem(first.labels, first.times, ...
+            problem = datasetOverlayProblem(first.labels, first.times, ...
                 {eeg.chanlocs.labels}, eeg.times);
         end
 

@@ -1,6 +1,6 @@
 function onContextMenuAction(this, eventData, sourceTree)
 %ONCONTEXTMENUACTION  Tree callback: dispatch a right-click context
-%   menu action (List events / Overlay on ERP plot / Rename / Recalculate /
+%   menu action (List events / Overlay on plot / Rename / Recalculate /
 %   Delete ...) --
 %   WorkSpaceTree has already selected EVENTDATA.NODE before invoking
 %   this, matching the old right-click-selects-first behaviour, so
@@ -12,8 +12,8 @@ function onContextMenuAction(this, eventData, sourceTree)
     switch eventData.Action
         case 'listEvents'
             this.onListEvents();
-        case 'overlayErp'
-            this.onOverlayErp();
+        case 'overlay'
+            this.onOverlay();
         case 'rename'
             this.onRenameNode();
         case 'recalculate'

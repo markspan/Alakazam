@@ -119,7 +119,7 @@ There are three ways out, in increasing order of ambition.
 step below it, onto the other recording, including branches where the
 analysis forked. One drag can reproduce a whole pipeline. As a special case,
 dropping one averaged dataset onto another overlays the two plots instead of
-transforming anything, as **Overlay on ERP plot** in its right-click menu
+transforming anything, as **Overlay on plot** in its right-click menu
 does: the quickest way to compare two conditions or two subjects on the same
 axes (@sec-overlay).
 

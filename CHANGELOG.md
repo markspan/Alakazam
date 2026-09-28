@@ -8,9 +8,13 @@ bar. Dates are those of the tag.
 
 ### Added
 
-- **Overlay on ERP plot**, in a node's right-click menu: draws an average's
+- **Overlay on plot**, in a node's right-click menu: draws an average's
   waveforms on the ERP plot in view, from either tree, to compare two
-  subjects, two conditions, or the same average before and after a step.
+  subjects, two conditions, or the same average before and after a step; or
+  a continuous recording under the continuous recording in view, each
+  channel in the lane of the channel with the same name, as a grey ghost.
+  Its **Difference** draws, in each lane, the recording minus the overlaid
+  one: what a filter or a cleaning step removed.
 - **Difference**: with exactly two lines ticked, the ERP plot draws the
   first minus the second (**Swap** reverses it), interpolating when the two
   were sampled differently.

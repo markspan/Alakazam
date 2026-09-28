@@ -156,6 +156,27 @@ which a plotting routine that subsamples would.
 Events are drawn as vertical lines with their codes; intervals marked by
 artefact detection are shaded.
 
+#### Overlaying a recording {#sec-overlay-continuous}
+
+To see what a step did to the raw signal, show the recording after the step,
+then right-click the recording before it (or any other continuous node) and
+choose **Overlay on plot**. It is drawn underneath as a grey ghost, each of
+its channels in the lane of the channel with the same name and at the same
+magnification, while the channels of the plot keep their colours. Its own
+time axis is used, so a resampled recording lines up with the original; two
+recordings with no channel in common, or that do not overlap in time, are
+refused with the reason. Dragging is not an overlay here: dropping a
+continuous node onto another replays its steps (@sec-replay).
+
+A row of controls appears under the sliders while a recording is overlaid:
+which recording it is, **opacity** (how dark the ghost is), **Difference**
+and **Remove overlay**. **Difference** draws, in each lane, the plot's
+recording minus the overlaid one, which is what a filter or a cleaning step
+removed; a channel the overlaid recording lacks is left empty. The difference
+is worked out from the raw samples in view, so zoomed out over a long
+recording it asks to be zoomed in first. One recording is overlaid at a
+time: overlaying another replaces it.
+
 ### Epoched data: the ERP image
 
 ![The ERP image of an epoched dataset at one channel: one row per trial, colour for amplitude, grouped by bin, and the trial average below.](images/definebins-result.jpg){#fig-erp-image}
@@ -209,7 +230,7 @@ The difference (below) keeps its own amplitude zoom.
 Two subjects, two conditions, or the same average before and after a
 preprocessing step are easiest to compare on the same axes. Show one ERP,
 then right-click another averaged node, in either tree, and choose
-**Overlay on ERP plot**: its waveforms are added to the ERP plot in view
+**Overlay on plot**: its waveforms are added to the ERP plot in view
 (the selected tab, or in a grid the tile last clicked). Dragging one average
 onto another does the same.
 

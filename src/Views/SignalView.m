@@ -18,6 +18,16 @@ classdef SignalView < AlakazamView
 %   time vector. Sampling is assumed uniform (as it is for EEGLAB continuous
 %   data). Overlays are read from eeg.event when present.
 %
+%   ANOTHER RECORDING CAN BE DRAWN UNDERNEATH (addDataset), to compare the
+%   same stretch before and after a step: each of its channels in the lane
+%   of the channel with the same name, at the same magnification, as a grey
+%   "ghost" whose strength the Overlay opacity slider sets (the channels
+%   themselves are already coloured). Its own time axis is used, so a
+%   resampled recording lines up. Difference draws, in each lane, this
+%   recording minus the other, from the raw samples of the visible window;
+%   zoomed out too far to do that quickly, it asks to be zoomed in. One
+%   recording is overlaid at a time; Remove overlay takes it off.
+%
 %   Style follows the project standard: UpperCamelCase class and properties,
 %   lowerCamelCase methods, double quotes except where a char array is required
 %   by a graphics API (HG property names in some legacy calls, cursor/label).
@@ -64,6 +74,22 @@ classdef SignalView < AlakazamView
         AxWidthCm = 100 % axes width in centimetres, refreshed every redraw
         ZoomDecay       % double, maps the zoom slider to a visible sample count
         MmPerSecDone = false % whether the initial mmPerSec zoom has been applied
+
+        OwnFile = ''            % EEG.File of the dataset drawn, when it has one
+        ChannelLabels = {}      % 1 x nchan, its channel labels
+        OverlaidDataset = []    % the recording drawn underneath (see addDataset), or []
+        OverlayOpacity = 0.5    % how dark the overlaid recording is drawn, 0.1 to 1
+        DifferenceOn = false    % drawing this recording minus the overlaid one?
+        OverlayRow              % uigridlayout: the overlay's controls, row 5
+        OverlayNameLabel        % uilabel, which recording is overlaid
+        OpacitySlider           % uislider, OverlayOpacity
+        DifferenceButton        % state uibutton
+        RemoveButton            % uibutton
+        DifferenceNote          % text in the axes: zoom in to see the difference
+    end
+
+    properties (Access = private)
+        Paths                   % containers.Map: dataset file -> its tree path (cellstr)
     end
 
     properties (Constant, Access = private)
@@ -73,6 +99,10 @@ classdef SignalView < AlakazamView
                                 % pages through them, showing this many at a time
         ChannelSliderPx = 18    % width of that scrollbar's column, pixels
         StepButtonPx = 16       % width of the pan step buttons, pixels
+        % Above this many samples x channels in view, the difference is not
+        % worked out (about 150 MB of doubles, and a second's work on every
+        % slider move): the window has to be narrowed first.
+        MaxDifferenceElements = 2e7
     end
 
     methods
@@ -94,6 +124,11 @@ classdef SignalView < AlakazamView
             end
             this.Parent  = parent;
             this.Options = opts;
+            this.Paths   = containers.Map('KeyType', 'char', 'ValueType', 'any');
+            if isfield(eeg, 'File') && ~isempty(eeg.File)
+                this.OwnFile = char(string(eeg.File));
+            end
+            this.ChannelLabels = channelLabelsOf(eeg, opts.AutoStackSignals);
 
             % Orient the signal as samples x channels (EEG.data is channels x
             % samples) and keep the matching time vector.
@@ -281,7 +316,111 @@ classdef SignalView < AlakazamView
             end
             this.applyYLim(yVis);
             this.updateScrollStep(numPoints);
+            this.drawOverlaid(startIndex, endIndex, targetColumns, scaleValue, xVis);
             this.drawOverlays(startTime, endTime);
+        end
+
+        function problem = addDataset(this, eeg, path)
+        %ADDDATASET  Draw another continuous recording underneath this one.
+        %   PROBLEM = addDataset(THIS, EEG, PATH) returns '' once EEG is drawn,
+        %   or leaves the view as it is and returns why not: no channel or
+        %   time in common (datasetOverlayProblem), or it is this recording or
+        %   the one already overlaid. An earlier overlay is replaced. PATH,
+        %   optional, is EEG's place in the tree (a cellstr of labels), which
+        %   names it (see setDatasetPath).
+            file = char(string(fieldOr(eeg, 'File', '')));
+            if ~isempty(file) && strcmp(file, this.OwnFile)
+                problem = 'It is this plot''s own dataset.';
+                return;
+            end
+            if ~isempty(this.OverlaidDataset) && ~isempty(file) ...
+                    && strcmp(file, this.OverlaidDataset.file)
+                problem = 'It is already on this plot.';
+                return;
+            end
+            labels = channelLabelsOf(eeg, string.empty);
+            times = double(eeg.times(:));
+            problem = datasetOverlayProblem(this.ChannelLabels, this.Time, labels, times, 's');
+            if ~isempty(problem)
+                return;
+            end
+
+            y = double(eeg.data);
+            if size(y, 1) ~= numel(times)
+                y = y.';
+            end
+            % Only the channels this plot has a lane for are kept.
+            matched = zeros(1, 0);
+            columns = zeros(1, 0);
+            for c = 1:numel(this.ChannelLabels)
+                k = find(strcmpi(strtrim(labels), strtrim(this.ChannelLabels{c})), 1);
+                if ~isempty(k)
+                    matched(end + 1) = c;   %#ok<AGROW>
+                    columns(end + 1) = k;   %#ok<AGROW>
+                end
+            end
+            y = y(:, columns);
+
+            this.removeOverlayLines();
+            lines = gobjects(1, numel(matched));
+            for j = 1:numel(matched)
+                lines(j) = line(this.Axes, nan, nan, "Color", this.ghostColour(), ...
+                    "LineWidth", 0.5, "Tag", "OverlayLine", "UserData", matched(j), ...
+                    "HitTest", "off", "PickableParts", "none");
+            end
+            uistack(lines, "bottom");   % underneath this recording's own lines
+            this.OverlaidDataset = struct('file', file, ...
+                'id', char(string(fieldOr(eeg, 'id', ''))), ...
+                'time', times, 'Y', y, 'period', median(diff(times), "omitnan"), ...
+                'pyramid', MinMaxPyramid(y), 'matched', matched, 'lines', lines, ...
+                'n', size(y, 1));
+            if nargin >= 3 && ~isempty(path) && ~isempty(file)
+                this.Paths(file) = cellstr(string(path));
+            end
+            this.DifferenceOn = false;
+            this.showOverlayRow();
+            this.redraw();
+        end
+
+        function setDatasetPath(this, file, path)
+        %SETDATASETPATH  Name FILE, this recording or the overlaid one, by
+        %   PATH, its place in the tree.
+            this.Paths(char(string(file))) = cellstr(string(path));
+            this.updateOverlayName();
+        end
+
+        function removeOverlays(this)
+        %REMOVEOVERLAYS  Take the overlaid recording off; this one is redrawn
+        %   as it was.
+            this.removeOverlayLines();
+            this.OverlaidDataset = [];
+            this.DifferenceOn = false;
+            this.Grid.RowHeight{5} = 0;
+            if ~isempty(this.OverlayRow) && isvalid(this.OverlayRow)
+                delete(this.OverlayRow);
+            end
+            this.OverlayRow = [];
+            this.notifyActivated();
+            this.redraw();
+        end
+
+        function setOverlayOpacity(this, value)
+        %SETOVERLAYOPACITY  How dark the overlaid recording is drawn (0.1 to 1).
+            this.OverlayOpacity = min(1, max(0.1, value));
+            if ~isempty(this.OverlaidDataset)
+                set(this.OverlaidDataset.lines, "Color", this.ghostColour());
+            end
+        end
+
+        function setDifference(this, on)
+        %SETDIFFERENCE  Draw this recording minus the overlaid one, or both.
+            this.DifferenceOn = logical(on) && ~isempty(this.OverlaidDataset);
+            if ~isempty(this.DifferenceButton) && isvalid(this.DifferenceButton)
+                this.DifferenceButton.Value = this.DifferenceOn;
+            end
+            this.updateOverlayName();
+            this.notifyActivated();
+            this.redraw();
         end
 
         function onWheel(this, callbackData)
@@ -327,8 +466,10 @@ classdef SignalView < AlakazamView
             if this.ChannelScroll
                 channelSliderCol = this.ChannelSliderPx;
             end
-            this.Grid = uigridlayout(this.Parent, [4 2], ...
-                "RowHeight", {'1x', this.SliderRowPx, this.SliderRowPx, this.SliderRowPx}, ...
+            % Row 5 holds an overlaid recording's controls, and has no height
+            % until there is one (see addDataset).
+            this.Grid = uigridlayout(this.Parent, [5 2], ...
+                "RowHeight", {'1x', this.SliderRowPx, this.SliderRowPx, this.SliderRowPx, 0}, ...
                 "ColumnWidth", {'1x', channelSliderCol}, ...
                 "Padding", [2 2 2 2], "RowSpacing", 2, "ColumnSpacing", 2);
             this.Axes = uiaxes(this.Grid, "TickLabelInterpreter", "none");
@@ -656,6 +797,197 @@ classdef SignalView < AlakazamView
             end
         end
 
+        function drawOverlaid(this, startIndex, endIndex, targetColumns, scale, xVis)
+        %DRAWOVERLAID  The overlaid recording underneath, or the difference in
+        %   place of this recording's own lines; nothing without an overlay.
+            if isempty(this.OverlaidDataset)
+                return;
+            end
+            if this.DifferenceOn
+                set(this.OverlaidDataset.lines, "Visible", "off");
+                this.drawDifference(startIndex, endIndex, targetColumns, scale, xVis);
+            else
+                this.showDifferenceNote(false);
+                this.drawOverlayLines(xVis(1), xVis(end), targetColumns, scale);
+            end
+        end
+
+        function drawOverlayLines(this, startTime, endTime, targetColumns, scale)
+        %DRAWOVERLAYLINES  The overlaid recording's samples in the window
+        %   [STARTTIME, ENDTIME], decimated through its own pyramid the way
+        %   redraw decimates this one's, in the lanes of the same channels.
+            o = this.OverlaidDataset;
+            set(o.lines, "Visible", "on");
+            i0 = max(1, floor((startTime - o.time(1)) / o.period) + 1);
+            i1 = min(o.n, ceil((endTime - o.time(1)) / o.period) + 1);
+            if i1 <= i0
+                set(o.lines, "XData", nan, "YData", nan);   % outside its recording
+                return;
+            end
+            if (i1 - i0 + 1) <= 2 * targetColumns
+                idx = (i0:i1)';
+                x = o.time(idx);
+                y = o.Y(idx, :);
+            else
+                [sampleIdx, env] = o.pyramid.queryInterleaved(i0, i1, targetColumns);
+                x = o.time(sampleIdx);
+                y = double(env);
+            end
+            y = y * scale + this.StackOffset(o.matched);
+            for j = 1:numel(o.lines)
+                set(o.lines(j), "XData", x, "YData", y(:, j));
+            end
+        end
+
+        function drawDifference(this, startIndex, endIndex, targetColumns, scale, xVis)
+        %DRAWDIFFERENCE  This recording minus the overlaid one, in each lane.
+        %   From the raw samples of the window, since the difference of two
+        %   min/max envelopes is not the envelope of the difference. The
+        %   overlaid recording is taken at this one's sample times, directly
+        %   when the two share a sampling grid and interpolated otherwise; a
+        %   channel only this recording has is left empty.
+            o = this.OverlaidDataset;
+            idx = (startIndex:endIndex)';
+            blank = nan(size(xVis));
+            if numel(idx) * numel(o.matched) > this.MaxDifferenceElements
+                set(this.Lines, "XData", xVis, "YData", blank);
+                this.showDifferenceNote(true);
+                return;
+            end
+            this.showDifferenceNote(false);
+            t = this.Time(idx);
+            other = this.overlaidAt(t);
+            d = this.Y(idx, o.matched) - other;
+            if numel(idx) <= 2 * targetColumns
+                x = t;
+                yd = d;
+            else
+                envelope = MinMaxPyramid(d);
+                [sampleIdx, env] = envelope.queryInterleaved(1, numel(idx), targetColumns);
+                x = t(sampleIdx);
+                yd = double(env);
+            end
+            yd = yd * scale + this.StackOffset(o.matched);
+            set(this.Lines, "XData", xVis, "YData", blank);   % lanes without a partner
+            for j = 1:numel(o.matched)
+                set(this.Lines(o.matched(j)), "XData", x, "YData", yd(:, j));
+            end
+        end
+
+        function values = overlaidAt(this, t)
+        %OVERLAIDAT  The overlaid recording's matched channels at times T (a
+        %   column), NaN outside its recording.
+            o = this.OverlaidDataset;
+            values = nan(numel(t), numel(o.matched));
+            offset = (t(1) - o.time(1)) / o.period;
+            sameGrid = abs(o.period - this.Period) <= 1e-9 * max(abs(this.Period), eps) ...
+                && abs(offset - round(offset)) < 1e-6;
+            if sameGrid
+                k = round(offset) + (1:numel(t))';
+                inside = k >= 1 & k <= o.n;
+                values(inside, :) = o.Y(k(inside), :);
+                return;
+            end
+            j0 = max(1, floor((t(1) - o.time(1)) / o.period));
+            j1 = min(o.n, ceil((t(end) - o.time(1)) / o.period) + 2);
+            if j1 > j0
+                values = interp1(o.time(j0:j1), o.Y(j0:j1, :), t, 'linear', NaN);
+            end
+        end
+
+        function showDifferenceNote(this, show)
+        %SHOWDIFFERENCENOTE  Ask for a narrower window, in the middle of the axes.
+            if show && (isempty(this.DifferenceNote) || ~isvalid(this.DifferenceNote))
+                this.DifferenceNote = text(this.Axes, 0.5, 0.5, ...
+                    'Zoom in to see the difference', 'Units', 'normalized', ...
+                    'HorizontalAlignment', 'center', 'FontSize', 12, ...
+                    'Tag', 'DifferenceNote', 'HitTest', 'off', 'PickableParts', 'none');
+            end
+            if ~isempty(this.DifferenceNote) && isvalid(this.DifferenceNote)
+                this.DifferenceNote.Visible = matlab.lang.OnOffSwitchState(show);
+            end
+        end
+
+        function colour = ghostColour(this)
+        %GHOSTCOLOUR  Black at OverlayOpacity over the axes' background: a grey
+        %   that reads as "the other recording" under channels that are
+        %   already every colour. Mixed by hand, since MATLAB does not keep a
+        %   line colour's alpha (see AverageView.paleColour).
+            background = this.Axes.Color;
+            if ~isnumeric(background) || numel(background) ~= 3
+                background = [1 1 1];
+            end
+            colour = (1 - this.OverlayOpacity) * background;
+        end
+
+        function removeOverlayLines(this)
+            if ~isempty(this.OverlaidDataset)
+                delete(this.OverlaidDataset.lines(isgraphics(this.OverlaidDataset.lines)));
+            end
+            this.showDifferenceNote(false);
+        end
+
+        function showOverlayRow(this)
+        %SHOWOVERLAYROW  The overlay's controls, under the sliders: which
+        %   recording it is, its opacity, Difference and Remove overlay.
+            if ~isempty(this.OverlayRow) && isvalid(this.OverlayRow)
+                delete(this.OverlayRow);
+            end
+            row = uigridlayout(this.Grid, [1 7], ...
+                "ColumnWidth", {this.LabelWidthPx, this.StepButtonPx, 260, 50, '1x', 90, 110}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 4);
+            row.Layout.Row = 5;
+            row.Layout.Column = [1, 2];
+            this.OverlayRow = row;
+
+            caption = uilabel(row, "Text", "overlay", "HorizontalAlignment", "right", "FontSize", 8);
+            caption.Layout.Column = 1;
+            this.OverlayNameLabel = uilabel(row, "Text", "", "FontSize", 9, "Tag", "OverlayName");
+            this.OverlayNameLabel.Layout.Column = 3;
+            opacity = uilabel(row, "Text", "opacity", "HorizontalAlignment", "right", "FontSize", 8);
+            opacity.Layout.Column = 4;
+            this.OpacitySlider = uislider(row, "Limits", [0.1 1], "Value", this.OverlayOpacity, ...
+                "MajorTicks", [], "MinorTicks", [], "Tag", "OverlayOpacity", ...
+                "Tooltip", 'How dark the overlaid recording is drawn.', ...
+                "ValueChangedFcn", @(src, ~) this.setOverlayOpacity(src.Value));
+            this.OpacitySlider.Layout.Column = 5;
+            this.DifferenceButton = uibutton(row, "state", "Text", "Difference", ...
+                "Value", this.DifferenceOn, "Tag", "DifferenceButton", ...
+                "Tooltip", 'Show this recording minus the overlaid one, in each channel''s lane.', ...
+                "ValueChangedFcn", @(src, ~) this.setDifference(src.Value));
+            this.DifferenceButton.Layout.Column = 6;
+            this.RemoveButton = uibutton(row, "Text", "Remove overlay", "Tag", "RemoveOverlayButton", ...
+                "Tooltip", 'Take the overlaid recording off this plot.', ...
+                "ButtonPushedFcn", @(~, ~) this.removeOverlays());
+            this.RemoveButton.Layout.Column = 7;
+            this.Grid.RowHeight{5} = this.SliderRowPx;
+            this.updateOverlayName();
+        end
+
+        function updateOverlayName(this)
+        %UPDATEOVERLAYNAME  Say which recording is overlaid, or which minus
+        %   which, named by what sets the two apart in the tree (overlayNames).
+            if isempty(this.OverlaidDataset) || isempty(this.OverlayNameLabel) ...
+                    || ~isvalid(this.OverlayNameLabel)
+                return;
+            end
+            own = {'this recording'};
+            if isKey(this.Paths, this.OwnFile)
+                own = this.Paths(this.OwnFile);
+            end
+            other = {this.OverlaidDataset.id};
+            if isKey(this.Paths, this.OverlaidDataset.file)
+                other = this.Paths(this.OverlaidDataset.file);
+            end
+            [short, full] = overlayNames({own, other});
+            if this.DifferenceOn
+                this.OverlayNameLabel.Text = char(short(1) + " " + char(8722) + " " + short(2));
+            else
+                this.OverlayNameLabel.Text = char(short(2));
+            end
+            this.OverlayNameLabel.Tooltip = char(full(1) + " and " + full(2));
+        end
+
         function drawOverlays(this, startTime, endTime)
         %DRAWOVERLAYS  Redraw the event / area markers within the window.
         %   Bounded by the Max* options so a dense window never floods the axes
@@ -797,5 +1129,27 @@ classdef SignalView < AlakazamView
             tickPos = -cumsum([0 spacing]);
             addVec = tickPos - signalMed;
         end
+    end
+end
+
+% ======================================================================= %
+function labels = channelLabelsOf(eeg, fallback)
+%CHANNELLABELSOF  EEG's channel labels, as a 1 x nchan cellstr: from its
+%   chanlocs, else FALLBACK (the stacking labels), else Ch1, Ch2, ...
+    nchan = size(eeg.data, 1);
+    if isfield(eeg, 'chanlocs') && numel(eeg.chanlocs) == nchan && isfield(eeg.chanlocs, 'labels')
+        labels = cellstr(string({eeg.chanlocs.labels}));
+    elseif numel(fallback) == nchan
+        labels = cellstr(fallback(:)');
+    else
+        labels = arrayfun(@(c) sprintf('Ch%d', c), 1:nchan, 'UniformOutput', false);
+    end
+end
+
+function value = fieldOr(s, name, default)
+%FIELDOR  S.(NAME), or DEFAULT when the field is absent or empty.
+    value = default;
+    if isfield(s, name) && ~isempty(s.(name))
+        value = s.(name);
     end
 end

@@ -7,7 +7,7 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
 %   equal array sizes, which refused the first and, for two montages of
 %   equal size in different orders, drew different electrodes on one plot
 %   without a sign of it. The cases below pin both: what may be overlaid
-%   (erpOverlayProblem), and that every line shows the electrode named in
+%   (datasetOverlayProblem), and that every line shows the electrode named in
 %   the title (AverageView).
 %
 %   The difference is checked against arithmetic, not appearance: the line
@@ -19,8 +19,8 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/ErpOverlayTest.m').
 %
-%   See also AVERAGEVIEW, ERPOVERLAYPROBLEM, OVERLAYNAMES,
-%   ALAKAZAMPLOTTER.VIEWCLASSFOR, ALAKAZAM.ONOVERLAYERP.
+%   See also AVERAGEVIEW, DATASETOVERLAYPROBLEM, OVERLAYNAMES,
+%   ALAKAZAMPLOTTER.VIEWCLASSFOR, ALAKAZAM.ONOVERLAY.
 
     properties
         Folder   % where MethodCopy puts copies of @Alakazam methods
@@ -45,22 +45,22 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
         function aResampledAverageIsCompatible(testCase)
             a = erp({'Fz', 'Cz', 'Pz'}, 'srate', 250);
             b = erp({'Fz', 'Cz', 'Pz'}, 'srate', 125);
-            testCase.verifyEmpty(erpOverlayProblem({a.chanlocs.labels}, a.times, ...
+            testCase.verifyEmpty(datasetOverlayProblem({a.chanlocs.labels}, a.times, ...
                 {b.chanlocs.labels}, b.times));
         end
 
         function noChannelInCommonIsRefusedWithTheMontages(testCase)
-            problem = erpOverlayProblem({'Fz', 'Cz'}, -200:4:596, {'EOG1', 'EOG2'}, -200:4:596);
+            problem = datasetOverlayProblem({'Fz', 'Cz'}, -200:4:596, {'EOG1', 'EOG2'}, -200:4:596);
             testCase.verifySubstring(problem, 'no channel in common');
             testCase.verifySubstring(problem, 'EOG1');
         end
 
         function channelNamesMatchWhateverTheirCase(testCase)
-            testCase.verifyEmpty(erpOverlayProblem({'Fz', 'CZ'}, -200:4:596, {' cz'}, -200:4:596));
+            testCase.verifyEmpty(datasetOverlayProblem({'Fz', 'CZ'}, -200:4:596, {' cz'}, -200:4:596));
         end
 
         function timesThatDoNotOverlapAreRefused(testCase)
-            problem = erpOverlayProblem({'Fz'}, -200:4:596, {'Fz'}, 1000:4:1500);
+            problem = datasetOverlayProblem({'Fz'}, -200:4:596, {'Fz'}, 1000:4:1500);
             testCase.verifySubstring(problem, 'does not overlap');
         end
 

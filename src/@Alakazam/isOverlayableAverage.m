@@ -8,7 +8,7 @@ function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
 %   Both must be drawn as ERP waveforms (AlakazamPlotter.viewClassFor), so
 %   a scalp map or a time-frequency result is never taken for one. Whether
 %   the two can then share the axes (a channel and a time range in common)
-%   is not decided here: overlayAverage asks erpOverlayProblem and tells the
+%   is not decided here: overlayAverage asks datasetOverlayProblem and tells the
 %   user when they cannot, instead of quietly replaying Average onto an
 %   average, which could only fail. It used to require equal array sizes,
 %   which refused a resampled average and let two montages of equal size

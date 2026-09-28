@@ -129,7 +129,7 @@ const LEAVE_GRACE_MS = 250
 const DRAG_THRESHOLD_PX = 10
 const CONTEXT_ITEMS = [
     { action: 'listEvents', label: 'List events' },
-    { action: 'overlayErp', label: 'Overlay on ERP plot' },
+    { action: 'overlay', label: 'Overlay on plot' },
     { separator: true },
     { action: 'rename', label: 'Rename' },
     { action: 'recalculate', label: 'Recalculate' },
@@ -576,15 +576,18 @@ class AlakazamTree {
             // 'exportErpset' (Averaged data only), a .set export is valid
             // for any real dataset -- continuous, epoched or averaged --
             // so the only thing worth disabling it for is a report node.
-            // 'overlayErp' shares 'exportErpset''s signal (averaged data):
-            // the tree cannot tell an ERP from a scalp map, so MATLAB checks
-            // that when it runs (Alakazam.onOverlayErp) and says why not.
+            // 'overlay' draws the node on the plot in view: an average on an
+            // ERP plot, a continuous recording on a continuous one. So it is
+            // offered for averaged data ('exportErpset''s signal) and for
+            // continuous data ('listEvents''s); the tree cannot tell an ERP
+            // from a scalp map, so MATLAB checks that when it runs
+            // (Alakazam.onOverlay) and says why not.
             const disabled = item.disabled || (item.action === 'listEvents' && !data.canListEvents)
                 || (item.action === 'recalculate' && !data.canRecalculate)
                 || (item.action === 'applyToAll' && !data.canApplyToAll)
                 || (item.action === 'saveTemplate' && !data.canApplyToAll)
                 || (item.action === 'exportErpset' && !data.canExportErpset)
-                || (item.action === 'overlayErp' && !data.canExportErpset)
+                || (item.action === 'overlay' && !data.canExportErpset && !data.canListEvents)
                 || (item.action === 'exportSet' && !data.canApplyTemplate)
                 || (item.action === 'applyTemplate' && !data.canApplyTemplate)
                 || (item.action === 'rejectionBreakdown' && !data.canRejectionBreakdown)
