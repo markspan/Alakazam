@@ -5,12 +5,17 @@ Tagging (RIFT) with a consumer monitor: A proof-of-concept"**
 ([bioRxiv 2025.08.14.670287](https://doi.org/10.1101/2025.08.14.670287), CC-BY
 4.0), showing how the paper's EEG analysis maps onto Alakazam. The paper itself,
 and its EEGLAB scripts, are the authoritative record; this note only describes how
-to carry out the same steps here.
+to carry out the same steps here. Chapter 16 of the manual (*Frequency
+tagging*) walks through the same pipeline in the application.
 
-> **Read this before relying on it.** Alakazam is young and lightly tested. The
-> paper's analysis was done with **EEGLAB** (`newcrossf`, `pop_eegfiltnew`,
-> `runica`, ICLabel), which is mature and validated. Alakazam re-implements the
-> same maths, and [one comparison with the paper's own
+*Last checked against the code: 28 September 2026 (V0.4.4.3): the RESS section
+is new, and the step table follows the current templates.*
+
+> **Read this before relying on it.** Alakazam is young. Its test suite is
+> large, but tests check the code against itself and against small fixtures,
+> not against years of published use. The paper's analysis was done with
+> **EEGLAB** (`newcrossf`, `pop_eegfiltnew`, `runica`, ICLabel), which is
+> mature and validated. Alakazam re-implements the same maths, and [one comparison with the paper's own
 > statistics](#checked-against-the-paper) agrees closely at electrode Oz, and
 > [`newcrossf` run on identical input](#which-coherence-estimator) agrees with
 > Alakazam's default coherence to about 0.001. Both are at one electrode, on one
@@ -28,15 +33,16 @@ the photodiode** that recorded the flicker.
 | Photodiode recorded on the amplifier's external input | it is just a channel in the dataset | pick it as the *reference* everywhere below |
 | Recorded against an online average reference; analysed average-referenced | **ReRef**, mode *Average*, photodiode excluded | not optional: a Cz reference lowers the Oz coherence by about 13%, see [Checked against the paper](#checked-against-the-paper) |
 | Downsample 2000 -> 1000 Hz | **Resample** (continuous) | `pop_resample`; not the paper's exact call but the same operation. The template resamples to 960 Hz, a multiple of the display's 480 Hz, rather than 1000 Hz |
-| High-pass 1 Hz FIR (`pop_eegfiltnew`, -6 dB, 2 Hz transition) | **Filter** (FIR, `pop_firws`/Kaiser) | a linear-phase high-pass, but **not** the identical `eegfiltnew` design; cutoff/transition will not match to the sample |
-| Epoch -2 to +11 s at the fade-in trigger; one bin per condition (60c / 64c / 60periph) | **DefineBins** (epoch statement + one bin per trigger) | |
+| High-pass 1 Hz FIR (`pop_eegfiltnew`, -6 dB, 2 Hz transition) | **Filter** (windowed-sinc FIR: `firws` with a Kaiser window, applied by `firfilt`) | a linear-phase high-pass, but **not** the identical `eegfiltnew` design; cutoff/transition will not match to the sample. The dialog plots the kernel's impulse and frequency response, so the difference can be seen |
+| Epoch -2 to +11 s at the fade-in trigger; one bin per condition (60c / 64c / 60periph) | **DefineBins** (epoch statement + one bin per trigger) | the templates epoch 0 to 8332 ms, which holds the fade-in, the steady state and the fade-out |
 | ICA + ICLabel, remove **Eye and Muscle** >= 90% | **AutoEyeICA** (Eye, auto) or manual **ICA** (pick any class by hand) | partial, see caveat 1 |
 | No baseline correction | omit the Baseline step | |
-| **Cross-coherence EEG x photodiode**, STFT 510 ms, pad 4, 52-68 Hz @ ~0.49 Hz, magnitude-squared, trial-averaged | **Coherence Map** (STFT: `WindowMs` 510, `PadRatio` 4, band 52-68) | implements the paper's Eq. 1 exactly (trial-averaged cross-spectrum / autospectra) |
+| **Cross-coherence EEG x photodiode**, STFT 510 ms, pad 4, 52-68 Hz @ ~0.49 Hz, magnitude-squared, trial-averaged | **Coherence Map** (STFT: `WindowMs` 510, `PadRatio` 4) | implements the paper's Eq. 1 exactly (trial-averaged cross-spectrum / autospectra). The templates run the map from 20 to 68 Hz, so the 30 Hz control condition is in it too |
 | Mean coherence topography during the steady-state interval (Fig 1C) | **Coherence Topography** (one scalp head-map per bin) | frequency taken from the photodiode's own spectral peak per bin (60, 64 or 30 Hz), or fixed; frame-averaged coherence, on the same scale as the map; restrict to the steady-state window with its Start/Stop (ms) fields |
 | Per-condition scalar coherence at Oz at the target frequency | **Spectral Measure** (coherence to reference at named frequencies, per channel/bin) -> tidy CSV | one value per subject/condition, ready for stats; the default estimator is the frame-averaged one that matches `newcrossf`, see [Which coherence estimator](#which-coherence-estimator) |
-| Paired one-tailed t-tests + 5000-permutation | tidy CSV (+ auto-generated R: RM-ANOVA / pairwise-t) | the exact one-tailed / permutation tests are a few lines of your own R, see caveat 3 |
-| Dropped-frame / stimulation-fidelity check | -- | out of scope: a photodiode/camera timing analysis, not EEG |
+| (not in the paper) a spatial filter instead of one electrode | **RESS**, before Spectral Measure | one component per tagging frequency, read like an electrode; see [RESS](#ress-a-component-instead-of-oz) |
+| Paired one-tailed t-tests + 5000-permutation | tidy CSV (+ the generated report: a paired t-test or Wilcoxon per comparison, mixed models for three or more conditions, Bayes factors) | the exact one-tailed / permutation tests are a few lines of your own R, see caveat 2 |
+| Dropped-frame / stimulation-fidelity check | none | out of scope: a timing analysis of the display, not EEG. The **Photodiode** step measures the delay of a diode *patch*; on these recordings, whose diode follows the flicker, it rightly finds no patch |
 
 ### The steady-state window
 
@@ -44,8 +50,9 @@ The paper averages coherence over the central **500-cycle steady-state period**
 (the constant-amplitude middle of each trial, after the raised-cosine fade-in and
 before the fade-out). Both **Coherence Topography** and **Spectral Measure** take a
 time window: set their **Start / Stop (ms)** to that steady-state interval so the
-onset/offset transients are excluded, matching the paper. Leaving the window at
-`0 to 0` uses the whole epoch instead.
+onset/offset transients are excluded, matching the paper. The templates use 883
+to 8594 ms, in Coherence Topography and in a SelectData step before Spectral
+Measure. Leaving the window at `0 to 0` uses the whole epoch instead.
 
 ## Two caveats worth your attention
 
@@ -62,8 +69,9 @@ onset/offset transients are excluded, matching the paper. Leaving the window at
    coherence values export cleanly (a tidy CSV, one row per measure x bin x
    channel), but the paper's one-tailed paired t-test and 5000-permutation test are
    not what the generated R report runs (it picks a paired t-test or a Wilcoxon
-   signed-rank test by a normality check, and fits a mixed model for three or more
-   conditions). Adapt the generated script, or take the CSV into your own R / JASP.
+   signed-rank test by a normality check, fits a mixed model for three or more
+   conditions, and gives a Bayes factor beside each). Adapt the generated
+   document, or take the CSV into your own R / JASP.
 
 ## Checked against the paper
 
@@ -159,15 +167,55 @@ Nodes made before this keep the estimator they were made with: options with no m
 mean `newcrossf` if that option was on and the single window if it was off, so
 recalculating an old node reproduces its numbers. A new run offers frame-averaged.
 
+## RESS: a component instead of Oz
+
+Reading the tagging response at Oz is a choice that differs between people and
+frequencies. **RESS** (rhythmic entrainment source separation; Cohen &
+Gulbinaite, 2017) replaces it with a spatial filter per recording and
+frequency: the combination of the scalp channels with the most power at the
+tagging frequency relative to the frequencies beside it. The paper did not use
+it; it is an addition.
+
+In Alakazam, **RESS** goes after DefineBins and ICA and before Spectral
+Measure. Each row names a frequency and the bins whose trials build its
+filter, pooled (the 60 Hz filter from the central and the peripheral 60 Hz
+bins together, as the authors advise). The component is added as a channel,
+`RESS60Hz` say, and computed for every trial, so the bins it was not built
+from are its null. Spectral Measure then reads its coherence to the photodiode
+like any electrode's. The defaults follow the authors: a Gaussian of 0.5 Hz
+FWHM at the frequency, neighbours 1 Hz away with 1 Hz FWHM, and 1% shrinkage.
+
+Checked against the authors' own code (`RESS_example_script`, `filterFGx`) on
+all ten recordings, twenty filters: given their frequency grid and their
+conversion of filter widths, the weights are identical to ten decimals and the
+eigenvalues to four. Alakazam corrects those two constants on purpose, and
+with its own the weights, maps and components still agree at 0.9999 or
+better. The audit also found a bug: a trial blanked outside the analysis
+window made the covariances NaN, and the component went missing without a
+message. It is fixed and tested.
+
+On these recordings the component's coherence to the photodiode beat Oz's in
+every recording at both central frequencies: 0.39 against 0.16 at 64 Hz and
+0.44 against 0.19 at 60 Hz, with the same gain when the filter was built on
+half the trials and measured on the other half (manual, chapter 16; those Oz
+values come from the RESS analysis window, not the steady-state window of the
+table above). In the peripheral 60 Hz condition both sat near the noise floor.
+The report says what the article asks a reader to check, and these recordings
+need it: in ThriftyRIFT_7 neither component separated its frequency from its
+neighbours (both largest eigenvalues below 1), and ThriftyRIFT_4's map is
+inverted, which puts its phase half a cycle from the others'.
+
 ## In short
 
-The **core** of the paper -- minimal preprocessing, epoching, ICA cleaning, and the
-EEG x photodiode magnitude-squared cross-coherence, read out both as per-channel
-time x frequency maps (**Coherence Map**) and as per-bin scalp topographies at the
-auto-detected tagging frequency (**Coherence Topography**) -- is directly available
-in Alakazam, which was in part designed around exactly this analysis. What you
-still handle outside or adapt: the exact `eegfiltnew` filter, the Muscle-removal and
-EOG-in-ICA montage choices, and the specific statistics -- plus a like-for-like
-check against the original EEGLAB scripts before reporting anything (the comparisons
-above are with the numbers printed in the preprint and with `newcrossf` on Alakazam's
-own epochs, not with the authors' preprocessed data).
+The **core** of the paper is directly available in Alakazam, which was in part
+designed around exactly this analysis: minimal preprocessing, epoching, ICA
+cleaning, and the EEG x photodiode magnitude-squared cross-coherence, read out
+both as per-channel time x frequency maps (**Coherence Map**) and as per-bin
+scalp topographies at the auto-detected tagging frequency (**Coherence
+Topography**). RESS adds a component per frequency that the paper did not use.
+What you still handle outside or adapt: the exact `eegfiltnew` filter, the
+Muscle-removal and EOG-in-ICA montage choices, and the specific statistics.
+Before reporting anything, also make a like-for-like check against the original
+EEGLAB scripts: the comparisons above are with the numbers printed in the
+preprint and with `newcrossf` on Alakazam's own epochs, not with the authors'
+preprocessed data.
