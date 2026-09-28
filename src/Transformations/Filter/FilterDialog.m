@@ -22,13 +22,18 @@ function options = FilterDialog(srate, labels, stored)
 %       panel above, right now" action.
 %   Everything else about the FIR design is worked out by Filter.m.
 %
-%   In global mode, a small plot under the three filters shows the impulse
-%   response of the enabled ones together (filterImpulseResponse, from the
-%   same kernels Filter applies), with its length, and is redrawn whenever a
-%   filter is ticked or a frequency or dB changes: how far one sample is
-%   smeared and what ringing the filters add, which a methods section should
-%   report alongside the settings. A setting Filter would refuse is shown
-%   there instead, with the reason.
+%   In global mode, two plots under the three filters describe the enabled
+%   ones together, both from the same kernels Filter applies, and are redrawn
+%   whenever a filter is ticked or a frequency or dB changes:
+%     * the impulse response (filterImpulseResponse), with its length: how
+%       far one sample is smeared and what ringing the filters add;
+%     * at the bottom, the frequency response (filterFrequencyResponse) as
+%       gain in dB from 0 Hz to Nyquist, with a dotted line at -6 dB, the
+%       level at which each cutoff is defined: which frequencies pass, where
+%       they are cut off, and how far the rest is attenuated.
+%   A methods section should report both alongside the settings. A setting
+%   Filter would refuse is shown there instead, with the reason. Per-channel
+%   mode has no such plots, since every channel may have its own filters.
 %
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
 %   channel labels (for the per-channel table); STORED a previous run's options
@@ -50,7 +55,7 @@ function options = FilterDialog(srate, labels, stored)
 
     COLS = {'Channel', 'HP?', 'HP (Hz)', 'HP dB', 'LP?', 'LP (Hz)', 'LP dB', 'Notch?', 'Notch (Hz)', 'Notch dB'};
 
-    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 700 560]), 'Color', bgColor);
+    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 700 760]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
@@ -59,7 +64,7 @@ function options = FilterDialog(srate, labels, stored)
     % visibility and even row HEIGHT change at runtime (see refreshMode),
     % which is only safe to reason about when nothing relies on an
     % implicit "next slot" placement alongside them.
-    outer = uigridlayout(root, [7 1], 'RowHeight', {'fit', 'fit', 'fit', 190, 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
+    outer = uigridlayout(root, [7 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 'fit', '1x', 'fit'}, 'Padding', [10 10 10 10]);
 
     descLabel = uilabel(outer, 'Text', [ ...
         'FIR windowed-sinc, zero-phase filtering. Give each filter a frequency and a dB rating ' ...
@@ -94,9 +99,11 @@ function options = FilterDialog(srate, labels, stored)
         ctl.(key) = struct('cb', cb, 'freq', f, 'db', d);
     end
 
-    % --- Impulse response of the global filters together (row 4, global
-    % mode only; the per-channel table has a filter per channel instead) ---
-    responsePanel = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, ...
+    % --- Impulse and frequency response of the global filters together
+    % (row 4, global mode only; the per-channel table has a filter per
+    % channel instead). The row takes all the height the global mode has
+    % left, so the plots shrink with the window rather than overflow it. ---
+    responsePanel = uigridlayout(outer, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1x'}, ...
         'RowSpacing', 2, 'Padding', [0 0 0 0]);
     responsePanel.Layout.Row = 4;
     responseCaption = uilabel(responsePanel, 'Text', '', 'WordWrap', 'on', 'FontSize', 11, ...
@@ -104,6 +111,12 @@ function options = FilterDialog(srate, labels, stored)
     responseAxes = uiaxes(responsePanel, 'FontSize', 9, 'Tag', 'ResponseAxes');
     xlabel(responseAxes, 'Time (s)');
     box(responseAxes, 'on');
+    frequencyCaption = uilabel(responsePanel, 'Text', '', 'WordWrap', 'on', 'FontSize', 11, ...
+        'Tag', 'FrequencyCaption');
+    frequencyAxes = uiaxes(responsePanel, 'FontSize', 9, 'Tag', 'FrequencyAxes');
+    xlabel(frequencyAxes, 'Frequency (Hz)');
+    ylabel(frequencyAxes, 'Gain (dB)');
+    box(frequencyAxes, 'on');
 
     % --- "Copy settings" (row 5, per-channel mode only) ---
     copyRow = uigridlayout(outer, [1 2], 'ColumnWidth', {140, '1x'}, 'Padding', [0 0 0 0]);
@@ -145,7 +158,7 @@ function options = FilterDialog(srate, labels, stored)
             outer.RowHeight{5} = 'fit';
             outer.RowHeight{6} = '1x';
         else
-            outer.RowHeight{4} = 190;
+            outer.RowHeight{4} = '1x';
             outer.RowHeight{5} = 0;
             outer.RowHeight{6} = 0;
         end
@@ -157,12 +170,17 @@ function options = FilterDialog(srate, labels, stored)
     end
 
     function updateResponse()
-    %UPDATERESPONSE  Redraw the impulse response of the ticked filters, or
-    %   say why it cannot be drawn: none ticked, or a setting Filter would
-    %   refuse (the message is Filter's own).
+    %UPDATERESPONSE  Redraw the impulse and frequency responses of the
+    %   ticked filters, or say (in the first caption) why they cannot be
+    %   drawn: none ticked, or a setting Filter would refuse (the message is
+    %   Filter's own).
         cla(responseAxes);
+        cla(frequencyAxes);
+        frequencyCaption.Text = '';
+        settings = currentGlobalSeed();
         try
-            [t, h] = filterImpulseResponse(currentGlobalSeed(), srate);
+            [t, h] = filterImpulseResponse(settings, srate);
+            [frequencies, gain] = filterFrequencyResponse(settings, srate);
         catch err
             responseCaption.Text = err.message;
             return;
@@ -171,11 +189,17 @@ function options = FilterDialog(srate, labels, stored)
             responseCaption.Text = 'No filter is ticked, so the data are left as they are.';
             return;
         end
+
         plot(responseAxes, t, h, 'Color', accentColor, 'LineWidth', 1);
         xlim(responseAxes, [t(1), t(end)]);
         responseCaption.Text = sprintf(['Impulse response of the ticked filters together: ' ...
             '%d samples, %.3g s at %g Hz, centred on the impulse (zero-phase).'], ...
             numel(h), numel(h) / srate, srate);
+
+        plotFrequencyResponse(frequencyAxes, frequencies, gain, gainFloorDb(settings), accentColor);
+        frequencyCaption.Text = sprintf(['Frequency response of the ticked filters together, ' ...
+            'from 0 Hz to Nyquist (%g Hz). The dotted line is at %.0f dB, where each cutoff sits.'], ...
+            nyq, cutoffLevelDb());
     end
 
     function onCopySettings()
@@ -317,6 +341,49 @@ function data = seedTable(labels, seed, stored)
         end
         data(i, :) = row;
     end
+end
+
+function plotFrequencyResponse(ax, f, gain, floorDb, color)
+%PLOTFREQUENCYRESPONSE  Draw a linear GAIN against F (Hz) on AX as dB.
+%   The frequency axis runs from F(1), 0 Hz, to F(end), the Nyquist
+%   frequency. The gain axis runs from FLOORDB to a little above 0 dB, and
+%   the gain is clamped to FLOORDB, since a stopband's exact zeros are -Inf
+%   dB and would leave gaps in the curve. A dotted line marks the cutoff
+%   level (cutoffLevelDb) under the curve, where it can be read off.
+    HEADROOM_DB = 5;   % room above 0 dB for passband ripple
+    gainDb = max(20 * log10(gain), floorDb);
+
+    plot(ax, [f(1), f(end)], [1, 1] * cutoffLevelDb(), ':', ...
+        'Color', [0.5 0.5 0.5], 'LineWidth', 1, 'Tag', 'CutoffLevel');
+    hold(ax, 'on');
+    plot(ax, f, gainDb, 'Color', color, 'LineWidth', 1, 'Tag', 'FrequencyResponse');
+    hold(ax, 'off');
+    xlim(ax, [f(1), f(end)]);
+    ylim(ax, [floorDb, HEADROOM_DB]);
+    grid(ax, 'on');
+end
+
+function floorDb = gainFloorDb(settings)
+%GAINFLOORDB  The bottom of the gain axis for the global SETTINGS: 20 dB
+%   below the deepest attenuation among the ticked filters, rounded down to
+%   a multiple of 10 dB, so each stopband is seen in full with room below
+%   its ripple.
+    MARGIN_DB = 20;
+    deepest = 0;
+    for key = {'highpass', 'lowpass', 'notch'}
+        s = settings.(key{1});
+        if s.enabled
+            deepest = max(deepest, s.db);
+        end
+    end
+    floorDb = -10 * ceil((deepest + MARGIN_DB) / 10);
+end
+
+function level = cutoffLevelDb()
+%CUTOFFLEVELDB  The gain, in dB, at which a windowed-sinc filter's cutoff
+%   is defined: one half, or about -6 dB, the centre of its transition band
+%   (Widmann et al., 2015), as designFilterKernel designs it.
+    level = 20 * log10(0.5);
 end
 
 function setRowEnabled(freqField, dbField, on)
