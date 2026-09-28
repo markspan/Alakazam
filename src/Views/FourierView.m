@@ -118,17 +118,27 @@ classdef FourierView < AlakazamView
             % against imaginary -- a picture that looks like a plot, is not
             % a spectrum, and carries no frequency axis at all. Reduce to a
             % real quantity here, once, before anything draws.
+            %
+            % PHASE IS SHOWN WRAPPED, in [-pi, pi], and NOT UNWRAPPED
+            % ACROSS FREQUENCY. Fourier measures phase from the segment's
+            % first sample, so every spectrum carries a ramp of 2*pi*f times
+            % the time at which its activity is centred, and unwrap() summed
+            % that ramp over every bin: on a five-minute recording it drew a
+            % straight line reaching 10^4 to 10^5 rad by 100 Hz, which says
+            % how long the segment is and nothing about the EEG. Unwrapping
+            % over frequency suits a smooth transfer function, not the phase
+            % of a noisy spectrum, whose neighbouring bins are independent.
             phaseMode = this.ShowPhase && ~isreal(spectrum);
             if phaseMode
-                spectrum = unwrap(angle(spectrum));
+                spectrum = angle(spectrum);
             elseif ~isreal(spectrum)
                 spectrum = abs(spectrum);
             end
 
             % Phase is not smoothed and gets no band fills: a moving mean
-            % over a wrapped-then-unwrapped angle is not a meaningful
-            % average, and shading the area under a phase curve implies an
-            % integral that means nothing.
+            % over an angle is not a meaningful average (pi and -pi are the
+            % same phase), and shading the area under a phase curve implies
+            % an integral that means nothing.
             if ~phaseMode && AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
                 % Smoothed once, here, before either the line or the band
                 % shading is drawn: both should show the same trend, not a
@@ -137,13 +147,26 @@ classdef FourierView < AlakazamView
             end
 
             hold(ax, "on");
-            if ~phaseMode
-                this.drawBands(ax, freqs, spectrum);
-            end
-            plot(ax, freqs, spectrum, "Color", "k", "LineWidth", 1);
-            hold(ax, "off");
             if phaseMode
-                ylabel(ax, 'phase (rad, unwrapped)');
+                % Points, not a line: a wrapped phase jumps between pi and
+                % -pi, and a line would draw each jump as a vertical stroke.
+                plot(ax, freqs, spectrum, ".", "Color", "k", "MarkerSize", 6);
+            else
+                this.drawBands(ax, freqs, spectrum);
+                plot(ax, freqs, spectrum, "Color", "k", "LineWidth", 1);
+            end
+            hold(ax, "off");
+            % The labels and ticks are the axes' own, not its children's, so
+            % they survive the delete(allchild) above and have to be set both
+            % ways: the phase's must not linger on a magnitude spectrum.
+            if phaseMode
+                ylabel(ax, 'phase (rad)');
+                yticks(ax, (-2:2) * pi / 2);
+                yticklabels(ax, {'-\pi', '-\pi/2', '0', '\pi/2', '\pi'});
+            else
+                ylabel(ax, '');
+                yticks(ax, 'auto');
+                yticklabels(ax, 'auto');
             end
 
             titleStr = sprintf("Channel %i: %s", this.Channel, this.EEG.chanlocs(this.Channel).labels);
@@ -182,7 +205,11 @@ classdef FourierView < AlakazamView
             % channel/trial change); y-limits go through applyYZoom so the
             % y-zoom slider's level, not just the absolute range, survives
             % too -- see ZoomPanButtons' own header comment.
-            this.Buttons.applyYZoom(max(spectrum, [], "omitnan"));
+            if phaseMode
+                this.Buttons.applyYZoom(pi, -pi);
+            else
+                this.Buttons.applyYZoom(max(spectrum, [], "omitnan"));
+            end
             this.Buttons.setChannelValue(this.Channel);
         end
 

@@ -104,7 +104,12 @@ tapered at its ends, in one of six units.
 **Which unit.** The first four are magnitudes: the absolute value is taken
 per segment, so the phase is discarded. **Volt** gives a sinusoid of
 amplitude *A* a peak of *A*, matching BrainVision Analyzer. **Complex** keeps
-the coefficients, so the phase survives (the view's **P** key shows it).
+the coefficients, so the phase survives. The view's **P** key shows it,
+wrapped to the range -π to π and drawn as points. The phase is measured from
+the segment's first sample, so a cosine that starts there at phase φ reads φ
+at its frequency. It is not unwrapped across frequency: the phase of a noisy
+spectrum changes independently from one frequency to the next, and unwrapping
+it only piles up the ramp that comes from where the segment starts.
 **PSD** is the only calibrated unit: a periodogram in units²/Hz, normalised
 by the energy of the taper, whose integral over frequency equals the
 signal's mean square [@welch1967], so that it can be compared with other

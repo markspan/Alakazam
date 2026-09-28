@@ -178,6 +178,29 @@ classdef FourierTest < matlab.unittest.TestCase
                 'abs(Complex) must reproduce Volt exactly: same quantity, one step earlier.');
         end
 
+        function complexOutputHasTheSignalsOwnPhase(testCase)
+        %COMPLEXOUTPUTHASTHESIGNALSOWNPHASE  The phase is that of the DFT,
+        %   exp(-i*2*pi*f*t) with t from the segment's first sample, and not
+        %   that of its complex conjugate: a cosine starting at phase PHI
+        %   reads PHI at its own frequency. Fourier used to transpose with ',
+        %   which conjugates, and read -PHI. Set up as
+        %   peakLandsAtInputFrequency is (bin-aligned, no taper, no padding),
+        %   so the reading is exact.
+            srate = 250;
+            nsamp = 256;
+            k = 20;
+            freq = k * srate / nsamp;
+            t = (0:nsamp - 1) / srate;
+            opts = struct('Output', 'Complex', 'FullSpectrum', true, 'Window', 'No', ...
+                'Window_Length', 100, 'Resolution', 'Max', 'ResVal', 1);
+            for phi = [-2.5, -1, 0.4, 2]
+                EEG = struct('data', cos(2 * pi * freq * t + phi), 'srate', srate);
+                [result, ~] = Fourier(EEG, opts);
+                testCase.verifyEqual(angle(result.data(1, k + 1, 1)), phi, 'AbsTol', 1e-9, ...
+                    sprintf('A cosine starting at phase %g should read %g, not its negative.', phi, phi));
+            end
+        end
+
         function averagingComplexSpectraEqualsTransformingTheAverage(testCase)
         %AVERAGINGCOMPLEXSPECTRAEQUALSTRANSFORMINGTHEAVERAGE  The reason
         %   the option exists.

@@ -45,6 +45,18 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **Fourier's Complex output had the phase of every coefficient the wrong
+  way round**: it stored the complex conjugate of each spectrum, because
+  the transform was transposed with `'`, which conjugates. A cosine starting
+  at phase φ read -φ. The magnitudes (Volt, Power, the densities, PSD) were
+  never affected. Complex nodes computed before this fix keep the old sign
+  until they are recalculated.
+- **The Fourier view's phase (the P key) is wrapped to -π to π and drawn as
+  points.** It was unwrapped across frequency, which piled up the ramp that
+  comes from measuring phase from the segment's first sample: on a long
+  recording, a straight line reaching 10^4 to 10^5 radians by 100 Hz. It was
+  also drawn on an axis that started at 0, and its label stayed on the axis
+  after switching back to the magnitude.
 - The Filter dialog did not open for settings that stored a filter which is
   off with a frequency or attenuation of 0, as a script does; it now falls
   back to the defaults for those fields.

@@ -47,6 +47,7 @@ classdef ZoomPanButtons < handle
         XZoomValue = 0 % 0..1, x-zoom slider value (0 = full range)
         YZoomValue = 0 % 0..1, y-zoom slider value (0 = full natural range)
         YTop = 1       % most recent natural top passed to applyYZoom
+        YBottom = 0    % and its natural bottom (0 for a magnitude, -pi for a phase)
     end
 
     properties (Constant, Access = private)
@@ -111,16 +112,25 @@ classdef ZoomPanButtons < handle
             end
         end
 
-        function applyYZoom(this, naturalTop)
+        function applyYZoom(this, naturalTop, naturalBottom)
         %APPLYYZOOM  Set the y-limits to the current y-zoom slider value,
         %   relative to NATURALTOP (the owning view's own auto-scale for
         %   whatever channel/trial/bin is now shown). Call at the end of the
         %   owning view's redraw(), in place of a bare ylim(ax,[0,top]).
+        %
+        %   NATURALBOTTOM, 0 when omitted, is the lower end of that range,
+        %   for a quantity that goes below zero: -pi for a phase in
+        %   [-pi, pi]. Zooming scales both ends towards 0, so a magnitude
+        %   keeps its 0 at the bottom and a phase stays centred on 0.
             if ~isfinite(naturalTop) || naturalTop <= 0
                 naturalTop = 1;
             end
+            if nargin < 3 || ~isfinite(naturalBottom) || naturalBottom >= naturalTop
+                naturalBottom = 0;
+            end
             this.YTop = naturalTop;
-            ylim(this.Axes, [0, naturalTop * this.zoomFraction(this.YZoomValue)]);
+            this.YBottom = naturalBottom;
+            this.applyYLim();
         end
     end
 
@@ -218,7 +228,14 @@ classdef ZoomPanButtons < handle
 
         function onYZoomChanged(this, value)
             this.YZoomValue = value;
-            ylim(this.Axes, [0, this.YTop * this.zoomFraction(value)]);
+            this.applyYLim();
+        end
+
+        function applyYLim(this)
+        %APPLYYLIM  Apply the natural y-range, scaled towards 0 by the
+        %   y-zoom slider (see applyYZoom).
+            f = this.zoomFraction(this.YZoomValue);
+            ylim(this.Axes, [this.YBottom, this.YTop] * f);
         end
 
         function onButtonPushed(this, callback)

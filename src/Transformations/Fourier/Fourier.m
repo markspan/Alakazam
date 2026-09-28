@@ -243,14 +243,20 @@ for seg = 1:nseg
             %
             % FullSpectrum is ignored here: a PSD is one-sided by
             % definition, so there is no second convention to offer.
-            Xw = fft((fullwin .* input.data(:,:,seg))', NFFT)';
+            Xw = fft(fullwin .* input.data(:,:,seg), NFFT, 2);
             P  = (abs(Xw) .^ 2) ./ (input.srate * sum(fullwin .^ 2));
             P(:, 2:NFFT/2) = 2 * P(:, 2:NFFT/2);
             data(:,:,seg) = P;
             continue;
         end
 
-        spec = fs*(fft((corrwin.*input.data(:,:,seg))',NFFT)/(nsamp))';
+        % Along the rows (dimension 2), with no transposes. The transform
+        % used to be written fft(x', NFFT)', and ' is the CONJUGATE
+        % transpose: on the complex result it stored conj(X), so every
+        % 'Complex' phase had the wrong sign (the magnitudes, being abs(),
+        % never showed it). The phase is that of exp(-i*2*pi*f*t) with t
+        % counted from the segment's first sample, as in SpectralMeasure.
+        spec = fs * fft(corrwin .* input.data(:,:,seg), NFFT, 2) / nsamp;
         switch lower(options.Output)
             case 'complex'
                 data(:,:,seg) = spec;
