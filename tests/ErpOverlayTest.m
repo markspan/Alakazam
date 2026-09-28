@@ -109,6 +109,25 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
                 'A scalp map is not an ERP to overlay on.');
         end
 
+        function aDropOfAnAveragedSpectrumOnAnotherIsAnOverlay(testCase)
+        %ADROPOFANAVERAGEDSPECTRUMONANOTHERISANOVERLAY  FourierView overlays
+        %   spectra as AverageView overlays ERPs, so dropping one averaged
+        %   spectrum on another overlays them too, where replaying Average
+        %   onto an average could only fail. An ERP and a spectrum are never
+        %   overlaid on each other.
+            isOverlay = testCase.copyMethod('isOverlayableAverage');
+            target = spectrumOf(erp({'Fz', 'Cz', 'Pz'}));
+            source = spectrumOf(erp({'Fz', 'Cz'}));
+            source.Call = 'Average';
+            testCase.verifyTrue(feval(isOverlay, [], target, source));
+
+            average = erp({'Fz', 'Cz'});
+            average.Call = 'Average';
+            testCase.verifyFalse(feval(isOverlay, [], target, average), 'An ERP is not a spectrum.');
+            testCase.verifyFalse(feval(isOverlay, [], erp({'Fz', 'Cz'}), source), ...
+                'Nor is a spectrum an ERP.');
+        end
+
         % ---- the lines -----------------------------------------------------
         function everyLineShowsTheElectrodeInTheTitle(testCase)
         %EVERYLINESHOWSTHEELECTRODEINTHETITLE  The whole point, as a test.
@@ -394,6 +413,13 @@ function eeg = erp(labels, varargin)
         eeg.bindesc = struct('label', arrayfun(@(b) sprintf('Bin %d', b), 1:nBins, ...
             'UniformOutput', false));
     end
+end
+
+function eeg = spectrumOf(eeg)
+%SPECTRUMOF  EEG as an averaged spectrum: what Average makes of Fourier's
+%   output, which the plotter draws with FourierView.
+    eeg.DataType = 'FrequencyDomain';
+    eeg.freqs = linspace(0, eeg.srate / 2, size(eeg.data, 2));
 end
 
 function c = code(label)

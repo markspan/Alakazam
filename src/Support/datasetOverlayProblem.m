@@ -5,7 +5,8 @@ function problem = datasetOverlayProblem(plotLabels, plotTimes, labels, times, u
 %   dataset to be overlaid, and returns a sentence for the user saying what
 %   stands in the way, or '' when the two can share the axes. UNIT, optional,
 %   names the time unit in that sentence: 'ms' (the default, for ERPs) or
-%   's' (continuous recordings).
+%   's' (continuous recordings). With 'Hz' the axis is a frequency axis
+%   (spectra, FourierView), and the sentence says so.
 %
 %   BY CHANNEL NAME AND TIME, NOT BY SHAPE. Two datasets worth comparing
 %   routinely differ in shape: a re-referenced set has lost its reference, a
@@ -31,7 +32,11 @@ function problem = datasetOverlayProblem(plotLabels, plotTimes, labels, times, u
     end
 
     if isempty(plotTimes) || isempty(times)
-        problem = 'It has no time axis to draw against the plot''s.';
+        axisName = 'time';
+        if strcmpi(unit, 'Hz')
+            axisName = 'frequency';
+        end
+        problem = sprintf('It has no %s axis to draw against the plot''s.', axisName);
         return;
     end
     lo = max(min(plotTimes), min(times));

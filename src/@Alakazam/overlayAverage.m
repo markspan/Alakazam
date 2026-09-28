@@ -1,9 +1,10 @@
 function overlayAverage(this, targetEEG, sourceEEG)
 %OVERLAYAVERAGE  Overlay a dropped average dataset on the target's plot.
 %   Ensures the target average is shown (reusing its tab if open),
-%   then adds the source average to that tab's AverageView. Plots are
-%   uitabs in PlotsTabGroup, found directly by their own Tag (see
-%   AlakazamPlotter.plotCurrent).
+%   then adds the source average to that tab's view: an AverageView for
+%   ERPs, a FourierView for averaged spectra (isOverlayableAverage has made
+%   sure both are drawn by the same one). Plots are uitabs in PlotsTabGroup,
+%   found directly by their own Tag (see AlakazamPlotter.plotCurrent).
 %
 %   The lines are named by where each dataset sits in the tree
 %   (treePathOf), and when the two cannot share the axes (no channel or
@@ -24,13 +25,13 @@ function overlayAverage(this, targetEEG, sourceEEG)
         return;
     end
 
-    view = getappdata(existingTab(1), "AverageView");
+    view = getappdata(existingTab(1), AlakazamPlotter.viewClassFor(targetEEG));
     if ~isempty(view) && isvalid(view)
         view.setDatasetPath(targetEEG.File, this.treePathOf(targetEEG.File));
         problem = view.addDataset(sourceEEG, this.treePathOf(sourceEEG.File));
         if ~isempty(problem)
             uialert(this.MainFigure, sprintf('The dropped average cannot be overlaid on this plot. %s', ...
-                problem), 'Overlay on ERP plot', 'Icon', 'warning');
+                problem), 'Overlay on plot', 'Icon', 'warning');
         end
     end
 end

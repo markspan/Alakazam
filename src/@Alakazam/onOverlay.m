@@ -7,16 +7,18 @@ function onOverlay(this)
 %   without plotting it (the tree only clicks on the left button), so that
 %   plot is still the one the user was looking at.
 %
-%   TWO KINDS OF PLOT. On an ERP plot (AverageView) the node must be drawn as
-%   ERP waveforms too; on a continuous recording (SignalView) it must be a
-%   continuous time-domain recording. The menu item is offered for every
-%   averaged or continuous node, since the tree decides from a small record
-%   (see WorkSpaceTree.optsFor); which kind the node really is is asked here,
-%   once it is loaded (AlakazamPlotter.viewClassFor for an ERP). Whether the
-%   two can share the axes is decided by channel name and time
-%   (datasetOverlayProblem), and every refusal says why.
+%   THREE KINDS OF PLOT. On an ERP plot (AverageView) the node must be drawn
+%   as ERP waveforms too; on a spectrum (FourierView) it must be a spectrum;
+%   on a continuous recording (SignalView) it must be a continuous
+%   time-domain recording. The menu item is offered for every averaged or
+%   continuous node, since the tree decides from a small record (see
+%   WorkSpaceTree.optsFor); which kind the node really is is asked here,
+%   once it is loaded (AlakazamPlotter.viewClassFor). Whether the two can
+%   share the axes is decided by the view (addDataset): by channel name and
+%   time or frequency (datasetOverlayProblem), and for spectra by unit and
+%   by not being single trials. Every refusal says why.
 %
-%   See also ALAKAZAM.OVERLAYAVERAGE, AVERAGEVIEW, SIGNALVIEW,
+%   See also ALAKAZAM.OVERLAYAVERAGE, AVERAGEVIEW, FOURIERVIEW, SIGNALVIEW,
 %   DATASETOVERLAYPROBLEM.
     dialogTitle = 'Overlay on plot';
     node = this.Workspace.ActiveTree.SelectedNodes;
@@ -28,7 +30,7 @@ function onOverlay(this)
     view = [];
     kind = '';
     if ~isempty(tab)
-        for candidate = {'AverageView', 'SignalView'}
+        for candidate = {'AverageView', 'FourierView', 'SignalView'}
             found = getappdata(tab(1), candidate{1});
             if ~isempty(found) && isvalid(found)
                 view = found;
@@ -38,9 +40,9 @@ function onOverlay(this)
         end
     end
     if isempty(view)
-        uialert(this.MainFigure, ['Show an ERP or a continuous recording first: select it so ' ...
-            'its plot is in view, then right-click another dataset of the same kind and ' ...
-            'choose Overlay on plot.'], dialogTitle, 'Icon', 'info');
+        uialert(this.MainFigure, ['Show an ERP, a spectrum or a continuous recording first: ' ...
+            'select it so its plot is in view, then right-click another dataset of the same ' ...
+            'kind and choose Overlay on plot.'], dialogTitle, 'Icon', 'info');
         return;
     end
     if strcmp(node.UserData, tab(1).Tag)
@@ -57,6 +59,9 @@ function onOverlay(this)
     if strcmp(kind, 'AverageView')
         fits = strcmp(AlakazamPlotter.viewClassFor(EEG), 'AverageView');
         what = 'ERP waveforms';
+    elseif strcmp(kind, 'FourierView')
+        fits = strcmp(AlakazamPlotter.viewClassFor(EEG), 'FourierView');
+        what = 'a spectrum';
     else
         fits = strcmpi(TransTools.FieldOr(EEG, 'DataFormat', ''), 'CONTINUOUS') ...
             && strcmpi(TransTools.FieldOr(EEG, 'DataType', ''), 'TIMEDOMAIN');

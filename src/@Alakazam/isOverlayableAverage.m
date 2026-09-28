@@ -1,12 +1,15 @@
 function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
 %ISOVERLAYABLEAVERAGE  True when dropping SOURCEEEG onto TARGETEEG means
-%   "overlay the two ERPs" rather than "replay this step there".
+%   "overlay the two averages" rather than "replay this step there".
 %   Used by evaluateDroppedBranch to decide whether dropping one
 %   dataset onto another should overlay their average plots rather than
 %   re-apply a transformation.
 %
-%   Both must be drawn as ERP waveforms (AlakazamPlotter.viewClassFor), so
-%   a scalp map or a time-frequency result is never taken for one. Whether
+%   Both must be drawn by the same view that overlays averages
+%   (AlakazamPlotter.viewClassFor): as ERP waveforms (AverageView) or as
+%   spectra (FourierView, an averaged spectrum), so a scalp map or a
+%   time-frequency result is never taken for one, and an ERP is never
+%   overlaid on a spectrum. Whether
 %   the two can then share the axes (a channel and a time range in common)
 %   is not decided here: overlayAverage asks datasetOverlayProblem and tells the
 %   user when they cannot, instead of quietly replaying Average onto an
@@ -29,7 +32,8 @@ function tf = isOverlayableAverage(~, targetEEG, sourceEEG)
     else
         sourceIsFreshAverage = true;    % no call at all: a grand average
     end
+    targetView = AlakazamPlotter.viewClassFor(targetEEG);
     tf = sourceIsFreshAverage && ...
-         strcmp(AlakazamPlotter.viewClassFor(targetEEG), 'AverageView') && ...
-         strcmp(AlakazamPlotter.viewClassFor(sourceEEG), 'AverageView');
+         any(strcmp(targetView, {'AverageView', 'FourierView'})) && ...
+         strcmp(AlakazamPlotter.viewClassFor(sourceEEG), targetView);
 end

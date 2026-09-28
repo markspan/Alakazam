@@ -243,7 +243,8 @@ montage or channel order: every line shows the electrode named in the
 title, and a dataset without that electrode says so in its tick box. Two
 datasets with no channel in common, or with time ranges that do not
 overlap, are refused with the reason. Only averages drawn as waveforms can
-be overlaid; a scalp map or a time-frequency result cannot.
+be overlaid; a scalp map or a time-frequency result cannot. Spectra are
+overlaid in the same way on the spectrum view (see Spectra, below).
 
 **Lines are named by what sets their datasets apart** in the tree: two
 subjects' averages read `S01` and `S02`, two branches of one subject by the
@@ -290,15 +291,30 @@ since it does not depend on the overall level, which falls steeply with
 frequency. With the phase shown (**P**), the difference is the phase of the
 first bin relative to the second.
 
+**Other spectra can be overlaid** exactly as ERPs are (@sec-overlay): show
+one spectrum, then right-click another averaged spectrum, or a Welch
+spectrum of a continuous recording, and choose **Overlay on plot**; dragging
+one averaged spectrum onto another does the same. Channels are matched by
+name and each spectrum keeps its own frequencies, so one of another
+resolution or montage overlays the original. Overlaid lines are named,
+drawn underneath and paler, and taken off again, as on the ERP plot, and
+Difference and Ratio in dB compare any two ticked lines, of one dataset or
+two, interpolating the second onto the first's frequencies. A spectrum in
+another unit (power on amplitude, say) cannot share the axis and is refused
+with the reason, and so are single-trial spectra. Overlaying two Welch
+spectra is the quickest way to see what a cleaning step removed, or how two
+recordings differ at rest.
+
 The single-trial spectra of an epoched recording are shown one at a time,
-picked by trial; average them to compare bins.
+picked by trial, and take no overlay; average them to compare bins.
 
 | Control | Key | Action |
 |------------------|-----------|-------------------------------------------------------|
 | **Channel** | up, down | The channel shown. The mouse wheel also steps through the channels. |
 | **Trial** | left, right | The trial of an epoched spectrum, with the bin it belongs to. |
-| Bin tickboxes | | The bins of an averaged spectrum that are drawn. |
-| **Difference**, **Swap**, **Ratio in dB** | | Compare two ticked bins. |
+| Tickboxes | | The lines drawn: the bins of an averaged spectrum, and those of an overlaid one. |
+| **Difference**, **Swap**, **Ratio in dB** | | Compare two ticked lines. |
+| **Remove overlay**, **Overlay opacity** | | Take the overlaid spectra off, or set how pale they are drawn. |
 | **Log scale** | | Draw the magnitude on a logarithmic axis, six decades deep. Off by default; not for a phase, a difference or a ratio. |
 | **x zoom**, **y zoom** | | Zoom the frequency and power axes. |
 | | P | Switch between magnitude and phase, for a complex spectrum. |

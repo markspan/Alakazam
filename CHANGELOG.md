@@ -35,6 +35,15 @@ bar. Dates are those of the tag.
   their ratio in decibels (10·log10 for a power, 20·log10 for an
   amplitude); with the phase shown, the difference is the phase of one
   relative to the other.
+- **Overlay on plot works on spectra**, as on ERPs: right-click an averaged
+  spectrum, or a Welch spectrum of a continuous recording, and choose
+  Overlay on plot, or drop one averaged spectrum onto another. Channels are
+  matched by name and each spectrum keeps its own frequencies; overlaid
+  lines are named by what sets their datasets apart, drawn underneath and
+  paler (Overlay opacity), and taken off with Remove overlay. Difference
+  and Ratio in dB compare any two ticked lines, of one dataset or two, the
+  second interpolated onto the first's frequencies. A spectrum in another
+  unit, or single-trial spectra, are refused with the reason.
 - **Log scale** in the spectrum view draws the magnitude on a logarithmic
   axis, six decades deep; it is off by default. On a log scale the y zoom
   keeps the bottom of the axis and brings its top down.
@@ -70,6 +79,9 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- Dropping one averaged spectrum onto another replayed Average onto an
+  average, which could only fail; it now overlays the two, as dropping one
+  ERP onto another does.
 - **Fourier's Complex output had the phase of every coefficient the wrong
   way round**: it stored the complex conjugate of each spectrum, because
   the transform was transposed with `'`, which conjugates. A cosine starting

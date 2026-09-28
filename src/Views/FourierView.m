@@ -1,18 +1,18 @@
 classdef FourierView < AlakazamView
 %FOURIERVIEW  Keyboard-driven view of a frequency-domain dataset.
 %
-%   FourierView draws one channel's spectrum at a time, over the frequency
+%   FourierView draws one channel's spectra at a time, over the frequency
 %   bands shaded in the background (from AlakazamSettings.getBands,
 %   user-editable on the Settings dialog's own "Frequency bands" tab -- see
 %   drawBandStripes) and, optionally, a light moving-average smoothing over
 %   the plotted spectrum (the "Smooth spectrum" checkbox on the Settings
-%   dialog's "Graphics" tab -- see spectrumValues), and steps through
-%   channels with the up/down arrow keys -- the same interaction model
-%   EpochView and AverageView already use for time-domain data. Replaces the
-%   previous grid-of-every-channel-at-once layout with
-%   click-to-drill-into-detail, which needed its own rebuild-in-place
-%   machinery (captureSlot/buildOuterGrid) that a single persistent axes,
-%   redrawn in place like EpochView/AverageView, does not.
+%   dialog's "Graphics" tab -- see magnitudeOf), and steps through channels
+%   with the up/down arrow keys -- the same interaction model EpochView and
+%   AverageView already use for time-domain data. Replaces the previous
+%   grid-of-every-channel-at-once layout with click-to-drill-into-detail,
+%   which needed its own rebuild-in-place machinery (captureSlot/
+%   buildOuterGrid) that a single persistent axes, redrawn in place like
+%   EpochView/AverageView, does not.
 %
 %   WHAT THE 3RD DIMENSION IS depends on whether the data has been
 %   averaged, and that is not the same question as whether it has bins.
@@ -25,26 +25,40 @@ classdef FourierView < AlakazamView
 %   wrong name for the thing on screen. It asks DataFormat instead
 %   (thirdDimIsBins), and the answer decides how the view works:
 %
-%     * AVERAGED SPECTRA, one per bin, are OVERLAID, as AverageView overlays
-%       ERPs: a tickbox per bin in a strip right of the plot, each ticked bin
-%       a line in its own colour (lineColour, the palette AverageView uses,
-%       so a bin keeps its colour from waveform to spectrum), with a legend
-%       and, where Average stored one, a band of n standard errors (the ERP
-%       plot's own "Show confidence interval" settings). With exactly two
-%       bins ticked, Difference draws the first minus the second (Swap
-%       reverses it), or, with "Ratio in dB", their ratio in decibels:
-%       10*log10 for a power and 20*log10 for an amplitude, read from the
-%       unit Fourier and Welch stamp on the data (EEG.SpectrumUnit, see
-%       spectrumUnit). The ratio is how conditions are usually contrasted in
-%       a spectrum, since it does not depend on the 1/f level. On a complex
-%       spectrum with the phase shown, the difference is the phase of A
-%       relative to B, angle(A .* conj(B)).
+%     * AVERAGED SPECTRA, one per bin, are LINES, as AverageView draws ERPs:
+%       a tickbox per bin in a strip right of the plot, each ticked bin a line
+%       in its own colour (lineColour, the palette AverageView uses, so a bin
+%       keeps its colour from waveform to spectrum), with a legend and, where
+%       Average stored one, a band of n standard errors (the ERP plot's own
+%       "Show confidence interval" settings).
+%     * ONE SPECTRUM PER CHANNEL (a continuous recording, Welch) is a single
+%       black line, and the strip appears once something is overlaid on it.
 %     * SINGLE-TRIAL SPECTRA are shown one at a time, picked with a
 %       "Trial:" dropdown that names each trial's bin, or the left/right
 %       keys. Hundreds of single trials laid over each other show nothing;
-%       Average them to compare bins.
-%     * ONE SPECTRUM PER CHANNEL (a continuous recording, Welch) is a single
-%       line.
+%       Average them to compare bins. Nothing is overlaid on them.
+%
+%   OVERLAYS. Other spectra can be drawn on the same axes (addDataset): the
+%   tree's Overlay on plot command, or dropping one averaged spectrum onto
+%   another, exactly as AverageView overlays ERPs. Each overlaid spectrum
+%   keeps its own frequency axis and each channel is found by its label, so
+%   a spectrum of another resolution or montage overlays correctly
+%   (datasetOverlayProblem says when it cannot). A spectrum in another unit
+%   is refused, since the two cannot share an axis, and so are single-trial
+%   spectra. Lines are named by what tells their datasets apart in the tree
+%   (overlayNames); overlaid spectra are drawn underneath the plot's own and
+%   paler, by the Overlay opacity slider, and Remove overlay takes them off.
+%
+%   DIFFERENCE. With exactly two lines ticked, of one dataset or two,
+%   Difference draws the first minus the second (Swap reverses it), or,
+%   with "Ratio in dB", their ratio in decibels: 10*log10 for a power and
+%   20*log10 for an amplitude, read from the unit Fourier and Welch stamp on
+%   the data (EEG.SpectrumUnit, see spectrumUnit). The ratio is how
+%   conditions are usually contrasted in a spectrum, since it does not
+%   depend on the 1/f level. On complex spectra with the phase shown, the
+%   difference is the phase of the first relative to the second,
+%   angle(A .* conj(B)). The second is interpolated onto the first's
+%   frequencies when the two differ.
 %
 %   The channel is picked with a dropdown above the plot, as in EpochView
 %   and TimeFrequencyView (TransTools.BuildChannelDropdown), and the keys,
@@ -69,32 +83,40 @@ classdef FourierView < AlakazamView
 %   Style follows the project standard.
 %
 %   See also ALAKAZAMPLOTTER, EPOCHVIEW, AVERAGEVIEW, SPECTRALMEASUREVIEW,
-%   ZOOMPANBUTTONS, LINECOLOUR.
+%   ZOOMPANBUTTONS, LINECOLOUR, DATASETOVERLAYPROBLEM, OVERLAYNAMES.
 
     properties
     end
 
     properties (SetAccess = private)
         Figure          % owning figure
-        EEG             % frequency-domain dataset (channels x freqs x trials or bins)
+        EEG             % the plot's own frequency-domain dataset
         Grid            % 4x1 uigridlayout: controls | plot | x-zoom | y-zoom (built once, never rebuilt)
         ChannelDropdown % "Channel:" uidropdown (see TransTools.BuildChannelDropdown), row 1
         StepDropdown    % "Trial:" uidropdown (TransTools.BuildBinDropdown), row 1, for
                         % single-trial spectra only; empty otherwise
         LogScaleBox     % "Log scale" uicheckbox, row 1
         Axes            % the single axes the spectra are drawn in
-        Strip           % uigridlayout right of the axes for the bin tickboxes and
-                        % Difference controls; empty unless Overlay
+        Strip           % uigridlayout right of the axes: tickboxes, Difference, overlay controls
         Zoom            % ZoomPanButtons, the x/y zoom sliders alone (no button row)
-        Overlay         % true for averaged spectra: every ticked bin drawn at once
+        SingleTrials    % true for epoched single-trial spectra, stepped one at a time
+        Series          % cell of line structs (spectrumSeries): the plot's own first, then
+                        % overlaid ones; empty for single trials
+        Visible         % logical row, one per series: is it drawn?
         Channel = 1     % channel currently shown
-        CurrentTrial = 1    % single-trial spectrum shown (not used when Overlay)
+        CurrentTrial = 1    % single-trial spectrum shown (SingleTrials only)
         ShowPhase = false   % complex data only: plot angle() rather than abs()
-        Visible             % Overlay only: logical row, one per bin, is it drawn?
-        DifferenceOn = false        % drawing the first ticked bin against the second?
+        DifferenceOn = false        % drawing the first ticked line against the second?
         DifferenceSwapped = false   % ... or the second against the first
         DifferenceAsRatio = false   % ... as their ratio in dB rather than a difference
         LogScale = false            % magnitude on a logarithmic axis?
+        OverlayOpacity = 0.5        % how strongly overlaid spectra are drawn, 0.1 to 1
+    end
+
+    properties (Access = private)
+        PlotRow         % 1x2 uigridlayout holding the axes and the strip
+        HostFile        % the plot's own dataset file (EEG.File), which tells its lines apart
+        Paths           % containers.Map: dataset file -> its tree path (cellstr)
     end
 
     properties (Constant, Access = private)
@@ -107,7 +129,9 @@ classdef FourierView < AlakazamView
         %FOURIERVIEW  Build the frequency-domain view for EEG in FIG.
             this.Figure = fig;
             this.EEG    = eeg;
-            this.Overlay = thirdDimIsBins(eeg);
+            this.HostFile = fileOf(eeg);
+            this.Paths = containers.Map('KeyType', 'char', 'ValueType', 'any');
+            this.SingleTrials = ~thirdDimIsBins(eeg) && size(eeg.data, 3) > 1;
 
             % Key handling is wired by the shared Alakazam-level dispatcher
             % (Alakazam.dispatchKey), not a per-view fig.KeyPressFcn here:
@@ -125,7 +149,7 @@ classdef FourierView < AlakazamView
             controls.Layout.Row = 1;
             this.ChannelDropdown = TransTools.BuildChannelDropdown(controls, 1, 1, ...
                 {eeg.chanlocs.labels}, @(idx) this.onChannelSelected(idx));
-            if ~this.Overlay && size(eeg.data, 3) > 1
+            if this.SingleTrials
                 this.StepDropdown = TransTools.BuildBinDropdown(controls, 1, 2, ...
                     trialItems(eeg), @(idx) this.onStepSelected(idx), "Trial:");
             end
@@ -134,23 +158,22 @@ classdef FourierView < AlakazamView
                 "ValueChangedFcn", @(src, ~) this.setLogScale(src.Value));
             this.LogScaleBox.Layout.Column = 3;
 
-            % Row 2: the plot, and for averaged spectra the tickbox strip
-            % beside it, in AverageView's proportions. Nested, so that the
-            % rows around it keep a single column.
-            if this.Overlay
-                plotRow = uigridlayout(this.Grid, [1 2], "ColumnWidth", {'9x', '1x'}, ...
-                    "Padding", [0 0 0 0]);
-                plotRow.Layout.Row = 2;
-                this.Axes = uiaxes(plotRow);
-                this.Axes.Layout.Column = 1;
-                this.Strip = uigridlayout(plotRow, [1 1], "Padding", [0 0 0 0]);
-                this.Strip.Layout.Column = 2;
-                this.Visible = true(1, size(eeg.data, 3));
-            else
-                this.Axes = uiaxes(this.Grid);
-                this.Axes.Layout.Row = 2;
-            end
+            % Row 2: the plot, and beside it the strip, in AverageView's
+            % proportions while it is shown (see layoutStrip). Nested, so
+            % that the rows around it keep a single column.
+            this.PlotRow = uigridlayout(this.Grid, [1 2], "ColumnWidth", {'1x', 0}, ...
+                "Padding", [0 0 0 0]);
+            this.PlotRow.Layout.Row = 2;
+            this.Axes = uiaxes(this.PlotRow);
+            this.Axes.Layout.Column = 1;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
+            this.Strip = uigridlayout(this.PlotRow, [1 1], "Padding", [0 0 0 0]);
+            this.Strip.Layout.Column = 2;
+
+            if ~this.SingleTrials
+                this.Series = spectrumSeries(eeg, this.HostFile);
+                this.Visible = true(1, numel(this.Series));
+            end
 
             this.Zoom = ZoomPanButtons(this.Grid, [3 4], this.Axes, eeg.srate / 2, ...
                 @() this.notifyActivated());
@@ -160,20 +183,19 @@ classdef FourierView < AlakazamView
 
         function redraw(this)
         %REDRAW  Draw the spectra shown at the current channel: every ticked
-        %   bin (averaged spectra), or the current trial, or the one spectrum,
-        %   or the difference or ratio of two ticked bins; then the axes'
-        %   scale, limits, labels and title, and the controls that follow
-        %   the state.
+        %   line (the plot's own bins or spectrum and anything overlaid), or
+        %   the current trial, or the difference or ratio of two ticked
+        %   lines; then the axes' scale, limits, labels and title, and the
+        %   controls that follow the state.
             ax = this.Axes;
             delete(allchild(ax));
-            freqs = reshape(double(this.EEG.freqs), 1, []);
 
             % COMPLEX DATA MUST NEVER REACH plot() AS-IS. Fourier's
             % 'Complex' output keeps the raw coefficients, and plot() given
             % complex y IGNORES the x argument entirely and draws real
             % against imaginary -- a picture that looks like a plot, is not
             % a spectrum, and carries no frequency axis at all. Every value
-            % drawn is made real first (spectrumValues, drawDifference).
+            % drawn is made real first (magnitudeOf, angle).
             %
             % PHASE IS SHOWN WRAPPED, in [-pi, pi], and NOT UNWRAPPED
             % ACROSS FREQUENCY. Fourier measures phase from the segment's
@@ -192,12 +214,15 @@ classdef FourierView < AlakazamView
             asRatio = this.DifferenceOn && this.DifferenceAsRatio && ~phaseMode && ~isempty(unitKind);
             logScale = this.LogScale && ~phaseMode && ~this.DifferenceOn;
             ax.YScale = ternary(logScale, 'log', 'linear');
+            label = this.channelLabel();
+            [names, fullNames] = this.seriesNames();
 
             hold(ax, "on");
             if this.DifferenceOn
-                [lo, hi, handles, names, yText] = this.drawDifference(ax, freqs, phaseMode, asRatio, unitKind, unitLabel);
+                [lo, hi, handles, legendNames, yText] = this.drawDifference(ax, names, label, ...
+                    phaseMode, asRatio, unitKind, unitLabel);
             else
-                [lo, hi, handles, names] = this.drawSpectra(ax, freqs, phaseMode, logScale);
+                [lo, hi, handles, legendNames] = this.drawSpectra(ax, names, label, phaseMode, logScale);
                 yText = ternary(phaseMode, 'phase (rad)', unitLabel);
             end
             if logScale && ~(isfinite(lo) && isfinite(hi) && lo > 0 && hi > lo)
@@ -205,7 +230,7 @@ classdef FourierView < AlakazamView
                 lo = 0;
             end
             if ~phaseMode
-                this.drawBandStripes(ax, freqs, lo, hi);
+                this.drawBandStripes(ax, lo, hi);
             end
             if this.DifferenceOn && ~phaseMode
                 yline(ax, 0, "Color", "k", "LineStyle", "--", "HandleVisibility", "off");
@@ -223,8 +248,8 @@ classdef FourierView < AlakazamView
                 yticks(ax, 'auto');
                 yticklabels(ax, 'auto');
             end
-            if this.Overlay && ~isempty(handles)
-                legend(handles, cellstr(names), "Location", "northeast", "Interpreter", "none");
+            if this.showsStrip() && ~isempty(handles)
+                legend(handles, cellstr(legendNames), "Location", "northeast", "Interpreter", "none");
             else
                 legend(ax, "off");
             end
@@ -248,9 +273,7 @@ classdef FourierView < AlakazamView
             this.LogScaleBox.Tooltip = ternary(phaseMode || this.DifferenceOn, ...
                 'A log scale applies to a magnitude, not to a phase, a difference or a ratio.', ...
                 'Draw the magnitude on a logarithmic axis.');
-            if this.Overlay
-                this.buildStrip(phaseMode, unitKind);
-            end
+            this.buildStrip(names, fullNames, label, phaseMode, unitKind);
         end
 
         function onKey(this, event)
@@ -265,8 +288,8 @@ classdef FourierView < AlakazamView
                 case "downarrow"
                     this.Channel = min(size(this.EEG.data, 1), this.Channel + 1);
                 case {"leftarrow", "rightarrow"}
-                    if isempty(this.StepDropdown)
-                        return;   % bins are ticked, not stepped
+                    if ~this.SingleTrials
+                        return;   % lines are ticked, not stepped
                     end
                     step = 2 * strcmpi(event.Key, "rightarrow") - 1;
                     this.CurrentTrial = min(size(this.EEG.data, 3), max(1, this.CurrentTrial + step));
@@ -300,6 +323,91 @@ classdef FourierView < AlakazamView
             this.notifyActivated();
         end
 
+        function problem = addDataset(this, eeg, path)
+        %ADDDATASET  Overlay another spectrum.
+        %   PROBLEM = addDataset(THIS, EEG, PATH) draws EEG's spectra on these
+        %   axes and returns '', or leaves the plot as it is and returns why
+        %   (overlayProblem), or that it is already here. PATH, optional, is
+        %   the dataset's place in the tree (a cellstr of labels), which names
+        %   its lines. EEG.File, the dataset's unique cache path, tells its
+        %   lines apart from the plot's own.
+            problem = this.overlayProblem(eeg);
+            if ~isempty(problem)
+                return;
+            end
+            file = fileOf(eeg);
+            if any(cellfun(@(s) strcmp(s.file, file), this.Series))
+                problem = 'It is already on this plot.';
+                return;
+            end
+            if nargin >= 3 && ~isempty(path)
+                this.Paths(file) = cellstr(string(path));
+            end
+            added = spectrumSeries(eeg, file);
+            this.Series = [this.Series, added];
+            this.Visible = [this.Visible, true(1, numel(added))];
+            this.redraw();
+        end
+
+        function problem = overlayProblem(this, eeg)
+        %OVERLAYPROBLEM  Why EEG cannot be overlaid here, or '' if it can:
+        %   not a spectrum; single trials on either side, which are stepped
+        %   through, not overlaid; another unit, which cannot share the axis;
+        %   or no channel or frequency in common (datasetOverlayProblem).
+            problem = '';
+            if this.SingleTrials
+                problem = ['This plot shows single trials one at a time. Overlay on an averaged ' ...
+                    'spectrum, or on a single one such as Welch''s.'];
+                return;
+            end
+            if ~strcmpi(TransTools.FieldOr(eeg, 'DataType', ''), 'FrequencyDomain')
+                problem = 'It is not a spectrum.';
+                return;
+            end
+            if ~thirdDimIsBins(eeg) && size(eeg.data, 3) > 1
+                problem = 'It holds single-trial spectra; average them to overlay them.';
+                return;
+            end
+            [~, ~, plotUnit] = spectrumUnit(this.EEG);
+            [~, ~, itsUnit] = spectrumUnit(eeg);
+            if ~isempty(plotUnit) && ~isempty(itsUnit) && ~strcmp(plotUnit, itsUnit)
+                problem = sprintf('It is %s and the plot %s, which cannot share an axis.', ...
+                    itsUnit, plotUnit);
+                return;
+            end
+            problem = datasetOverlayProblem({this.EEG.chanlocs.labels}, this.EEG.freqs, ...
+                {eeg.chanlocs.labels}, eeg.freqs, 'Hz');
+        end
+
+        function setDatasetPath(this, file, path)
+        %SETDATASETPATH  Name FILE's lines by PATH, its place in the tree.
+            this.Paths(char(string(file))) = cellstr(string(path));
+            if this.isOverlaid()
+                this.redraw();
+            end
+        end
+
+        function removeOverlays(this)
+        %REMOVEOVERLAYS  Take every overlaid spectrum off the plot, leaving the
+        %   plot's own lines as they were (ticked or not).
+            own = cellfun(@(s) this.isOwn(s), this.Series);
+            for file = unique(cellfun(@(s) string(s.file), this.Series(~own)))
+                if isKey(this.Paths, char(file))
+                    remove(this.Paths, char(file));
+                end
+            end
+            this.Series = this.Series(own);
+            this.Visible = this.Visible(own);
+            this.notifyActivated();
+            this.redraw();
+        end
+
+        function setOverlayOpacity(this, value)
+        %SETOVERLAYOPACITY  How strongly overlaid spectra are drawn (0.1 to 1).
+            this.OverlayOpacity = min(1, max(0.1, value));
+            this.redraw();
+        end
+
         function setLogScale(this, on)
         %SETLOGSCALE  Draw the magnitude on a logarithmic axis, or a linear one.
             this.LogScale = logical(on);
@@ -308,13 +416,12 @@ classdef FourierView < AlakazamView
         end
 
         function tf = canShowDifference(this)
-        %CANSHOWDIFFERENCE  A difference needs averaged spectra with exactly
-        %   two bins ticked.
-            tf = this.Overlay && nnz(this.Visible) == 2;
+        %CANSHOWDIFFERENCE  A difference needs exactly two ticked lines.
+            tf = ~this.SingleTrials && nnz(this.Visible) == 2;
         end
 
         function setDifference(this, on)
-        %SETDIFFERENCE  Draw the two ticked bins' difference, or the bins.
+        %SETDIFFERENCE  Draw the two ticked lines' difference, or the lines.
             this.DifferenceOn = logical(on) && this.canShowDifference();
             this.notifyActivated();
             this.redraw();
@@ -328,7 +435,7 @@ classdef FourierView < AlakazamView
         end
 
         function setRatio(this, on)
-        %SETRATIO  Show the two ticked bins' ratio in dB, or their difference.
+        %SETRATIO  Show the two ticked lines' ratio in dB, or their difference.
             this.DifferenceAsRatio = logical(on);
             this.notifyActivated();
             this.redraw();
@@ -336,114 +443,154 @@ classdef FourierView < AlakazamView
     end
 
     methods (Access = private)
-        function [lo, hi, handles, names] = drawSpectra(this, ax, freqs, phaseMode, logScale)
-        %DRAWSPECTRA  Every spectrum shown (shownSpectra) at the current
-        %   channel, each over its standard-error band where there is one,
-        %   and the natural y-range [LO, HI] they need. A magnitude axis
-        %   starts at 0 unless the data dips below it (a combination bin can).
-        %   On a log axis values at or below zero are left out, and LO is
-        %   the smallest value drawn, but no more than LogDecades below the
-        %   largest; a band edge below LO is drawn down to it.
-            shown = this.shownSpectra();
-            handles = gobjects(1, 0);
-            names = strings(1, 0);
+        function [lo, hi, handles, legendNames] = drawSpectra(this, ax, names, label, phaseMode, logScale)
+        %DRAWSPECTRA  Every ticked line at the channel called LABEL, each over
+        %   its standard-error band where it has one, and the natural y-range
+        %   [LO, HI] they need. Overlaid spectra are drawn first, so the
+        %   plot's own lie on top of them. A magnitude axis starts at 0 unless
+        %   the data dips below it (a combination bin can). On a log axis
+        %   values at or below zero are left out, and LO is the smallest value
+        %   drawn, but no more than LogDecades below the largest; a band edge
+        %   below LO is drawn down to it. A line whose dataset lacks the
+        %   channel, or has no phase to show, is left out (its tickbox says so).
+            [series, visible] = this.drawnSeries();
+            n = numel(series);
+            lineOf = gobjects(1, n);
+            own = cellfun(@(s) this.isOwn(s), series);
+            order = [find(~own & visible), find(own & visible)];
+
             if phaseMode
                 lo = -pi;
                 hi = pi;
-                for k = shown
+                for i = order
+                    s = series{i};
+                    ch = seriesChannel(s, label);
+                    if isempty(ch) || isreal(s.data)
+                        continue;
+                    end
                     % Points, not a line: a wrapped phase jumps between pi
                     % and -pi, and a line would draw each jump as a
                     % vertical stroke.
-                    handles(end + 1) = plot(ax, freqs, this.spectrumValues(k, true), ".", ...
-                        "Color", this.colourOf(k), "MarkerSize", 6, ...
-                        "Tag", "SpectrumLine", "UserData", k); %#ok<AGROW>
-                    names(end + 1) = binName(this.EEG, k); %#ok<AGROW>
+                    lineOf(i) = plot(ax, s.freqs, angle(s.data(ch, :)), ".", ...
+                        "Color", this.seriesColour(i, s), "MarkerSize", 6, ...
+                        "Tag", "SpectrumLine", "UserData", i);
                 end
-                return;
-            end
-
-            % First every value, to know the range; then the drawing, since
-            % on a log axis a band's lower edge is drawn down to that range.
-            [bandOn, bandN] = errorBandSettings();
-            n = numel(shown);
-            values = nan(n, numel(freqs));
-            tops = values;
-            bottoms = values;
-            for i = 1:n
-                y = this.spectrumValues(shown(i), false);
-                band = zeros(size(y));
-                if this.Overlay && bandOn
-                    band = bandN * this.standardError(shown(i));
-                end
-                values(i, :) = y;
-                tops(i, :) = y + band;
-                bottoms(i, :) = y - band;
-            end
-            if logScale
-                values(values <= 0) = NaN;
-                tops(tops <= 0) = NaN;
-                hi = max([-inf; tops(:)], [], "omitnan");
-                positive = [values(values > 0); bottoms(bottoms > 0)];
-                lo = max(min([inf; positive], [], "omitnan"), hi / 10 ^ this.LogDecades);
-                bottoms(~(bottoms > lo)) = lo;
             else
-                hi = max([-inf; tops(:)], [], "omitnan");
-                lo = min([0; bottoms(:)], [], "omitnan");
-            end
-
-            for i = 1:n
-                k = shown(i);
-                colour = this.colourOf(k);
-                if any(tops(i, :) > values(i, :))
-                    drawBand(ax, freqs, tops(i, :), bottoms(i, :), colour);
+                % First every value, to know the range; then the drawing,
+                % since on a log axis a band's lower edge is drawn down to it.
+                [bandOn, bandN] = errorBandSettings();
+                values = cell(1, n);
+                tops = cell(1, n);
+                bottoms = cell(1, n);
+                for i = order
+                    s = series{i};
+                    ch = seriesChannel(s, label);
+                    if isempty(ch)
+                        continue;
+                    end
+                    y = magnitudeOf(s.data(ch, :));
+                    band = zeros(size(y));
+                    if bandOn && ~isempty(s.stErr)
+                        band = bandN * s.stErr(ch, :);
+                        band(~isfinite(band)) = 0;
+                    end
+                    values{i} = y;
+                    tops{i} = y + band;
+                    bottoms{i} = y - band;
                 end
-                handles(end + 1) = plot(ax, freqs, values(i, :), "Color", colour, ...
-                    "LineWidth", 1, "Tag", "SpectrumLine", "UserData", k); %#ok<AGROW>
-                names(end + 1) = binName(this.EEG, k); %#ok<AGROW>
+                allValues = [values{:}];
+                allTops = [tops{:}];
+                allBottoms = [bottoms{:}];
+                hi = max([-inf, allTops(~logScale | allTops > 0)], [], "omitnan");
+                if logScale
+                    positive = [allValues(allValues > 0), allBottoms(allBottoms > 0)];
+                    lo = max(min([inf, positive], [], "omitnan"), hi / 10 ^ this.LogDecades);
+                else
+                    lo = min([0, allBottoms], [], "omitnan");
+                end
+
+                for i = order
+                    if isempty(values{i})
+                        continue;
+                    end
+                    s = series{i};
+                    y = values{i};
+                    top = tops{i};
+                    bottom = bottoms{i};
+                    if logScale
+                        y(y <= 0) = NaN;
+                        top(top <= 0) = NaN;
+                        bottom(~(bottom > lo)) = lo;
+                    end
+                    colour = this.seriesColour(i, s);
+                    if any(top > y)
+                        opacity = ternary(this.isOwn(s), 1, this.OverlayOpacity);
+                        drawBand(ax, s.freqs, top, bottom, colour, 0.3 * opacity);
+                    end
+                    lineOf(i) = plot(ax, s.freqs, y, "Color", colour, "LineWidth", 1, ...
+                        "Tag", "SpectrumLine", "UserData", i);
+                end
+            end
+            drawn = isgraphics(lineOf);
+            handles = lineOf(drawn);
+            legendNames = strings(1, 0);
+            if numel(names) == n   % single trials have no names, and no legend
+                legendNames = names(drawn);
             end
         end
 
-        function colour = colourOf(this, k)
-        %COLOUROF  Spectrum K's colour: its bin's (lineColour) when bins are
-        %   overlaid, black when there is one spectrum to draw.
-            colour = [0 0 0];
-            if this.Overlay
-                colour = lineColour(k);
-            end
-        end
-
-        function [lo, hi, handles, names, yText] = drawDifference(this, ax, freqs, phaseMode, asRatio, unitKind, unitLabel)
-        %DRAWDIFFERENCE  The first ticked bin against the second: their
-        %   difference, their ratio in dB (10*log10 for a power, 20*log10
-        %   for an amplitude), or, with the phase shown, the phase of the
-        %   first relative to the second. No band: the standard error of a
-        %   difference cannot be had from the two bins' own when they share
-        %   trials, as AverageView's difference explains.
+        function [lo, hi, handles, legendNames, yText] = drawDifference(this, ax, names, label, phaseMode, asRatio, unitKind, unitLabel)
+        %DRAWDIFFERENCE  The first ticked line against the second at the
+        %   channel called LABEL: their difference, their ratio in dB
+        %   (10*log10 for a power, 20*log10 for an amplitude), or, with the
+        %   phase shown, the phase of the first relative to the second. The
+        %   second is interpolated onto the first's frequencies when the two
+        %   differ. No band: the standard error of a difference cannot be had
+        %   from the two lines' own when they share trials, as AverageView's
+        %   difference explains. Nothing is drawn when either line lacks the
+        %   channel, or, for a phase, is not complex.
+            handles = gobjects(1, 0);
+            legendNames = strings(1, 0);
             pair = this.differencePair();
-            [a, b] = deal(pair(1), pair(2));
-            names = binName(this.EEG, a);
+            a = this.Series{pair(1)};
+            b = this.Series{pair(2)};
+            ca = seriesChannel(a, label);
+            cb = seriesChannel(b, label);
             if phaseMode
-                y = angle(this.rawSpectrum(a) .* conj(this.rawSpectrum(b)));
-                handles = plot(ax, freqs, y, ".", "Color", [0 0 0], "MarkerSize", 6, ...
-                    "Tag", "DifferenceLine");
-                names = names + " vs " + binName(this.EEG, b);
                 yText = 'phase difference (rad)';
-                lo = -pi; hi = pi;
+                lo = -pi;
+                hi = pi;
+                if isempty(ca) || isempty(cb) || isreal(a.data) || isreal(b.data)
+                    return;
+                end
+                bOnA = onGrid(b.freqs, b.data(cb, :), a.freqs);
+                handles = plot(ax, a.freqs, angle(a.data(ca, :) .* conj(bOnA)), ".", ...
+                    "Color", [0 0 0], "MarkerSize", 6, "Tag", "DifferenceLine");
+                legendNames = names(pair(1)) + " vs " + names(pair(2));
                 return;
             end
-            ya = this.spectrumValues(a, false);
-            yb = this.spectrumValues(b, false);
+
+            if asRatio
+                yText = 'ratio (dB)';
+            else
+                yText = strtrim(['difference ' unitLabel]);
+            end
+            lo = 0;
+            hi = -inf;
+            if isempty(ca) || isempty(cb)
+                return;
+            end
+            ya = magnitudeOf(a.data(ca, :));
+            yb = onGrid(b.freqs, magnitudeOf(b.data(cb, :)), a.freqs);
             if asRatio
                 y = ternary(strcmp(unitKind, 'power'), 10, 20) * log10(ya ./ yb);
                 y(~isfinite(y)) = NaN;
-                names = names + " / " + binName(this.EEG, b) + " (dB)";
-                yText = 'ratio (dB)';
+                legendNames = names(pair(1)) + " / " + names(pair(2)) + " (dB)";
             else
                 y = ya - yb;
-                names = names + " " + char(8722) + " " + binName(this.EEG, b);
-                yText = strtrim(['difference ' unitLabel]);
+                legendNames = names(pair(1)) + " " + char(8722) + " " + names(pair(2));
             end
-            handles = plot(ax, freqs, y, "Color", [0 0 0], "LineWidth", 1.5, ...
+            handles = plot(ax, a.freqs, y, "Color", [0 0 0], "LineWidth", 1.5, ...
                 "Tag", "DifferenceLine");
             % Both signs, with 0 in view and a margin so the extremes are
             % not drawn on the frame.
@@ -454,7 +601,7 @@ classdef FourierView < AlakazamView
             hi = hi + margin;
         end
 
-        function drawBandStripes(~, ax, freqs, lo, hi)
+        function drawBandStripes(this, ax, lo, hi)
         %DRAWBANDSTRIPES  Shade each frequency band (AlakazamSettings.getBands,
         %   the "Frequency bands" settings tab) as a pale stripe from LO to
         %   HI, behind whatever is drawn. Stripes rather than the area under
@@ -467,9 +614,10 @@ classdef FourierView < AlakazamView
             if ~(isfinite(lo) && isfinite(hi) && hi > lo)
                 return;
             end
-            bands = AlakazamSettings.getBands();
+            freqs = double(this.EEG.freqs);
             fmin = min(freqs);
             fmax = max(freqs);
+            bands = AlakazamSettings.getBands();
             for b = 1:numel(bands)
                 x0 = max(bands(b).loFreq, fmin);
                 x1 = min(bands(b).hiFreq, fmax);
@@ -483,59 +631,95 @@ classdef FourierView < AlakazamView
             end
         end
 
-        function shown = shownSpectra(this)
-        %SHOWNSPECTRA  Which spectra of the third dimension are drawn: the
-        %   ticked bins of averaged spectra, otherwise the current trial (or
-        %   the only spectrum).
-            if this.Overlay
-                shown = find(this.Visible);
+        function [series, visible] = drawnSeries(this)
+        %DRAWNSERIES  The lines this plot is drawing from, and which are
+        %   ticked: the current trial alone for single-trial spectra,
+        %   otherwise the plot's own and overlaid series.
+            if this.SingleTrials
+                series = {sliceSeries(this.EEG, this.CurrentTrial, "", this.HostFile)};
+                visible = true;
             else
-                shown = this.CurrentTrial;
+                series = this.Series;
+                visible = this.Visible;
+            end
+        end
+
+        function tf = showsStrip(this)
+        %SHOWSSTRIP  Whether the strip beside the plot has anything to offer:
+        %   bins to tick, or an overlay to manage. A single spectrum alone,
+        %   and single trials, have neither.
+            tf = ~this.SingleTrials && ~isempty(this.Series) ...
+                && (this.Series{1}.isBin || numel(this.Series) > 1);
+        end
+
+        function tf = isOverlaid(this)
+        %ISOVERLAID  Whether another dataset is drawn on this plot.
+            tf = any(~cellfun(@(s) this.isOwn(s), this.Series));
+        end
+
+        function tf = isOwn(this, s)
+        %ISOWN  Whether line S belongs to the plot's own dataset.
+            tf = strcmp(s.file, this.HostFile);
+        end
+
+        function colour = seriesColour(this, i, s)
+        %SERIESCOLOUR  Line I's colour: black when it is the one spectrum
+        %   drawn, otherwise its place in the shared palette (lineColour),
+        %   paler for an overlaid dataset by the Overlay opacity.
+            if ~this.showsStrip()
+                colour = [0 0 0];
+                return;
+            end
+            colour = lineColour(i);
+            if ~this.isOwn(s)
+                colour = paleColour(colour, this.OverlayOpacity, this.Axes.Color);
             end
         end
 
         function pair = differencePair(this)
-        %DIFFERENCEPAIR  The two ticked bins, in the order they are compared.
+        %DIFFERENCEPAIR  The two ticked lines, in the order they are compared.
             pair = find(this.Visible, 2);
             if this.DifferenceSwapped
                 pair = fliplr(pair);
             end
         end
 
-        function x = rawSpectrum(this, k)
-        %RAWSPECTRUM  Spectrum K at the current channel as stored: complex for
-        %   Fourier's Complex output.
-            x = reshape(this.EEG.data(this.Channel, :, k), 1, []);
+        function label = channelLabel(this)
+        %CHANNELLABEL  The label of the channel shown, from the plot's own list.
+            label = char(string(this.EEG.chanlocs(min(max(this.Channel, 1), ...
+                numel(this.EEG.chanlocs))).labels));
         end
 
-        function y = spectrumValues(this, k, phaseMode)
-        %SPECTRUMVALUES  Spectrum K at the current channel as drawn: its
-        %   wrapped phase, or its magnitude (the modulus, for complex data),
-        %   smoothed when the Settings say so. A phase is never smoothed: a
-        %   moving mean over an angle is not a meaningful average (pi and -pi
-        %   are the same phase).
-            x = double(this.rawSpectrum(k));
-            if phaseMode
-                y = angle(x);
+        function [names, fullNames] = seriesNames(this)
+        %SERIESNAMES  A legend name for every line, and its full tree path.
+        %   The plot's own lines are named by their bin, as always. Once
+        %   another dataset is overlaid, each name is prefixed with what
+        %   tells the datasets apart (overlayNames); a dataset with no known
+        %   path is called by its transformation's name, as in AverageView.
+            n = numel(this.Series);
+            names = strings(1, n);
+            for i = 1:n
+                names(i) = this.Series{i}.name;
+            end
+            fullNames = names;
+            files = unique(cellfun(@(s) string(s.file), this.Series), 'stable');
+            if numel(files) < 2
                 return;
             end
-            y = x;
-            if ~isreal(x)
-                y = abs(x);
+            paths = cell(1, numel(files));
+            for k = 1:numel(files)
+                if isKey(this.Paths, char(files(k)))
+                    paths{k} = this.Paths(char(files(k)));
+                else
+                    first = find(cellfun(@(s) string(s.file) == files(k), this.Series), 1);
+                    paths{k} = {char(this.Series{first}.id)};
+                end
             end
-            if AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
-                y = movmean(y, 5);
-            end
-        end
-
-        function se = standardError(this, k)
-        %STANDARDERROR  Average's standard error of spectrum K at the current
-        %   channel, or zeros when the dataset carries none.
-            se = zeros(1, size(this.EEG.data, 2));
-            if isfield(this.EEG, 'stErr') && isequal(size(this.EEG.stErr, 1, 2), size(this.EEG.data, 1, 2)) ...
-                    && size(this.EEG.stErr, 3) >= k
-                se = reshape(double(real(this.EEG.stErr(this.Channel, :, k))), 1, []);
-                se(~isfinite(se)) = 0;
+            [short, full] = overlayNames(paths);
+            for i = 1:n
+                k = find(files == string(this.Series{i}.file), 1);
+                names(i) = short(k) + ": " + this.Series{i}.name;
+                fullNames(i) = full(k) + ": " + this.Series{i}.name;
             end
         end
 
@@ -545,8 +729,7 @@ classdef FourierView < AlakazamView
         %   comparison drawn. The magnitude/phase mode is not named: the
         %   phase's own y label and multiples of pi say which is shown, and
         %   the P key is in the manual's table of keys.
-            text = sprintf("Channel %i: %s", this.Channel, this.EEG.chanlocs(this.Channel).labels);
-            nseg = size(this.EEG.data, 3);
+            text = sprintf("Channel %i: %s", this.Channel, this.channelLabel());
             if this.DifferenceOn
                 if phaseMode
                     text = text + ", phase difference";
@@ -555,13 +738,14 @@ classdef FourierView < AlakazamView
                 else
                     text = text + ", difference";
                 end
-            elseif ~this.Overlay && nseg > 1
+            elseif this.SingleTrials
                 % "i of N" alongside the label/number, not just the label
                 % alone: with only a label, stepping to a same- or similarly-
                 % named neighbour (or a stale figure that never redrew) reads
                 % as "nothing happened" -- the count makes a real step
                 % unambiguous even when the label text does not obviously
                 % change.
+                nseg = size(this.EEG.data, 3);
                 where = trialBinPhrase(this.EEG, this.CurrentTrial);
                 if isempty(where)
                     text = sprintf('%s   (Trial %i of %i)', text, this.CurrentTrial, nseg);
@@ -571,61 +755,97 @@ classdef FourierView < AlakazamView
             end
         end
 
-        function buildStrip(this, phaseMode, unitKind)
-        %BUILDSTRIP  The strip right of the plot, as AverageView's: one
-        %   tickbox per bin, reflecting (and toggling) this.Visible; below
-        %   them Difference, and while it is on, Swap and "Ratio in dB".
-        %   Rebuilt on every redraw, so it always matches the state.
-            delete(this.Strip.Children);
-            n = numel(this.Visible);
-            rows = [repmat({22}, 1, n), {24}];
-            if this.DifferenceOn
-                rows = [rows, {24, 22}];
+        function layoutStrip(this)
+        %LAYOUTSTRIP  Show the strip in AverageView's proportions, wider while
+        %   another dataset is overlaid (its lines carry the dataset's name as
+        %   well as the bin's), or give its column no width when it has
+        %   nothing to offer.
+            if ~this.showsStrip()
+                this.PlotRow.ColumnWidth = {'1x', 0};
+            elseif this.isOverlaid()
+                this.PlotRow.ColumnWidth = {'1x', 200};
+            else
+                this.PlotRow.ColumnWidth = {'9x', '1x'};
             end
+        end
+
+        function buildStrip(this, names, fullNames, label, phaseMode, unitKind)
+        %BUILDSTRIP  The strip right of the plot, as AverageView's: one
+        %   tickbox per line, reflecting (and toggling) this.Visible; below
+        %   them Difference, while it is on Swap and "Ratio in dB", and while
+        %   another dataset is overlaid Remove overlay and the overlay
+        %   opacity. Rebuilt on every redraw, so it always matches the state.
+            delete(this.Strip.Children);
+            this.layoutStrip();
+            if ~this.showsStrip()
+                return;
+            end
+            n = numel(this.Series);
+            overlaid = this.isOverlaid();
+            rows = [repmat({22}, 1, n), {24}];                 % tickboxes, Difference
+            if this.DifferenceOn;  rows = [rows, {24, 22}];     end   % Swap, Ratio in dB
+            if overlaid;           rows = [rows, {24, 16, 24}]; end   % Remove overlay, opacity
             this.Strip.RowHeight = [rows, {'1x'}];
 
-            for k = 1:n
-                cb = uicheckbox(this.Strip, "Text", char(binName(this.EEG, k)), ...
-                    "Tooltip", char(binName(this.EEG, k)), "Value", this.Visible(k), ...
-                    "ValueChangedFcn", @(src, ~) this.onToggle(k, src.Value));
-                cb.Layout.Row = k;
+            for i = 1:n
+                s = this.Series{i};
+                text = names(i);
+                if isempty(seriesChannel(s, label))
+                    text = sprintf('%s (no %s)', text, label);
+                elseif phaseMode && isreal(s.data)
+                    text = sprintf('%s (no phase)', text);
+                end
+                cb = uicheckbox(this.Strip, "Text", char(text), "Tooltip", char(fullNames(i)), ...
+                    "Value", this.Visible(i), ...
+                    "ValueChangedFcn", @(src, ~) this.onToggle(i, src.Value));
+                cb.Layout.Row = i;
             end
             difference = uibutton(this.Strip, "state", "Text", "Difference", ...
                 "Value", this.DifferenceOn, "Enable", this.canShowDifference(), ...
                 "Tag", "DifferenceButton", ...
-                "Tooltip", 'Compare the first ticked bin with the second. Tick exactly two bins.', ...
+                "Tooltip", 'Compare the first ticked line with the second. Tick exactly two lines.', ...
                 "ValueChangedFcn", @(src, ~) this.setDifference(src.Value));
             difference.Layout.Row = n + 1;
-            if ~this.DifferenceOn
-                return;
+            row = n + 1;
+            if this.DifferenceOn
+                row = row + 1;
+                swap = uibutton(this.Strip, "Text", "Swap", "Tag", "SwapButton", ...
+                    "Tooltip", 'Compare the other way round.', ...
+                    "ButtonPushedFcn", @(~, ~) this.swapDifference());
+                swap.Layout.Row = row;
+                row = row + 1;
+                canRatio = ~phaseMode && ~isempty(unitKind);
+                ratio = uicheckbox(this.Strip, "Text", "Ratio in dB", "Tag", "RatioCheckbox", ...
+                    "Value", this.DifferenceAsRatio && canRatio, "Enable", canRatio, ...
+                    "Tooltip", ratioTooltip(phaseMode, unitKind), ...
+                    "ValueChangedFcn", @(src, ~) this.setRatio(src.Value));
+                ratio.Layout.Row = row;
             end
-            swap = uibutton(this.Strip, "Text", "Swap", "Tag", "SwapButton", ...
-                "Tooltip", 'Compare the other way round.', ...
-                "ButtonPushedFcn", @(~, ~) this.swapDifference());
-            swap.Layout.Row = n + 2;
-            canRatio = ~phaseMode && ~isempty(unitKind);
-            ratio = uicheckbox(this.Strip, "Text", "Ratio in dB", "Tag", "RatioCheckbox", ...
-                "Value", this.DifferenceAsRatio && canRatio, "Enable", canRatio, ...
-                "ValueChangedFcn", @(src, ~) this.setRatio(src.Value));
-            ratio.Layout.Row = n + 3;
-            if phaseMode
-                ratio.Tooltip = 'A phase is compared by its difference.';
-            elseif isempty(unitKind)
-                ratio.Tooltip = ['This spectrum does not say whether it is a power or an ' ...
-                    'amplitude; run its Fourier or Welch step again to compare in dB.'];
-            else
-                isPower = strcmp(unitKind, 'power');
-                ratio.Tooltip = sprintf(['The first bin over the second in dB: %s of their ' ...
-                    'ratio, since this spectrum is %s.'], ...
-                    ternary(isPower, '10*log10', '20*log10'), ternary(isPower, 'a power', 'an amplitude'));
+            if overlaid
+                row = row + 1;
+                remover = uibutton(this.Strip, "Text", "Remove overlay", ...
+                    "Tag", "RemoveOverlayButton", ...
+                    "Tooltip", 'Take the overlaid spectra off this plot, keeping its own lines.', ...
+                    "ButtonPushedFcn", @(~, ~) this.removeOverlays());
+                remover.Layout.Row = row;
+                row = row + 1;
+                caption = uilabel(this.Strip, "Text", "Overlay opacity", "FontSize", 10);
+                caption.Layout.Row = row;
+                row = row + 1;
+                slider = uislider(this.Strip, "Limits", [0.1 1], ...
+                    "Value", this.OverlayOpacity, "MajorTicks", [], "MinorTicks", [], ...
+                    "Tag", "OverlayOpacity", ...
+                    "Tooltip", 'How strongly the overlaid spectra are drawn, under the plot''s own.', ...
+                    "ValueChangedFcn", @(src, ~) this.setOverlayOpacity(src.Value));
+                slider.Layout.Row = row;
             end
         end
 
-        function onToggle(this, k, value)
-        %ONTOGGLE  A tickbox was (un)checked: draw or drop that bin. A
-        %   difference needs exactly two bins, so ticking a third (or
-        %   unticking one of the two) returns to the bins (see redraw).
-            this.Visible(k) = logical(value);
+        function onToggle(this, i, value)
+        %ONTOGGLE  A tickbox was (un)checked: draw or drop that line. A
+        %   difference needs exactly two lines, so ticking a third (or
+        %   unticking one of the two) returns to the lines (see redraw).
+            this.Visible(i) = logical(value);
             this.notifyActivated();
             this.redraw();
         end
@@ -679,40 +899,142 @@ classdef FourierView < AlakazamView
     end
 end
 
-function [kind, label] = spectrumUnit(EEG)
-%SPECTRUMUNIT  What a spectrum holds, from the EEG.SpectrumUnit that Fourier
-%   (its Output) and Welch ('PSD') stamp on their result, which Average
-%   keeps. KIND is 'power' or 'amplitude', which decides 10*log10 or
-%   20*log10 in a ratio in dB; LABEL is the y-axis label. Both are '' for a
-%   spectrum computed before the unit was stamped: the axis is then left
-%   unlabelled and the ratio unavailable, rather than guessed.
-    kind = '';
-    label = '';
-    if ~isfield(EEG, 'SpectrumUnit') || isempty(EEG.SpectrumUnit)
+% ======================================================================= %
+function series = spectrumSeries(eeg, file)
+%SPECTRUMSERIES  EEG's lines: one per bin of an averaged spectrum, else its
+%   one spectrum, named by the dataset's transformation (as AverageView
+%   names a plain average) or "Spectrum".
+    if thirdDimIsBins(eeg)
+        series = arrayfun(@(k) sliceSeries(eeg, k, binName(eeg, k), file), ...
+            1:size(eeg.data, 3), 'UniformOutput', false);
         return;
     end
-    switch lower(char(string(EEG.SpectrumUnit)))
-        case {'volt', 'complex'}
-            kind = 'amplitude'; label = 'amplitude (\muV)';
-        case 'voltdens'
-            kind = 'amplitude'; label = 'amplitude density (\muV/Hz)';
-        case 'power'
-            kind = 'power'; label = 'power (\muV^2)';
-        case 'powerdens'
-            kind = 'power'; label = 'power density (\muV^2/Hz)';
-        case 'psd'
-            kind = 'power'; label = 'PSD (\muV^2/Hz)';
+    name = string(TransTools.FieldOr(eeg, 'id', ''));
+    if strlength(name) == 0
+        name = "Spectrum";
+    end
+    series = {sliceSeries(eeg, 1, name, file)};
+end
+
+function s = sliceSeries(eeg, k, name, file)
+%SLICESERIES  One line: spectrum K of EEG, with what drawing it needs. Each
+%   line carries its own frequencies and channel labels, so a spectrum of
+%   another resolution or montage is drawn correctly, and its standard
+%   error when Average stored one ([] otherwise).
+    se = [];
+    if isfield(eeg, 'stErr') && isequal(size(eeg.stErr, 1, 2), size(eeg.data, 1, 2)) ...
+            && size(eeg.stErr, 3) >= k
+        se = double(real(eeg.stErr(:, :, k)));
+    end
+    s = struct('file', file, 'id', string(TransTools.FieldOr(eeg, 'id', '')), ...
+        'name', string(name), 'freqs', reshape(double(eeg.freqs), 1, []), ...
+        'labels', {cellstr(string({eeg.chanlocs.labels}))}, ...
+        'data', eeg.data(:, :, k), 'stErr', se, 'isBin', thirdDimIsBins(eeg));
+end
+
+function ch = seriesChannel(s, label)
+%SERIESCHANNEL  Where the channel called LABEL is in line S, or [] when S
+%   does not have it. By label, since an overlaid dataset's channels need
+%   not be in the plot's order.
+    ch = find(strcmpi(strtrim(s.labels), strtrim(label)), 1);
+end
+
+function file = fileOf(eeg)
+%FILEOF  A dataset's cache file, its identity on a plot ('' when unknown).
+    file = char(string(TransTools.FieldOr(eeg, 'File', '')));
+end
+
+function y = magnitudeOf(x)
+%MAGNITUDEOF  A spectrum as drawn: its modulus (for complex data) as a real
+%   row, smoothed when the Settings say so. A phase is never smoothed, and
+%   does not come here: a moving mean over an angle is not a meaningful
+%   average (pi and -pi are the same phase).
+    y = reshape(double(x), 1, []);
+    if ~isreal(y)
+        y = abs(y);
+    end
+    if AlakazamSettings.get('graphics', 'fourierPlot', 'smoothSpectrum')
+        y = movmean(y, 5);
     end
 end
 
-function drawBand(ax, freqs, yTop, yBottom, colour)
+function yq = onGrid(x, y, xq)
+%ONGRID  Y (sampled at frequencies X) at frequencies XQ: itself when the two
+%   grids agree, otherwise interpolated, and NaN outside X.
+    if numel(x) == numel(xq) && max(abs(x - xq)) < 1e-9
+        yq = y;
+    else
+        yq = interp1(x, y, xq, 'linear', NaN);
+    end
+end
+
+function colour = paleColour(colour, opacity, background)
+%PALECOLOUR  COLOUR as seen at OPACITY over BACKGROUND, mixed by hand as
+%   AverageView's paleColour explains (an RGBA line colour is not kept).
+    if ~isnumeric(background) || numel(background) ~= 3
+        background = [1 1 1];
+    end
+    colour = opacity * colour + (1 - opacity) * background;
+end
+
+function drawBand(ax, freqs, yTop, yBottom, colour, alpha)
 %DRAWBAND  The shaded band between YBOTTOM and YTOP, with dotted edges, as
 %   AverageView draws its standard-error band.
     ok = isfinite(yTop) & isfinite(yBottom);
     plot(ax, freqs, yTop, "Color", colour, "LineStyle", ":", "HandleVisibility", "off");
     plot(ax, freqs, yBottom, "Color", colour, "LineStyle", ":", "HandleVisibility", "off");
     patch(ax, [freqs(ok), fliplr(freqs(ok))], [yTop(ok), fliplr(yBottom(ok))], colour, ...
-        "EdgeColor", "none", "FaceAlpha", 0.3, "HandleVisibility", "off");
+        "EdgeColor", "none", "FaceAlpha", alpha, "HandleVisibility", "off");
+end
+
+function [kind, label, phrase] = spectrumUnit(EEG)
+%SPECTRUMUNIT  What a spectrum holds, from the EEG.SpectrumUnit that Fourier
+%   (its Output) and Welch ('PSD') stamp on their result, which Average
+%   keeps. KIND is 'power' or 'amplitude', which decides 10*log10 or
+%   20*log10 in a ratio in dB; LABEL is the y-axis label; PHRASE says what
+%   it is in a sentence, and two spectra with the same PHRASE can share an
+%   axis. All three are '' for a spectrum computed before the unit was
+%   stamped: the axis is then left unlabelled and the ratio unavailable,
+%   rather than guessed.
+    kind = '';
+    label = '';
+    phrase = '';
+    if ~isfield(EEG, 'SpectrumUnit') || isempty(EEG.SpectrumUnit)
+        return;
+    end
+    mu = char(181);
+    squared = char(178);
+    switch lower(char(string(EEG.SpectrumUnit)))
+        case {'volt', 'complex'}
+            kind = 'amplitude'; label = 'amplitude (\muV)';
+            phrase = ['an amplitude (' mu 'V)'];
+        case 'voltdens'
+            kind = 'amplitude'; label = 'amplitude density (\muV/Hz)';
+            phrase = ['an amplitude density (' mu 'V/Hz)'];
+        case 'power'
+            kind = 'power'; label = 'power (\muV^2)';
+            phrase = ['a power (' mu 'V' squared ')'];
+        case 'powerdens'
+            kind = 'power'; label = 'power density (\muV^2/Hz)';
+            phrase = ['a power density (' mu 'V' squared '/Hz)'];
+        case 'psd'
+            kind = 'power'; label = 'PSD (\muV^2/Hz)';
+            phrase = ['a PSD (' mu 'V' squared '/Hz)'];
+    end
+end
+
+function text = ratioTooltip(phaseMode, unitKind)
+%RATIOTOOLTIP  What "Ratio in dB" does here, or why it cannot.
+    if phaseMode
+        text = 'A phase is compared by its difference.';
+    elseif isempty(unitKind)
+        text = ['This spectrum does not say whether it is a power or an amplitude; ' ...
+            'run its Fourier or Welch step again to compare in dB.'];
+    elseif strcmp(unitKind, 'power')
+        text = 'The first line over the second in dB: 10*log10 of their ratio, since this is a power.';
+    else
+        text = 'The first line over the second in dB: 20*log10 of their ratio, since this is an amplitude.';
+    end
 end
 
 function [on, n] = errorBandSettings()
