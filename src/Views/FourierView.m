@@ -192,13 +192,9 @@ classdef FourierView < AlakazamView
                     end
                 end
             end
-            if ~isreal(this.EEG.data)
-                if phaseMode
-                    titleStr = sprintf('%s   [phase -- P for magnitude]', titleStr);
-                else
-                    titleStr = sprintf('%s   [magnitude -- P for phase]', titleStr);
-                end
-            end
+            % The title does not name the magnitude/phase mode or the P key:
+            % the phase's own y label and multiples of pi say which is shown,
+            % and the key is in the manual's table of keys.
             title(ax, titleStr);
 
             % x-limits are owned by this.Buttons (persists zoom/pan across a
