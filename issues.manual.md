@@ -20,7 +20,7 @@ decision before anything changes), **won't fix** (decided to leave as is).
 | M7 | fixed | TimeFrequency, Coherence views | NaN cells were drawn as the lowest colour |
 | M8 | fixed | ReRef | Reconstructed implicit reference was left out of an average reference |
 | M9 | fixed | Fourier | "Other" resolution silently truncated segments |
-| M10 | fixed, unconfirmed | Deconvolve | lsmr "did not converge": time-locked events are now warned about |
+| M10 | fixed | Deconvolve | lsmr "did not converge": time-locked events are now warned about |
 | M11 | won't fix | Cache | Average nodes computed before M1 keep the old errors |
 | M12 | fixed | Docs | ManualReject header said it was not recalculable |
 | M13 | fixed | Docs | `measure.md` and `bin_language.md` were out of date |
@@ -150,7 +150,9 @@ M3 this is rarer, but it should get the same treatment as EpochView.
 *Status: fixed 2026-09-28, as EEGLAB advises: the channel is added as a flat
 zero before `pop_reref`, so an Average reference is over all N+1 sites and
 the channels sum to zero. Tested in `tests/ReRefTest.m`. The manual's
-two-step workaround is replaced by a description of the new behaviour.*
+two-step workaround is replaced by a description of the new behaviour. Nodes
+computed before the fix keep the old result until recalculated; left as is,
+like M11, and said in the CHANGELOG.*
 
 With **Average** and **Reconstruct implicit reference channel**, `pop_reref`
 averages over the recorded channels only, and the reconstructed channel is
@@ -177,13 +179,13 @@ the segment length.
 
 ### M10. Deconvolve: lsmr "did not converge" diagnosis never confirmed
 
-*Status: fixed, unconfirmed 2026-09-28. `Unfold.timeLockedEvents` finds a
+*Status: fixed 2026-09-28. `Unfold.timeLockedEvents` finds a
 modelled event in no bin that keeps a near-constant lag to a bin or another
 modelled code; the Deconvolve dialog lists it as a warning in the model and
 raises an alert, and the fit names it as the likely cause when the solver
 does not converge. Tested in `tests/UnfoldTimeLockedTest.m` and
-`tests/DeconvolveDialogTest.m`. The confirming fit on the reported data is
-still not run.*
+`tests/DeconvolveDialogTest.m`. Closed without the confirming fit on the
+reported data (your decision, 2026-09-28).*
 
 You reported "did not converge for channel 9 after 400 iterations". The
 Figure 11 template converges in 78 iterations. The likely cause is modelling
@@ -236,7 +238,11 @@ troubleshooting and glossary. The README holds most of the source text.
 
 *Status: fixed 2026-09-27: all retaken and looked at; captions updated.
 Run with `CAPTURE_ONLY` and the runner in the scratchpad (`run_capture.m`,
-scratch `C:\AlakazamManual`).*
+scratch `C:\AlakazamManual`). Closed 2026-09-28 without a further retake
+(your decision): `fourier-result`, `welch-result`, `spectralmeasure-result`
+and `ress-result` still show the spectrum views' old step and pan buttons,
+from before the channel and bin dropdowns; a capture run (`manualShots`)
+makes them again.*
 
 | Image | Why |
 |---|---|
