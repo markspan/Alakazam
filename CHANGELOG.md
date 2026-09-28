@@ -33,7 +33,8 @@ bar. Dates are those of the tag.
 - **A bin script could define the same bin number twice**, and both were
   accepted without a word, although a bin's number is how events and
   combination bins refer to it. It is now refused with a message naming the
-  number. A shipped P3b bin script did this; it is kept out of the library.
+  number. A shipped P3b bin script did this; it is removed, with two other
+  drafts from the old `binscripts/` folder.
 
 - **Export as Code wrote a ReRef that reconstructs an implicit reference as a
   plain `pop_reref`**, which drops the reconstructed channel and, under an
