@@ -34,6 +34,15 @@ function options = DeconvolveDialog(EEG, stored)
 %   bins, a formula or the chosen event codes change, because all three
 %   change the model.
 %
+%   IT WARNS ABOUT EVENTS LOCKED TOGETHER. A code in no bin that is modelled
+%   and keeps a near-constant lag to a bin or another modelled code (a
+%   fixation 12 ms after its saccade) makes the design nearly collinear: the
+%   solver may not converge, and the two responses are not told apart (see
+%   Unfold.timeLockedEvents). Such a pair is listed in the model and raised in
+%   an alert whenever the model gains one, since unticking the code is the
+%   usual remedy and is made right here (manual issue M10). The alert does not
+%   stop OK: a lock can be what the user means to model.
+%
 %   OK checks the settings the way Deconvolve will apply them, so a design
 %   the fit would refuse is reported here rather than after the dialog closes.
 %
@@ -95,6 +104,7 @@ function options = DeconvolveDialog(EEG, stored)
         legacyCovariates = {};   % the formulas already say what they meant
     end
     selectedRow = 1;
+    lockedWarned = {};      % the time-locked pairs last alerted about (see warnAboutLockedEvents)
 
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Deconvolve', 'Position', fitOnScreen([80 60 1200 900]), 'Color', bgColor);
@@ -119,12 +129,15 @@ function options = DeconvolveDialog(EEG, stored)
     settings = uigridlayout(outer, [6 4], 'ColumnWidth', {190, 90, 210, 90}, ...
         'RowHeight', repmat({'fit'}, 1, 6), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
-    startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1));
+    % The window decides which events overlap, so the model is shown again.
+    startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1), ...
+        'ValueChangedFcn', @(~, ~) showModel());
     uilabel(settings, 'Text', 'Artefact threshold (uV, 0 = off):');
     thresholdField = uieditfield(settings, 'numeric', 'Value', seed.artifactThresholdUv, ...
         'Limits', [0 Inf]);
     uilabel(settings, 'Text', 'Window stop (ms):');
-    stopField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(2));
+    stopField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(2), ...
+        'ValueChangedFcn', @(~, ~) showModel());
     uilabel(settings, 'Text', 'Measured in a window of (ms):');
     artWindowField = uieditfield(settings, 'numeric', 'Value', seed.artifactWindowMs, ...
         'Limits', [0 Inf], 'LowerLimitInclusive', 'off');
@@ -501,7 +514,26 @@ function options = DeconvolveDialog(EEG, stored)
             lines{end + 1} = ''; %#ok<AGROW>
             lines{end + 1} = ['Note: ' plan.notes{k}]; %#ok<AGROW>
         end
+        locked = Unfold.timeLockedEvents(plan, tagged.srate, [startField.Value stopField.Value]);
+        for k = 1:numel(locked)
+            lines{end + 1} = ''; %#ok<AGROW>
+            lines{end + 1} = ['Warning: ' locked(k).note]; %#ok<AGROW>
+        end
         modelList.Value = lines;
+        warnAboutLockedEvents({locked.note});
+    end
+
+    function warnAboutLockedEvents(notes)
+    %WARNABOUTLOCKEDEVENTS  An alert when the model gains a time-locked pair.
+    %   Only when the pairs change, so editing a formula does not raise the
+    %   same alert again; unticking the code clears them, and ticking it
+    %   again warns again. An alert rather than a question: it leaves the
+    %   dialog usable, and the model list keeps the warning in view.
+        if ~isempty(notes) && ~isequal(notes, lockedWarned)
+            uialert(fig, strjoin(notes, [newline newline]), 'Events locked together', ...
+                'Icon', 'warning');
+        end
+        lockedWarned = notes;
     end
 
     function text = binSourceText()

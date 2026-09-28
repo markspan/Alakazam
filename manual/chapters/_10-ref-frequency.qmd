@@ -97,7 +97,7 @@ tapered at its ends, in one of six units.
 | **Full spectrum (×2)** | on | Double the one-sided magnitude, for the folded negative frequencies. Ignored for PSD. |
 | **Taper** | Hanning | The window function. |
 | **Length (% of segment)** | 100 | The share of the segment that is tapered, half at each end; 100 is a full Hanning window, 10 tapers 5% at each end and leaves the rest flat. |
-| **Mode**, **Resolution** | Max | **Max** uses the segment's own length, padded to a power of two; **Other** sets the frequency spacing to the value given. |
+| **Mode**, **Resolution** | Max | **Max** uses the segment's own length, padded to a power of two; **Other** sets the frequency spacing to at most the value given, and never coarser than **Max**. |
 
 : Fourier's options. {#tbl-fourier}
 
@@ -128,8 +128,10 @@ Welch's method with the trials as its segments.
 its length, whatever the spacing: padding with zeros interpolates the
 spectrum without resolving anything finer. A spacing coarser than the
 segment supports (**Other** with a value above the reciprocal of the segment
-length) shortens the transform, which then uses only the start of each
-segment.
+length) would need a transform shorter than the segment, which uses only its
+start. Alakazam pads to the segment's own length instead, so the whole
+segment is always transformed and such a value gives the same spectrum as
+**Max**.
 
 ![The PSD of the N400 epochs at Oz, averaged per bin, with the frequency bands of @sec-settings shaded beneath it and the alpha peak near 10 Hz.](images/fourier-result.jpg){#fig-fourier-result}
 

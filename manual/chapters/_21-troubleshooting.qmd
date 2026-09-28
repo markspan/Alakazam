@@ -59,7 +59,8 @@ before ArtefactDetect kept its per-detector record. Recalculate it.
 collinear: often two event types at a nearly constant lag are both modelled
 (a fixation and the saccade just before it, a trial marker and the stimulus
 a fixed time later), or a formula has more terms than its events support.
-Model one of each such pair (@sec-tr-deconvolve).
+Model one of each such pair (@sec-tr-deconvolve). The Deconvolve dialog warns
+about such pairs before the fit, and the warning after it names them.
 
 **TimeFrequency or the Coherence Map is empty after artefact rejection.**
 An earlier version let one rejected trial blank the whole map; recalculate

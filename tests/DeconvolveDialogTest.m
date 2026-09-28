@@ -119,6 +119,37 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
                 'None is an empty list, which Deconvolve reads as none, not as the default.');
         end
 
+        function aCodeLockedToABinIsWarnedAbout(testCase)
+        %ACODELOCKEDTOABINISWARNEDABOUT  The fixture's 'response' comes
+        %   exactly 600 ms after every Frequent event, which leaves the fit
+        %   next to nothing to tell the two apart by (manual issue M10). The
+        %   model says so, and names the remedy.
+            shown = {};
+            testCase.runDialog(@(f) record(f));
+
+            testCase.verifyTrue(any(contains(shown, 'Warning: "response", in no bin, follows "Frequent"')), ...
+                'The model should warn that "response" is locked to "Frequent".');
+
+            function record(f)
+                shown = modelText(f);
+            end
+        end
+
+        function untickingTheLockedCodeClearsTheWarning(testCase)
+            shown = {};
+            testCase.runDialog(@(f) untickAndRecord(f));
+
+            testCase.verifyFalse(any(contains(shown, 'Warning:')), ...
+                'With "response" no longer modelled there is no pair left to warn about.');
+
+            function untickAndRecord(f)
+                tree = codeTree(f);
+                tick(tree, 'probe');
+                tree.CheckedNodesChangedFcn(tree, []);   % as a click would
+                shown = modelText(f);
+            end
+        end
+
         % ---- the result: waveforms, trials or terms ---------------------- %
         function theResultIsOneWaveformPerBinByDefault(testCase)
             options = testCase.runDialog(@(f) []);
@@ -247,6 +278,16 @@ function tree = treeHolding(f, nodeData)
             tree = trees(k);
             return;
         end
+    end
+end
+
+function text = modelText(f)
+%MODELTEXT  Every line of the dialog's read-only text areas: the model and
+%   the reference of fields a formula can use.
+    areas = findall(f, 'Type', 'uitextarea');
+    text = {};
+    for k = 1:numel(areas)
+        text = [text; cellstr(areas(k).Value(:))]; %#ok<AGROW>
     end
 end
 

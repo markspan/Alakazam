@@ -118,18 +118,45 @@ classdef FourierTest < matlab.unittest.TestCase
         end
 
         function resolutionOtherProducesTheRequestedNFFT(testCase)
-        %RESOLUTIONOTHERPRODUCESTHEREQUESTEDNFFT  Resolution='Other' with
-        %   a given ResVal (Hz) should size the FFT to
-        %   2^nextpow2(floor(srate/ResVal)), reflected in output.pnts
-        %   (== NFFT/2 + 1).
+        %RESOLUTIONOTHERPRODUCESTHEREQUESTEDNFFT  Resolution='Other' with a
+        %   ResVal finer than the segment's own spacing should size the FFT
+        %   to 2^nextpow2(floor(srate/ResVal)), reflected in output.pnts
+        %   (== NFFT/2 + 1): 128 samples at 250 Hz and 0.5 Hz ask for 512.
             EEG = struct('data', testSignal(), 'srate', 250);
             opts = struct('Output', 'Volt', 'FullSpectrum', true, 'Window', 'No', ...
-                'Window_Length', 100, 'Resolution', 'Other', 'ResVal', 2);
+                'Window_Length', 100, 'Resolution', 'Other', 'ResVal', 0.5);
 
             [result, ~] = Fourier(EEG, opts);
 
             expectedNFFT = 2 ^ nextpow2(floor(EEG.srate / opts.ResVal));
+            testCase.verifyEqual(expectedNFFT, 512);
             testCase.verifyEqual(result.pnts, expectedNFFT / 2 + 1);
+            testCase.verifyLessThanOrEqual(result.freqs(2), opts.ResVal);
+        end
+
+        function resolutionOtherNeverDropsSamples(testCase)
+        %RESOLUTIONOTHERNEVERDROPSSAMPLES  A spacing coarser than the
+        %   segment's own used to shorten the FFT below the segment, which
+        %   transforms only the first NFFT samples (manual issue M9): at
+        %   200 Hz, 200 samples and 2 Hz, only the first 128. It is padded up
+        %   to the segment instead, so the result is Max's, and a signal that
+        %   lives only in the dropped samples still shows.
+            srate = 200;
+            data = zeros(1, 200);
+            data(151:200) = sin(2 * pi * 20 * (0:49) / srate);   % after sample 128 only
+            EEG = struct('data', data, 'srate', srate);
+            otherOpts = struct('Output', 'Volt', 'FullSpectrum', true, 'Window', 'No', ...
+                'Window_Length', 100, 'Resolution', 'Other', 'ResVal', 2);
+            maxOpts = otherOpts;
+            maxOpts.Resolution = 'Max';
+
+            [coarse, ~] = Fourier(EEG, otherOpts);
+            [whole, ~] = Fourier(EEG, maxOpts);
+
+            testCase.verifyEqual(coarse.pnts, 2 ^ nextpow2(200) / 2 + 1);
+            testCase.verifyEqual(coarse.data, whole.data, 'AbsTol', 1e-12);
+            testCase.verifyGreaterThan(max(coarse.data), 0.1, ...
+                'The sine in the last 50 samples should be in the spectrum.');
         end
 
         function outputMetadataIsPopulatedCorrectly(testCase)

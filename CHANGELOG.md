@@ -53,6 +53,15 @@ bar. Dates are those of the tag.
   dB; a spectrum computed before this has no label and no ratio until it is
   recalculated.
 
+- **Deconvolve warns about events locked together.** When an event in no
+  bin is modelled and keeps a nearly constant lag to a bin or to another
+  modelled event (a fixation 12 ms after its saccade), the dialog lists a
+  warning in the model and raises an alert naming the pair and the lag, and
+  the fit notes it; if the solver then does not converge, its note names
+  the pair as the likely cause. Such a pair makes the design nearly
+  collinear, which was the likely reason for a reported "did not converge".
+  Unticking the event clears the warning.
+
 ### Changed
 
 - **The spectrum view picks the channel with a dropdown above the plot**, as
@@ -104,6 +113,21 @@ bar. Dates are those of the tag.
 - The Filter dialog did not open for settings that stored a filter which is
   off with a frequency or attenuation of 0, as a script does; it now falls
   back to the defaults for those fields.
+- **ReRef with an Average reference and a reconstructed implicit reference
+  left the reference site out of its own average.** The channel is now added
+  as a flat zero before re-referencing, as EEGLAB advises, so N recorded
+  channels and the reference are averaged as N + 1 sites and the channels
+  sum to zero. Before, the subtracted average was N/(N + 1) of what it
+  should be (3% at 32 channels). Specific-channel references are unchanged.
+  Nodes computed before this fix keep the old result until recalculated.
+- **Fourier's Other resolution no longer drops samples.** A spacing coarser
+  than the segment's own made the transform shorter than the segment, which
+  used only its first samples, silently: at 200 Hz, a 1 s segment and 2 Hz,
+  the first 128 of 200. The transform is now padded to at least the
+  segment's length, so such a spacing gives the same spectrum as Max.
+- The time-frequency and coherence views leave a cell with no value blank,
+  as the ERP image already did for a rejected trial, instead of drawing it
+  as the strongest decrease or as no coherence.
 
 ## V0.4.4.2 (2026-09-28)
 

@@ -7,7 +7,7 @@ session. Close an issue by changing its status, not by deleting it.
 
 Status: **fixed** (in the working tree, not committed), **fixed, untested**
 (changed, but no test yet), **open** (not changed), **decide** (needs a
-decision before anything changes).
+decision before anything changes), **won't fix** (decided to leave as is).
 
 | ID | Status | Area | Summary |
 |---|---|---|---|
@@ -16,12 +16,12 @@ decision before anything changes).
 | M3 | fixed | Coherence Map | One rejected trial made a channel's coherence NaN |
 | M4 | fixed, untested | ICA dialog | Activation preview was a single sample on continuous data |
 | M5 | fixed, untested | TransformOptionsDialog | Long descriptions were clipped |
-| M6 | fixed, untested | ERP image | Rejected trials were drawn as the lowest colour |
-| M7 | open | TimeFrequency, Coherence views | NaN cells are drawn as the lowest colour |
-| M8 | decide | ReRef | Reconstructed implicit reference is left out of an average reference |
-| M9 | decide | Fourier | "Other" resolution silently truncates segments |
-| M10 | open | Deconvolve | lsmr "did not converge" diagnosis never confirmed |
-| M11 | open | Cache | Average nodes computed before M1 keep the old errors |
+| M6 | fixed | ERP image | Rejected trials were drawn as the lowest colour |
+| M7 | fixed | TimeFrequency, Coherence views | NaN cells were drawn as the lowest colour |
+| M8 | fixed | ReRef | Reconstructed implicit reference was left out of an average reference |
+| M9 | fixed | Fourier | "Other" resolution silently truncated segments |
+| M10 | fixed, unconfirmed | Deconvolve | lsmr "did not converge": time-locked events are now warned about |
+| M11 | won't fix | Cache | Average nodes computed before M1 keep the old errors |
 | M12 | fixed | Docs | ManualReject header said it was not recalculable |
 | M13 | fixed | Docs | `measure.md` and `bin_language.md` were out of date |
 | M14 | fixed | Docs | README still said ManualReject is not recalculable |
@@ -122,11 +122,13 @@ lines. The dialogs were retaken with the fix. **To do:** a test.
 
 ### M6. ERP image: rejected trials drawn as the lowest colour
 
-*Status: fixed, untested. `src/Views/EpochView.m` lines 313 to 314.*
+*Status: fixed 2026-09-28, with a test (`tests/NaNCellsAreBlankTest.m`).
+`src/Views/showImageData.m`.*
 
 NaN rows were drawn in the colour map's lowest colour, so a rejected trial
 looked like a strongly negative one. `AlphaData` now makes them blank.
-`artefactdetect-result.jpg` was retaken with the fix. **To do:** a test.
+`artefactdetect-result.jpg` was retaken with the fix. EpochView now draws
+through `showImageData`, shared with M7.
 
 ---
 
@@ -134,8 +136,9 @@ looked like a strongly negative one. `AlphaData` now makes them blank.
 
 ### M7. TimeFrequency and Coherence views draw NaN as the lowest colour
 
-*Status: open. `src/Views/TimeFrequencyView.m` line 147,
-`src/Views/CoherenceView.m` line 127.*
+*Status: fixed 2026-09-28: both draw through `src/Views/showImageData.m`,
+which makes NaN cells transparent, as EpochView does (M6). Tested in
+`tests/NaNCellsAreBlankTest.m`.*
 
 The same drawing problem as M6: both set `CData` with `imagesc` and no
 `AlphaData`, so a NaN cell (a bin whose trials were all rejected, a
@@ -144,8 +147,10 @@ M3 this is rarer, but it should get the same treatment as EpochView.
 
 ### M8. ReRef: the reconstructed implicit reference is left out of an average reference
 
-*Status: decide. `src/Transformations/ReRef/ReRef.m`,
-`addImplicitReferenceChannel` (line 70).*
+*Status: fixed 2026-09-28, as EEGLAB advises: the channel is added as a flat
+zero before `pop_reref`, so an Average reference is over all N+1 sites and
+the channels sum to zero. Tested in `tests/ReRefTest.m`. The manual's
+two-step workaround is replaced by a description of the new behaviour.*
 
 With **Average** and **Reconstruct implicit reference channel**, `pop_reref`
 averages over the recorded channels only, and the reconstructed channel is
@@ -159,7 +164,9 @@ reconstruct the channel before averaging when both options are set.
 
 ### M9. Fourier: "Other" resolution silently truncates segments
 
-*Status: decide. `src/Transformations/Fourier/Fourier.m` line 185.*
+*Status: fixed 2026-09-28 by padding: NFFT is never below the segment's own
+power of two, so a coarser spacing gives Max's spectrum and a finer one
+zero-pads. Tested in `tests/FourierTest.m`; the manual says so.*
 
 In **Other** mode, `NFFT = 2^nextpow2(srate/ResVal)`. When that is shorter
 than the segment, `fft(x, NFFT)` uses only the first NFFT samples, silently:
@@ -170,7 +177,13 @@ the segment length.
 
 ### M10. Deconvolve: lsmr "did not converge" diagnosis never confirmed
 
-*Status: open.*
+*Status: fixed, unconfirmed 2026-09-28. `Unfold.timeLockedEvents` finds a
+modelled event in no bin that keeps a near-constant lag to a bin or another
+modelled code; the Deconvolve dialog lists it as a warning in the model and
+raises an alert, and the fit names it as the likely cause when the solver
+does not converge. Tested in `tests/UnfoldTimeLockedTest.m` and
+`tests/DeconvolveDialogTest.m`. The confirming fit on the reported data is
+still not run.*
 
 You reported "did not converge for channel 9 after 400 iterations". The
 Figure 11 template converges in 78 iterations. The likely cause is modelling
@@ -184,7 +197,8 @@ in the dialog when an event in no bin is time-locked to a binned one.
 
 ### M11. Cached Average nodes keep the old errors
 
-*Status: open.*
+*Status: won't fix (decided 2026-09-28): kept as is. Recalculating the nodes,
+or Clear WorkSpace and a replay, gives the corrected values.*
 
 M1 changes what Average computes, but a node already in a cache keeps what
 it was computed with (see the memory note on cached transform results).
@@ -196,7 +210,9 @@ entry for the fix.
 ### M14. README still says ManualReject is not recalculable
 
 *Status: fixed 2026-09-27: the README is now the landing page (M17), and the
-manual describes ManualReject as recalculable.*
+manual describes ManualReject as recalculable. Checked again 2026-09-28:
+`README.MD` no longer mentions ManualReject, and no file in the repository
+says it is not recalculable.*
 
 `WorkSpaceTree.RecalculableTransforms` includes ManualReject on purpose,
 and its header now says so (M12). The README will be replaced by the landing

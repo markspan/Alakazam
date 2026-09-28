@@ -124,7 +124,10 @@ classdef CoherenceView < AlakazamView
             ch = this.Channel;
             cmax = this.climMax();
             for b = 1:numel(this.Axes)
-                this.Images(b).CData = squeeze(this.EEG.coherence(ch, :, :, this.BinIndices(b)));
+                % A cell with no value (a frequency outside the method's band,
+                % a bin with too few trials) is left blank rather than drawn
+                % as no coherence at all.
+                showImageData(this.Images(b), squeeze(this.EEG.coherence(ch, :, :, this.BinIndices(b))));
                 this.Axes(b).CLim = [0, cmax];
             end
             ref = '';

@@ -4,13 +4,15 @@ classdef ReRefTest < matlab.unittest.TestCase
 %   channel.
 %
 %   THE IMPLICIT-REFERENCE MATHS, IN ONE LINE. A channel referenced to
-%   itself always reads zero, so its true signal relative to a NEW
-%   reference is just the negative of whatever waveform re-referencing
-%   subtracted from every other channel. Every implicit-reference test
-%   below checks the reconstructed channel against that waveform computed
-%   independently (a plain mean() over the pre-reref data), not against
-%   ReRef's own working -- the point is to catch the maths being wrong, not
-%   to confirm the code agrees with itself.
+%   itself always reads zero, so it joins the data as a flat zero and its
+%   true signal relative to a NEW reference is the negative of whatever
+%   waveform re-referencing subtracted from every channel. Under an Average
+%   reference it is one of the averaged sites (EEGLAB's advice, manual issue
+%   M8), so N recorded channels are averaged as N + 1. Every
+%   implicit-reference test below checks the result against that waveform
+%   computed independently (a plain sum() or mean() over the pre-reref
+%   data), not against ReRef's own working: the point is to catch the maths
+%   being wrong, not to confirm the code agrees with itself.
 %
 %   Run with: runtests('tests/ReRefTest.m').
 
@@ -83,7 +85,11 @@ classdef ReRefTest < matlab.unittest.TestCase
 
         % ---- reconstructing the implicit reference ------------------------
 
-        function implicitReferenceUnderAverageModeIsMinusTheAverage(testCase)
+        function implicitReferenceJoinsTheAverage(testCase)
+        %IMPLICITREFERENCEJOINSTHEAVERAGE  The reference site is one of the
+        %   averaged sites: five recorded channels and a flat Cz are averaged
+        %   as six, so Cz reads minus that average and every recorded
+        %   channel has it subtracted.
             EEG = testCase.fixture();
             opts = struct('mode', 'Average', 'refChannels', {{}}, 'exclude', {{}}, ...
                 'keepref', false, 'implicitRef', 'Cz');
@@ -91,9 +97,28 @@ classdef ReRefTest < matlab.unittest.TestCase
             out = ReRef(EEG, opts);
 
             testCase.assertEqual(out.nbchan, EEG.nbchan + 1);
+            average = sum(EEG.data, 1) / (EEG.nbchan + 1);
             cz = testCase.indexOf(out.chanlocs, 'Cz');
-            expected = -mean(EEG.data, 1);
-            testCase.verifyEqual(double(out.data(cz, :)), expected, 'AbsTol', 1e-4);
+            testCase.verifyEqual(double(out.data(cz, :)), -average, 'AbsTol', 1e-4);
+            for i = 1:EEG.nbchan
+                j = testCase.indexOf(out.chanlocs, EEG.chanlocs(i).labels);
+                testCase.verifyEqual(double(out.data(j, :)), EEG.data(i, :) - average, 'AbsTol', 1e-4, ...
+                    sprintf('%s should have the six-site average subtracted.', EEG.chanlocs(i).labels));
+            end
+        end
+
+        function anAverageReferenceWithTheImplicitChannelSumsToZero(testCase)
+        %ANAVERAGEREFERENCEWITHTHEIMPLICITCHANNELSUMSTOZERO  What an average
+        %   reference means. Adding Cz after averaging, as Alakazam once did,
+        %   left it out of its own average and the channels summed to minus
+        %   the old average instead.
+            EEG = testCase.fixture();
+            opts = struct('mode', 'Average', 'refChannels', {{}}, 'exclude', {{}}, ...
+                'keepref', false, 'implicitRef', 'Cz');
+
+            out = ReRef(EEG, opts);
+
+            testCase.verifyEqual(sum(double(out.data), 1), zeros(1, size(out.data, 2)), 'AbsTol', 1e-4);
         end
 
         function implicitReferenceUnderSpecificChannelModeIsMinusTheirMean(testCase)
@@ -110,11 +135,10 @@ classdef ReRefTest < matlab.unittest.TestCase
         end
 
         function implicitReferenceStillCorrectWithAnExcludedChannel(testCase)
-        %IMPLICITREFERENCESTILLCORRECTWITHANEXCLUDEDCHANNEL  The probe used
-        %   to read the reference waveform back out must skip excluded
-        %   channels (they are untouched, so they would read back a flat
-        %   zero instead of the real waveform) -- this is what would break
-        %   if that guard were removed.
+        %IMPLICITREFERENCESTILLCORRECTWITHANEXCLUDEDCHANNEL  Exclusions are
+        %   resolved against the dataset with Cz already in it: A2 stays out
+        %   of the average and untouched, and Cz stays in it, so four
+        %   recorded channels and Cz are averaged as five.
             EEG = testCase.fixture();
             opts = struct('mode', 'Average', 'refChannels', {{}}, 'exclude', {{'A2'}}, ...
                 'keepref', false, 'implicitRef', 'Cz');
@@ -123,9 +147,11 @@ classdef ReRefTest < matlab.unittest.TestCase
 
             a2 = TransTools.LabelsToIdx(EEG, {'A2'});
             others = setdiff(1:EEG.nbchan, a2);
-            expected = -mean(EEG.data(others, :), 1);
+            average = sum(EEG.data(others, :), 1) / (numel(others) + 1);
             cz = testCase.indexOf(out.chanlocs, 'Cz');
-            testCase.verifyEqual(double(out.data(cz, :)), expected, 'AbsTol', 1e-4);
+            testCase.verifyEqual(double(out.data(cz, :)), -average, 'AbsTol', 1e-4);
+            testCase.verifyEqual(double(out.data(testCase.indexOf(out.chanlocs, 'A2'), :)), ...
+                EEG.data(a2, :), 'AbsTol', 1e-4, 'The excluded channel should be left untouched.');
         end
 
         function implicitReferenceGetsA1005PositionWhenItsLabelMatches(testCase)

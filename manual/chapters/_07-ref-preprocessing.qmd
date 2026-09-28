@@ -354,18 +354,17 @@ whose channels differ in order.
 
 **The implicit reference.** Many amplifiers record against one active
 electrode, often a mastoid or Cz, whose own signal is not saved because it is
-zero relative to itself. Re-referencing recovers it: if *w* is the waveform
-subtracted from every channel, then the old reference, which read zero,
-reads -*w* after re-referencing. Alakazam reads *w* back from a channel that
-was re-referenced, rather than recomputing it, so the reconstruction is
-right for any reference and any exclusions. The channel is inserted next to
-its nearest neighbour on the 10-5 template.
+zero relative to itself. Re-referencing recovers it. Alakazam adds the
+channel back as a flat zero before re-referencing, as EEGLAB advises; if *w*
+is the waveform then subtracted from every channel, the old reference, which
+read zero, reads -*w*. The channel is inserted next to its nearest neighbour
+on the 10-5 template.
 
-With an **average** reference, the reconstructed channel is not part of the
-average, which is taken over the recorded channels only. For an average
-reference that includes the original reference site, run ReRef twice:
-first to any reference with the implicit channel reconstructed, then to the
-average.
+With an **average** reference, the reconstructed channel is part of the
+average: 32 recorded channels and the reference are averaged as 33 sites,
+and the channels sum to zero, as an average reference should. Channels
+excluded from the reference stay out of the average, and the reconstructed
+channel stays in it.
 
 The choice of reference changes the shape of every waveform and map, and
 should follow the literature on the component studied, so that results can
