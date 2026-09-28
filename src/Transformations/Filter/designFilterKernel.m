@@ -8,8 +8,9 @@ function b = designFilterKernel(type, freq, db, srate)
 %   firfilt does, is zero-phase.
 %
 %   ONE DESIGN, TWO READERS. Filter applies these kernels, and FilterDialog
-%   plots their combined impulse response (filterImpulseResponse), so what the
-%   dialog shows is exactly what the step does.
+%   plots their combined impulse response (filterImpulseResponse) and
+%   frequency response (filterFrequencyResponse, from that impulse
+%   response), so what the dialog shows is exactly what the step does.
 %
 %   The design:
 %     * the stopband deviation is 10^(-DB/20), and the Kaiser beta and the
@@ -22,7 +23,8 @@ function b = designFilterKernel(type, freq, db, srate)
 %   A frequency outside (0, Nyquist), a notch too close to either end, or a
 %   non-positive DB is refused with a message for the user.
 %
-%   See also FILTER, FILTERIMPULSERESPONSE, FIRWS, FIRWSORD.
+%   See also FILTER, FILTERIMPULSERESPONSE, FILTERFREQUENCYRESPONSE, FIRWS,
+%   FIRWSORD.
     nyq  = srate / 2;
     freq = double(freq);
     db   = double(db);

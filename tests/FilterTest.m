@@ -315,15 +315,88 @@ classdef FilterTest < matlab.unittest.TestCase
         function aSettingFilterRefusesIsRefusedHereToo(testCase)
             testCase.verifyError(@() filterImpulseResponse(filterOptions([125 40], [], []), 250), ...
                 'Alakazam:Filter');
+            testCase.verifyError(@() filterFrequencyResponse(filterOptions([125 40], [], []), 250), ...
+                'Alakazam:Filter');
+        end
+
+        % ---- the frequency response the dialog plots ----------------------
+        function theFrequencyResponseIsWhatFilterDoesToASinusoid(testCase)
+        %THEFREQUENCYRESPONSEISWHATFILTERDOESTOASINUSOID  The dialog plots
+        %   filterFrequencyResponse; this pins that plot to the step itself.
+        %   A sum of unit sinusoids is filtered with all three filters, and
+        %   the amplitude each keeps must be the plotted gain at its
+        %   frequency: in the passband, at each cutoff and in each stopband.
+        %   At 256 Hz every probe frequency lies exactly on the response's
+        %   grid, and each makes a whole number of cycles in the stretch
+        %   measured, which is clear of the filter's reach from either edge,
+        %   so the comparison is exact rather than approximate.
+            srate = 256;
+            opts = filterOptions([1 40], [30 40], [50 40]);
+            [f, gain] = filterFrequencyResponse(opts, srate);
+            [~, h] = filterImpulseResponse(opts, srate);
+            edge = (numel(h) - 1) / 2 + srate;
+            window = 10 * srate;
+            n = window + 2 * edge;
+            t = (0:n - 1) / srate;
+            probes = [0.5 1 10 30 50 60 100];
+            EEG = struct('data', sum(sin(2 * pi * probes' * t), 1), 'srate', srate, ...
+                'nbchan', 1, 'trials', 1, 'pnts', n, ...
+                'event', struct('type', {}, 'latency', {}), ...
+                'chanlocs', struct('labels', {'Ch1'}));
+
+            result = Filter(EEG, opts);
+
+            measured = edge + (1:window);
+            for p = probes
+                plotted = gain(abs(f - p) < 1e-9);
+                testCase.assertNumElements(plotted, 1, sprintf( ...
+                    '%g Hz must lie on the response''s frequency grid.', p));
+                kept = freqAmplitude(result.data(measured), t(measured), p);
+                testCase.verifyEqual(kept, plotted, 'AbsTol', 1e-9, sprintf( ...
+                    'At %g Hz the plotted gain must be what Filter does to a sinusoid.', p));
+            end
+        end
+
+        function theGainIsOneHalfAtEachCutoff(testCase)
+        %THEGAINISONEHALFATEACHCUTOFF  A windowed-sinc filter's cutoff is its
+        %   -6 dB point, where the dialog draws its dotted line: a gain of one
+        %   half, within the stopband deviation of 40 dB (0.01). A notch has
+        %   two cutoffs, the edges of its stop band.
+            srate = 256;
+            cases = {filterOptions([1 40], [], []), 1; ...
+                     filterOptions([], [30 40], []), 30; ...
+                     filterOptions([], [], [50 40]), [49 51]};
+            for k = 1:size(cases, 1)
+                [f, gain] = filterFrequencyResponse(cases{k, 1}, srate);
+                for cutoff = cases{k, 2}
+                    testCase.verifyEqual(gain(abs(f - cutoff) < 1e-9), 0.5, 'AbsTol', 0.01, ...
+                        sprintf('The gain at the %g Hz cutoff should be one half.', cutoff));
+                end
+            end
+        end
+
+        function theFrequencyResponseRunsFromZeroToNyquist(testCase)
+            [f, gain] = filterFrequencyResponse(filterOptions([], [30 40], []), 250);
+            testCase.verifyEqual(f(1), 0);
+            testCase.verifyEqual(f(end), 125, 'AbsTol', 1e-12);
+            testCase.verifyTrue(all(diff(f) > 0), 'The frequencies rise.');
+            testCase.verifySize(gain, size(f));
+        end
+
+        function withNoFilterTheGainIsOneEverywhere(testCase)
+            [f, gain] = filterFrequencyResponse(filterOptions([], [], []), 250);
+            testCase.verifyEqual(gain, ones(size(f)), 'AbsTol', 1e-12);
         end
     end
 
     methods (Test, TestTags = {'Slow'})
         function theDialogPlotsTheResponseAndFollowsTheSettings(testCase)
         %THEDIALOGPLOTSTHERESPONSEANDFOLLOWSTHESETTINGS  The dialog is modal,
-        %   so a timer finds it, reads the plot, unticks the high-pass, reads
-        %   it again, and presses Cancel. The timer repeats until the dialog
-        %   is up, so the test does not depend on how long that takes.
+        %   so a timer finds it, reads both plots (the impulse response, and
+        %   the frequency response from 0 Hz to Nyquist), unticks the
+        %   high-pass, reads them again, and presses Cancel. The timer
+        %   repeats until the dialog is up, so the test does not depend on
+        %   how long that takes.
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'Support')));
@@ -337,8 +410,11 @@ classdef FilterTest < matlab.unittest.TestCase
             stored = filterOptions([1 40], [30 40], []);
             [~, both] = filterImpulseResponse(stored, srate);
             [~, lowOnly] = filterImpulseResponse(filterOptions([], [30 40], []), srate);
+            bothFrequencies = filterFrequencyResponse(stored, srate);
+            lowOnlyFrequencies = filterFrequencyResponse(filterOptions([], [30 40], []), srate);
 
-            seen = struct('both', [], 'lowOnly', [], 'caption', '');
+            seen = struct('both', [], 'lowOnly', [], 'caption', '', ...
+                'span', [], 'bothFrequencies', [], 'lowOnlyFrequencies', [], 'frequencyCaption', '');
             timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                 'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
             cleanup = onCleanup(@() cleanupTimer(timerObj));
@@ -349,6 +425,13 @@ classdef FilterTest < matlab.unittest.TestCase
             testCase.verifyEqual(seen.both, numel(both), 'The plot shows both filters together.');
             testCase.verifySubstring(seen.caption, sprintf('%d samples', numel(both)));
             testCase.verifyEqual(seen.lowOnly, numel(lowOnly), 'Unticking the high-pass redraws it.');
+            testCase.verifyEqual(seen.span, [0, srate / 2], 'AbsTol', 1e-12, ...
+                'The frequency response runs from 0 Hz to Nyquist.');
+            testCase.verifyEqual(seen.bothFrequencies, numel(bothFrequencies), ...
+                'The frequency response is that of both filters together.');
+            testCase.verifySubstring(seen.frequencyCaption, sprintf('Nyquist (%g Hz)', srate / 2));
+            testCase.verifyEqual(seen.lowOnlyFrequencies, numel(lowOnlyFrequencies), ...
+                'Unticking the high-pass redraws the frequency response.');
 
             function drive(src)
                 f = findall(groot, 'Type', 'figure', 'Name', 'Filter');
@@ -357,12 +440,18 @@ classdef FilterTest < matlab.unittest.TestCase
                 end
                 stop(src);
                 axesOf = findall(f(1), 'Tag', 'ResponseAxes');
+                frequencyAxes = findall(f(1), 'Tag', 'FrequencyAxes');
                 seen.both = numel(findobj(axesOf, 'Type', 'line').XData);
                 seen.caption = findall(f(1), 'Tag', 'ResponseCaption').Text;
+                curve = findobj(frequencyAxes, 'Tag', 'FrequencyResponse');
+                seen.span = curve.XData([1 end]);
+                seen.bothFrequencies = numel(curve.XData);
+                seen.frequencyCaption = findall(f(1), 'Tag', 'FrequencyCaption').Text;
                 highPass = findall(f(1), 'Type', 'uicheckbox', 'Text', 'High-pass');
                 highPass.Value = false;
                 highPass.ValueChangedFcn(highPass, []);
                 seen.lowOnly = numel(findobj(axesOf, 'Type', 'line').XData);
+                seen.lowOnlyFrequencies = numel(findobj(frequencyAxes, 'Tag', 'FrequencyResponse').XData);
                 cancel = findall(f(1), 'Type', 'uibutton', 'Text', 'Cancel');
                 cancel(1).ButtonPushedFcn(cancel(1), []);
             end

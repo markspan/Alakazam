@@ -277,10 +277,17 @@ ideally with a plot of its impulse or step response [@decheveigne2019]; the
 type, cutoff, transition band and order in @tbl-filter-design are the
 details to give. The dialog draws that plot: under the three filters it
 shows the impulse response of the ticked ones together, centred on the
-impulse, with its length, and redraws it whenever a filter is ticked or a
-frequency or attenuation changes. It is computed from the same kernels the
-step applies, so it is the response of the filtering that is done; with a
-0.1 Hz high-pass it is 25 seconds long, which is the plot's first lesson.
+impulse, with its length. Below it, at the bottom of the dialog, is their
+frequency response: the gain in dB from 0 Hz to the Nyquist frequency, with
+a dotted line at -6 dB, where each cutoff sits, and the axis reaching 20 dB
+below the deepest attenuation ticked. It shows which frequencies pass, how
+steep each transition band is, and how far the stop bands reach; zoom in on
+a transition band with the plot's toolbar to read it off. Both plots are
+redrawn whenever a filter is ticked or a frequency or attenuation changes,
+and neither is shown in per-channel mode. They are computed from the same
+kernels the step applies, so they are the responses of the filtering that is
+done; with a 0.1 Hz high-pass the impulse response is 25 seconds long, which
+is the first lesson of the plots.
 
 ## DC-Detrend {#sec-tr-dcdetrend}
 

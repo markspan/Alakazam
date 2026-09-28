@@ -18,7 +18,7 @@ function [t, h] = filterImpulseResponse(options, srate)
 %   settings (de Cheveigné & Nelken, 2019): how far one sample of data is
 %   smeared, and what ringing a filter adds.
 %
-%   See also FILTER, DESIGNFILTERKERNEL, FILTERDIALOG.
+%   See also FILTER, DESIGNFILTERKERNEL, FILTERFREQUENCYRESPONSE, FILTERDIALOG.
     h = 1;
     for kind = {'highpass', 'high'; 'lowpass', 'low'; 'notch', 'notch'}'
         key = kind{1};
