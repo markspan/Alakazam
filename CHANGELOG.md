@@ -104,6 +104,16 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **Recalculate on a step under a grand average recalculated the grand
+  average.** A Filter run on a grand average keeps the grand average's record
+  in its data, and that record was read as "this node is a grand average", so
+  Recalculate reopened the subject list instead of the filter's settings. The
+  grand average is now told by its place in the tree (the top-level node),
+  and a step under it recalculates as that step. An Average under a grand
+  average no longer offers Recalculate at all.
+- **Steps under a grand average came back after reopening the workspace.**
+  They were saved in a folder named after the grand average, like every
+  node's children, but only the grand averages themselves were read back.
 - **Derive Channels on an average could not be shown**: the step added the
   channel to the data but not to the average's standard error and aSME, and
   the waveform view failed with "Arrays have incompatible sizes". Every

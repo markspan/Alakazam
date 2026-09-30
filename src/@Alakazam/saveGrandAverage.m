@@ -37,7 +37,7 @@ function saveGrandAverage(this, spec, existingNode)
         % distinct concept with its own dedicated tree icon,
         % regardless of the underlying data's time/frequency domain.
         newNode = this.Workspace.GrandAveragesTree.addNode(EEG.id, '', ...
-            'grandAverage', EEG.File, WorkSpaceTree.optsFor(EEG));
+            'grandAverage', EEG.File, WorkSpaceTree.optsFor(EEG, 'GrandAverage', true));
         this.Workspace.GrandAveragesTree.SelectedNodes = newNode;
     else
         this.Workspace.GrandAveragesTree.renameNode(existingNode.Id, EEG.id);

@@ -196,7 +196,7 @@ classdef BranchReplayTest < matlab.unittest.TestCase
 
             grandTree = FakeTree();
             app = FakeApp(struct('CacheDirectory', cache, 'Tree', FakeTree({owned}), ...
-                'GrandAveragesTree', grandTree));
+                'GrandAveragesTree', grandTree, 'treeTraverse', @(varargin) []));
             testCase.copyMethod('loadGrandAverages', 'gaCopy', '@WorkSpace');
 
             gaCopy(app);
@@ -206,6 +206,56 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.verifyEqual(grandTree.Added{1, 1}, 'Ours');
             testCase.verifyEqual(grandTree.Added{1, 4}, ours);
             testCase.verifyTrue(grandTree.Added{1, 5}.canRecalculate);
+        end
+
+        function aStepOnAGrandAverageIsListedUnderItAgain(testCase)
+        %ASTEPONAGRANDAVERAGEISLISTEDUNDERITAGAIN  A Filter run on a grand
+        %   average is saved in a folder named after it, as every node's
+        %   children are, but only the grand averages themselves were read
+        %   back, so the Filter vanished when the workspace was reopened.
+        %   Listed again, it recalculates as a Filter: it keeps the grand
+        %   average's record in its data, and that record must not make it
+        %   look like the grand average (see WorkSpaceTree.optsFor).
+            root = fileparts(fileparts(mfilename('fullpath')));
+            cache = fullfile(testCase.Folder, 'cache');
+            owned = fullfile(cache, 'subject1.mat');
+            ours = fullfile(cache, 'GrandAverages', 'ours.mat');
+            testCase.grandAverageNode(ours, 'Ours', {owned});
+            filtered = testCase.averaged('Filter', 1);
+            filtered.etc.GrandAverage = struct('sources', {{owned}}, 'weighted', false, ...
+                'nSubjects', 1, 'kind', 'erp');
+            mkdir(fullfile(cache, 'GrandAverages', 'ours'));
+            child = fullfile(cache, 'GrandAverages', 'ours', 'Filter101010.mat');
+            saveEegCache(child, filtered);
+
+            grandTree = FakeTree();
+            app = FakeApp(struct('CacheDirectory', cache, 'Tree', FakeTree({owned}), ...
+                'GrandAveragesTree', grandTree, 'Parent', struct('RootDir', fullfile(root, 'src'))));
+            app.addprop('treeTraverse');
+            testCase.copyMethod('loadGrandAverages', 'gaCopy', '@WorkSpace');
+            testCase.copyMethod('treeTraverse', 'traverseCopy', '@WorkSpace');
+            app.treeTraverse = @(varargin) traverseCopy(app, varargin{:});
+
+            gaCopy(app);
+
+            testCase.assertEqual(size(grandTree.Added, 1), 2);
+            testCase.verifyEqual(grandTree.Added{2, 1}, 'Filter');
+            testCase.verifyEqual(grandTree.Added{2, 2}, 'a1', 'Under the grand average.');
+            testCase.verifyEqual(grandTree.Added{2, 4}, child);
+            testCase.verifyFalse(grandTree.Added{2, 5}.canApplyToAll, ...
+                'A grand average''s steps cannot be replayed onto a recording.');
+            testCase.verifyTrue(grandTree.Added{2, 5}.canRecalculate, 'As a Filter.');
+        end
+
+        function onlyTheGrandAverageItselfRecalculatesAsOne(testCase)
+        %ONLYTHEGRANDAVERAGEITSELFRECALCULATESASONE  An Average under a
+        %   grand average carries its record too, and has nothing to
+        %   recalculate; read as a grand average, it offered Recalculate.
+            below = testCase.averaged('Average', 1);
+            below.etc.GrandAverage = struct('sources', {{'a.mat'}}, 'weighted', false);
+
+            testCase.verifyFalse(WorkSpaceTree.optsFor(below).canRecalculate);
+            testCase.verifyTrue(WorkSpaceTree.optsFor(below, 'GrandAverage', true).canRecalculate);
         end
 
         function reportsAreListedByTheirLabelsFromTheirRecords(testCase)
