@@ -27,6 +27,9 @@ function meta = eegCacheMeta(EEG)
 %     hasRejectionBreakdown  whether etc.alz.artefactDetectors exists
 %     hasDesignCell, designCell   etc.DesignCell (which cell of the design a
 %                          grand average was built for), or []
+%     workspace            a report node's Workspace record (which workspace
+%                          rendered it, see WorkSpace.ownerRecord), or [].
+%                          Records written before it existed lack the field.
 %
 %   See also SAVEEEGCACHE, READEEGCACHEMETA, EEGCACHEINFO.
     meta = struct();
@@ -62,6 +65,8 @@ function meta = eegCacheMeta(EEG)
     if meta.hasDesignCell
         meta.designCell = EEG.etc.DesignCell;
     end
+
+    meta.workspace = valueOr(EEG, 'Workspace', []);
 
     meta.hasRejectionBreakdown = isfield(EEG, 'etc') && isstruct(EEG.etc) ...
         && isfield(EEG.etc, 'alz') && isstruct(EEG.etc.alz) ...

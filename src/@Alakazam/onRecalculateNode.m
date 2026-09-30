@@ -9,6 +9,14 @@ function onRecalculateNode(this)
 %       weighting, then recomputes and re-saves it in place;
 %     * a node produced by one of WorkSpaceTree.RecalculableTransforms
 %       -- delegates to recalculateTransformNode, see there.
+%
+%   THE GRAND AVERAGE IS THE ROOT NODE, not any node whose data carries
+%   etc.GrandAverage: every step run on a grand average keeps that record,
+%   so a Filter under one carried it too, and Recalculate on the Filter
+%   reopened the grand average's subject list and recomputed the grand
+%   average, leaving the filter as it was. A grand average is always a
+%   top-level node of the Grand Averages tree (saveGrandAverage), and the
+%   steps under it are ordinary transformation nodes.
     node = this.Workspace.ActiveTree.SelectedNodes;
     if isempty(node)
         return;
@@ -20,7 +28,8 @@ function onRecalculateNode(this)
         return;
     end
 
-    if isfield(ownEEG, "etc") && isfield(ownEEG.etc, "GrandAverage")
+    isGrandAverageNode = node.IsRoot && isfield(ownEEG, "etc") && isfield(ownEEG.etc, "GrandAverage");
+    if isGrandAverageNode
         existingSpec = struct('name', ownEEG.id, ...
             'sources', {ownEEG.etc.GrandAverage.sources}, ...
             'weighted', ownEEG.etc.GrandAverage.weighted);

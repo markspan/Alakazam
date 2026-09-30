@@ -1,4 +1,4 @@
-function treeTraverse(this, id, branchDir, currentParentNode)
+function treeTraverse(this, id, branchDir, currentParentNode, tree)
     % treeTraverse Rebuilds the transformation tree from the directory structure.
     %
     % This function recursively traverses the directory structure, identifying
@@ -10,6 +10,14 @@ function treeTraverse(this, id, branchDir, currentParentNode)
     % - id: The identifier for the current branch being processed.
     % - branchDir: The directory path where the branches are located.
     % - currentParentNode: The current parent node in the tree to which new nodes will be added.
+    % - tree: the WorkSpaceTree to add them to; this.Tree when omitted. The
+    %   Grand Averages tree passes its own (see loadGrandAverages), since the
+    %   steps run on a grand average are stored the same way, in a folder
+    %   named after it, and were otherwise never listed again once the
+    %   workspace had been closed.
+    if nargin < 5
+        tree = this.Tree;
+    end
 
     % Construct the full path for the current branch directory.
     currentDir = fullfile(branchDir, id);
@@ -75,32 +83,25 @@ function treeTraverse(this, id, branchDir, currentParentNode)
             % type if no matching transformation icon exists -- see
             % WorkSpaceTree.iconForResult) and with List events/Recalculate
             % eligibility baked in from the loaded EEG (see
-            % WorkSpaceTree.optsFor). canApplyToAll is unconditionally true
-            % here (unlike Alakazam.persistResultNode, which computes it
-            % from the currently active tree): treeTraverse only ever adds
-            % nodes to this.Tree (see loadBVAFile.m/loadMATFile.m/
-            % loadSETFile.m, its only three callers -- GrandAveragesTree is
-            % populated by loadGrandAverages.m instead, never this
-            % function), so every node it rebuilds from disk is, by
-            % construction, a non-root branch node in the Data & Analyses
-            % tree -- exactly Save Template/Apply to All Raw Files'
-            % eligibility. Without this, every node from a REOPENED
-            % workspace (i.e. everything except nodes created fresh in the
-            % current session) silently fell back to addNode's own
-            % canApplyToAll default of false, leaving both context-menu
-            % items permanently disabled for a workspace's entire existing
-            % history.
+            % WorkSpaceTree.optsFor). canApplyToAll is true in the Data &
+            % Analyses tree, where every node rebuilt here is a non-root
+            % branch node, exactly Save Template/Apply to All Raw Files'
+            % eligibility; without it, every node of a REOPENED workspace
+            % fell back to addNode's default of false, leaving both items
+            % disabled for its entire history. Under a grand average it is
+            % false, as persistResultNode makes it for a fresh node there:
+            % a grand average's steps cannot be replayed onto a recording.
             transRoot = fullfile(this.Parent.RootDir, 'Transformations');
             opts = WorkSpaceTree.optsFor(proxyEEG);
-            opts.canApplyToAll = true;
-            newNode = this.Tree.addNode(info.id, currentParentNode.Id, ...
+            opts.canApplyToAll = tree == this.Tree;   % never under a grand average
+            newNode = tree.addNode(info.id, currentParentNode.Id, ...
                 WorkSpaceTree.iconForResult(proxyEEG, transRoot), actualFile, opts);
 
             % Extract the file name without the extension for recursion.
             [~, name, ~] = fileparts(file.name);
 
             % Recursively traverse the next level of the directory structure.
-            treeTraverse(this, name, currentDir, newNode);
+            this.treeTraverse(name, currentDir, newNode, tree);
         end
     end
 end

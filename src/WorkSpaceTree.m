@@ -412,9 +412,21 @@ classdef WorkSpaceTree < handle
             end
         end
 
-        function opts = optsFor(EEG)
+        function opts = optsFor(EEG, varargin)
         %OPTSFOR  Build an addNode opts struct from a loaded EEG's
-        %   DataFormat/Call/etc.GrandAverage fields. 'List events' only
+        %   DataFormat/Call fields. OPTS = optsFor(EEG, 'GrandAverage', true)
+        %   is for the node of a grand average itself (Alakazam.
+        %   saveGrandAverage, WorkSpace.loadGrandAverages).
+        %
+        %   WHY THE GRAND AVERAGE IS SAID, NOT READ. EEG.etc.GrandAverage
+        %   marks data that IS a grand average, and every step run on one
+        %   keeps it (a Filter of a grand average is still grand-averaged
+        %   data, which is what the reports and the candidate lists need to
+        %   know). So it cannot tell the grand average's own node from a
+        %   node computed from it: read as the former, a Filter under a
+        %   grand average offered Recalculate and reopened the grand
+        %   average's subject list instead of the filter's settings. Only
+        %   the caller knows which node it is adding. 'List events' only
         %   makes sense for continuous (non-epoched) data. 'Recalculate' is
         %   offered for a Grand Average node (revisit its subject list --
         %   see Alakazam.onRecalculateNode), or for a node produced by one
@@ -434,7 +446,11 @@ classdef WorkSpaceTree < handle
         %   Workspace.GrandAveragesTree), which this EEG-only function has
         %   no way to know -- see Alakazam.persistResultNode, which sets it
         %   itself after calling this.
-            isGrandAverage = isfield(EEG, 'etc') && isfield(EEG.etc, 'GrandAverage');
+            p = inputParser();
+            p.addParameter('GrandAverage', false, @(x) islogical(x) || isnumeric(x));
+            p.parse(varargin{:});
+            isGrandAverage = logical(p.Results.GrandAverage) && isfield(EEG, 'etc') ...
+                && isfield(EEG.etc, 'GrandAverage');
             isEditableTransform = isfield(EEG, 'Call') && ~isempty(EEG.Call) && ...
                 any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
             % 'Rejection breakdown' is offered when the node actually carries

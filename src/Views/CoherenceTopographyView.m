@@ -1,138 +1,186 @@
 classdef CoherenceTopographyView < AlakazamView
-%COHERENCETOPOGRAPHYVIEW  One scalp coherence topography, with a bin
-%   dropdown when there is more than one.
+%COHERENCETOPOGRAPHYVIEW  Every bin's scalp coherence topography in one
+%   plot, on one colour scale, with the bins ticked in a side column.
 %
-%   Draws one head-map, of every scalp channel's magnitude-squared
-%   coherence to the reference, at the frequency CoherenceTopography
-%   detected (or was told to use) for the selected bin -- the title shows
-%   that bin's label and frequency. A "Bin" dropdown appears when there is
-%   more than one bin, matching ScalpDistributionView's/Brain3DView's own
-%   single-plot-plus-bin-dropdown interface (this used to draw a whole grid
-%   of per-bin tiles at once; one topography plus a dropdown reads far more
-%   clearly once there are more than a couple of bins, and keeps every
-%   view in this family consistent with the others). Unlike
-%   ScalpDistributionView there is no time scrubbing: a coherence
-%   topography is one map per bin.
+%   Each map shows every scalp channel's magnitude-squared coherence to the
+%   reference at the frequency CoherenceTopography detected (or was told to
+%   use) for that bin; its title gives the bin's label and frequency. The
+%   side column holds a tickbox per bin, as the ERP view does for its lines:
+%   the ticked bins are drawn side by side, up to three to a row, and all of
+%   them start ticked.
 %
-%   Uses TransTools.DrawScalpMap for the head/interpolation, then overrides
-%   its (signed, diverging) colour scale with a sequential 0..max map,
-%   since coherence is a non-negative [0,1] quantity. One shared colorbar.
+%   WHY SIDE BY SIDE, not one at a time. The view used to show one bin
+%   behind a dropdown. The question a coherence topography answers is
+%   comparative (does the 64 Hz condition focus where the 60 Hz one does, is
+%   the SSVEP control's map different), and one map at a time made the
+%   reader carry the last one in memory. Drawn together on one colour scale
+%   (0 to the largest coherence of any bin), the maps compare as they stand,
+%   which is how Dimigen et al. (2025, Figure 1C) show them. The tickboxes
+%   keep a study with many conditions readable: untick what is not being
+%   compared.
+%
+%   Uses TransTools.DrawScalpMap for the head and interpolation, then
+%   replaces its signed, diverging colour scale with a sequential 0..max
+%   one, since coherence is a non-negative quantity in [0, 1]. One shared
+%   colorbar.
 %
 %   See also ALAKAZAMPLOTTER, COHERENCETOPOGRAPHY, TRANSTOOLS.DRAWSCALPMAP,
-%   SCALPDISTRIBUTIONVIEW, BRAIN3DVIEW.
+%   AVERAGEVIEW, SCALPDISTRIBUTIONVIEW.
 
-    properties
+    properties (Constant, Access = private)
+        MaxColumns = 3      % maps per row
+        SideWidthPx = 170   % the tickbox column
     end
 
     properties (SetAccess = private)
         Figure
         EEG
         Grid
-        Axes            % the single head-map uiaxes
+        MapGrid          % nested grid holding one uiaxes per ticked bin
+        CheckboxGrid     % the side column: one uicheckbox per bin
+        Axes             % the drawn maps' uiaxes, in bin order
         BinLabels        % display label for each bin
-        SelectedBin      % index of the bin currently drawn
-        BinDropdown      % uidropdown, only built when numel(BinLabels) > 1
+        Shown            % logical, one per bin: ticked in the side column
     end
 
     methods
         function this = CoherenceTopographyView(fig, eeg)
             this.Figure = fig;
             this.EEG    = eeg;
+            this.BinLabels = cellfun(@(l) char(string(l)), eeg.CohTopoBinLabels, 'UniformOutput', false);
+            this.Shown = true(1, numel(this.BinLabels));
 
-            nBins = size(eeg.CohTopoValues, 2);
-            this.BinLabels = eeg.CohTopoBinLabels;
-            this.SelectedBin = 1;
+            this.Grid = uigridlayout(fig, [1, 3], ...
+                "RowHeight", {'1x'}, ...
+                "ColumnWidth", {'1x', TransTools.ColorbarColumnWidth(), this.SideWidthPx}, ...
+                "Padding", [4 4 4 4]);
+            this.MapGrid = uigridlayout(this.Grid, [1, 1], "Padding", [0 0 0 0]);
+            this.MapGrid.Layout.Row = 1;
+            this.MapGrid.Layout.Column = 1;
+            this.CheckboxGrid = uigridlayout(this.Grid, [1, 1], "Padding", [4 0 0 0], "RowSpacing", 2);
+            this.CheckboxGrid.Layout.Row = 1;
+            this.CheckboxGrid.Layout.Column = 3;
 
-            hasDropdown = nBins > 1;
-            dropdownRows = double(hasDropdown); % 0 or 1 extra row at the top
-
-            this.Grid = uigridlayout(fig, [dropdownRows + 1, 2], ...
-                "RowHeight", [repmat({26}, 1, dropdownRows), {'1x'}], ...
-                "ColumnWidth", {'1x', TransTools.ColorbarColumnWidth()}, "Padding", [4 4 4 4]);
-
-            if hasDropdown
-                this.BinDropdown = TransTools.BuildBinDropdown(this.Grid, 1, 1, ...
-                    this.BinLabels, @(idx) this.onBinChanged(idx));
-            end
-
-            axRow = dropdownRows + 1;
-            this.Axes = uiaxes(this.Grid);
-            this.Axes.Layout.Row = axRow;
-            this.Axes.Layout.Column = 1;
-            this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
-            axtoolbar(this.Axes, "default");
-
+            this.buildCheckboxes();
             this.redraw();
 
             % Built AFTER the first redraw() above -- see Brain3DView's own
             % constructor comment for why (a real reported regression when
             % this order was briefly swapped for cross-file consistency).
-            TransTools.AddSharedColorbar(this.Grid, axRow, 2, parula, ...
-                [0, this.EEG.CohTopoLimit], sprintf('Coherence to %s (%s)', this.EEG.CohTopoRef, methodLabel(this.EEG)));
+            TransTools.AddSharedColorbar(this.Grid, 1, 2, parula, [0, this.EEG.CohTopoLimit], ...
+                sprintf('Coherence to %s (%s)', this.EEG.CohTopoRef, methodLabel(this.EEG)));
         end
-
     end
 
     methods (Access = private)
+        function buildCheckboxes(this)
+        %BUILDCHECKBOXES  A heading and one tickbox per bin, named with the
+        %   frequency its map is drawn at.
+            n = numel(this.BinLabels);
+            this.CheckboxGrid.RowHeight = [{18}, repmat({22}, 1, n), {'1x'}];
+            heading = uilabel(this.CheckboxGrid, "Text", "Bins", "FontWeight", "bold");
+            heading.Layout.Row = 1;
+            for b = 1:n
+                cb = uicheckbox(this.CheckboxGrid, ...
+                    "Text", this.binTitle(b), ...
+                    "Tooltip", this.binTitle(b), ...
+                    "Value", this.Shown(b), ...
+                    "ValueChangedFcn", @(src, ~) this.onToggle(b, src.Value));
+                cb.Layout.Row = b + 1;
+            end
+        end
+
         function redraw(this)
-        %REDRAW  Draw the currently selected bin's coherence head-map.
-            eeg   = this.EEG;
-            b     = this.SelectedBin;
-            label = char(string(this.BinLabels{b}));
-            ax    = this.Axes;
-            values = eeg.CohTopoValues(eeg.CohTopoDrawn, b);
-            lim    = eeg.CohTopoLimit;
+        %REDRAW  One head-map per ticked bin, laid out in rows of up to
+        %   MaxColumns, all on the same 0..CohTopoLimit scale.
+            delete(this.MapGrid.Children);
+            this.Axes = gobjects(0);
+            bins = find(this.Shown);
+            if isempty(bins)
+                this.MapGrid.RowHeight = {'1x'};
+                this.MapGrid.ColumnWidth = {'1x'};
+                note = uilabel(this.MapGrid, "Text", "Tick a bin to show its map.", ...
+                    "HorizontalAlignment", "center");
+                note.Layout.Row = 1;
+                note.Layout.Column = 1;
+                return;
+            end
+            nCols = min(this.MaxColumns, numel(bins));
+            nRows = ceil(numel(bins) / nCols);
+            this.MapGrid.RowHeight = repmat({'1x'}, 1, nRows);
+            this.MapGrid.ColumnWidth = repmat({'1x'}, 1, nCols);
+            for k = 1:numel(bins)
+                ax = uiaxes(this.MapGrid);
+                ax.Layout.Row = ceil(k / nCols);
+                ax.Layout.Column = mod(k - 1, nCols) + 1;
+                ax.ButtonDownFcn = @(~, ~) this.notifyActivated();
+                axtoolbar(ax, "default");
+                this.drawMap(ax, bins(k));
+                this.Axes(end + 1) = ax;
+            end
+        end
+
+        function drawMap(this, ax, b)
+        %DRAWMAP  Bin B's coherence head-map into AX.
+            eeg = this.EEG;
+            lim = eeg.CohTopoLimit;
             try
-                TransTools.DrawScalpMap(ax, values, eeg.CohTopoChanlocs, lim);
+                TransTools.DrawScalpMap(ax, eeg.CohTopoValues(eeg.CohTopoDrawn, b), eeg.CohTopoChanlocs, lim);
                 % Coherence is non-negative: replace DrawScalpMap's symmetric
                 % diverging scale with a sequential 0..max one.
                 colormap(ax, parula);
                 ax.CLim = [0, lim];
             catch err
-                cla(ax); axis(ax, 'off');
-                title(ax, sprintf('%s (no map: %s)', label, err.message));
+                cla(ax);
+                axis(ax, 'off');
+                title(ax, sprintf('%s (no map: %s)', this.BinLabels{b}, err.message), 'Interpreter', 'none');
                 return;
             end
-            f = eeg.CohTopoFreqs(b);
+            title(ax, this.binTitle(b), 'Interpreter', 'none');
+        end
+
+        function text = binTitle(this, b)
+        %BINTITLE  "Label  (64.0 Hz)", or the label alone without a frequency.
+            text = this.BinLabels{b};
+            f = this.EEG.CohTopoFreqs(b);
             if isfinite(f)
-                title(ax, sprintf('%s  (%.1f Hz)', label, f));
-            else
-                title(ax, label);
+                text = sprintf('%s  (%.1f Hz)', text, f);
             end
         end
 
-        function onBinChanged(this, binIdx)
-        %ONBINCHANGED  BinDropdown ValueChangedFcn target.
+        function onToggle(this, b, value)
+        %ONTOGGLE  A tickbox changed: show or hide that bin's map.
             this.notifyActivated();
-            this.SelectedBin = binIdx;
+            this.Shown(b) = logical(value);
             this.redraw();
         end
     end
 
     methods
         function focus = currentFocus(this)
-        %CURRENTFOCUS  The bin this map is drawn for, by label.
+        %CURRENTFOCUS  The first bin shown, by label: what another view
+        %   should show to match this one.
             focus = struct();
-            if ~isempty(this.SelectedBin) && this.SelectedBin >= 1 && ...
-                    this.SelectedBin <= numel(this.BinLabels)
-                focus.Bin = char(string(this.BinLabels{this.SelectedBin}));
+            first = find(this.Shown, 1);
+            if ~isempty(first)
+                focus.Bin = this.BinLabels{first};
             end
         end
 
         function applyFocus(this, focus)
-        %APPLYFOCUS  Show FOCUS.Bin if this dataset has it, keeping the
-        %   dropdown in step with the map.
+        %APPLYFOCUS  Make sure FOCUS.Bin is among the maps shown, if this
+        %   dataset has it; the other ticked bins stay as they are.
             if ~isstruct(focus) || ~isfield(focus, 'Bin') || isempty(this.BinLabels)
                 return;
             end
             idx = ViewFocus.indexOfLabel(this.BinLabels, focus.Bin);
-            if isempty(idx) || isequal(idx, this.SelectedBin)
+            if isempty(idx) || this.Shown(idx)
                 return;
             end
-            this.onBinChanged(idx);
-            if ~isempty(this.BinDropdown) && isvalid(this.BinDropdown)
-                this.BinDropdown.Value = idx;
-            end
+            this.Shown(idx) = true;
+            delete(this.CheckboxGrid.Children);
+            this.buildCheckboxes();
+            this.redraw();
         end
     end
 end

@@ -67,6 +67,10 @@ bar. Dates are those of the tag.
 
 ### Changed
 
+- **CohTopo shows every bin's map in one plot**, side by side on one colour
+  scale, with a tickbox per bin in a column on the right (as the ERP view has
+  for its lines), instead of one map at a time behind a dropdown.
+
 - **The generated settings dialog can hold much more**, so fewer
   transformations need a dialog of their own. A field can now be a channel
   picker (by label, with All, None and Scalp EEG), a bin picker (with
@@ -104,6 +108,31 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **The continuous view sometimes drew a sawtooth** that went away at the
+  next zoom. Its min/max envelope was decimated for the axes' width as last
+  measured, which before layout is a placeholder and after a window resize,
+  a move into the tile grid or an undock is out of date; and between 2 and 8
+  samples per pixel it used 8-sample buckets, up to 4 pixels wide. A line
+  through buckets wider than a pixel zigzags. The envelope is now decimated
+  for at least the widest screen, and no bucket is wider than a column: the
+  samples are reduced directly where the pyramid's finest level is too
+  coarse, and its buckets are merged to one per column elsewhere, which also
+  draws fewer vertices than before.
+- **The Reports tree listed the reports of every workspace** sharing the
+  same Exports folder. A report now records the workspace that rendered it
+  (its Raw folder), and each workspace lists its own; a report made before
+  that is judged by the recordings its tables name. Grand averages were
+  already scoped this way.
+- **Recalculate on a step under a grand average recalculated the grand
+  average.** A Filter run on a grand average keeps the grand average's record
+  in its data, and that record was read as "this node is a grand average", so
+  Recalculate reopened the subject list instead of the filter's settings. The
+  grand average is now told by its place in the tree (the top-level node),
+  and a step under it recalculates as that step. An Average under a grand
+  average no longer offers Recalculate at all.
+- **Steps under a grand average came back after reopening the workspace.**
+  They were saved in a folder named after the grand average, like every
+  node's children, but only the grand averages themselves were read back.
 - **Derive Channels on an average could not be shown**: the step added the
   channel to the data but not to the average's standard error and aSME, and
   the waveform view failed with "Arrays have incompatible sizes". Every

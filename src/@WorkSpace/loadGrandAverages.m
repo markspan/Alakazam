@@ -31,6 +31,10 @@ function loadGrandAverages(this)
 %   enough to keep a wholly unrelated study's grand averages out, which is
 %   what this is for.
 %
+%   The steps run on a grand average are listed under it again, from the
+%   folder named after it (see treeTraverse); only the grand averages
+%   themselves sit at the top level of the folder.
+%
 %   A grand average that records NO sources (written before that field
 %   existed, or damaged) is shown rather than hidden. Its provenance cannot
 %   be checked either way, and silently hiding a user's saved result is
@@ -56,8 +60,12 @@ function loadGrandAverages(this)
         % creation path -- its own dedicated icon regardless of the
         % underlying data's time/frequency domain, not a borrowed
         % time/freq badge (see alakazam-tree.js's ICONS map comment).
-        this.GrandAveragesTree.addNode(proxy.id, '', 'grandAverage', file, ...
-            WorkSpaceTree.optsFor(proxy));
+        gaNode = this.GrandAveragesTree.addNode(proxy.id, '', 'grandAverage', file, ...
+            WorkSpaceTree.optsFor(proxy, 'GrandAverage', true));
+        % The steps run on it (a Filter, a Measure) are cached in a folder
+        % named after it, as every node's children are (persistResultNode).
+        [~, stem] = fileparts(file);
+        this.treeTraverse(stem, gaDir, gaNode, this.GrandAveragesTree);
     end
 end
 

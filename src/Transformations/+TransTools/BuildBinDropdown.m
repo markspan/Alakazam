@@ -1,9 +1,9 @@
 function dropdown = BuildBinDropdown(grid, row, col, binLabels, valueChangedFcn, label)
-%BUILDBINDROPDOWN  The "Bin:" label + uidropdown row shared by
-%   TimeScrubStrip (paired with its own time slider) and
-%   CoherenceTopographyView (standalone, no time scrubbing) -- both built
-%   the identical nested-grid label+dropdown block independently;
-%   consolidated here.
+%BUILDBINDROPDOWN  The "Bin:" label + uidropdown row shared by the views
+%   that show one bin (or trial) at a time: TimeScrubStrip (paired with its
+%   own time slider), EpochView, FourierView, SpectralMeasureView,
+%   CovarianceView and CrossCorrelationView. It began as two identical
+%   copies, consolidated here.
 %
 %   Builds into a nested [1,2] uigridlayout inside GRID at ROW/COL
 %   (ColumnWidth {40,'1x'} for the "Bin:" label + the dropdown itself,
@@ -16,8 +16,7 @@ function dropdown = BuildBinDropdown(grid, row, col, binLabels, valueChangedFcn,
 %   passes "Trial:" when the spectra it steps through are single trials.
 %   Any other label gets a column fitted to its own width.
 %
-%   See also TIMESCRUBSTRIP, COHERENCETOPOGRAPHYVIEW, FOURIERVIEW,
-%   SPECTRALMEASUREVIEW.
+%   See also TIMESCRUBSTRIP, EPOCHVIEW, FOURIERVIEW, SPECTRALMEASUREVIEW.
     labelWidth = 40;
     if nargin < 6 || isempty(label)
         label = "Bin:";

@@ -41,6 +41,10 @@ function newNode = persistReportNode(this, reportName, htmlFile, qmdFile)
     reportEEG.Label = reportName;
     reportEEG.ReportHtmlFile = htmlFile;
     reportEEG.ReportQmdFile = qmdFile;
+    % Which workspace made it. The Reports folder sits in the Exports
+    % directory, which several workspaces may share; without this, every one
+    % of them listed every report (see WorkSpace.loadReports).
+    reportEEG.Workspace = this.Workspace.ownerRecord();
 
     [folder, stem] = fileparts(htmlFile);
     reportEEG.File = fullfile(folder, [stem '_node.mat']);

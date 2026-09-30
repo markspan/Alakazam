@@ -177,4 +177,9 @@ Measure reports and the Coherence Map draws, so the three agree. Only
 channels with a 10-5 position are drawn; coherence is still computed for
 every channel, and kept for export.
 
+The view draws every bin's map side by side, on one colour scale from zero to
+the largest coherence in any of them, so conditions compare as they stand.
+The column on the right has a tickbox per bin, named with the frequency its
+map is drawn at: untick the bins not being compared.
+
 ![Coherence to the photodiode at 64 Hz in the RIFT 64 Hz condition: an occipital focus.](images/coherencetopography-result.jpg){#fig-coherencetopography-result}
