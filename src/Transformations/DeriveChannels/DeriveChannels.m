@@ -26,6 +26,12 @@ function [EEG, options] = DeriveChannels(input, varargin)
 %   deriving before epoching is equally valid when the derived channel is
 %   what you want to epoch, baseline or reject on.
 %
+%   ON AN AVERAGE, NO ERROR BAND. The standard error and aSME of a derived
+%   channel depend on how its source channels covary over trials, which an
+%   average no longer holds, so they are NaN (see
+%   TransTools.AlignChannelCompanions) and the view draws the line without
+%   a band. Derived on the epochs, before Average, the channel gets both.
+%
 %   WHY THIS IS ITS OWN STEP, when Measure's own "derived channels" field
 %   already ran the same engine. Because a derivation is a change to the
 %   data, not a measurement of it, and hiding it inside Measure meant you

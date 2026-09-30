@@ -449,6 +449,12 @@ of them. A derived channel has type `derived` and no scalp position: it is
 drawn in the waveform view and carried into grand averages, but left out of
 scalp maps.
 
+Derived on an average, a channel has no confidence band and no aSME. Its
+standard error depends on how the channels it is computed from vary together
+over trials, which the average no longer holds, so it is left unknown rather
+than guessed. Derive it on the epochs instead, before Average, and Average
+gives it both, computed from its own trials as for any other channel.
+
 ![The derived channel `C34` in the response-locked LRP average: before a left-hand response (blue) C4 turns negative relative to C3, before a right-hand response (red) positive, and the LRP bin (teal), half their difference, is the contralateral-minus-ipsilateral negativity.](images/derivechannels-result.jpg){#fig-derivechannels-result}
 
 ERP Measure has a field for `let` statements too (@sec-tr-measure). Each of

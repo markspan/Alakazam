@@ -53,7 +53,7 @@ function recalculateTransformNode(this, node, ownEEG)
         [newEEG, newParams] = TransTools.invoke(transformId, parentLoaded.EEG);
     catch ME
         this.restoreFocus();
-        this.showTransformationError(transformId, ME);
+        this.showTransformationError(transformId, ME, 'Dataset', parentLoaded.EEG);
         return;
     end
 
@@ -98,7 +98,7 @@ function recalculateTransformNode(this, node, ownEEG)
             this.planDescendantRecalc(node.UserData, newEEG)];
     catch ME
         this.restoreFocus();
-        this.showTransformationError(transformId, ME);
+        this.showTransformationError(transformId, ME, 'Dataset', parentLoaded.EEG);
         return;
     end
 
@@ -124,7 +124,15 @@ function recalculateTransformNode(this, node, ownEEG)
     this.recalculateAffectedGrandAverages({plan.file});
 
     this.Workspace.EEG = newEEG;
-    this.Plotter.plotCurrent();
+    % The branch is already rewritten on disk, so a view that cannot draw
+    % the result is reported as such, with the result kept (unlike a new
+    % node, see onTransformation, there is no previous state to go back to).
+    try
+        this.Plotter.plotCurrent();
+    catch ME
+        this.showTransformationError(transformId, ME, 'Phase', 'draw', ...
+            'Dataset', newEEG, 'Kept', true);
+    end
     this.restoreFocus();
 end
 

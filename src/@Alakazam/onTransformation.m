@@ -10,6 +10,12 @@ function onTransformation(this, entry)
 %
 %   A transformation returns [EEG, params]; if it instead returns a
 %   graphics handle it was a pure plot and nothing is persisted.
+%
+%   ALL OR NOTHING. The step runs, its result is saved as a node, and the
+%   node is drawn. A failure in the first phase adds nothing; a failure in
+%   either of the others takes the node out again (discardResultNode), so
+%   the tree never keeps a result nobody has seen, and the dialog says
+%   which phase failed rather than blaming the step for its view's fault.
     % The gallery passes the entry file name (e.g. "Fourier.m"); its
     % stem is the transformation id and the function to call. The '.'
     % is a char so the element-wise comparison works. Computed before
@@ -34,6 +40,11 @@ function onTransformation(this, entry)
         return;
     end
 
+    parentNode = this.Workspace.ActiveTree.SelectedNodes;
+    inputEEG = this.Workspace.EEG;
+    phase = 'run';        % what was going on if the catch below is reached
+    result.EEG = [];
+    newNode = [];
     try
         restoreDir = this.enterRepoRoot();
 
@@ -54,7 +65,7 @@ function onTransformation(this, entry)
         restoreBusy = beginBusy(this.MainFigure, sprintf("Running %s...", transformId));
 
         % Apply the transformation to the current dataset.
-        [result.EEG, usedParams] = TransTools.invoke(transformId, this.Workspace.EEG);
+        [result.EEG, usedParams] = TransTools.invoke(transformId, inputEEG);
 
         if isempty(result.EEG) || ishandle(result.EEG)
             % Either the transformation's own options dialog was
@@ -95,15 +106,23 @@ function onTransformation(this, entry)
         % selection actually lives in -- Tree or GrandAveragesTree,
         % since a transformation can be run on a currently-selected
         % grand average too.
-        displayBase = this.Workspace.ActiveTree.SelectedNodes.Name;
-        this.persistResultNode(result.EEG, result.EEG.File, displayBase, ...
-            transformId, this.Workspace.ActiveTree.SelectedNodes);
+        phase = 'save';
+        [result.EEG, newNode] = this.persistResultNode(result.EEG, result.EEG.File, ...
+            parentNode.Name, transformId, parentNode);
 
+        phase = 'draw';
         this.Plotter.plotCurrent();
         this.restoreFocus();
 
     catch ME
+        if ~isempty(newNode)
+            this.discardResultNode(newNode, parentNode, inputEEG);
+        end
         this.restoreFocus();
-        this.showTransformationError(transformId, ME);
+        dataset = inputEEG;
+        if ~strcmp(phase, 'run')
+            dataset = result.EEG;
+        end
+        this.showTransformationError(transformId, ME, 'Phase', phase, 'Dataset', dataset);
     end
 end

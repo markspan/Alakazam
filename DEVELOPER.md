@@ -165,7 +165,10 @@ end
   shape (two outputs; an `EEG` that is empty, a struct or a graphics handle;
   `options` a struct, empty or the `'Init'` sentinel) before it reaches the
   tree. `TransformContractTest` specifies this seam and asserts that nothing
-  bypasses it.
+  bypasses it. It also brings the per-channel arrays of the result
+  (`stErr`, `aSME`, `etc.alz.interpolated`) in step with its channels, by
+  label (`TransTools.AlignChannelCompanions`), so a step that adds or drops
+  channels with EEGLAB's own functions need not know they exist.
 - **Options are plain data**, never a command string that is `eval`'d.
   Channels and bins are stored by **label**, not index, and resolved against
   the dataset at compute time, so a stored choice replays on another subject

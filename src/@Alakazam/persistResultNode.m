@@ -57,6 +57,14 @@ function [resultEEG, newNode] = persistResultNode(this, resultEEG, sourceFile, ~
 
     % Persist to disk (under the variable name "EEG", plus a JSON sidecar
     % -- see saveEegCache) and adopt it as the workspace's current dataset.
-    saveEegCache(resultEEG.File, resultEEG);
+    % A node whose file could not be written is taken out again before the
+    % error goes on: left in, it would be a node with nothing behind it,
+    % which fails the moment it is clicked.
+    try
+        saveEegCache(resultEEG.File, resultEEG);
+    catch ME
+        this.discardResultNode(newNode, parentTreeNode, this.Workspace.EEG);
+        rethrow(ME);
+    end
     this.Workspace.EEG = resultEEG;
 end

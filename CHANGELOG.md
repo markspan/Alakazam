@@ -104,6 +104,26 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **Derive Channels on an average could not be shown**: the step added the
+  channel to the data but not to the average's standard error and aSME, and
+  the waveform view failed with "Arrays have incompatible sizes". Every
+  transformation's result now has those arrays (and the interpolation mask)
+  brought in step with its channels as it returns (`TransTools.
+  AlignChannelCompanions`, run by `TransTools.invoke`), so the same holds
+  for Select Data, Channel Editor and any plugin, and a node saved before
+  the fix draws too. A derived channel's error on an average is unknown and
+  drawn without a band; derived before Average, it gets its own.
+- **A failed step no longer leaves a node behind.** A result is saved as a
+  node before it is drawn; when the drawing (or the saving) failed, the node
+  stayed, looking like an unchanged copy of its parent. It is now taken out
+  again, and the step either completes or leaves no trace.
+- **The error dialog says what failed.** It used to read "could not run on
+  this dataset" and suggest the data was of the wrong kind whatever
+  happened. It now tells a failed step from a failed drawing of its result
+  (and says the fault is then the view's), names the kind and shape of the
+  dataset concerned, keeps the "wrong kind of data" hint for the errors
+  data of the wrong shape produces, and calls any other unanticipated error
+  a defect rather than the user's data.
 - **The cluster statistics report printed its significance level as
   `\(\alpha\)`**, and the data-quality report its chi-square the same way.
   They were written as TeX math, which is drawn by MathJax, and MathJax does
