@@ -200,5 +200,19 @@ classdef ReportDocTest < matlab.unittest.TestCase
                 end
             end
         end
+
+        % ---- symbols ------------------------------------------------------
+        function aSymbolIsTheLetterNotItsMarkup(testCase)
+        %ASYMBOLISTHELETTERNOTITSMARKUP  The reports print symbols as
+        %   Unicode, since TeX math needs MathJax and the app's viewer does
+        %   not run it (see ReportDoc.symbol).
+            testCase.verifyEqual(ReportDoc.symbol('alpha'), char(945));
+            testCase.verifyEqual(ReportDoc.symbol('chi2'), char([967 178]));
+            testCase.verifyEqual(ReportDoc.symbol("Alpha"), char(945), 'Any case, char or string.');
+        end
+
+        function anUnknownSymbolIsRefused(testCase)
+            testCase.verifyError(@() ReportDoc.symbol('omega'), 'Alakazam:ReportDoc:unknownSymbol');
+        end
     end
 end

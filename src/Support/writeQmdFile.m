@@ -16,8 +16,14 @@ function writeQmdFile(qmdFile, qmdText, errorId)
 %   opening the file first would truncate it, so a generator that then threw
 %   would leave an empty, unexplained .qmd behind.
 %
-%   See also RENDERQUARTOREPORT, GENERATEQUARTOREPORT.
-    fid = fopen(qmdFile, 'w');
+%   IN UTF-8, whatever MATLAB's default encoding is on this machine. Quarto
+%   and Pandoc read nothing else, and the reports hold text outside ASCII
+%   (µV, and the statistical symbols of ReportDoc.symbol). Written in a
+%   legacy code page, a Greek letter becomes a question mark before Quarto
+%   ever sees it.
+%
+%   See also RENDERQUARTOREPORT, GENERATEQUARTOREPORT, REPORTDOC.SYMBOL.
+    fid = fopen(qmdFile, 'w', 'n', 'UTF-8');
     if fid < 0
         throw(MException(errorId, 'I couldn''t open "%s" for writing.', qmdFile));
     end

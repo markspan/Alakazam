@@ -47,13 +47,13 @@ if (n_distinct(by_bin$bin) >= 2 && n_distinct(by_bin$dataset) >= 2) {
       cat("\n\nEvery subject has an identical rejection rate in every bin, so there is nothing to test.\n\n")
     } else {
       ft <- friedman.test(mat)
-      # One backslash reaches the output, not two: this string is written by
-      # MATLAB into R SOURCE, so R's own parser consumes one level before cat
-      # ever runs. "\\\\chi" here would emit \\chi, which is a LaTeX line break,
-      # and MathJax renders the rest as the literal letters c-h-i.
+      # The chi-square symbol is the letters themselves, written as \u
+      # escapes that R's parser turns into them, not TeX math: MathJax does
+      # not run in the app's report viewer, so $\chi^2$ reached readers as
+      # "\(\chi^2\)" (see ReportDoc.symbol).
       cat(sprintf(paste0("\nA Friedman test across %d subject(s) with a complete set of bins ",
                          "found %s evidence that rejection rate differs between conditions, ",
-                         "$\\chi^2$(%d) = %s, *p* %s.\n\n"),
+                         "\u03c7\u00b2(%d) = %s, *p* %s.\n\n"),
                   nrow(complete_rows),
                   ifelse(ft$p.value < .05, "**significant**", "no significant"),
                   ft$parameter, apa_num(ft$statistic), apa_p(ft$p.value)))

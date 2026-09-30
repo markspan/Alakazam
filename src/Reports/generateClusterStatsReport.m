@@ -119,18 +119,15 @@ function s = correctionSentence(opts)
 %   was never run, and invited a reader to report a threshold that had no
 %   effect on the result.
 %
-%   THE BACKSLASH BEFORE alpha IS DOUBLED HERE AND MUST NOT BE ANYWHERE ELSE.
-%   These are sprintf FORMAT strings, where \\ emits one backslash (and a lone
-%   \a would emit a BEL character, not the letters). The bug this replaces had
-%   the same '$\\alpha$' as a sprintf ARGUMENT instead, substituted through a
-%   %s, where nothing unescapes anything: both backslashes reached the Quarto
-%   and LaTeX printed \alpha as text rather than the letter.
+%   The significance level is the letter itself, not TeX math: see
+%   ReportDoc.symbol for why $\alpha$ reached readers as "\(\alpha\)".
+    alpha = ReportDoc.symbol('alpha');
     if strcmpi(opts.correctm, 'tfce')
         s = sprintf(['TFCE correction (no cluster-forming threshold is chosen, which is what ' ...
-            'TFCE is for; significance at $\\alpha$ = %s)'], numToStr(opts.alpha));
+            'TFCE is for; significance at %s = %s)'], alpha, numToStr(opts.alpha));
     else
-        s = sprintf('cluster correction (cluster-forming *p* < %s, cluster-level $\\alpha$ = %s)', ...
-            numToStr(opts.clusteralpha), numToStr(opts.alpha));
+        s = sprintf('cluster correction (cluster-forming *p* < %s, cluster-level %s = %s)', ...
+            numToStr(opts.clusteralpha), alpha, numToStr(opts.alpha));
     end
 end
 

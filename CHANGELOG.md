@@ -104,6 +104,14 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **The cluster statistics report printed its significance level as
+  `\(\alpha\)`**, and the data-quality report its chi-square the same way.
+  They were written as TeX math, which is drawn by MathJax, and MathJax does
+  not run in the app's report viewer (nor offline). The reports now print
+  the letters themselves (α, χ²), from one place (`ReportDoc.symbol`), and a
+  test fails on TeX math in any report source. Reports are also written and
+  read explicitly as UTF-8.
+
 ### Documentation
 
 - The documents in `Docs/` are brought up to date: the transformation

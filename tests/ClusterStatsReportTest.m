@@ -79,17 +79,21 @@ classdef ClusterStatsReportTest < matlab.unittest.TestCase
             end
         end
 
-        function theAlphaIsASingleBackslashInTheDocument(testCase)
-        %THEALPHAISASINGLEBACKSLASHINTHEDOCUMENT  A wrong escape here does
-        %   not fail anything: the document renders, and prints "\alpha" as
-        %   text where the letter should be. It was written as a sprintf
-        %   argument, where '$\\alpha$' passes through untouched, and the
-        %   reported symptom was exactly that in the finished report.
+        function theAlphaIsTheLetterNotTexMath(testCase)
+        %THEALPHAISTHELETTERNOTTEXMATH  A wrong symbol here fails nothing:
+        %   the document renders, and prints the markup where the letter
+        %   should be. It happened twice. First '$\\alpha$' went in as a
+        %   sprintf argument and reached the page with both backslashes;
+        %   then, with the escaping right, the app's viewer still showed
+        %   "\(\alpha\)", because TeX math is drawn by MathJax and MathJax
+        %   does not run there (see ReportDoc.symbol). So the document must
+        %   hold the letter itself, and no TeX alpha of any kind.
             for correctm = {'cluster', 'tfce'}
                 txt = testCase.build(correctm{1}, strcmp(correctm{1}, 'cluster'));
-                testCase.verifySubstring(txt, '$\alpha$');
-                testCase.verifyFalse(contains(txt, '\\alpha'), ...
-                    sprintf('The %s report doubled the backslash before alpha.', correctm{1}));
+                testCase.verifySubstring(txt, [char(945) ' = .05'], ...
+                    sprintf('The %s report does not state its alpha as the letter.', correctm{1}));
+                testCase.verifyFalse(contains(txt, '\alpha'), ...
+                    sprintf('The %s report still writes TeX math for alpha.', correctm{1}));
             end
         end
 
