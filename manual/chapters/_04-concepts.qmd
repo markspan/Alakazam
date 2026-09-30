@@ -138,3 +138,10 @@ tree (@sec-grand-averages). A **report** is a rendered Quarto document,
 statistical, cluster-based or about data quality, with its own node in the
 Reports tree and its own copy of the data it was computed from
 (@sec-statistics, @sec-data-quality).
+
+Both trees show only what belongs to the open workspace. Several workspaces
+may share one Cache or Exports folder, so a grand average is listed where the
+recordings it was built from are, and a report where it was rendered: each
+report records the Raw folder of the workspace that made it. A report
+rendered before reports kept that record is listed where its tables name a
+recording of the workspace, and everywhere when they name none.

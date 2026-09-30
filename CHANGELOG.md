@@ -104,6 +104,11 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **The Reports tree listed the reports of every workspace** sharing the
+  same Exports folder. A report now records the workspace that rendered it
+  (its Raw folder), and each workspace lists its own; a report made before
+  that is judged by the recordings its tables name. Grand averages were
+  already scoped this way.
 - **Recalculate on a step under a grand average recalculated the grand
   average.** A Filter run on a grand average keeps the grand average's record
   in its data, and that record was read as "this node is a grand average", so

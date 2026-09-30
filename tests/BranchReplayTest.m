@@ -268,13 +268,53 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.garble(file, EEG);
 
             tree = FakeTree();
-            app = FakeApp(struct('ReportsTree', tree, 'reportsDirectory', @() reports));
+            app = testCase.reportsApp(tree, reports);
             testCase.copyMethod('loadReports', 'reportsCopy', '@WorkSpace');
 
             reportsCopy(app);
 
             testCase.assertEqual(size(tree.Added, 1), 1);
             testCase.verifyEqual(tree.Added{1, 1}, 'Report (spectral) - 20-Sep');
+        end
+
+        function aReportFromAnotherWorkspaceIsNotListed(testCase)
+        %AREPORTFROMANOTHERWORKSPACEISNOTLISTED  The Reports folder is in the
+        %   Exports directory, which several workspaces share; each lists
+        %   only the reports rendered from its own Raw directory.
+            reports = fullfile(testCase.Folder, 'reports');
+            mkdir(reports);
+            testCase.reportNode(fullfile(reports, 'ours_node.mat'), 'Ours', ...
+                struct('name', 'Study A', 'raw', '/data/studyA/raw/'));
+            testCase.reportNode(fullfile(reports, 'theirs_node.mat'), 'Theirs', ...
+                struct('name', 'Study B', 'raw', '/data/studyB/raw'));
+
+            tree = FakeTree();
+            testCase.copyMethod('loadReports', 'reportsCopy', '@WorkSpace');
+            reportsCopy(testCase.reportsApp(tree, reports));
+
+            testCase.verifyEqual(tree.Added(:, 1), {'Ours'}, ...
+                'Only the report rendered here is listed, whatever the trailing separator.');
+        end
+
+        function anOlderReportIsJudgedByTheRecordingsItNames(testCase)
+        %ANOLDERREPORTISJUDGEDBYTHERECORDINGSITNAMES  A report rendered before
+        %   reports recorded their workspace is claimed by the recordings its
+        %   CSVs name, and listed when it names none (it cannot be judged).
+            reports = fullfile(testCase.Folder, 'reports');
+            mkdir(reports);
+            testCase.reportNode(fullfile(reports, 'mine_node.mat'), 'Mine', []);
+            writeLines(fullfile(reports, 'mine_measures.csv'), ...
+                {'dataset,dataset_type,value', 'GA,grand_average,1', 'node1,subject,2'});
+            testCase.reportNode(fullfile(reports, 'other_node.mat'), 'Other', []);
+            writeLines(fullfile(reports, 'other.csv'), {'dataset,value', 'S99,1'});
+            testCase.reportNode(fullfile(reports, 'clusters_node.mat'), 'Clusters', []);
+            writeLines(fullfile(reports, 'clusters_stat.csv'), {'channel,time,stat', 'Cz,100,2.1'});
+
+            tree = FakeTree();
+            testCase.copyMethod('loadReports', 'reportsCopy', '@WorkSpace');
+            reportsCopy(testCase.reportsApp(tree, reports));
+
+            testCase.verifyEqual(sort(tree.Added(:, 1))', {'Clusters', 'Mine'});
         end
 
         function aGrandAverageIsRefreshedWhenAnyOfItsSourcesWasRecalculated(testCase)
@@ -367,6 +407,25 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             node = struct('Id', 't', 'Name', 'target', 'UserData', file, 'IsRoot', true);
         end
 
+        function app = reportsApp(~, tree, reports)
+        %REPORTSAPP  A workspace whose Raw directory is /data/studyA/raw and
+        %   whose one recording is called node1 (FakeTree's name for it).
+            app = FakeApp(struct('ReportsTree', tree, 'reportsDirectory', @() reports, ...
+                'Tree', FakeTree({'node1.mat'}), 'RawDirectory', '/data/studyA/raw', ...
+                'fromStoredPath', @(p) p));
+        end
+
+        function reportNode(testCase, file, label, workspace)
+        %REPORTNODE  A report node as persistReportNode writes one, with the
+        %   given WORKSPACE record ([] for one written before records).
+            EEG = struct('id', 'Report', 'Label', label, 'DataFormat', 'EPOCHED', 'DataType', 'REPORT');
+            if ~isempty(workspace)
+                EEG.Workspace = workspace;
+            end
+            saveEegCache(file, EEG);
+            testCase.garble(file, EEG);
+        end
+
         function grandAverageNode(testCase, file, name, sources)
             mkdir(fileparts(file));
             EEG = testCase.averaged('Average', 1);
@@ -432,5 +491,11 @@ end
 function write(file, text)
     fid = fopen(file, 'w');
     fwrite(fid, text);
+    fclose(fid);
+end
+
+function writeLines(file, lines)
+    fid = fopen(file, 'w');
+    fprintf(fid, '%s\n', lines{:});
     fclose(fid);
 end
