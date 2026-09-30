@@ -8,7 +8,8 @@ belongs upstream.
 Verified against the source rather than recalled. The commands that produced
 it are at the foot of this page, so they can be re-run rather than trusted.
 
-*Last verified: 28 September 2026, 35 transformations, at V0.4.4.3. The
+*Last verified: 28 September 2026, 35 transformations, at V0.4.4.3; PREP,
+ASR and AutoReject added 30 September, 38 in all. The
 previous full pass (30 August, 22 transformations) is superseded: since then
 SourceEstimate has come to call FieldTrip's inverse solutions, RemoveComponents
 fits dipoles with dipfit, and RESS, Photodiode, EventEditor, DeriveChannels,
@@ -18,7 +19,7 @@ before.*
 
 ## Wrappers: the toolkit does the work
 
-Eleven transformations.
+Thirteen transformations.
 
 | Transformation | Wraps |
 |---|---|
@@ -33,6 +34,8 @@ Eleven transformations.
 | `SourceEstimate` | FieldTrip: `ft_prepare_leadfield` and the template head, electrode and cortex files for the forward model (`TransTools.BuildSourceForwardModel`), and `ft_inverse_mne`, `ft_inverse_sloreta`, `ft_inverse_eloreta` for the spatial filter (`TransTools.InverseSolution`) |
 | `Deconvolve` | `uf_designmat`, `uf_timeexpandDesignmat`, `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude`, `uf_combineWinrej`, `uf_glmfit`, `uf_condense`, `uf_predictContinuous`, `uf_addmarginal` (Unfold), through `Unfold.fitBins` and `Unfold.designMatrix` |
 | `EyeTracking` | `parseeyelink`, `pop_importeyetracker` (EYE-EEG) |
+| `PREP` | `prepPipeline` (the PREP pipeline, v0.56.0): line noise, bad channels, the robust average reference and the interpolation; `pop_chanedit` fills positions |
+| `ASR` | `clean_flatlines`, `clean_channels`, `clean_asr`, `clean_windows` (EEGLAB's clean_rawdata), `eeg_interp` puts the removed channels back; `pop_select`, `pop_chanedit` |
 
 `Deconvolve` has the most of its own around the toolkit: turning DefineBins'
 bins into Unfold's event types, each with its formula, and checking every
@@ -59,6 +62,14 @@ reference is inserted as a flat zero channel, next to its nearest neighbour
 on the 10-5 template, before `pop_reref` runs, so an average reference
 includes it.
 
+`ASR` calls clean_rawdata's stages one by one rather than `clean_artifacts`,
+for two reasons: its high-pass is left to Filter, and a rejected burst is
+marked `NaN` rather than cut out. Which samples a rejection removes is
+clean_rawdata's own rule, reproduced in `asrRejectedSamples`. `PREP` passes
+its channel sets (the scalp for the reference, the scalp and EOG for the line
+noise and the re-referencing) and reads its record; a stage that fails inside
+`prepPipeline` is turned into an error rather than passed on.
+
 `Filter` is the one worth a note: the filtering is `firfilt`, but the
 parameter design is Alakazam's. You give a frequency and a stopband
 attenuation in dB, and the order, transition band and window are derived
@@ -67,11 +78,12 @@ dialog plots come from the same kernels.
 
 ## Own algorithm, another toolkit for support only
 
-Five transformations.
+Six transformations.
 
 | Transformation | Its own | Borrowed |
 |---|---|---|
-| `ArtefactDetect` | the four detectors and the per-detector record, 445 lines | `eeg_interp`, through `TransTools.InterpolateFlaggedCells`, to repair flagged cells |
+| `ArtefactDetect` | the five detectors and the per-detector record, 518 lines | `eeg_interp`, through `TransTools.InterpolateFlaggedCells`, to repair flagged cells |
+| `AutoReject` | local autoreject (Jas et al., 2017): the cross-validated thresholds, the consensus and the repair plan, 400 lines | `eeg_interp`, the same |
 | `ManualReject` | the rejection view, 382 lines | `eeg_interp`, the same |
 | `ChannelEditor` | the editor, 312 lines | `readlocs` and the 10-5 template file (`TransTools.Template1005File`) |
 | `CoherenceTopography` | the coherence, 333 lines | `readlocs` and the template file, for electrode positions |
@@ -104,10 +116,18 @@ own folder, comments included, and comments are often half of them.
 | `ScalpDistribution` | 42; the drawing is in `ScalpDistributionView` |
 | `Brain3D` | 27; scalp-position resolution, the drawing is in `Brain3DView` |
 
-With the eleven wrappers and the five that borrow a helper, that accounts for
-all 35.
+With the thirteen wrappers and the six that borrow a helper, that accounts for
+all 38.
 
-## Four things worth knowing
+## Five things worth knowing
+
+**`AutoReject` is a port, not a wrapper.** autoreject is a Python package on
+MNE, with no MATLAB counterpart, so its algorithm is implemented here and
+checked against a literal evaluation of its criterion (`AutoRejectTest`). Two
+details differ from the package on purpose: each channel's threshold is the
+exact minimum over every candidate rather than a Bayesian-optimisation
+sample, and each candidate number of channels to interpolate is scored from
+the thresholded labels rather than from the previous candidate's.
 
 **`TimeFrequency` is not a `newtimef` wrapper.** `ComputeErsp` builds its own
 Morlet wavelets, `exp(2i*pi*f*t) * exp(-t^2 / 2*sigma^2)`, unit-energy

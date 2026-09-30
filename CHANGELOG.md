@@ -8,6 +8,47 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **PREP, ASR and AutoReject**, the standardised automated cleaning methods
+  the field cites (Tools > 2. Artifact Rejection / Reduction). **PREP** runs
+  the PREP pipeline (Bigdely-Shamlo et al., 2015): line noise at the mains
+  frequency and its harmonics, bad channels found by robust statistics and
+  RANSAC and interpolated, and a robust average reference; the line
+  frequency defaults to 50 Hz where PREP's own is 60. **ASR** runs
+  clean_rawdata's bad-channel and burst stages (Artifact Subspace
+  Reconstruction), interpolates the removed channels back in their places,
+  and repairs bursts, or marks them rejected rather than cutting them out;
+  its criterion defaults to 20 SD. **AutoReject** implements local
+  autoreject (Jas et al., 2017): a peak-to-peak threshold per channel chosen
+  by cross-validation, and a consensus that rejects an epoch or interpolates
+  its worst channels, deterministic and checked against a literal
+  evaluation of autoreject's criterion. All three work on the scalp channels
+  with a position and leave the peripherals alone, record what they did, and
+  have their own table in the data-quality report's provenance section. PREP
+  is downloaded on first use, after consent, pinned to v0.56.0;
+  clean_rawdata ships with EEGLAB and is now on the startup plugin list.
+- **A generator for new transformations**: `newTransformation('Name', ...)`
+  writes the entry function (the contract, a generated dialog from the fields
+  given, replay, an input check and a record in `etc.alz`), the manifest, a
+  placeholder icon and its SVG source, a test class whose cases pass as
+  generated, a manual section with an options table, and the entry on the
+  Recalculate list. DEVELOPER.md now also states what a transformation may
+  do to the dataset it is given.
+- **Every major recording format opens**: European Data Format (.edf,
+  EDF+), BioSemi (.bdf), GDF, Neuroscan and ANT Neuro (.cnt), EGI (.mff and
+  simple binary .raw), Lab Streaming Layer (.xdf), Micromed (.trc), Nicolet
+  (.e) and MNE-Python's .fif, alongside .set, .vhdr, .erp and .mat. Each is
+  read by its dedicated EEGLAB reader, installed through EEGLAB's plugin
+  manager the first time it is needed, with EEGLAB's File-IO route
+  (FieldTrip's readers) as the fall-back. An EyeLink .edf beside a
+  recording is recognised by its header and left for EyeTracking. The list
+  is one registry (`rawFormats`), so a format is one entry.
+- **A recording that cannot be read no longer stops the workspace from
+  opening**: it is left out, and one message lists every such file and why.
+- **ArtefactDetect has a flat-line detector**: a channel whose voltage stays
+  within a set range (1 uV by default) for at least a set time (200 ms), at
+  any offset. A channel that is exactly zero throughout is the reference and
+  is not tested.
+
 - **A library of ready-made files**, in `library/` at the root: templates
   (`library/templates`), bin scripts (`library/binscripts`) and measurement
   windows (`library/measures`), gathered from `templates/`, `binscripts/` and
@@ -18,9 +59,31 @@ bar. Dates are those of the tag.
   but uses Cz for CPz; the MMN set uses 150 to 250 ms for ERP CORE's 125 to
   225 ms). `library/README.md` indexes every file and the data it was written
   for, and `LibraryTest` checks that each loads, has its source and is
-  indexed.
+  indexed. `LibraryReplayTest` replays the templates on their own data, where
+  it is present, and compares with the results recorded when each was
+  checked (Docs/luck.md, Docs/dimigen.md, chapters 17 and 20 of the manual).
+  `AutoEyeICA.alztemplate`, which was never checked against its data, is not
+  in the library.
 
 ### Changed
+
+- **The generated settings dialog can hold much more**, so fewer
+  transformations need a dialog of their own. A field can now be a channel
+  picker (by label, with All, None and Scalp EEG), a bin picker (with
+  Differences), an editable table of rows, a block of text checked when OK
+  is pressed, a drop-down whose shown and stored values differ, a number with
+  limits, or a live preview; and any field can be greyed out while other
+  values say it does not apply. OK now asks every field whether its value can
+  be used and stays open, saying why, when one cannot. Interpolate and Derive
+  Channels lose their hand-written dialogs to it; Baseline gains a preview of
+  its window over every channel's average; ArtefactDetect greys out the
+  settings of detectors that are not ticked; the channel lists of Rectify,
+  DC-Detrend, Covariance and Cross Correlation gain All, None and Scalp EEG.
+- **Interpolating flagged channel-epochs is faster**: trials that share a set
+  of bad channels are interpolated in one call, which gives the same result
+  (the spline weights depend only on the set) at a fraction of the calls.
+  ArtefactDetect's and ManualReject's interpolation benefit; AutoReject's
+  cross-validation depends on it.
 
 - **Apply Template, and DefineBins' and ERP Measure's Load..., open in the
   library** the first time in a session, and after that in whichever folder
@@ -33,12 +96,41 @@ bar. Dates are those of the tag.
 - **A bin script could define the same bin number twice**, and both were
   accepted without a word, although a bin's number is how events and
   combination bins refer to it. It is now refused with a message naming the
-  number. A shipped P3b bin script did this; it is kept out of the library.
+  number. A shipped P3b bin script did this; it is removed, with two other
+  drafts from the old `binscripts/` folder.
 
 - **Export as Code wrote a ReRef that reconstructs an implicit reference as a
   plain `pop_reref`**, which drops the reconstructed channel and, under an
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
+
+- **Derive Channels on an average could not be shown**: the step added the
+  channel to the data but not to the average's standard error and aSME, and
+  the waveform view failed with "Arrays have incompatible sizes". Every
+  transformation's result now has those arrays (and the interpolation mask)
+  brought in step with its channels as it returns (`TransTools.
+  AlignChannelCompanions`, run by `TransTools.invoke`), so the same holds
+  for Select Data, Channel Editor and any plugin, and a node saved before
+  the fix draws too. A derived channel's error on an average is unknown and
+  drawn without a band; derived before Average, it gets its own.
+- **A failed step no longer leaves a node behind.** A result is saved as a
+  node before it is drawn; when the drawing (or the saving) failed, the node
+  stayed, looking like an unchanged copy of its parent. It is now taken out
+  again, and the step either completes or leaves no trace.
+- **The error dialog says what failed.** It used to read "could not run on
+  this dataset" and suggest the data was of the wrong kind whatever
+  happened. It now tells a failed step from a failed drawing of its result
+  (and says the fault is then the view's), names the kind and shape of the
+  dataset concerned, keeps the "wrong kind of data" hint for the errors
+  data of the wrong shape produces, and calls any other unanticipated error
+  a defect rather than the user's data.
+- **The cluster statistics report printed its significance level as
+  `\(\alpha\)`**, and the data-quality report its chi-square the same way.
+  They were written as TeX math, which is drawn by MathJax, and MathJax does
+  not run in the app's report viewer (nor offline). The reports now print
+  the letters themselves (α, χ²), from one place (`ReportDoc.symbol`), and a
+  test fails on TeX math in any report source. Reports are also written and
+  read explicitly as UTF-8.
 
 ### Documentation
 

@@ -1,0 +1,1 @@
+{"Name":"ASR","Description":"Artifact Subspace Reconstruction (clean_rawdata): flat and noisy scalp channels found and interpolated, then high-amplitude bursts repaired from a clean calibration stretch, or rejected. High-pass the recording first. Continuous data only.","Entry":"ASR.m","Icon":"ASR.png","Section":"2. Artifact Rejection / Reduction","Category":"Automated cleaning"}

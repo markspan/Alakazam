@@ -72,7 +72,6 @@ end
 
 MODES = {'Full wave (|x|)', 'Half wave (negatives to zero)', 'Squared (x^2)'};
 
-labels = channelLabels(input);
 if interactive
     stored = TransformSettings.get('Rectify');
     if isempty(stored) || ~isstruct(stored)
@@ -88,7 +87,7 @@ if interactive
             'afterwards.'], ...
         'title', 'Rectify options', ...
         'separator', 'Channels to rectify:', ...
-        {'Channels'; 'Channels'}, multiSelectField(labels, TransTools.FieldOr(stored, 'Channels', {})), ...
+        {'Channels'; 'Channels'}, DialogFields.Channels(input, TransTools.FieldOr(stored, 'Channels', {})), ...
         'separator', 'Rectification:', ...
         {'Mode'; 'Mode'}, TransTools.PutFirst(MODES, TransTools.FieldOr(stored, 'Mode', MODES{1})));
     if isempty(options)
@@ -233,11 +232,3 @@ function EEG = recordRectified(EEG, idx, mode, nTrials)
     EEG.etc.alz.rectifySquared = strcmp(mode, 'squared');
 end
 
-% ======================================================================= %
-function labels = channelLabels(EEG)
-    if isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) && isfield(EEG.chanlocs, 'labels')
-        labels = cellfun(@(s) char(string(s)), {EEG.chanlocs.labels}, 'UniformOutput', false);
-    else
-        labels = arrayfun(@(i) sprintf('ch%d', i), 1:size(EEG.data, 1), 'UniformOutput', false);
-    end
-end

@@ -43,12 +43,18 @@ if interactive
     if isempty(stored)
         stored = struct('Start', -100, 'Stop', 0);
     end
+    % The preview draws every channel's average over trials, computed once
+    % here rather than on every keystroke.
+    butterfly = mean(double(input.data), 3, 'omitnan');
     opts = TransformOptionsDialog(...
-        'Description', 'Set the parameters for Baseline',...
+        'Description', ['Subtract each channel''s mean over a window, in ms, from the ' ...
+            'whole epoch. The shaded band in the preview is the window.'], ...
         'title' , 'Baseline options',...
         'separator' , 'Location:',...
         {'Start'; 'Start'}, stored.Start, ...
-        {'Stop'; 'Stop'}, stored.Stop);
+        {'Stop'; 'Stop'}, stored.Stop, ...
+        {'The window, over every channel''s average'; 'Preview'}, DialogFields.Plot( ...
+            @(ax, values) drawWindow(ax, input.times, butterfly, values.Start, values.Stop)));
     if isempty(opts)
         % Cancelled: nothing to persist (leave the remembered settings
         % untouched) and nothing to run -- Alakazam.onTransformation
@@ -74,4 +80,37 @@ for i = 1:EEG.trials
         bl = mean(EEG.data(c,start:stop,i));
         EEG.data(c,:,i) = EEG.data(c,:,i) - bl;
     end
+end
+end
+
+% ======================================================================= %
+function drawWindow(ax, times, butterfly, startMs, stopMs)
+%DRAWWINDOW  The dialog's preview: every channel's average over trials, and
+%   the baseline window shaded behind them, so a window that catches the
+%   response, or misses the epoch, is seen before it is applied.
+    if isempty(times) || size(butterfly, 2) ~= numel(times)
+        title(ax, 'No time axis to preview.', 'FontWeight', 'normal', 'FontSize', 9);
+        return;
+    end
+    finite = butterfly(isfinite(butterfly));
+    if isempty(finite)
+        limits = [-1 1];
+    else
+        limits = [min(finite), max(finite)];
+        if limits(1) == limits(2)
+            limits = limits + [-1 1];
+        end
+    end
+    lo = min(startMs, stopMs);
+    hi = max(startMs, stopMs);
+    patch(ax, [lo hi hi lo], limits([1 1 2 2]), [0.29 0.50 0.79], ...
+        'FaceAlpha', 0.18, 'EdgeColor', 'none');
+    hold(ax, 'on');
+    plot(ax, times, butterfly.', 'Color', [0.45 0.45 0.45], 'LineWidth', 0.5);
+    xline(ax, 0, ':');
+    hold(ax, 'off');
+    xlim(ax, [times(1), times(end)]);
+    ylim(ax, limits);
+    xlabel(ax, 'ms');
+    ylabel(ax, 'uV');
 end

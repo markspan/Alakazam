@@ -40,7 +40,7 @@ function lines = template(name)
              'there, and that every template there is asked for.'], char(name), file));
     end
 
-    text = fileread(file);
+    text = fileread(file, 'Encoding', 'UTF-8');   % the templates are UTF-8 (a µV label, say)
     if ~isempty(text) && double(text(1)) == 65279     % a UTF-8 BOM, if an editor left one
         text = text(2:end);
     end

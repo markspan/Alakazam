@@ -4,8 +4,18 @@ The transformations of **Tools > 2. Artifact Rejection / Reduction** deal
 with signal that is not brain activity: blinks and eye movements, muscle,
 drifts, bad electrodes. They fall into two families. **Rejection** removes
 the contaminated data, by trial or by channel within a trial
-(ArtefactDetect, ManualReject). **Correction** estimates the contaminating
-signal and subtracts it, keeping the trial (AutoICA, ICA, AutoGEDAI).
+(ArtefactDetect, AutoReject, ManualReject). **Correction** estimates the
+contaminating signal and subtracts it, keeping the trial (AutoICA, ICA,
+AutoGEDAI, ASR). PREP, the third kind, prepares the continuous recording:
+it removes line noise, finds and interpolates bad channels, and chooses the
+reference.
+
+Three of these are the standardised, citable pipelines of the field: PREP
+[@bigdelyshamlo2015], ASR [@mullen2015; @chang2020] and autoreject
+[@jas2017]. Each replaces a judgement made by eye (which channels are bad,
+which bursts are artefact, which threshold rejects a trial) with a rule
+applied the same way to every subject, and each records what it did, so the
+data-quality report can say what it cost (@sec-data-quality).
 
 Correction keeps more trials, and so more power, but it changes the data in
 ways that are harder to verify, and for time-locked ERPs of good quality
@@ -26,7 +36,7 @@ per-trial measures and single-trial models relate a trial to its neighbours.
 *Tools > 2. Artifact Rejection / Reduction > ArtefactDetect · epoched →
 epoched · `ArtefactDetect`*
 
-Flags epochs with four detectors that match, and extend, ERPLAB's
+Flags epochs with five detectors that match, and extend, ERPLAB's
 [@lopezcalderon2014]:
 
 | Detector | Flags a channel of a trial when |
@@ -35,6 +45,7 @@ Flags epochs with four detectors that match, and extend, ERPLAB's
 | **Step function** | in a moving **Window**, advanced by **Window step**, the means of the first and second halves differ by more than **Threshold** µV: the signature of a saccade or the onset of a blink. |
 | **Moving-window peak-to-peak** | the range (maximum minus minimum) within a moving **Window** exceeds **Threshold** µV. |
 | **Sample-to-sample** | the difference between two consecutive samples exceeds **Threshold** µV: a single-sample jump. |
+| **Flat line** | the voltage stays within **Range within** µV, peak to peak, for at least **For at least** ms: a disconnected electrode, a saturated amplifier or a dropout. |
 
 : ArtefactDetect's detectors. Several can be ticked; a channel trips if any of them flags it. {#tbl-artefactdetect-detectors}
 
@@ -42,15 +53,18 @@ Flags epochs with four detectors that match, and extend, ERPLAB's
 
 | Option | Default | Meaning |
 |-------------------|--------------------|-------------------------------------------------------|
-| **Detectors** | Absolute threshold | One or more of the four. |
+| **Detectors** | Absolute threshold | One or more of the five. |
 | **Minimum**, **Maximum** | -100, 100 µV | The absolute threshold's limits. |
 | **Threshold** | 100 µV | The limit of the other three detectors. |
 | **Window**, **Window step** | 200, 50 ms | The moving window of the step and peak-to-peak detectors. |
+| **Range within**, **For at least** | 1 µV, 200 ms | The flat-line detector's tolerance and duration. |
 | **Test** start, stop | 0 to 0 (whole epoch) | The interval tested, in ms. |
 | **Channels** | All channels | **All channels**, or **Scalp EEG only**. |
 | **Reject** | Whole epoch | What to do with a hit (below). |
 
 : ArtefactDetect's options. {#tbl-artefactdetect}
+
+A detector's own settings are greyed out while it is not ticked.
 
 **What happens to a hit** is chosen separately from the detection:
 
@@ -62,6 +76,14 @@ Flags epochs with four detectors that match, and extend, ERPLAB's
   from its neighbours with spherical splines [@perrin1989]. A channel
   without a scalp position (an EOG channel) cannot be interpolated and is
   rejected instead.
+
+The flat-line detector tests the range of the voltage itself, so an
+electrode stuck at +40 µV is as flat as one stuck at zero, and every start
+position is tested, so no flat stretch falls between two windows. One flat
+channel is not an artefact: the reference electrode, which ReRef keeps (or
+reconstructs) as a channel of zeros. A channel that is exactly zero
+throughout is recognised as the reference and not tested; a channel that is
+zero in only some epochs is a dropout and is flagged.
 
 **Channels to test** decides which channels can trip a trial. **All
 channels** includes the EOG channels, which is what makes a blink on VEOG
@@ -107,7 +129,60 @@ standardised measurement error gives an objective criterion: the threshold
 that minimises the SME of the score being analysed, which trades the noise
 removed against the trials lost [@luck2021]. A rejection rate above about 25%
 of the trials in any condition is the conventional point at which a subject
-is excluded, and the data-quality report flags it.
+is excluded, and the data-quality report flags it. AutoReject, below, chooses
+a threshold per channel from the data itself.
+
+## AutoReject {#sec-tr-autoreject}
+
+*Tools > 2. Artifact Rejection / Reduction > AutoReject · epoched →
+epoched · `AutoReject`*
+
+Learns the rejection thresholds from the data, by the local autoreject
+algorithm [@jas2017]. A fixed threshold treats every channel alike, although
+a frontal channel near the eyes and an occipital one far from them differ in
+how much they vary; and it is chosen by eye. AutoReject instead chooses, for
+each scalp channel, the peak-to-peak threshold that the data support, and
+then decides, per epoch, whether to reject it or repair it:
+
+1. **A threshold per channel, by cross-validation.** The epochs are split
+   into ten blocks. For a candidate threshold, the epochs of nine blocks
+   that stay under it are averaged, and the average is compared with the
+   median of the tenth block, a robust stand-in for the clean response. A
+   threshold that lets artefacts in pulls the average away from the median;
+   one that throws good epochs away makes it noisy. The threshold with the
+   smallest error over the ten blocks is the channel's.
+2. **Bad channels per epoch.** A channel is bad in an epoch when its
+   peak-to-peak amplitude there exceeds its threshold.
+3. **Reject or repair.** An epoch with too many bad channels is rejected. In
+   the others, up to a set number of bad channels, the worst, are
+   interpolated from the rest of the epoch. How many is too many (the
+   consensus) and how many are interpolated are chosen by the same
+   cross-validation.
+
+| Option | Default | Meaning |
+|------------------------------------|---------|-------------------------------------------------------|
+| **Folds** | 10 | The number of blocks the cross-validation uses. |
+| **Interpolate at most (candidates)** | blank | The numbers of channels to consider interpolating per epoch; blank uses autoreject's own, 1, 4 and 32 (at most one fewer than the channels). |
+
+: AutoReject's options. The consensus is chosen from 0 to 1 in steps of 0.1, as in autoreject. {#tbl-autoreject}
+
+Only the scalp channels with a position are tested and interpolated, each
+from the others; peripheral channels are left alone, as autoreject leaves
+everything but the EEG. Epochs already rejected are passed through and not
+counted. As everywhere in Alakazam, a rejected epoch is `NaN` on every
+channel, and the interpolated channel-epochs are recorded, so the
+data-quality report shows the share of the data that was rebuilt; its
+provenance section lists, per subject, the epochs rejected, the channel-epochs
+interpolated and the range of the learnt thresholds.
+
+The folds are autoreject's own, contiguous and not shuffled, so the result is
+deterministic and a replay reproduces it. Two details differ from the Python
+package, on purpose. Each threshold is the exact minimum of the
+cross-validation error over every candidate, where autoreject samples 50 of
+them by Bayesian optimisation. And each number of channels to interpolate is
+scored from the thresholded channels alone, where autoreject's
+cross-validation carries one candidate's interpolations into the next. Both
+are the algorithm as the paper states it.
 
 ## ManualReject {#sec-tr-manualreject}
 
@@ -263,3 +338,86 @@ only (@tbl-toolboxes). Its parallel processing on the CPU can silently
 corrupt the output when one of its frequency bands fails and is retried, so
 Alakazam uses parallel processing only on a GPU; the problem has been
 reported to its authors.
+
+## PREP {#sec-tr-prep}
+
+*Tools > 2. Artifact Rejection / Reduction > PREP · continuous → continuous ·
+`PREP`*
+
+Runs the PREP pipeline [@bigdelyshamlo2015], the standardised early stage of
+preprocessing that large EEG studies cite as one step. PREP removes line
+noise at the mains frequency and its harmonics, leaving the rest of the
+spectrum alone; then it estimates a **robust average reference**, the average
+of the channels that are not bad, where a channel is bad by extreme
+amplitude, poor correlation with the others, excess high-frequency noise, or
+poor prediction from its neighbours (RANSAC). Which channels look bad depends
+on the reference, and the reference depends on which channels are bad, so the
+two are estimated in turn until they agree. The bad channels are then
+interpolated and every channel is put on the robust reference.
+
+| Option | Default | Meaning |
+|----------------------------------|--------|-------------------------------------------------------|
+| **Line frequency** | 50 Hz | The mains frequency; its harmonics below the Nyquist frequency are removed too. **none** skips the step. |
+| **Robust deviation** | 5 | A channel whose robust z-score of amplitude exceeds this is bad. |
+| **High-frequency noise** | 5 | The same for its noise above 50 Hz relative to its signal. |
+| **Minimum correlation** | 0.4 | A channel correlating less than this with the others, in too many one-second windows, is bad. |
+| **Predict from neighbours** | on | RANSAC: a channel its neighbours predict poorly is bad. Turn off for a small montage. |
+| **Ignore boundary events** | off | PREP refuses a recording with discontinuities; ticking this runs across them. |
+
+: PREP's options, with PREP's own defaults except the line frequency, which PREP sets to 60 Hz. {#tbl-prep}
+
+The reference is estimated from, and bad channels are looked for among, the
+scalp channels with a position. EOG channels are cleaned of line noise and
+put on the same reference, so an eye channel stays comparable with the scalp,
+but they do not shape the reference and are not interpolated. Any other
+channel (ECG, a photodiode) is left as it was. PREP high-passes a copy of the
+data to decide which channels are bad; the data it returns keep their low
+frequencies, so Filter them as the analysis needs.
+
+PREP's full record stays with the result, and what a methods section needs
+(the channels interpolated, those still noisy after referencing, the line
+frequencies and the version) goes to the data-quality report. PREP is
+downloaded on first use, after consent (@tbl-toolboxes).
+
+## ASR {#sec-tr-asr}
+
+*Tools > 2. Artifact Rejection / Reduction > ASR · continuous → continuous ·
+`ASR`*
+
+Artifact Subspace Reconstruction, from EEGLAB's clean_rawdata plugin
+[@mullen2015]. It first finds scalp channels that are flat for too long or
+that their neighbours predict poorly, and interpolates them. Then it learns,
+from the cleanest stretches of the recording, what the scalp's covariance
+normally looks like; wherever a sliding window's variance exceeds that by
+more than the **burst criterion** along some direction, the offending
+components are reconstructed from the clean ones. Large, brief artefacts
+(movement, electrode pops, muscle bursts) are repaired, and the rest of the
+recording is untouched.
+
+| Option | Default | Meaning |
+|------------------------------------|---------|-------------------------------------------------------|
+| **Flat for longer than** | 5 s | A channel flat for longer than this is bad; 0 switches the check off. |
+| **Correlation below** | 0.8 | A channel correlating less than this with its prediction from its neighbours, for more than half the recording, is bad; 0 switches it off. |
+| **Line noise above** | 4 SD | A channel with this much more line noise than the rest is bad; 0 switches it off. |
+| **Burst criterion** | 20 SD | How far a window may exceed the calibration before it is repaired. Lower is more aggressive. |
+| **Bursts are** | Repaired | **Repaired**, or **Rejected**: every sample ASR would change is marked rejected instead. |
+| **Reject bad windows**, **Bad above** | off, 0.25 | After the repair, reject windows in which more than this fraction of the channels are still out of range. |
+
+: ASR's options. The criterion defaults to 20, the value clean_rawdata's own dialog proposes, within the 20 to 30 found to work on real EEG [@chang2020]. {#tbl-asr}
+
+ASR assumes data without slow drifts, so **high-pass the recording first**
+(Filter, about 0.5 to 1 Hz). clean_rawdata applies its own high-pass inside
+the same function; here it is left to Filter, so that each operation is a
+step of its own in the tree, and ASR warns when the recording still carries
+large offsets. The flagged channels are interpolated back in their own
+places, so the montage is unchanged. A **rejected** stretch is marked
+rejected (`NaN`) on every channel rather than cut out, so the recording keeps
+its length and its events their latencies; an epoch cut across it keeps
+`NaN` there, which Average leaves out sample by sample. Only scalp channels
+with a position calibrate ASR and are cleaned; the others are left as they
+were.
+
+clean_rawdata ships with EEGLAB and is installed through EEGLAB's plugin
+manager when it is missing. The data-quality report lists, per subject, the
+channels interpolated, the share of samples repaired and rejected, and the
+criterion used.

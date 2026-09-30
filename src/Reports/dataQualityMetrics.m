@@ -573,6 +573,9 @@ function rows = provenanceRows(EEG, nChan, nTrials, averaged)
         rows(end + 1) = row; %#ok<AGROW>
     end
 
+    % --- automated cleaning: PREP, ASR, AutoReject ----------------------- %
+    rows = [rows, automatedCleaningRows(alz, blankProvenanceRow('', '', NaN, NaN))];
+
     % --- transformation: rectification ------------------------------------ %
     % Read from the AVERAGE when there is one: Rectify may have run after
     % averaging, and the record travels down the chain, so the average
@@ -644,6 +647,107 @@ function row = rectifyRow(EEG, template)
         end
         row.detail = sprintf('%s; unit uV^2%s', row.detail, power);
     end
+end
+
+function rows = automatedCleaningRows(alz, template)
+%AUTOMATEDCLEANINGROWS  What PREP, ASR and AutoReject did, one row each,
+%   from the records they leave in etc.alz (prep, asr, autoreject).
+%
+%   Each is a method a methods section names in one word, which is exactly
+%   why its cost has to be stated: "we used ASR" says nothing about how much
+%   of a subject's recording it rewrote. So each row carries what it changed
+%   against what it looked at, in the columns the other steps use:
+%     PREP        channels interpolated of the scalp channels (n, n_total),
+%                 which ones (components), the rest in detail;
+%     ASR         the same for its channels, and the samples it repaired
+%                 (channel_epochs is not it; see below) and rejected;
+%     AutoReject  epochs rejected of those examined, channel-epochs
+%                 interpolated (channel_epochs), channels tested, and the
+%                 median learnt threshold in uV (threshold).
+%   ASR's repaired-sample count has no column of its own, so it is the
+%   second of its two rows, item 'samples repaired', with the rejected
+%   count in n_samples_rejected and the burst criterion in threshold.
+%
+%   A record of the wrong shape is skipped, as everywhere in this function.
+    rows = emptyProvenanceRows();
+
+    if isfield(alz, 'prep') && isstruct(alz.prep)
+        p = alz.prep;
+        interpolated = labelList(fieldOrEmpty(p, 'interpolated'));
+        reference = labelList(fieldOrEmpty(p, 'referenceChannels'));
+        row = template;
+        row = fillCounts(row, 'PREP', 'channels interpolated', numel(interpolated), numel(reference));
+        row.components = strjoin(interpolated, ', ');
+        noisy = labelList(fieldOrEmpty(p, 'stillNoisy'));
+        if isempty(noisy)
+            noisyText = 'none still noisy';
+        else
+            noisyText = ['still noisy: ' strjoin(noisy, ', ')];
+        end
+        mains = fieldOrEmpty(p, 'lineFrequencies');
+        if isempty(mains)
+            lineText = 'no line noise removed';
+        else
+            lineText = ['line noise removed at ' numberList(mains) ' Hz'];
+        end
+        row.detail = sprintf('%s; %s; %s', noisyText, lineText, char(string(fieldOrEmpty(p, 'version'))));
+        rows(end + 1) = row;
+    end
+
+    if isfield(alz, 'asr') && isstruct(alz.asr) ...
+            && all(isfield(alz.asr, {'channels', 'interpolated', 'samplesRepaired', 'nSamples'}))
+        a = alz.asr;
+        interpolated = labelList(a.interpolated);
+        row = fillCounts(template, 'ASR', 'channels interpolated', numel(interpolated), ...
+            numel(labelList(a.channels)));
+        row.components = strjoin(interpolated, ', ');
+        rows(end + 1) = row;
+
+        row = fillCounts(template, 'ASR', 'samples repaired', double(a.samplesRepaired), double(a.nSamples));
+        row.n_samples_rejected = double(fieldNumOrNaN(a, 'samplesRejected'));
+        row.n_samples          = double(a.nSamples);
+        row.threshold          = fieldNumOrNaN(a, 'burstCriterion');
+        row.detail             = char(string(fieldOrEmpty(a, 'version')));
+        rows(end + 1) = row;
+    end
+
+    if isfield(alz, 'autoreject') && isstruct(alz.autoreject) ...
+            && all(isfield(alz.autoreject, {'rejected', 'examined', 'thresholds', 'consensus', 'nInterpolate'}))
+        r = alz.autoreject;
+        nChan = numel(r.thresholds);
+        row = fillCounts(template, 'AutoReject', 'epochs rejected', nnz(r.rejected), nnz(r.examined));
+        row.channel_epochs  = fieldNumOrNaN(r, 'nInterpolated');
+        row.channels_tested = nChan;
+        row.threshold       = median(double(r.thresholds));
+        row.detail = sprintf(['an epoch is rejected with %d or more of %d channels bad ' ...
+            '(consensus %.1f); up to %d interpolated; thresholds %.0f to %.0f uV'], ...
+            ceil(r.consensus * nChan), nChan, r.consensus, r.nInterpolate, ...
+            min(double(r.thresholds)), max(double(r.thresholds)));
+        rows(end + 1) = row;
+    end
+end
+
+function row = fillCounts(row, step, item, n, nTotal)
+%FILLCOUNTS  STEP/ITEM/N/N_TOTAL/PCT on a copy of a blank row.
+    row.step    = step;
+    row.item    = item;
+    row.n       = n;
+    row.n_total = nTotal;
+    row.pct     = pct(n, nTotal);
+end
+
+function labels = labelList(value)
+%LABELLIST  A stored list of channel labels as a row cellstr, whatever
+%   shape it came back in (a JSON round trip turns a one-element list into a
+%   bare string, and an empty one into []).
+    if isempty(value)
+        labels = {};
+    elseif ischar(value) || isstring(value)
+        labels = cellstr(value);
+    else
+        labels = reshape(cellstr(string(value)), 1, []);
+    end
+    labels = reshape(labels, 1, []);
 end
 
 % ----------------------------------------------------------------------- %

@@ -387,7 +387,7 @@ action of ArtefactDetect or ManualReject instead (@sec-ref-artefacts).
 | Option | Default | Meaning |
 |-----------------------|----------------|-------------------------------------------------------|
 | **Method** | Spherical spline | **Spherical spline** [@perrin1989], **Inverse distance**, or EEGLAB's **spacetime** method. |
-| **Channels to interpolate** | none | The bad channels. Stored by label. |
+| **Channels to interpolate** | none | The bad channels, with **All** and **None** to start from. Stored by label; OK asks for at least one. |
 
 : Interpolate's options. {#tbl-interpolate}
 
@@ -435,7 +435,10 @@ let RMSfront = sqrt((Fz*Fz + Cz*Cz) / 2)
 The grammar is small and is parsed, never evaluated as MATLAB: `+ - * /` on
 channels and numbers, unary minus, parentheses, `abs()` and `sqrt()`, and `%`
 for a comment. The arithmetic is elementwise, so the step runs on continuous,
-epoched and averaged data alike.
+epoched and averaged data alike. The block is checked when OK is pressed,
+against this dataset's own channels and by the same parser the step runs, so
+a typo, an unknown channel or a name used twice is reported in the dialog
+rather than after the node exists.
 
 ![**Derive Channels** on the ERP CORE LRP epochs, adding `C34 = C4 - C3`, the lateral motor pair; C4 is contralateral to a left-hand response.](images/derivechannels-dialog.png){#fig-derivechannels-dialog}
 
@@ -445,6 +448,12 @@ in DefineBins), a derived channel says how to combine the channels of each
 of them. A derived channel has type `derived` and no scalp position: it is
 drawn in the waveform view and carried into grand averages, but left out of
 scalp maps.
+
+Derived on an average, a channel has no confidence band and no aSME. Its
+standard error depends on how the channels it is computed from vary together
+over trials, which the average no longer holds, so it is left unknown rather
+than guessed. Derive it on the epochs instead, before Average, and Average
+gives it both, computed from its own trials as for any other channel.
 
 ![The derived channel `C34` in the response-locked LRP average: before a left-hand response (blue) C4 turns negative relative to C3, before a right-hand response (red) positive, and the LRP bin (teal), half their difference, is the contralateral-minus-ipsilateral negativity.](images/derivechannels-result.jpg){#fig-derivechannels-result}
 
@@ -465,7 +474,7 @@ rectification step of an EMG-envelope analysis (rectify, smooth, measure).
 
 | Option | Default | Meaning |
 |--------|---------|-------------------------------------------------------|
-| **Channels** | | The channels to rectify; required. |
+| **Channels** | | The channels to rectify, with **All**, **None** and **Scalp EEG** (every channel that is not a known peripheral); required. |
 | **Mode** | Full wave | **Full wave** (\|*x*\|), **Half wave** (negative values set to zero) or **Squared** (*x*^2^, in µV^2^). |
 
 : Rectify's options. {#tbl-rectify}
@@ -487,7 +496,7 @@ per subject (@sec-dq-provenance). Rejected samples stay rejected.
 
 Subtracts from every trial and channel the mean of a baseline interval.
 
-![**Baseline**: the interval, in ms relative to the time-locking event.](images/baseline-dialog.png){#fig-baseline-dialog}
+![**Baseline**: the interval, in ms relative to the time-locking event, and a preview of it shaded over every channel's average, redrawn as the interval changes.](images/baseline-dialog.png){#fig-baseline-dialog}
 
 | Option | Default | Meaning |
 |------|-------|-------------------------------|

@@ -44,21 +44,58 @@ function open(this,~,~)
         end
     end
 
-    % One loader per raw format, in a fixed order (mat, vhdr, set, erp --
-    % unchanged from before this was table-driven, in case anything ever
-    % turns out to depend on it). fullfile, not strcat -- see
-    % resolveCachePaths for why: RawDirectory is not guaranteed to end in
-    % a path separator, and strcat blindly concatenating one with a glob
-    % pattern silently searched the wrong (parent) directory.
-    formats = {'*.mat', 'loadMATFile'; '*.vhdr', 'loadBVAFile'; ...
-               '*.set', 'loadSETFile'; '*.erp', 'loadERPFile'};
-    for row = 1:size(formats, 1)
-        fileList = dir(fullfile(this.RawDirectory, formats{row, 1}));
-        for file = 1:numel(fileList)
-            this.(formats{row, 2})(fileList(file).name);
+    % One loader per raw format (rawFormats), in the registry's order: the
+    % four formats Alakazam has always read first, in the order they always
+    % were, then the rest. fullfile, not strcat -- see resolveCachePaths for
+    % why: RawDirectory is not guaranteed to end in a path separator.
+    %
+    % A recording that cannot be read is set aside and reported, together
+    % with the others, once everything readable is open. One unreadable file
+    % used to stop the whole workspace from opening, which is the wrong
+    % price for a single bad file among forty good ones.
+    unreadable = {};
+    for format = rawFormats()
+        for e = 1:numel(format.extensions)
+            fileList = dir(fullfile(this.RawDirectory, ['*' format.extensions{e}]));
+            % The extension exactly: Windows' dir matches a short pattern
+            % against 8.3 names too, so '*.e' is not trusted to mean '.e'.
+            [~, ~, found] = cellfun(@fileparts, {fileList.name}, 'UniformOutput', false);
+            fileList = fileList([fileList.isdir] == format.isFolder ...
+                & strcmpi(found, format.extensions{e}));
+            for file = 1:numel(fileList)
+                name = fileList(file).name;
+                if ~format.accepts(fullfile(this.RawDirectory, name))
+                    continue;   % the extension, but not this format (an EyeLink .edf)
+                end
+                try
+                    if strcmp(format.loader, 'loadRawFile')
+                        this.loadRawFile(name, format);
+                    else
+                        this.(format.loader)(name);
+                    end
+                catch err
+                    unreadable{end + 1} = sprintf('%s: %s', name, err.message); %#ok<AGROW>
+                end
+            end
         end
+    end
+    if ~isempty(unreadable)
+        reportUnreadable(this, unreadable);
     end
 
     this.loadGrandAverages();
     this.loadReports();
+end
+
+% ======================================================================= %
+function reportUnreadable(this, unreadable)
+%REPORTUNREADABLE  Say which recordings were left out, and why, once.
+    message = sprintf(['%d recording(s) in the raw directory could not be read and are ' ...
+        'not in the tree:\n\n%s'], numel(unreadable), strjoin(unreadable, sprintf('\n\n')));
+    fprintf('%s\n', message);
+    try
+        uialert(this.Parent.MainFigure, message, 'Some recordings could not be read', 'Icon', 'warning');
+    catch
+        % No window to show it in (a headless open): the console has it.
+    end
 end

@@ -13,6 +13,46 @@ A scalp ERP workbench measured against EEGLAB, FieldTrip, ERPLAB, BrainVision An
 - Bayes factors in the mixed-model sections of the report, **Apply to All Raw Files** in parallel, and four releases (V0.4.4 to V0.4.4.3).
 - 35 transformations instead of 32; 161 test classes holding 1,932 tests instead of 130 and 1,509.
 
+## Addendum: 30 September
+
+Four of the gaps below were closed two days after this pass, and one area it
+rated too kindly needs saying plainly.
+
+- **Gap 01, standard automated cleaning, is closed.** PREP, ASR and
+  AutoReject are transformations of their own, and ArtefactDetect has a
+  flat-line detector. PREP and ASR wrap the reference implementations (the
+  PREP pipeline, pinned; EEGLAB's clean_rawdata); AutoReject implements
+  autoreject's algorithm, since autoreject is a Python package, and is tested
+  against a literal evaluation of its criterion. Each records what it did,
+  and each has its own table in the data-quality report.
+- **Gap 06, the scaffold, is closed.** `newTransformation` writes a
+  transformation that runs under the contract from the start, with its test
+  class, manual section and place on the Recalculate list, and the developer
+  guide now states what a transformation may do to the dataset it is given.
+- **Gap 07, the generated dialog, is closed.** Its fields are objects:
+  channel and bin pickers by label, tables of rows, checked text, previews,
+  limits, and fields that depend on others. Interpolate and Derive Channels
+  lost their hand-written dialogs to it.
+- **Gap 09, file formats, is closed.** EDF, BDF, GDF, Neuroscan and ANT,
+  EGI, XDF, Micromed, Nicolet and FIF open alongside the four formats read
+  before, each through its dedicated EEGLAB reader with FieldTrip's File-IO
+  as the fall-back, from one registry.
+- 38 transformations; 168 test classes.
+
+> **The reports need extra attention.** Claim 5 below, "the report writes
+> itself", is true of what the reports contain and too kind about how
+> reliably they are produced. They are R and Quarto documents assembled as
+> text by MATLAB, and the tests check that text (its structure, its CSV
+> columns), not the rendered page, so a defect that only shows once R has run
+> reaches the user first. Two were reported in the week after this pass: the cluster
+> statistics report printed its significance level as an escaped
+> `\(\alpha\)`, and the Reports tree listed reports from other workspaces.
+> The provenance tables added for PREP, ASR and AutoReject were written
+> without a render. What would close it: a rendering test in CI (with gap
+> 05), a snapshot of each report's rendered text to diff against, and one
+> place that escapes text for Markdown and LaTeX rather than each section
+> doing its own.
+
 ## What is being reviewed
 
 *Scope, before anything is called a gap*
@@ -210,6 +250,8 @@ Two readings of this. The worrying one is that core steps like Average had been 
 
 *Capability*
 
+> **Closed on 30 September**: PREP, ASR and AutoReject, and a flat-line detector in ArtefactDetect. See the addendum.
+
 ICLabel eye correction and GEDAI are both present and both current. What is missing is the citable, standardised pipeline: PREP for robust referencing and bad-channel detection, ASR for burst repair, autoreject for principled per-channel rejection thresholds derived by cross-validation rather than chosen by eye. Flat-line detection, the simplest of the bad-channel checks, is missing too.
 
 This matters disproportionately for a tool whose pitch is methodological rigour. "We used autoreject" is a stronger sentence in a methods section than "we used a threshold of ±100 µV", and reviewers increasingly know the difference. It is now the largest capability gap.
@@ -256,6 +298,8 @@ EEGLAB has a plugin manager, MNE-Python has PyPI, Alakazam has a folder. Sharing
 
 *Friction*
 
+> **Closed on 30 September**: `newTransformation`, and the dataset contract in the developer guide. See the addendum.
+
 Narrower than a week ago. `DEVELOPER.md` now states the contract with a worked example, the rules for dialogs and for recalculation, the JSON rule, and a six-step checklist for a new transformation whose last steps are enforced by tests (the script exporter's equivalence test, and a manual test that fails when a transformation has no section). What is still missing is a generator for the three files, and a written rule for what a transformation may do to the dataset it is given: which fields it must keep, and where its own provenance goes.
 
 The checklist also shows the design claim's small print. An in-tree transformation is now three files plus a test class, a manual section and its pictures. That is the right standard for the project, and it is more than the "three files" a third-party author needs.
@@ -265,6 +309,8 @@ The checklist also shows the design claim's small print. An in-tree transformati
 ### 07. The generated dialog caps out early
 
 *Friction*
+
+> **Closed on 30 September**: the field types below exist (`+DialogFields`), with previews and dependent fields. See the addendum.
 
 Inferring field types from default values is the trick that removes the UI work, and it covers dropdowns, checkboxes, numbers and text. Anything richer (a channel picker, a waveform preview, a table of formulas, a field that depends on another) needs a hand-written dialog. Of the 32 transformations with settings, 14 use the generated dialog and 18 have their own, and each of the three added this week is among the 18. At that point the headline benefit is gone and the author is writing an app.
 
@@ -281,6 +327,8 @@ No MVPA. Multivariate decoding is a legitimate scalp-EEG technique rather than a
 ### 09. File formats
 
 *Trivia*
+
+> **Closed on 30 September**: every major format opens, from one registry. See the addendum.
 
 Reads BrainVision, EEGLAB `.set` (including an already-epoched one, whose bins are adapted into Alakazam's own), ERPLAB `.erp` and the cache, and joins an EyeLink `.asc` (or an `.edf`, when SR Research's converter is installed) onto a recording; writes `.set`, `.erp` and an ERPLAB `EVENTLIST`. No BioSemi, Neuroscan, EGI or EDF. Listed for completeness rather than as a design finding: a loader is exactly the kind of thing this architecture makes cheap, and the EEGLAB importers already exist.
 

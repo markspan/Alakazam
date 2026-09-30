@@ -165,7 +165,10 @@ end
   shape (two outputs; an `EEG` that is empty, a struct or a graphics handle;
   `options` a struct, empty or the `'Init'` sentinel) before it reaches the
   tree. `TransformContractTest` specifies this seam and asserts that nothing
-  bypasses it.
+  bypasses it. It also brings the per-channel arrays of the result
+  (`stErr`, `aSME`, `etc.alz.interpolated`) in step with its channels, by
+  label (`TransTools.AlignChannelCompanions`), so a step that adds or drops
+  channels with EEGLAB's own functions need not know they exist.
 - **Options are plain data**, never a command string that is `eval`'d.
   Channels and bins are stored by **label**, not index, and resolved against
   the dataset at compute time, so a stored choice replays on another subject
@@ -184,9 +187,35 @@ A dialog returns the options on OK and `[]` on Cancel or when its window is
 closed. `TransformOptionsDialog` builds a standard one from
 `{label; field}, default` pairs and infers each field's kind from its default
 (a cell array of strings is a drop-down, a logical a checkbox, a number a
-numeric field, anything else text). A dialog of its own is a `uifigure`
-placed with `fitOnScreen`, coloured with `dialogChromeColors`, and must set
-`CloseRequestFcn` to its Cancel path.
+numeric field, anything else text).
+
+A default can also be a field object from `src/Dialogs/+DialogFields`, which
+is what keeps a transformation on the generated dialog when it needs more:
+
+| Field | For |
+|---|---|
+| `Choice(items, selected, 'Values', v)` | a drop-down whose shown items and stored values differ |
+| `Number(x, 'Limits', [lo hi], 'Integer', tf)` | a number with limits |
+| `Channels(EEG, selected, 'Multiple', 'Required')` | the dataset's channels by label, with All, None and Scalp EEG |
+| `Bins(EEG, selected, 'Differences', tf)` | the dataset's bins by label, with All, None and Differences |
+| `Table(columns, rows, 'MinRows', n)` | rows of fields, with Add and Remove; returns a cell of structs, the JSON-safe shape |
+| `TextArea(text, 'Validate', @(t) ...)` | a block of text checked at OK, by the parser the step runs |
+| `Plot(@(ax, values) ...)` | a preview redrawn whenever a value changes; adds nothing to the options |
+
+Every field takes `'EnabledWhen', @(values) ...` (greyed out, and not
+validated, while false; `values` holds every field's current value by name)
+and `'Tooltip'`. OK asks each enabled field to `validate` and stays open with
+its message when one refuses. A new kind of field is a subclass of
+`DialogFields.Field` (`build`, `value`, and optionally `height`, `width`,
+`spansBothColumns`, `validate`, `refresh`); the dialog needs no change.
+Interpolate, Derive Channels and Baseline show the range: a required channel
+list, a checked script, and a live preview.
+
+A dialog of its own is a `uifigure` placed with `fitOnScreen`, coloured with
+`dialogChromeColors`, and must set `CloseRequestFcn` to its Cancel path. It
+is the right choice when the dialog is an editor rather than a form (Measure's
+windows, DefineBins' script with its bin preview), not merely because a field
+is a channel list or a table.
 
 ### Recalculate
 
@@ -196,9 +225,57 @@ A node offers **Recalculate** when its transformation is listed in
 cannot be reseeded from stored options (Photodiode, EventEditor) or when it
 has none.
 
+### What a transformation may do to the dataset
+
+A transformation is handed a dataset and returns one, and everything
+downstream (the views, the other steps, the reports, a replay on another
+subject) reads what it returns. So:
+
+- **Start from what you were given**: `EEG = input;`, then change what the
+  method changes. Every field you do not touch survives: EEGLAB's, Alakazam's
+  own (`DataType`, `DataFormat`, `bindesc`) and the records earlier steps
+  left in `EEG.etc.alz`.
+- **Keep the description true to the data.** When the data's shape changes,
+  so do `nbchan`, `pnts`, `trials`, `chanlocs`, `times` and `DataFormat`
+  (`'CONTINUOUS'`, `'EPOCHED'` or `'Averaged'`; `inferDataFormat` derives it
+  from the shape). `DataType` is `'TIMEDOMAIN'` for waveforms; a spectrum is
+  `'FrequencyDomain'`, with its own axis.
+- **Time is in seconds when continuous, milliseconds when epoched or
+  averaged**, as every loader leaves it.
+- **Channels and bins are labels.** Options store labels, resolved against
+  the dataset at compute time (`TransTools.LabelsToIdx`), so a stored choice
+  replays on a montage in another order, or one lacking a channel.
+- **Rejection is `NaN`, never deletion.** A rejected epoch is `NaN` on every
+  channel, a rejected channel-epoch on that channel; trials keep their
+  places, and Average leaves `NaN` out. A reconstructed cell is recorded with
+  `TransTools.RecordInterpolated`, or it is invisible to the data-quality
+  report.
+- **Say what you did in `EEG.etc.alz.<step>`**, plain data only (it is saved,
+  and exported): the settings that mattered, what was changed, and the
+  version of any toolbox that did the work. Never overwrite another step's
+  record. The data-quality report reads the records it knows
+  (`dataQualityMetrics`); a new one that a reader of the results needs gets
+  a provenance row there.
+- **Leave `id`, `File`, `Call` and `params` alone**: the host sets them when
+  it stores the result (`onTransformation`, `persistResultNode`).
+- **Refuse, do not guess.** Input of the wrong kind is an `MException` with
+  the transformation's id and a sentence saying what to do instead; so is a
+  toolbox that fails quietly (see `PREP`'s handling of `prepPipeline`).
+
 ### Adding a transformation: the checklist
 
+`newTransformation(name, ...)` (src/Support) writes the first steps: the
+folder with an entry function that follows the contract, the manifest, a
+placeholder icon and its SVG source, a test class, a manual section with an
+options table, and the entry on the Recalculate list. It refuses to
+overwrite anything. What it cannot write is the method, its tests of
+substance and its description.
+
 1. The folder, entry function, manifest and icon, following the contract.
+   The icon is drawn as `src/Icons/<Name>.svg` (24 x 24, the ribbon blue
+   `#4a7fc9`) and the PNG beside the manifest is rasterized from it:
+   `node src/webtree/rasterize.mjs src/Icons/<Name>.svg
+   src/Transformations/<Name>/<Name>.png 24` (needs `@resvg/resvg-js`).
 2. A test class in `tests/` (see [Testing](#testing)): the compute on a small
    fixture, the replay, and the dialog's OK and Cancel paths.
 3. `RecalculableTransforms`, if it can be recalculated.
@@ -207,7 +284,14 @@ has none.
    `src/IO/nativeTransformCall.m` **and** a case in
    `NativeExportEquivalenceTest`, which compares every field of both routes
    and fails when a native emission has no case.
-6. A section in the manual's transformation reference
+6. If it needs a toolbox that is not bundled, a description of it for
+   `TransTools.EnsureToolbox` (name, pinned archive, version, licence; see
+   `PREP/prepToolbox.m`), a row in `alakazamDependencies` and in the
+   manual's table of toolboxes. `TransTools.ToolboxAvailable` answers the
+   same question without asking, for tests. A method that learns from the
+   scalp (a reference, a covariance, an interpolation) takes its channels
+   from `TransTools.ScalpChannels`, which leaves the peripherals out.
+7. A section in the manual's transformation reference
    (`manual/chapters/`), with its dialog and result pictures added to
    `src/help/capture/manualShots.m`. `ManualTest` fails when a
    transformation has no section.
@@ -228,6 +312,12 @@ enforces them:
   `differs`, `not compared` or `no source`, and a reference unless it is
   `no source`;
 - every file is listed in the README.
+
+`LibraryReplayTest` (tagged `Slow`, skipped where the data or a toolbox is
+missing) replays each template on its own data through `TransTools.invoke`,
+as Apply Template does, and compares with the numbers recorded in
+`Docs/luck.md`, `Docs/dimigen.md` and chapters 17 and 20 of the manual. A
+new template with a recorded result gets a case there.
 
 A measurement window from the library is an a priori choice only when its
 source is known, so a window with no source says so rather than borrowing a

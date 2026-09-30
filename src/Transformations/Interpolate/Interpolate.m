@@ -1,11 +1,12 @@
 function [EEG, options] = Interpolate(input, varargin)
 %% Interpolate  Reconstruct bad channels from their neighbours.
 %
-%   Wraps EEGLAB's pop_interp (spherical-spline and related methods), driven by
-%   an Alakazam channel-picker dialog. The chosen channels are rebuilt from the
-%   surrounding good channels; the channel count is unchanged. Bad channels are
-%   stored as labels and resolved to indices against the current dataset, so a
-%   stored choice replays on another subject with the same montage.
+%   Wraps EEGLAB's pop_interp (spherical-spline and related methods), driven
+%   by the generated dialog with a channel picker (DialogFields.Channels).
+%   The chosen channels are rebuilt from the surrounding good channels; the
+%   channel count is unchanged. Bad channels are stored as labels and
+%   resolved to indices against the current dataset, so a stored choice
+%   replays on another subject with the same montage.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Interpolate(input)        % interactive dialog
@@ -23,7 +24,17 @@ if ~anyHasPosition(input.chanlocs)
 end
 
 if interactive
-    options = InterpolateDialog(input.chanlocs, TransformSettings.get('Interpolate'));
+    stored = TransformSettings.get('Interpolate');
+    options = TransformOptionsDialog( ...
+        'title', 'Interpolate', ...
+        'Description', ['Rebuild bad channels from the surrounding good ones, which need ' ...
+            'scalp positions. The channel count is unchanged.'], ...
+        {'Method'; 'method'}, DialogFields.Choice( ...
+            {'Spherical spline', 'Inverse distance', 'Spacetime'}, ...
+            TransTools.FieldOr(stored, 'method', 'spherical'), ...
+            'Values', {'spherical', 'invdist', 'spacetime'}), ...
+        {'Channels to interpolate'; 'channels'}, DialogFields.Channels(input, ...
+            TransTools.FieldOr(stored, 'channels', {}), 'Required', true, 'QuickSelect', cell(0, 2)));
     if isempty(options)
         EEG = [];   % cancelled -- no node, no compute
         return;

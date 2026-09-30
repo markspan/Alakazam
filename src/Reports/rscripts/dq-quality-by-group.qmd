@@ -26,7 +26,7 @@ if (n_distinct(gsub_dat$group) >= 2) {
                 ifelse(wt$p.value < .05, "", "not "), apa_num(wt$statistic), apa_p(wt$p.value)))
   } else {
     kt <- kruskal.test(pct_rejected ~ factor(group), data = gsub_dat)
-    cat(sprintf("\n\nRejection rate did %sdiffer significantly between groups (Kruskal-Wallis, $\\chi^2$(%d) = %s, *p* %s).\n\n",
+    cat(sprintf("\n\nRejection rate did %sdiffer significantly between groups (Kruskal-Wallis, \u03c7\u00b2(%d) = %s, *p* %s).\n\n",
                 ifelse(kt$p.value < .05, "", "not "), kt$parameter, apa_num(kt$statistic), apa_p(kt$p.value)))
   }
 }

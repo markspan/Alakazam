@@ -35,6 +35,12 @@ function [EEG, added] = ApplyDerivations(EEG, text)
 %   first, so re-running Measure with an edited let block (Recalculate,
 %   replay) replaces the derived channels rather than accumulating them.
 %
+%   The per-channel arrays beside EEG.data follow the channels (see
+%   TransTools.AlignChannelCompanions): a derived channel's standard error
+%   and aSME are NaN, since an average no longer holds the covariance
+%   between electrodes they depend on, and it counts as interpolated in a
+%   trial where any channel it is computed from was.
+%
 %   A no-op (EEG unchanged, ADDED empty) when TEXT defines no statements.
 %   Shared by Measure.m (a real averaged EEG) and MeasureDialog (a tiny dummy
 %   EEG built from the dataset's chanlocs, purely to validate the block at
@@ -45,7 +51,9 @@ function [EEG, added] = ApplyDerivations(EEG, text)
         return;
     end
 
+    inputChanlocs = EEG.chanlocs;
     EEG = stripDerived(EEG);
+    sources = cell(1, numel(derivs));
     for i = 1:numel(derivs)
         name = derivs(i).name;
         if any(strcmpi({EEG.chanlocs.labels}, name))
@@ -54,9 +62,11 @@ function [EEG, added] = ApplyDerivations(EEG, text)
         end
         ast = parseExpression(derivs(i).expr, name);
         value = evalNode(ast, @(nm) lookupChannel(EEG, nm, name));
+        sources{i} = channelRows(EEG, channelNames(ast));
         EEG = appendChannel(EEG, name, value);
         added{end + 1} = name; %#ok<AGROW>
     end
+    EEG = derivedCompanions(EEG, inputChanlocs, numel(derivs), sources);
 end
 
 % ======================================================================= %
@@ -263,6 +273,25 @@ function out = evalNode(node, getChan)
     end
 end
 
+function names = channelNames(node)
+%CHANNELNAMES  Every channel label an AST refers to, as a cellstr.
+    switch node.type
+        case 'chan'
+            names = {node.name};
+        case {'neg', 'func'}
+            names = channelNames(node.child);
+        case 'op'
+            names = [channelNames(node.left), channelNames(node.right)];
+        otherwise
+            names = {};
+    end
+end
+
+function rows = channelRows(EEG, names)
+%CHANNELROWS  The rows of EEG.data holding the channels called NAMES.
+    rows = cellfun(@(nm) find(strcmpi({EEG.chanlocs.labels}, nm), 1), names);
+end
+
 function v = lookupChannel(EEG, nm, ctx)
 %LOOKUPCHANNEL  The samples of channel NM (case-insensitive), or a friendly
 %   error naming the derivation CTX that referred to a channel not present.
@@ -292,6 +321,34 @@ function EEG = appendChannel(EEG, name, value)
     EEG.chanlocs = [cl, newChan];
     EEG.data(end + 1, :, :) = value;   % scalar VALUE broadcasts over the waveform
     EEG.nbchan = size(EEG.data, 1);
+end
+
+function EEG = derivedCompanions(EEG, inputChanlocs, nDerived, sources)
+%DERIVEDCOMPANIONS  Bring the per-channel arrays in step with the channels
+%   after the derivations, then set the rows of the NDERIVED channels just
+%   appended: an unknown error (NaN), whatever a stripped channel of the
+%   same name had, and an interpolation flag that is the OR of the flags of
+%   the channels each was computed from (SOURCES, rows of EEG.data).
+    EEG = TransTools.AlignChannelCompanions(EEG, inputChanlocs);
+    nChan = size(EEG.data, 1);
+    derived = nChan - nDerived + 1:nChan;
+    if isfield(EEG, 'stErr') && ~isempty(EEG.stErr)
+        EEG.stErr(derived, :) = NaN;
+    end
+    if isfield(EEG, 'aSME') && ~isempty(EEG.aSME)
+        EEG.aSME(derived, :) = NaN;
+    end
+    try
+        mask = EEG.etc.alz.interpolated;
+    catch
+        return;   % no interpolation record to extend
+    end
+    if islogical(mask) && size(mask, 1) == nChan
+        for i = 1:nDerived
+            mask(derived(i), :) = any(mask(sources{i}, :), 1);
+        end
+        EEG.etc.alz.interpolated = mask;
+    end
 end
 
 function EEG = stripDerived(EEG)

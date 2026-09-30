@@ -40,7 +40,15 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
 %   sanctioned identifier the seam recognises -- rather than a convention
 %   about return values.
 %
-%   See also TRANSTOOLS.INITGUARD, ALAKAZAM.ONTRANSFORMATION.
+%   ONE THING IS DONE TO THE RESULT, not only checked: its per-channel
+%   companions (the standard error and aSME of an average, the
+%   interpolation mask) are brought in step with its channel list by
+%   TransTools.AlignChannelCompanions. A step that adds or removes channels
+%   need not know those arrays exist, and one that keeps them itself is left
+%   as it is.
+%
+%   See also TRANSTOOLS.INITGUARD, ALAKAZAM.ONTRANSFORMATION,
+%   TRANSTOOLS.ALIGNCHANNELCOMPANIONS.
     transformId = char(transformId);
 
     if exist(transformId, 'file') ~= 2
@@ -71,6 +79,9 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
     end
 
     checkReturn(transformId, EEG, options);
+    if isstruct(EEG) && isstruct(inputEEG) && isfield(inputEEG, 'chanlocs')
+        EEG = TransTools.AlignChannelCompanions(EEG, inputEEG.chanlocs);
+    end
 end
 
 % ======================================================================= %

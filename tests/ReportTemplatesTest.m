@@ -100,6 +100,34 @@ classdef ReportTemplatesTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function noReportWritesTexMath(testCase)
+        %NOREPORTWRITESTEXMATH  A symbol written as TeX math ($\alpha$,
+        %   $\chi^2$) is drawn by MathJax, which does not run in the app's
+        %   report viewer, so the reader sees "\(\alpha\)" instead of the
+        %   letter. Nothing else fails when that happens: the document
+        %   renders. So every template and every generator under
+        %   src/Reports is read for a dollar sign followed by a backslash
+        %   command, comment lines aside (this is where the history is
+        %   explained). The letters come from ReportDoc.symbol, or from \u
+        %   escapes in R.
+            files = [dir(fullfile(ReportTemplatesTest.Root, 'src', 'Reports', '**', '*.m')); ...
+                     dir(fullfile(ReportTemplatesTest.templateDir(), '*.*'))];
+            files = files(~[files.isdir]);
+            for k = 1:numel(files)
+                name = fullfile(files(k).folder, files(k).name);
+                lines = strsplit(fileread(name, 'Encoding', 'UTF-8'), newline);
+                code = lines(~startsWith(strtrim(lines), {'%', '#'}));
+                hit = find(~cellfun(@isempty, regexp(code, '\$\\+[A-Za-z]', 'once')), 1);
+                if ~isempty(hit)
+                    testCase.verifyFail(sprintf( ...
+                        '%s writes TeX math ("%s"); use ReportDoc.symbol or a \\u escape instead.', ...
+                        files(k).name, strtrim(code{hit})));
+                end
+            end
+        end
+    end
+
     methods (Test, TestTags = {'External'})
         function everyRTemplateParsesAsR(testCase)
             rscript = ReportFixtures.rscriptExe();

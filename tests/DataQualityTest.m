@@ -373,18 +373,15 @@ classdef DataQualityTest < matlab.unittest.TestCase
             testCase.verifySubstring(qmd, 'title: "Alakazam Data Quality Report"');
         end
 
-        function mathAndPipeEscapesSurviveIntoTheReport(testCase)
-        %MATHANDPIPEESCAPESSURVIVEINTOTHEREPORT  Two escaping levels are
-        %   easy to get wrong here and both were, until a real render
-        %   showed it, and the two sit at DIFFERENT escaping levels, which
-        %   is exactly why they were both wrong.
+        function symbolsAndPipeEscapesSurviveIntoTheReport(testCase)
+        %SYMBOLSANDPIPEESCAPESSURVIVEINTOTHEREPORT  Two things were easy to
+        %   get wrong here and both were, until a real render showed it.
         %
-        %   The chi-squared symbol is written into R SOURCE inside the
-        %   .qmd, so R's own parser eats one backslash level before cat()
-        %   ever runs. The .qmd must therefore carry "$\\chi^2$" for
-        %   $\chi^2$ to reach the page: "$\\\\chi^2$" (the original bug)
-        %   emitted \\chi, a LaTeX line break, and MathJax then printed the
-        %   letters c-h-i.
+        %   The chi-squared symbol is not TeX math. $\chi^2$ needs MathJax,
+        %   which does not run in the app's report viewer, so it reached
+        %   readers as "\(\chi^2\)" (see ReportDoc.symbol). It is written as
+        %   the \u escapes R's parser turns into the letters, and the .qmd
+        %   carries them as such; no TeX chi of any escaping level remains.
         %
         %   The pipe is plain markdown, not inside any R string, so it
         %   passes through at face value and needs exactly ONE backslash.
@@ -392,8 +389,8 @@ classdef DataQualityTest < matlab.unittest.TestCase
         %   cell separator, splitting the table row in half.
             qmd = generateDataQualityReport(testCase.twoSubjectEntries(), 'q.csv', 't.csv');
 
-            testCase.verifySubstring(qmd, '$\\chi^2$');
-            testCase.verifyEmpty(strfind(qmd, '$\\\\chi^2$')); %#ok<STRIFCND>
+            testCase.verifySubstring(qmd, '\u03c7\u00b2(%d)');
+            testCase.verifyEmpty(strfind(qmd, '\chi')); %#ok<STRIFCND>
             testCase.verifySubstring(qmd, '\|z\| > 2');
             testCase.verifyEmpty(strfind(qmd, '\\|z\\|')); %#ok<STRIFCND>
         end

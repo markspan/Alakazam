@@ -341,8 +341,12 @@ classdef AverageView < AlakazamView
                 end
                 s = this.Series{i};
                 if showBand
-                    loMat = s.data - confN * s.stErr;
-                    hiMat = s.data + confN * s.stErr;
+                    % An unknown error (NaN, see binStErr) adds no band, but
+                    % its channel's waveform still counts towards the range.
+                    err = s.stErr;
+                    err(~isfinite(err)) = 0;
+                    loMat = s.data - confN * err;
+                    hiMat = s.data + confN * err;
                 else
                     loMat = s.data;
                     hiMat = s.data;
@@ -528,7 +532,9 @@ classdef AverageView < AlakazamView
                 band   = confN * reshape(s.stErr(ch, :), 1, []);
                 lineOf(i) = plot(ax, t, meanCh, "Color", colour, "LineWidth", 1.5, ...
                     "Tag", "ErpLine", "UserData", i);
-                if showBand
+                % No band where the error is not known (a derived channel,
+                % see binStErr), rather than a patch with holes in it.
+                if showBand && all(isfinite(band))
                     plot(ax, t, meanCh + band, "Color", colour, "LineStyle", ":");
                     plot(ax, t, meanCh - band, "Color", colour, "LineStyle", ":");
                     patch(ax, [t, fliplr(t)], [meanCh + band, fliplr(meanCh - band)], ...
@@ -856,7 +862,7 @@ classdef AverageView < AlakazamView
                     s.name   = name;
                     s.times  = eeg.times;
                     s.data   = eeg.data(:, :, b);
-                    s.stErr  = eeg.stErr(:, :, b);
+                    s.stErr  = binStErr(eeg, b);
                     s.aSME   = binASME(eeg, b);
                     s.labels = labels;
                     s.bin    = b;
@@ -869,11 +875,7 @@ classdef AverageView < AlakazamView
                 s.name  = id;
                 s.times = eeg.times;
                 s.data  = reshape(eeg.data, size(eeg.data, 1), size(eeg.data, 2));
-                if isfield(eeg, "stErr") && ~isempty(eeg.stErr)
-                    s.stErr = reshape(eeg.stErr, size(s.data, 1), size(s.data, 2));
-                else
-                    s.stErr = zeros(size(s.data));
-                end
+                s.stErr = binStErr(eeg, 1);
                 s.aSME  = binASME(eeg, 1);
                 s.labels = labels;
                 s.bin    = 1;
@@ -925,11 +927,36 @@ classdef AverageView < AlakazamView
     end
 end
 
+function se = binStErr(eeg, b)
+%BINSTERR  The standard error of bin B, channels x samples: zeros when the
+%   dataset carries none (no band is drawn), NaN where it is not known.
+%
+%   NOT KNOWN covers two cases. A channel derived from others on an average
+%   has NaN by design (see TransTools.AlignChannelCompanions). And a node
+%   saved before that alignment existed can hold an error with a row per
+%   channel of its PARENT, one short after a derived channel was added;
+%   reading it row by row put the wrong error on the wrong channel, and
+%   the band arithmetic failed with "Arrays have incompatible sizes". Such
+%   an error is not used at all rather than guessed at.
+    shape = [size(eeg.data, 1), size(eeg.data, 2)];
+    if ~isfield(eeg, 'stErr') || isempty(eeg.stErr)
+        se = zeros(shape);
+    elseif size(eeg.stErr, 1) == shape(1) && size(eeg.stErr, 2) == shape(2) ...
+            && size(eeg.stErr, 3) == size(eeg.data, 3)
+        se = eeg.stErr(:, :, b);
+    else
+        se = nan(shape);
+    end
+end
+
 function sme = binASME(eeg, b)
 %BINASME  Per-channel analytic SME (uV) for bin B (a column vector), or [] when
-%   the dataset carries none (e.g. an averaged dataset made before aSME existed).
+%   the dataset carries none (e.g. an averaged dataset made before aSME
+%   existed) or carries one that does not have a row per channel (see
+%   binStErr for how that happens).
     sme = [];
-    if isfield(eeg, 'aSME') && ~isempty(eeg.aSME) && size(eeg.aSME, 2) >= b
+    if isfield(eeg, 'aSME') && ~isempty(eeg.aSME) && size(eeg.aSME, 2) >= b ...
+            && size(eeg.aSME, 1) == size(eeg.data, 1)
         sme = eeg.aSME(:, b);
     end
 end
