@@ -18,6 +18,17 @@ classdef MinMaxPyramid < handle
 %   visible span is no larger than the axis is wide) is drawn from the raw data
 %   by the caller and does not need the pyramid.
 %
+%   NO BUCKET IS WIDER THAN A COLUMN, and that is what keeps the drawing
+%   honest. A min/max envelope is drawn as one line through each bucket's
+%   minimum and then its maximum, so every bucket adds a zigzag as wide as
+%   the bucket. Narrower than a pixel, the zigzags fill in to the band the
+%   signal occupies; wider, they are a sawtooth that is not in the data.
+%   Between 2 and BaseFactor samples per column, level 1 is too coarse (its
+%   buckets span up to BaseFactor/2 columns), and that is exactly where a
+%   sawtooth used to appear. There the envelope is reduced from the raw
+%   samples, one bucket per column, which costs at most BaseFactor samples
+%   per column: still O(pixels).
+%
 %   Construction:
 %     pyr = MinMaxPyramid(Y)               % Y is samples x channels
 %     pyr = MinMaxPyramid(Y, baseFactor)   % bucket ratio between levels
@@ -40,6 +51,13 @@ classdef MinMaxPyramid < handle
         Hi                  % 1xL cell, Hi{L} is nBuckets(L) x NumChannels single
     end
 
+    properties (Access = private)
+        % The signal itself, samples x channels, for the finest envelopes (see
+        % the class header). The caller's own array: MATLAB copies on write,
+        % and neither side writes, so this costs no memory.
+        Raw
+    end
+
     methods
         function this = MinMaxPyramid(y, baseFactor)
         %MINMAXPYRAMID  Build the pyramid from a samples-by-channels signal.
@@ -57,6 +75,7 @@ classdef MinMaxPyramid < handle
             if isrow(y)
                 y = y(:);
             end
+            this.Raw         = y;
             this.NumSamples  = size(y, 1);
             this.NumChannels = size(y, 2);
             this.BaseFactor  = baseFactor;
@@ -113,29 +132,57 @@ classdef MinMaxPyramid < handle
         %
         %   The caller should draw the raw samples directly when the visible
         %   span is already no wider than the axis; this method is for the
-        %   decimated (zoomed-out) case and always reads a coarse level.
+        %   decimated (zoomed-out) case. It reads the coarsest level whose
+        %   buckets are no wider than a column, or the raw samples when even
+        %   level 1 is wider (see the class header).
             i0   = max(1, round(i0));
             i1   = min(this.NumSamples, round(i1));
             span = i1 - i0 + 1;
 
             bucketSize = span / max(1, nBuckets);
+            if isempty(this.Factor) || bucketSize < this.Factor(1)
+                [sampleIdx, yEnv] = this.fromRaw(i0, i1, nBuckets);
+                return;
+            end
             L = this.pickLevel(bucketSize);
             f = this.Factor(L);
 
-            % Buckets of level L that overlap the requested sample range.
+            % Buckets of level L that overlap the requested sample range,
+            % merged G at a time so that each drawn bucket is as close to one
+            % column as the level allows: a level's buckets can be up to
+            % BaseFactor times narrower than a column, and drawing each of
+            % them costs vertices without adding anything a pixel can show.
             b0 = max(1, floor((i0 - 1) / f) + 1);
             b1 = min(size(this.Lo{L}, 1), ceil(i1 / f));
-            buckets = (b0:b1)';
-
-            lo = this.Lo{L}(buckets, :);
-            hi = this.Hi{L}(buckets, :);
+            g = max(1, floor(bucketSize / f));
+            [lo, hi] = MinMaxPyramid.reduce(this.Lo{L}(b0:b1, :), this.Hi{L}(b0:b1, :), g);
 
             % Representative sample index for the min (bucket start) and the max
             % (bucket end), so the envelope spans the correct time extent.
-            startIdx = (buckets - 1) * f + 1;
-            endIdx   = min(buckets * f, this.NumSamples);
+            nb = size(lo, 1);
+            startIdx = (b0 - 1 + (0:nb - 1)' * g) * f + 1;
+            endIdx   = min(startIdx + g * f - 1, min(b1 * f, this.NumSamples));   % the last group may be short
 
-            nb = numel(buckets);
+            sampleIdx = reshape([startIdx, endIdx]', [], 1);
+            yEnv = zeros(2 * nb, this.NumChannels, 'single');
+            yEnv(1:2:end, :) = lo;
+            yEnv(2:2:end, :) = hi;
+        end
+    end
+
+    methods (Access = private)
+        function [sampleIdx, yEnv] = fromRaw(this, i0, i1, nBuckets)
+        %FROMRAW  The envelope of raw samples [I0, I1] in buckets of equal
+        %   length, as many as NBUCKETS allows and never longer than a column,
+        %   in the same interleaved shape as queryInterleaved.
+            span = i1 - i0 + 1;
+            m = max(1, floor(span / max(1, nBuckets)));   % samples per bucket
+            block = single(this.Raw(i0:i1, :));
+            [lo, hi] = MinMaxPyramid.reduce(block, block, m);
+
+            nb = size(lo, 1);
+            startIdx = i0 + (0:nb - 1)' * m;
+            endIdx   = min(startIdx + m - 1, i1);
             sampleIdx = reshape([startIdx, endIdx]', [], 1);
             yEnv = zeros(2 * nb, this.NumChannels, 'single');
             yEnv(1:2:end, :) = lo;

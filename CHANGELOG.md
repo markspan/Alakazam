@@ -104,6 +104,16 @@ bar. Dates are those of the tag.
   average reference, subtracts a different average. Such a step now keeps
   ReRef's own call in the script, as Filter does.
 
+- **The continuous view sometimes drew a sawtooth** that went away at the
+  next zoom. Its min/max envelope was decimated for the axes' width as last
+  measured, which before layout is a placeholder and after a window resize,
+  a move into the tile grid or an undock is out of date; and between 2 and 8
+  samples per pixel it used 8-sample buckets, up to 4 pixels wide. A line
+  through buckets wider than a pixel zigzags. The envelope is now decimated
+  for at least the widest screen, and no bucket is wider than a column: the
+  samples are reduced directly where the pyramid's finest level is too
+  coarse, and its buckets are merged to one per column elsewhere, which also
+  draws fewer vertices than before.
 - **The Reports tree listed the reports of every workspace** sharing the
   same Exports folder. A report now records the workspace that rendered it
   (its Raw folder), and each workspace lists its own; a report made before

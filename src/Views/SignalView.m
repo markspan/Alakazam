@@ -76,6 +76,8 @@ classdef SignalView < AlakazamView
 
         AxWidthPx = 100 % axes width in pixels, refreshed every redraw
         AxWidthCm = 100 % axes width in centimetres, refreshed every redraw
+        ScreenColumns = 0 % width of the widest monitor in pixels: the least
+                          % resolution a redraw decimates to (see redraw)
         ZoomDecay       % double, maps the zoom slider to a visible sample count
         MmPerSecDone = false % whether the initial mmPerSec zoom has been applied
 
@@ -148,6 +150,7 @@ classdef SignalView < AlakazamView
 
             % Decimation engine and overlay data.
             this.Pyramid = MinMaxPyramid(this.Y);
+            this.ScreenColumns = widestScreen();
             this.Overlay = this.parseOverlays(eeg);
 
             this.buildGraphics(opts.LineSpec, eeg);
@@ -288,7 +291,17 @@ classdef SignalView < AlakazamView
 
             % Decimate: raw samples when the window already fits the axis,
             % otherwise a min/max envelope of about one column per pixel.
-            targetColumns = max(1, this.AxWidthPx);
+            %
+            % AT LEAST AS FINE AS THE WIDEST SCREEN, not only as the axes'
+            % width as measured now. The measure can be stale: before the
+            % grid has laid the axes out it is a placeholder, and a resized
+            % window, a tab moved into the tile grid or undocked, changes the
+            % width without a redraw. An envelope decimated for a narrower
+            % axis than the one it is drawn in has buckets several pixels
+            % wide, and a min/max line through such buckets is a sawtooth that
+            % is not in the data; it went away at the next zoom, which
+            % measured again. No axes is wider than the screen it is on.
+            targetColumns = max([1, this.AxWidthPx, this.ScreenColumns]);
             if (endIndex - startIndex + 1) <= 2 * targetColumns
                 idx  = (startIndex:endIndex)';
                 xVis = this.Time(idx);
@@ -1180,5 +1193,17 @@ function value = fieldOr(s, name, default)
     value = default;
     if isfield(s, name) && ~isempty(s.(name))
         value = s.(name);
+    end
+end
+
+function px = widestScreen()
+%WIDESTSCREEN  The width in pixels of the widest monitor, or 0 when MATLAB
+%   reports none (a session without a display).
+    px = 0;
+    try
+        monitors = get(groot, 'MonitorPositions');
+        px = max(monitors(:, 3));
+    catch
+        % No display information: the axes' own width is used alone.
     end
 end
