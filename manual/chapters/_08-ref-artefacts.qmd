@@ -64,6 +64,8 @@ Flags epochs with five detectors that match, and extend, ERPLAB's
 
 : ArtefactDetect's options. {#tbl-artefactdetect}
 
+A detector's own settings are greyed out while it is not ticked.
+
 **What happens to a hit** is chosen separately from the detection:
 
 - **Whole epoch** rejects every channel of the trial: the standard ERP

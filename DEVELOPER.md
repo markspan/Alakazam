@@ -184,9 +184,35 @@ A dialog returns the options on OK and `[]` on Cancel or when its window is
 closed. `TransformOptionsDialog` builds a standard one from
 `{label; field}, default` pairs and infers each field's kind from its default
 (a cell array of strings is a drop-down, a logical a checkbox, a number a
-numeric field, anything else text). A dialog of its own is a `uifigure`
-placed with `fitOnScreen`, coloured with `dialogChromeColors`, and must set
-`CloseRequestFcn` to its Cancel path.
+numeric field, anything else text).
+
+A default can also be a field object from `src/Dialogs/+DialogFields`, which
+is what keeps a transformation on the generated dialog when it needs more:
+
+| Field | For |
+|---|---|
+| `Choice(items, selected, 'Values', v)` | a drop-down whose shown items and stored values differ |
+| `Number(x, 'Limits', [lo hi], 'Integer', tf)` | a number with limits |
+| `Channels(EEG, selected, 'Multiple', 'Required')` | the dataset's channels by label, with All, None and Scalp EEG |
+| `Bins(EEG, selected, 'Differences', tf)` | the dataset's bins by label, with All, None and Differences |
+| `Table(columns, rows, 'MinRows', n)` | rows of fields, with Add and Remove; returns a cell of structs, the JSON-safe shape |
+| `TextArea(text, 'Validate', @(t) ...)` | a block of text checked at OK, by the parser the step runs |
+| `Plot(@(ax, values) ...)` | a preview redrawn whenever a value changes; adds nothing to the options |
+
+Every field takes `'EnabledWhen', @(values) ...` (greyed out, and not
+validated, while false; `values` holds every field's current value by name)
+and `'Tooltip'`. OK asks each enabled field to `validate` and stays open with
+its message when one refuses. A new kind of field is a subclass of
+`DialogFields.Field` (`build`, `value`, and optionally `height`, `width`,
+`spansBothColumns`, `validate`, `refresh`); the dialog needs no change.
+Interpolate, Derive Channels and Baseline show the range: a required channel
+list, a checked script, and a live preview.
+
+A dialog of its own is a `uifigure` placed with `fitOnScreen`, coloured with
+`dialogChromeColors`, and must set `CloseRequestFcn` to its Cancel path. It
+is the right choice when the dialog is an editor rather than a form (Measure's
+windows, DefineBins' script with its bin preview), not merely because a field
+is a channel list or a table.
 
 ### Recalculate
 

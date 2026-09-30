@@ -61,7 +61,6 @@ end
 ORDERS  = {'1 - linear', '0 - mean only', '2 - quadratic'};
 METHODS = {'Least squares', 'Robust (Huber)'};
 
-labels = channelLabels(input);
 if interactive
     stored = TransformSettings.get('DCDetrend');
     if isempty(stored) || ~isstruct(stored)
@@ -76,7 +75,7 @@ if interactive
             'empty for all channels.'], ...
         'title', 'DC-Detrend options', ...
         'separator', 'Channels (empty = all):', ...
-        {'Channels'; 'Channels'}, multiSelectField(labels, TransTools.FieldOr(stored, 'Channels', {})), ...
+        {'Channels'; 'Channels'}, DialogFields.Channels(input, TransTools.FieldOr(stored, 'Channels', {})), ...
         'separator', 'Trend:', ...
         {'Polynomial order'; 'Order'}, TransTools.PutFirst(ORDERS, TransTools.FieldOr(stored, 'Order', ORDERS{1})), ...
         {'Fitting method'; 'Method'}, TransTools.PutFirst(METHODS, TransTools.FieldOr(stored, 'Method', METHODS{1})), ...
@@ -213,13 +212,6 @@ function [lo, hi] = fitRange(EEG, startMs, stopMs, nSamp)
     lo = a; hi = b;
 end
 
-function labels = channelLabels(EEG)
-    if isfield(EEG, 'chanlocs') && ~isempty(EEG.chanlocs) && isfield(EEG.chanlocs, 'labels')
-        labels = cellfun(@(s) char(string(s)), {EEG.chanlocs.labels}, 'UniformOutput', false);
-    else
-        labels = arrayfun(@(i) sprintf('ch%d', i), 1:size(EEG.data, 1), 'UniformOutput', false);
-    end
-end
 
 function report(order, robust, nChan, nTrials, fitLo, fitHi, input, slopes, nSkipped)
 %REPORT  What was removed, in units a user can check against the trace.

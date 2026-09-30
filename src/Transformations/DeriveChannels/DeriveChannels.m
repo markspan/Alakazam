@@ -50,7 +50,7 @@ function [EEG, options] = DeriveChannels(input, varargin)
 %   OPTIONS carries .derivations, the let block as text -- the same field
 %   name Measure uses, so a block can be moved between the two unchanged.
 %
-%   See also TRANSTOOLS.APPLYDERIVATIONS, DERIVECHANNELSDIALOG, MEASURE,
+%   See also TRANSTOOLS.APPLYDERIVATIONS, MEASURE,
 %   DEFINEBINS (bin arithmetic), MERGELETDEFINITIONS.
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:DeriveChannels', varargin{:});
 
@@ -61,7 +61,22 @@ if ~isfield(input, 'chanlocs') || isempty(input.chanlocs)
 end
 
 if interactive
-    options = DeriveChannelsDialog(input, TransformSettings.get('DeriveChannels'));
+    stored = TransformSettings.get('DeriveChannels');
+    labels = {input.chanlocs.labels};
+    example = sprintf('%% One per line, e.g. a lateralised difference:\n%% let LRP = %s - %s\n', ...
+        labels{1}, labels{min(2, numel(labels))});
+    % The block is checked at OK against this dataset's own channels, by the
+    % engine the transformation runs, so a typo, an unknown channel or a
+    % name clash is reported in the dialog rather than after the node
+    % exists, and the two cannot disagree about what parses.
+    options = TransformOptionsDialog( ...
+        'title', 'Derive Channels', ...
+        'Description', sprintf(['One "let <name> = <expression>" per line. Channels by label; ' ...
+            '+ - * / with parentheses, abs() and sqrt(); %% starts a comment.\nChannels: %s'], ...
+            strjoin(labels, ', ')), ...
+        {'Statements'; 'derivations'}, DialogFields.TextArea( ...
+            TransTools.FieldOr(stored, 'derivations', example), 'Height', 220, ...
+            'Validate', @(text) TransTools.ApplyDerivations(channelsOnly(input), text)));
     if isempty(options)
         EEG = [];   % cancelled -- no node, no compute (see Alakazam.onTransformation)
         return;
@@ -81,4 +96,13 @@ if isempty(added)
 else
     fprintf('DeriveChannels: added %s.\n', strjoin(added, ', '));
 end
+end
+
+% ======================================================================= %
+function d = channelsOnly(EEG)
+%CHANNELSONLY  The dataset's channels over three samples: enough for the
+%   derivation engine to resolve labels, catch clashes and evaluate the
+%   grammar when the dialog checks a block, without copying the recording.
+    d = struct('chanlocs', EEG.chanlocs, 'nbchan', numel(EEG.chanlocs), ...
+        'data', zeros(numel(EEG.chanlocs), 3));
 end

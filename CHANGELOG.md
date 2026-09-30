@@ -49,6 +49,18 @@ bar. Dates are those of the tag.
 
 ### Changed
 
+- **The generated settings dialog can hold much more**, so fewer
+  transformations need a dialog of their own. A field can now be a channel
+  picker (by label, with All, None and Scalp EEG), a bin picker (with
+  Differences), an editable table of rows, a block of text checked when OK
+  is pressed, a drop-down whose shown and stored values differ, a number with
+  limits, or a live preview; and any field can be greyed out while other
+  values say it does not apply. OK now asks every field whether its value can
+  be used and stays open, saying why, when one cannot. Interpolate and Derive
+  Channels lose their hand-written dialogs to it; Baseline gains a preview of
+  its window over every channel's average; ArtefactDetect greys out the
+  settings of detectors that are not ticked; the channel lists of Rectify,
+  DC-Detrend, Covariance and Cross Correlation gain All, None and Scalp EEG.
 - **Interpolating flagged channel-epochs is faster**: trials that share a set
   of bad channels are interpolated in one call, which gives the same result
   (the spline weights depend only on the set) at a fraction of the calls.

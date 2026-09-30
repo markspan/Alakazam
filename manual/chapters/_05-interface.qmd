@@ -42,7 +42,7 @@ part of this manual:
 | Group | Transformations | Reference |
 |-----------------------------------|-------------------------------------------------------|-----------------------------|
 | 1. Preprocessing | Baseline, ChannelEditor, Collapse Hemispheres, DC-Detrend, Derive Channels, EventEditor, Eye tracking, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData | @sec-ref-preprocessing |
-| 2. Artifact Rejection / Reduction | ArtefactDetect, AutoGEDAI, AutoICA, ICA, ManualReject | @sec-ref-artefacts |
+| 2. Artifact Rejection / Reduction | ArtefactDetect, ASR, AutoGEDAI, AutoICA, AutoReject, ICA, ManualReject, PREP | @sec-ref-artefacts |
 | 3. Epoching and Averaging | Average, Deconvolve, DefineBins | @sec-ref-epoching |
 | 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, RESS, Source Estimate, Spectral Measure, Welch PSD | @sec-ref-frequency |
 | 5. Plots | Brain (3D), CohTopo, Coherence Map, Scalp, TimeFrequency | @sec-ref-plots |

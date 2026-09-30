@@ -8,7 +8,7 @@ function [accentColor, bgColor] = dialogChromeColors()
 %   Previously restated as the same two literal RGB triples in every one
 %   of TransformOptionsDialog.m, MeasureDialog.m, FilterDialog.m,
 %   ReRefDialog.m, SelectDataDialog.m, ChannelEditorDialog.m,
-%   InterpolateDialog.m, RemoveComponentsDialog.m, SpectralMeasureDialog.m,
+%   RemoveComponentsDialog.m, SpectralMeasureDialog.m,
 %   GrandAverageDialog.m and SettingsDialog.m (the last one to get this
 %   treatment; previously the one dialog left unstyled entirely);
 %   consolidated here. The dialogs' own header bar / body-grid / button-row

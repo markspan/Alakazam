@@ -1,10 +1,6 @@
 function settings = TransformOptionsDialog(varargin)
-%TRANSFORMOPTIONSDIALOG  uifigure-based replacement for uiextras.settingsdlg,
-%   a classic Java/AWT dialog -- see migration.md's "old-style Java-based
-%   graphics" note. Deliberately mirrors settingsdlg's own call signature
-%   (title/Description/separator/{label;fieldname},default pairs) so every
-%   call site only needed its function name swapped, not its argument list
-%   rewritten:
+%TRANSFORMOPTIONSDIALOG  The generated settings dialog: a column of labelled
+%   fields, OK and Cancel, built from one call.
 %
 %       settings = TransformOptionsDialog( ...
 %           'Description', 'Set the parameters for Baseline', ...
@@ -13,63 +9,90 @@ function settings = TransformOptionsDialog(varargin)
 %           {'Start'; 'Start'}, stored.Start, ...
 %           {'Stop'; 'Stop'}, stored.Stop);
 %
-%   Field kind is inferred from each DEFAULT value, exactly like
-%   settingsdlg: a cell array of strings is a dropdown (its first element
-%   the initial selection -- callers already pre-order that with their own
-%   putFirst-style helper), a scalar logical is a checkbox, a numeric
-%   value is a numeric edit field, anything else a text edit field.
+%   The arguments mirror uiextras.settingsdlg's, which this replaced (a
+%   classic Java/AWT dialog, see migration.md): 'title' and 'Description'
+%   set the header, 'separator' inserts a section heading, and every other
+%   argument is a {label; fieldname} pair (or a bare fieldname) followed by
+%   the field's default. OK returns a struct with one field per fieldname.
 %
-%   Cancelling (or closing the window) returns SETTINGS = [] (empty).
-%   This deliberately does NOT match settingsdlg's own single-output
-%   contract, which silently returns the pre-fill/default values on
-%   Cancel -- indistinguishable from pressing OK with nothing changed.
-%   Since no caller of settingsdlg ever checked for that (there was no
-%   way to, from a single output arg), clicking Cancel on e.g. Baseline's
-%   options dialog used to run Baseline anyway with default values and
-%   add a tree node the user never asked for. Every call site MUST check
-%   `if isempty(settings) ... end` and abort (return an empty EEG,
-%   handled by Alakazam.onTransformation the same way a cancelled
-%   transformation always is) rather than proceeding.
+%   WHAT A DEFAULT CAN BE. A plain value makes the field its kind implies,
+%   as it always has: a cellstr a drop-down (its first entry chosen), a
+%   scalar logical a checkbox, a scalar number a numeric box, anything else
+%   a text box, and multiSelectField(...) a multi-select list. A field
+%   object from the +DialogFields package makes that field instead:
 %
-%   See also ALAKAZAMSETTINGS, SETTINGSDIALOG (the app's own global-
-%   settings dialog -- schema-driven from AlakazamSettings, a different
-%   use case from this one-off, call-site-parameterized dialog).
+%     DialogFields.Choice     a drop-down whose shown items and stored
+%                             values differ ('Spherical spline' -> 'spherical')
+%     DialogFields.Number     a numeric box with limits, or whole numbers only
+%     DialogFields.Channels   the dataset's channels by label, with All,
+%                             None and Scalp EEG
+%     DialogFields.Bins       the dataset's bins by label, with All, None and
+%                             Differences
+%     DialogFields.Table      an editable table of rows, with Add and Remove
+%     DialogFields.TextArea   a block of text, checked before the dialog
+%                             closes (a script, a list of statements)
+%     DialogFields.Plot       a preview redrawn from the current values
+%
+%   and any field takes 'EnabledWhen', @(values) ..., which greys it out
+%   while the other fields' values say it does not apply. These are what
+%   used to push a transformation into writing a dialog of its own; with
+%   them the generated one goes further before that escape hatch is needed,
+%   and a new kind of field is a class in the package, not a change here.
+%
+%   OK CHECKS FIRST. Each enabled field may refuse its value (a required
+%   channel list left empty, a script that does not parse, too few rows),
+%   and the dialog then says why and stays open, so a mistake is reported
+%   before a node exists rather than after.
+%
+%   Cancelling (or closing the window) returns SETTINGS = [] (empty). This
+%   deliberately does NOT match settingsdlg's own contract, which returned
+%   the defaults on Cancel, indistinguishable from pressing OK: clicking
+%   Cancel on Baseline's options used to run Baseline with its defaults and
+%   add a node nobody asked for. Every call site MUST check
+%   `if isempty(settings) ... end` and abort.
+%
+%   See also DIALOGFIELDS.FIELD, DIALOGFIELDS.FROMDEFAULT, MULTISELECTFIELD,
+%   SETTINGSDIALOG (the application's own settings, schema-driven).
 
     [accentColor, bgColor] = dialogChromeColors();
+    [dlgTitle, description, specs] = parseArgs(varargin);
 
-    [dlgTitle, description, fieldSpecs] = parseArgs(varargin);
-
-    % [] until OK is actually pressed -- Cancel (button or window close)
-    % leaves this as [], the caller's signal to abort. Never pre-filled
-    % from the defaults (that was the bug: see this function's own
-    % header comment).
+    % [] until OK is pressed and every field has accepted its value; Cancel
+    % (button or window close) leaves it [], the caller's signal to abort.
     settings = [];
 
-    nRows = numel(fieldSpecs);
-    rowHeight = repmat({28}, 1, nRows);
+    LABELLINE = 22;   % the heading line above a field that spans the row
+    nRows = numel(specs);
+    rowHeight = cell(1, max(nRows, 1));
+    rowHeight{1} = 28;
+    figWidth = 420;
     for k = 1:nRows
-        if strcmp(fieldSpecs(k).kind, 'separator')
+        spec = specs{k};
+        if strcmp(spec.kind, 'separator')
             rowHeight{k} = 22;
-        elseif isMultiSelect(fieldSpecs(k).default)
-            % A multi-select list box needs room for several rows; size it to
-            % the number of choices (capped) rather than the single-line 28px.
-            nItems = numel(fieldSpecs(k).default.Items);
-            rowHeight{k} = min(140, max(60, 18 * nItems + 8));
+            continue;
         end
+        rowHeight{k} = spec.field.height();
+        if spec.field.spansBothColumns()
+            rowHeight{k} = rowHeight{k} + LABELLINE;
+        end
+        figWidth = max(figWidth, spec.field.width());
     end
 
     headerHeight = 40;
-    % The description gets the lines its text needs. It used to get two
-    % whatever it said, so a longer one (Artefact detection, Covariance,
-    % Rectify) stopped mid-sentence.
+    % The description gets the lines its text needs at this width. It used
+    % to get two whatever it said, so a longer one stopped mid-sentence.
     descHeight = 0;
     if strlength(string(description)) > 0
-        descHeight = 12 + 17 * descriptionLines(description);
+        descHeight = 12 + 17 * descriptionLines(description, figWidth);
     end
-    fieldsHeight = sum(cell2mat(rowHeight)) + (nRows - 1) * 8 + 16;
+    fieldsHeight = sum(cell2mat(rowHeight)) + (numel(rowHeight) - 1) * 8 + 16;
     buttonHeight = 46;
-    figHeight = headerHeight + descHeight + fieldsHeight + buttonHeight;
-    figWidth = 420;
+    screen = get(groot, 'ScreenSize');
+    % A dialog taller than the screen scrolls its fields rather than hiding
+    % OK below the bottom edge.
+    fieldsView = min(fieldsHeight, max(200, 0.85 * screen(4) - headerHeight - descHeight - buttonHeight));
+    figHeight = headerHeight + descHeight + fieldsView + buttonHeight;
 
     fig = uifigure('Name', dlgTitle, 'Position', fitOnScreen([400 300 figWidth figHeight]), ...
         'Color', bgColor, 'Resize', 'off');
@@ -98,13 +121,12 @@ function settings = TransformOptionsDialog(varargin)
     end
 
     fieldsGrid = uigridlayout(outer, [max(nRows, 1), 2], 'ColumnWidth', {160, '1x'}, ...
-        'RowHeight', rowHeight, 'Padding', [16 8 16 8], 'RowSpacing', 8);
+        'RowHeight', rowHeight, 'Padding', [16 8 16 8], 'RowSpacing', 8, 'Scrollable', 'on');
     fieldsGrid.Layout.Row = rowIdx;
     rowIdx = rowIdx + 1;
 
-    controls = struct();
-    for k = 1:numel(fieldSpecs)
-        spec = fieldSpecs(k);
+    for k = 1:nRows
+        spec = specs{k};
         if strcmp(spec.kind, 'separator')
             sepLabel = uilabel(fieldsGrid, 'Text', spec.label, 'FontWeight', 'bold');
             sepLabel.Layout.Row = k;
@@ -112,29 +134,23 @@ function settings = TransformOptionsDialog(varargin)
             continue;
         end
 
-        label = uilabel(fieldsGrid, 'Text', spec.label, 'VerticalAlignment', 'center');
-        label.Layout.Row = k;
-        label.Layout.Column = 1;
-
-        default = spec.default;
-        if isMultiSelect(default)
-            sel = intersect(default.Selected, default.Items, 'stable');
-            if isempty(sel); selVal = {}; else; selVal = cellstr(sel); end
-            ctrl = uilistbox(fieldsGrid, 'Items', string(default.Items), ...
-                'Multiselect', 'on', 'Value', selVal);
-        elseif iscell(default)
-            ctrl = uidropdown(fieldsGrid, 'Items', string(default), ...
-                'Value', string(default{1}));
-        elseif islogical(default) && isscalar(default)
-            ctrl = uicheckbox(fieldsGrid, 'Text', '', 'Value', default);
-        elseif isnumeric(default) && isscalar(default)
-            ctrl = uieditfield(fieldsGrid, 'numeric', 'Value', default);
+        if spec.field.spansBothColumns()
+            cell_ = uigridlayout(fieldsGrid, [2 1], 'RowHeight', {LABELLINE - 4, '1x'}, ...
+                'Padding', [0 0 0 0], 'RowSpacing', 4);
+            cell_.Layout.Row = k;
+            cell_.Layout.Column = [1, 2];
+            uilabel(cell_, 'Text', spec.label);
+            holder = uigridlayout(cell_, [1 1], 'Padding', [0 0 0 0]);
+            holder.Layout.Row = 2;
         else
-            ctrl = uieditfield(fieldsGrid, 'text', 'Value', char(string(default)));
+            label = uilabel(fieldsGrid, 'Text', spec.label, 'VerticalAlignment', 'center');
+            label.Layout.Row = k;
+            label.Layout.Column = 1;
+            holder = uigridlayout(fieldsGrid, [1 1], 'Padding', [0 0 0 0]);
+            holder.Layout.Row = k;
+            holder.Layout.Column = 2;
         end
-        ctrl.Layout.Row = k;
-        ctrl.Layout.Column = 2;
-        controls.(spec.name) = ctrl;
+        spec.field.build(holder, @onChange);
     end
 
     buttonRow = uigridlayout(outer, [1, 3], 'ColumnWidth', {'1x', 90, 90}, ...
@@ -147,90 +163,137 @@ function settings = TransformOptionsDialog(varargin)
     okBtn.Layout.Column = 3;
 
     fig.CloseRequestFcn = @(~, ~) onCancel();
+    onChange();   % the first enabling pass, and the first preview
 
     uiwait(fig);
 
-    function onOK()
-        for kk = 1:numel(fieldSpecs)
-            fs = fieldSpecs(kk);
-            if ~strcmp(fs.kind, 'field')
+    % ------------------------------------------------------------------- %
+    function onChange()
+    %ONCHANGE  Re-apply every field's EnabledWhen and redraw the previews,
+    %   from the values as they are now. A predicate or a preview that
+    %   fails leaves its field enabled rather than taking the dialog down.
+        values = currentValues();
+        for kk = 1:numel(specs)
+            s = specs{kk};
+            if strcmp(s.kind, 'separator')
                 continue;
             end
-            ctrl = controls.(fs.name);
-            if isMultiSelect(fs.default)
-                v = ctrl.Value;
-                if isempty(v); settings.(fs.name) = {}; else; settings.(fs.name) = cellstr(v); end
-            elseif iscell(fs.default)
-                settings.(fs.name) = char(ctrl.Value);
-            else
-                settings.(fs.name) = ctrl.Value;
+            if ~isempty(s.field.EnabledWhen)
+                try
+                    s.field.setEnabled(logical(s.field.EnabledWhen(values)));
+                catch
+                    s.field.setEnabled(true);
+                end
+            end
+            s.field.refresh(values);
+        end
+    end
+
+    function values = currentValues()
+        values = struct();
+        for kk = 1:numel(specs)
+            s = specs{kk};
+            if strcmp(s.kind, 'field') && s.field.hasValue()
+                values.(s.name) = s.field.value();
             end
         end
+    end
+
+    function onOK()
+        values = currentValues();
+        for kk = 1:numel(specs)
+            s = specs{kk};
+            if ~strcmp(s.kind, 'field') || ~isEnabled(s.field, values)
+                continue;
+            end
+            problem = s.field.validate();
+            if ~isempty(problem)
+                uialert(fig, problem, sprintf('%s: please check', stripColon(s.label)));
+                return;
+            end
+        end
+        settings = values;
         delete(fig);
     end
 
     function onCancel()
-        % settings is already [] (its initial value, never touched by
-        % anything but onOK) -- nothing to do beyond closing the window.
+        % settings is still [] (only onOK sets it), so closing is all there is.
         delete(fig);
     end
 end
 
-function n = descriptionLines(text)
-%DESCRIPTIONLINES  How many lines the description wraps to in this dialog's
-%   width: about 55 characters a line at the label's 388 pixels, each
-%   paragraph starting a line of its own.
+% ======================================================================= %
+function tf = isEnabled(field, values)
+%ISENABLED  Whether a field applies to the values as they are: a disabled
+%   field is not asked to validate (a required channel list for a step that
+%   is switched off is not required).
+    tf = true;
+    if ~isempty(field.EnabledWhen)
+        try
+            tf = logical(field.EnabledWhen(values));
+        catch
+            tf = true;
+        end
+    end
+end
+
+function s = stripColon(label)
+    s = regexprep(char(label), ':\s*$', '');
+end
+
+function n = descriptionLines(text, figWidth)
+%DESCRIPTIONLINES  How many lines the description wraps to at this width:
+%   about 55 characters a line at the 420-pixel dialog's 388-pixel label,
+%   proportionally more when a wide field widens the dialog, each paragraph
+%   starting a line of its own.
+    perLine = max(30, round(55 * (figWidth - 32) / 388));
     paragraphs = strsplit(char(string(text)), newline);
-    n = sum(max(1, ceil(cellfun(@numel, paragraphs) / 55)));
+    n = sum(max(1, ceil(cellfun(@numel, paragraphs) / perLine)));
 end
 
-function tf = isMultiSelect(default)
-%ISMULTISELECT  True when a field default is a multiSelectField(...) wrapper.
-    tf = isstruct(default) && isscalar(default) && ...
-        isfield(default, 'AlzMultiSelect') && default.AlzMultiSelect;
-end
-
-function [dlgTitle, description, fieldSpecs] = parseArgs(args)
-%PARSEARGS  Walks the settingsdlg-style varargin: 'title'/'description'
-%   set the two header strings; 'separator' inserts a section-heading
-%   entry; anything else is a {label;fieldname} (or bare fieldname)
-%   followed by its default value.
+function [dlgTitle, description, specs] = parseArgs(args)
+%PARSEARGS  Walks the settingsdlg-style arguments: 'title'/'description'
+%   set the two header strings; 'separator' inserts a heading; anything else
+%   is a {label; fieldname} (or bare fieldname) followed by its default,
+%   which DialogFields.fromDefault turns into a field.
     dlgTitle = 'Adjust settings';
     description = '';
-    fieldSpecs = struct('kind', {}, 'label', {}, 'name', {}, 'default', {});
+    specs = {};
 
     i = 1;
     while i <= numel(args)
         key = args{i};
+        if i == numel(args)
+            throw(MException('Alakazam:TransformOptionsDialog', ...
+                'The last argument, %s, has no value after it.', describeKey(key)));
+        end
         if (ischar(key) || isstring(key)) && strcmpi(key, 'title')
             dlgTitle = char(args{i + 1});
-            i = i + 2;
         elseif (ischar(key) || isstring(key)) && strcmpi(key, 'description')
             description = char(args{i + 1});
-            i = i + 2;
         elseif (ischar(key) || isstring(key)) && strcmpi(key, 'separator')
-            fieldSpecs(end + 1) = struct('kind', 'separator', 'label', char(args{i + 1}), ...
-                'name', '', 'default', []); %#ok<AGROW>
-            i = i + 2;
+            specs{end + 1} = struct('kind', 'separator', 'label', char(args{i + 1}), ...
+                'name', '', 'field', []); %#ok<AGROW>
         else
             if iscell(key)
-                label = key{1};
-                name = key{2};
+                label = char(key{1});
+                name = char(key{2});
             else
                 label = char(key);
                 name = char(key);
             end
-            % args(i+1) (paren indexing into the cell array, a 1x1 cell),
-            % not args{i+1} (its unwrapped contents): struct() treats a
-            % bare cell-array VALUE as "expand into a struct array" (one
-            % of its more surprising built-in behaviours) -- when the
-            % default itself is a cell array of choices, that would try
-            % to broadcast it against the other, scalar fields and
-            % error. Passing the 1x1 cell keeps 'default' scalar
-            % (a single field whose value happens to be a cell array).
-            fieldSpecs(end + 1) = struct('kind', 'field', 'label', label, ...
-                'name', name, 'default', args(i + 1)); %#ok<AGROW>
-            i = i + 2;
+            spec = struct('kind', 'field', 'label', label, 'name', name, 'field', []);
+            spec.field = DialogFields.fromDefault(args{i + 1});
+            specs{end + 1} = spec; %#ok<AGROW>
         end
+        i = i + 2;
+    end
+end
+
+function s = describeKey(key)
+    if iscell(key)
+        s = char(string(key{end}));
+    else
+        s = char(string(key));
     end
 end
