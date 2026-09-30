@@ -26,6 +26,13 @@ bar. Dates are those of the tag.
   have their own table in the data-quality report's provenance section. PREP
   is downloaded on first use, after consent, pinned to v0.56.0;
   clean_rawdata ships with EEGLAB and is now on the startup plugin list.
+- **A generator for new transformations**: `newTransformation('Name', ...)`
+  writes the entry function (the contract, a generated dialog from the fields
+  given, replay, an input check and a record in `etc.alz`), the manifest, a
+  placeholder icon and its SVG source, a test class whose cases pass as
+  generated, a manual section with an options table, and the entry on the
+  Recalculate list. DEVELOPER.md now also states what a transformation may
+  do to the dataset it is given.
 - **Every major recording format opens**: European Data Format (.edf,
   EDF+), BioSemi (.bdf), GDF, Neuroscan and ANT Neuro (.cnt), EGI (.mff and
   simple binary .raw), Lab Streaming Layer (.xdf), Micromed (.trc), Nicolet

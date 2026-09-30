@@ -222,7 +222,51 @@ A node offers **Recalculate** when its transformation is listed in
 cannot be reseeded from stored options (Photodiode, EventEditor) or when it
 has none.
 
+### What a transformation may do to the dataset
+
+A transformation is handed a dataset and returns one, and everything
+downstream (the views, the other steps, the reports, a replay on another
+subject) reads what it returns. So:
+
+- **Start from what you were given**: `EEG = input;`, then change what the
+  method changes. Every field you do not touch survives: EEGLAB's, Alakazam's
+  own (`DataType`, `DataFormat`, `bindesc`) and the records earlier steps
+  left in `EEG.etc.alz`.
+- **Keep the description true to the data.** When the data's shape changes,
+  so do `nbchan`, `pnts`, `trials`, `chanlocs`, `times` and `DataFormat`
+  (`'CONTINUOUS'`, `'EPOCHED'` or `'Averaged'`; `inferDataFormat` derives it
+  from the shape). `DataType` is `'TIMEDOMAIN'` for waveforms; a spectrum is
+  `'FrequencyDomain'`, with its own axis.
+- **Time is in seconds when continuous, milliseconds when epoched or
+  averaged**, as every loader leaves it.
+- **Channels and bins are labels.** Options store labels, resolved against
+  the dataset at compute time (`TransTools.LabelsToIdx`), so a stored choice
+  replays on a montage in another order, or one lacking a channel.
+- **Rejection is `NaN`, never deletion.** A rejected epoch is `NaN` on every
+  channel, a rejected channel-epoch on that channel; trials keep their
+  places, and Average leaves `NaN` out. A reconstructed cell is recorded with
+  `TransTools.RecordInterpolated`, or it is invisible to the data-quality
+  report.
+- **Say what you did in `EEG.etc.alz.<step>`**, plain data only (it is saved,
+  and exported): the settings that mattered, what was changed, and the
+  version of any toolbox that did the work. Never overwrite another step's
+  record. The data-quality report reads the records it knows
+  (`dataQualityMetrics`); a new one that a reader of the results needs gets
+  a provenance row there.
+- **Leave `id`, `File`, `Call` and `params` alone**: the host sets them when
+  it stores the result (`onTransformation`, `persistResultNode`).
+- **Refuse, do not guess.** Input of the wrong kind is an `MException` with
+  the transformation's id and a sentence saying what to do instead; so is a
+  toolbox that fails quietly (see `PREP`'s handling of `prepPipeline`).
+
 ### Adding a transformation: the checklist
+
+`newTransformation(name, ...)` (src/Support) writes the first steps: the
+folder with an entry function that follows the contract, the manifest, a
+placeholder icon and its SVG source, a test class, a manual section with an
+options table, and the entry on the Recalculate list. It refuses to
+overwrite anything. What it cannot write is the method, its tests of
+substance and its description.
 
 1. The folder, entry function, manifest and icon, following the contract.
    The icon is drawn as `src/Icons/<Name>.svg` (24 x 24, the ribbon blue
