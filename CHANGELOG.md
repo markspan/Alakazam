@@ -26,6 +26,17 @@ bar. Dates are those of the tag.
   have their own table in the data-quality report's provenance section. PREP
   is downloaded on first use, after consent, pinned to v0.56.0;
   clean_rawdata ships with EEGLAB and is now on the startup plugin list.
+- **Every major recording format opens**: European Data Format (.edf,
+  EDF+), BioSemi (.bdf), GDF, Neuroscan and ANT Neuro (.cnt), EGI (.mff and
+  simple binary .raw), Lab Streaming Layer (.xdf), Micromed (.trc), Nicolet
+  (.e) and MNE-Python's .fif, alongside .set, .vhdr, .erp and .mat. Each is
+  read by its dedicated EEGLAB reader, installed through EEGLAB's plugin
+  manager the first time it is needed, with EEGLAB's File-IO route
+  (FieldTrip's readers) as the fall-back. An EyeLink .edf beside a
+  recording is recognised by its header and left for EyeTracking. The list
+  is one registry (`rawFormats`), so a format is one entry.
+- **A recording that cannot be read no longer stops the workspace from
+  opening**: it is left out, and one message lists every such file and why.
 - **ArtefactDetect has a flat-line detector**: a channel whose voltage stays
   within a set range (1 uV by default) for at least a set time (200 ms), at
   any offset. A channel that is exactly zero throughout is the reference and

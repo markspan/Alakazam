@@ -15,15 +15,38 @@ recognised by its extension:
 | `.vhdr` (with `.eeg`, `.vmrk`) | BrainVision | continuous | Read with the bva-io plugin, installed on first use. |
 | `.erp` | ERPLAB erpset | averaged | Read directly, without ERPLAB; a root at the ERP stage, so only ERP-domain steps apply. |
 | `.mat` | an Alakazam dataset | as saved | A dataset saved by Alakazam or exported from its cache. |
+| `.edf` | European Data Format (EDF, EDF+) | continuous | BIOSIG. Labels such as `EEG Fp1-REF` need renaming to 10-5 labels for positions. |
+| `.bdf` | BioSemi | continuous | BIOSIG. Recorded without a reference: re-reference first. |
+| `.gdf` | General Data Format | continuous | BIOSIG. |
+| `.cnt` | Neuroscan or ANT Neuro | continuous | The Neuroscan reader, or File-IO for an ANT file. |
+| `.mff` (a folder) | EGI Netstation | continuous | The mffmatlabio plugin; event types from each event's code. |
+| `.raw` | EGI simple binary | continuous | EEGLAB's own reader. |
+| `.xdf` | Lab Streaming Layer | continuous | The xdfimport plugin; the EEG stream, with the other streams' markers as events. |
+| `.trc` | Micromed | continuous | File-IO. |
+| `.e` | Nicolet | continuous | File-IO. |
+| `.fif` | MNE-Python / Neuromag | continuous | File-IO; every channel is read, so select the EEG with SelectData. |
 
 : File formats read from the raw folder. {#tbl-file-formats}
+
+The first four have always been read; the others go through the reader named,
+an EEGLAB plugin that EEGLAB's plugin manager installs the first time a
+recording needs it, with EEGLAB's File-IO route (FieldTrip's readers) as the
+fall-back when that reader is missing or refuses the file. Which reader made
+the dataset is kept with it. Two extensions are not read, because a file
+with them could be one of several things: `.eeg` (BrainVision's data file,
+opened through its `.vhdr`, but also Nihon Kohden's and Neuroscan's) and
+`.dat`. Such a recording can be read with its own EEGLAB reader and saved as
+a `.set`. A recording that cannot be read does not stop the workspace from
+opening: it is left out of the tree, and one message lists every such file
+and why.
 
 The first time a recording is opened, it is read and its imported copy
 written to the cache; later openings read the copy, unless the raw file has
 become newer, in which case it is read again. An EyeLink file (`.asc`, or
 `.edf` when SR Research's converter is installed) is not a recording in its
 own right: it lies beside the recording it belongs to and is joined onto it
-by the eye-tracking step (@sec-tr-eyetracking).
+by the eye-tracking step (@sec-tr-eyetracking). An EyeLink `.edf` is told
+apart from a European Data Format one by its first bytes, and left alone.
 
 ### What Alakazam expects of a recording
 

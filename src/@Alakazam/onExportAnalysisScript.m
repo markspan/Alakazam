@@ -152,11 +152,13 @@ function file = rawFileFor(this, rootNode)
 %   by looking, since the cache stem does not carry it.
     [~, stem] = fileparts(rootNode.UserData);
     rawDir = this.Workspace.RawDirectory;
-    for ext = {'.set', '.vhdr', '.erp', '.mat'}
-        candidate = fullfile(rawDir, [stem ext{1}]);
-        if exist(candidate, 'file') == 2
-            file = candidate;
-            return;
+    for format = rawFormats()
+        for ext = format.extensions
+            candidate = fullfile(rawDir, [stem ext{1}]);
+            if exist(candidate, 'file') == 2 || (format.isFolder && isfolder(candidate))
+                file = candidate;
+                return;
+            end
         end
     end
     file = fullfile(rawDir, stem);
@@ -168,7 +170,8 @@ function loader = loaderFor(rawFile)
         case '.vhdr'; loader = 'bva';
         case '.erp';  loader = 'erp';
         case '.mat';  loader = 'mat';
-        otherwise;    loader = 'set';
+        case '.set';  loader = 'set';
+        otherwise;    loader = 'raw';   % any other format: readRecording
     end
 end
 
