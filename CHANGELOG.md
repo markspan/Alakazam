@@ -67,6 +67,10 @@ bar. Dates are those of the tag.
 
 ### Changed
 
+- **CohTopo shows every bin's map in one plot**, side by side on one colour
+  scale, with a tickbox per bin in a column on the right (as the ERP view has
+  for its lines), instead of one map at a time behind a dropdown.
+
 - **The generated settings dialog can hold much more**, so fewer
   transformations need a dialog of their own. A field can now be a channel
   picker (by label, with All, None and Scalp EEG), a bin picker (with
