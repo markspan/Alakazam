@@ -36,12 +36,13 @@ machine later.
 
 | Toolbox | Used by | Version | Licence |
 |---------------------|------------------------------------|--------|----------------------------|
-| ICLabel, bva-io | AutoICA, ICA; BrainVision import | current | EEGLAB plugins |
+| ICLabel, bva-io, clean_rawdata | AutoICA, ICA; BrainVision import; ASR | current | EEGLAB plugins |
 | FastICA [@hyvarinen2000] | AutoICA, when present | 2.5 | GPL |
 | GEDAI [@ros2025] | AutoGEDAI | 1.7 | PolyForm Noncommercial 1.0.0 |
 | FieldTrip [@oostenveld2011] | source estimates, cluster statistics | 20260812 | GPL |
 | Unfold [@ehinger2019] | Deconvolve | 1.3.1 | GPL |
 | EYE-EEG [@dimigen2011] | EyeTracking | 1.01 | GPL |
+| PREP [@bigdelyshamlo2015] | PREP | 0.56.0 | GPL |
 
 : Toolboxes Alakazam installs when first needed. {#tbl-toolboxes}
 

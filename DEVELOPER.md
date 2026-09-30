@@ -199,6 +199,10 @@ has none.
 ### Adding a transformation: the checklist
 
 1. The folder, entry function, manifest and icon, following the contract.
+   The icon is drawn as `src/Icons/<Name>.svg` (24 x 24, the ribbon blue
+   `#4a7fc9`) and the PNG beside the manifest is rasterized from it:
+   `node src/webtree/rasterize.mjs src/Icons/<Name>.svg
+   src/Transformations/<Name>/<Name>.png 24` (needs `@resvg/resvg-js`).
 2. A test class in `tests/` (see [Testing](#testing)): the compute on a small
    fixture, the replay, and the dialog's OK and Cancel paths.
 3. `RecalculableTransforms`, if it can be recalculated.
@@ -207,7 +211,14 @@ has none.
    `src/IO/nativeTransformCall.m` **and** a case in
    `NativeExportEquivalenceTest`, which compares every field of both routes
    and fails when a native emission has no case.
-6. A section in the manual's transformation reference
+6. If it needs a toolbox that is not bundled, a description of it for
+   `TransTools.EnsureToolbox` (name, pinned archive, version, licence; see
+   `PREP/prepToolbox.m`), a row in `alakazamDependencies` and in the
+   manual's table of toolboxes. `TransTools.ToolboxAvailable` answers the
+   same question without asking, for tests. A method that learns from the
+   scalp (a reference, a covariance, an interpolation) takes its channels
+   from `TransTools.ScalpChannels`, which leaves the peripherals out.
+7. A section in the manual's transformation reference
    (`manual/chapters/`), with its dialog and result pictures added to
    `src/help/capture/manualShots.m`. `ManualTest` fails when a
    transformation has no section.

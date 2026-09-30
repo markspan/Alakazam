@@ -177,6 +177,61 @@ if (nrow(ged) > 0) {
 ```
 
 ```{r}
+#| label: provenance-automated-cleaning-tables
+#| results: asis
+# PREP, ASR and AutoReject are each one word in a methods section, which is
+# exactly why their cost per subject is stated here: "we used ASR" says
+# nothing about how much of a recording it rewrote. Each table puts what
+# the step changed beside what it looked at, and every heading says its
+# own unit. dataQualityMetrics' automatedCleaningRows says which column
+# holds what.
+prp <- prov %>% filter(step == "PREP")
+if (nrow(prp) > 0) {
+  cat("\n\n### What PREP did\n\n")
+  cat("PREP (Bigdely-Shamlo et al., 2015) removes line noise at the mains frequency and its harmonics, then estimates a robust average reference: the average of the scalp channels that are not bad, where a channel is bad by extreme amplitude, poor correlation with the others, excess high-frequency noise or poor prediction from its neighbours, decided again after each re-referencing. The bad channels are interpolated and every channel is put on that reference. A channel still noisy after referencing was kept, not interpolated, and deserves a look.\n\n")
+  tab <- prp %>%
+    mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.0f%%", pct))) %>%
+    select(Subject = dataset, `Channels interpolated` = n, `of scalp channels` = n_total,
+           Share = share, `Which ones` = components, Details = detail) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "PREP: Channels Interpolated"))))
+}
+
+asr_ <- prov %>% filter(step == "ASR")
+if (nrow(asr_) > 0) {
+  cat("\n\n### What ASR did\n\n")
+  cat("Artifact Subspace Reconstruction (clean_rawdata; Mullen et al., 2015) first finds scalp channels that are flat or that their neighbours predict poorly, and interpolates them; it then learns from a clean stretch what the scalp's covariance should look like, and wherever a sliding window exceeds that by more than the burst criterion (in standard deviations; 20 to 30 is the range found to work on real EEG, Chang et al., 2020) it reconstructs the offending components from the rest. A repaired sample is still data, but not the data that was recorded, so the share repaired is the figure to compare across subjects. Rejected samples are left out of everything after, as a rejected epoch is.\n\n")
+  chans <- asr_ %>% filter(item == "channels interpolated") %>%
+    select(dataset, ch_n = n, ch_total = n_total, which = components)
+  samples <- asr_ %>% filter(item == "samples repaired") %>%
+    select(dataset, rep_pct = pct, rejected = n_samples_rejected, n_samples, criterion = threshold)
+  tab <- full_join(chans, samples, by = "dataset") %>%
+    mutate(repaired = ifelse(is.na(rep_pct), NA_character_, sprintf("%.1f%%", rep_pct)),
+           rejected = ifelse(is.na(rejected) | is.na(n_samples) | n_samples == 0, NA_character_,
+                             sprintf("%.1f%%", 100 * rejected / n_samples))) %>%
+    select(Subject = dataset, `Channels interpolated` = ch_n, `of scalp channels` = ch_total,
+           `Which ones` = which, `Samples repaired` = repaired, `Samples rejected` = rejected,
+           `Burst criterion (SD)` = criterion) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "ASR: Channels Interpolated and Samples Repaired"))))
+}
+
+ar <- prov %>% filter(step == "AutoReject")
+if (nrow(ar) > 0) {
+  cat("\n\n### What AutoReject did\n\n")
+  cat("AutoReject (Jas et al., 2017) learns a peak-to-peak rejection threshold for every scalp channel by cross-validation, rather than taking one fixed threshold for all: the threshold whose kept epochs average closest to the median of held-out epochs. An epoch with too many channels over their thresholds is rejected; in the others, the worst of the bad channels are interpolated. How many is too many, and how many are interpolated, are chosen by the same cross-validation, and both are listed, with the range of the learnt thresholds, so that a subject whose thresholds are far from the others' stands out.\n\n")
+  tab <- ar %>%
+    mutate(share = ifelse(is.na(pct), NA_character_, sprintf("%.1f%%", pct)),
+           median_threshold = ifelse(is.na(threshold), NA_character_, sprintf("%.0f", threshold))) %>%
+    select(Subject = dataset, `Epochs rejected` = n, `of epochs examined` = n_total, Share = share,
+           `Channel-epochs interpolated` = channel_epochs, `Channels tested` = channels_tested,
+           `Median threshold (uV)` = median_threshold, Details = detail) %>%
+    arrange(Subject)
+  cat(as_raw_html(blank_missing(apa_gt(tab, "AutoReject: Learnt Thresholds and Their Cost"))))
+}
+```
+
+```{r}
 #| label: provenance-rectify-table
 #| results: asis
 rec <- prov %>% filter(step == "Rectify")

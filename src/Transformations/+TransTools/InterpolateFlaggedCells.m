@@ -33,7 +33,9 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
 %       EEG.etc.alz.interpolated   logical nChan x nTrials
 %
 %   OR-ed with whatever an earlier step already recorded, so a dataset that
-%   has been through interpolation twice keeps both rounds. That mask is the
+%   has been through interpolation twice keeps both rounds (see
+%   TransTools.RecordInterpolated, which a caller that reconstructs data in
+%   some other way uses too). That mask is the
 %   ONLY trace interpolation leaves in the data, and dataQualityMetrics
 %   reads it to report % channel-epochs interpolated alongside % flagged.
 %   Any future caller that reconstructs data must write it too, or the
@@ -48,7 +50,8 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
 %   be clean; callers driven by inspection (ManualReject) rely on the
 %   user having looked.
 %
-%   See also INTERPOLATE, MANUALREJECT, ARTEFACTDETECT, DATAQUALITYMETRICS.
+%   See also INTERPOLATE, MANUALREJECT, ARTEFACTDETECT, AUTOREJECT,
+%   TRANSTOOLS.RECORDINTERPOLATED, DATAQUALITYMETRICS.
     nInterpolated = 0;
     if isempty(flags) || ~any(flags(:))
         return;
@@ -98,20 +101,31 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
     % letting either case reach eeg_interp at all.
     nTrials = size(EEG.data, 3);
     noGoodNeighbour = false(size(flags));
-    for t = 1:nTrials
-        badIdx = find(flags(:, t));
+
+    % TRIALS THAT SHARE A SET OF BAD CHANNELS ARE INTERPOLATED IN ONE CALL.
+    % The spline weights depend only on which channels are bad and where the
+    % good ones sit, and eeg_interp applies them sample by sample, so running
+    % it once on all trials with the same bad set gives exactly what running
+    % it on each of them alone would. On real data most flagged trials share
+    % one or two sets (one loose electrode), so this is a call per set rather
+    % than a call per trial; AutoReject's cross-validation, which interpolates
+    % every epoch once per candidate, depends on it.
+    [badSets, ~, setOfTrial] = unique(flags.', 'rows');
+    for s = 1:size(badSets, 1)
+        badIdx = find(badSets(s, :));
         if isempty(badIdx)
             continue;
         end
-        if ~any(positioned(:) & ~flags(:, t))
-            noGoodNeighbour(:, t) = flags(:, t);   % only the cells actually flagged here
+        trials = find(setOfTrial == s).';
+        if ~any(positioned(:) & ~badSets(s, :).')
+            noGoodNeighbour(:, trials) = flags(:, trials);   % only the cells actually flagged
             continue;
         end
-        oneTrial = EEG;
-        oneTrial.data   = EEG.data(:, :, t);
-        oneTrial.trials = 1;
-        oneTrial = eeg_interp(oneTrial, badIdx, 'spherical');
-        EEG.data(badIdx, :, t) = oneTrial.data(badIdx, :);
+        group = EEG;
+        group.data   = EEG.data(:, :, trials);
+        group.trials = numel(trials);
+        group = eeg_interp(group, badIdx, 'spherical');
+        EEG.data(badIdx, :, trials) = reshape(group.data(badIdx, :, :), numel(badIdx), [], numel(trials));
     end
 
     if any(noGoodNeighbour(:))
@@ -125,7 +139,7 @@ function [EEG, nInterpolated] = InterpolateFlaggedCells(EEG, flags)
     end
 
     nInterpolated = nnz(flags);
-    EEG = recordInterpolated(EEG, flags);
+    EEG = TransTools.RecordInterpolated(EEG, flags);
 end
 
 % ======================================================================= %
@@ -143,33 +157,4 @@ function mask = positionedChannels(EEG, nChan)
         x = EEG.chanlocs(c).X;
         mask(c) = ~isempty(x) && all(isfinite(x));
     end
-end
-
-% ======================================================================= %
-function EEG = recordInterpolated(EEG, flags)
-%RECORDINTERPOLATED  Merge FLAGS into EEG.etc.alz.interpolated.
-%   Written defensively because EEG.etc is EEGLAB's own free-form field: it
-%   may be absent, empty, or (on data that has been through some toolboxes)
-%   not a struct at all, and none of those may be allowed to error here.
-    [nChan, ~, nTrials] = size(EEG.data);
-
-    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || isempty(EEG.etc)
-        EEG.etc = struct();
-    end
-    if ~isfield(EEG.etc, 'alz') || ~isstruct(EEG.etc.alz) || isempty(EEG.etc.alz)
-        EEG.etc.alz = struct();
-    end
-
-    previous = false(nChan, nTrials);
-    if isfield(EEG.etc.alz, 'interpolated')
-        stored = EEG.etc.alz.interpolated;
-        if islogical(stored) && isequal(size(stored), [nChan, nTrials])
-            previous = stored;
-        end
-        % A stored mask of the wrong shape belongs to a differently shaped
-        % dataset (a resample or a channel edit since it was written), so it
-        % cannot be merged: it is dropped rather than misaligned.
-    end
-
-    EEG.etc.alz.interpolated = previous | logical(flags);
 end

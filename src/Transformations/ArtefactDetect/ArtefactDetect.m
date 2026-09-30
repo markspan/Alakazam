@@ -1,7 +1,7 @@
 function [EEG, options] = ArtefactDetect(EEG, varargin)
 %% ArtefactDetect  Mark artifact-contaminated epochs so averaging omits them.
 %
-%   Four detectors, matching (and extending) ERPLAB's set:
+%   Five detectors, matching (and extending) ERPLAB's set:
 %     * Absolute threshold      -- any sample outside [Minimum, Maximum] uV.
 %     * Step function           -- a moving window whose first-half vs
 %                                  second-half mean differs by > Threshold uV
@@ -10,6 +10,13 @@ function [EEG, options] = ArtefactDetect(EEG, varargin)
 %                                  exceeds Threshold uV.
 %     * Sample-to-sample        -- any |x[n]-x[n-1]| exceeds Threshold uV
 %                                  (a single-sample jump / transient).
+%     * Flat line               -- the voltage stays within FlatTolerance uV
+%                                  (its own peak-to-peak range, so at any
+%                                  offset) for at least FlatDuration ms: a
+%                                  disconnected electrode, a saturated
+%                                  amplifier, a dropout. A channel that is
+%                                  exactly zero throughout is the reference,
+%                                  not an artefact, and is not tested.
 %   One or more detectors may be selected at once; a channel trips if any
 %   selected detector flags it. Detection runs over a Test window (blank =
 %   the whole epoch), and a hit is acted on in one of three ways (Scope):
@@ -57,7 +64,8 @@ if ismatrix(EEG.data) || (isfield(EEG, 'DataFormat') && ~strcmpi(EEG.DataFormat,
          '(e.g. with DefineBins), then run artifact detection on the epoched result.']));
 end
 
-METHODS = {'Absolute threshold', 'Step function', 'Moving-window peak-to-peak', 'Sample-to-sample'};
+METHODS = {'Absolute threshold', 'Step function', 'Moving-window peak-to-peak', 'Sample-to-sample', ...
+    'Flat line'};
 SCOPES  = {'Whole epoch', 'This channel only', 'Interpolate this channel'};
 CHANNELS = {'All channels', 'Scalp EEG only'};
 
@@ -81,6 +89,9 @@ if interactive
         {'Threshold (uV)'; 'Threshold'}, d('Threshold', 100), ...
         {'Window (ms)'; 'Window'}, d('Window', 200), ...
         {'Window step (ms)'; 'Step'}, d('Step', 50), ...
+        'separator', 'Flat line:', ...
+        {'Range within (uV)'; 'FlatTolerance'}, d('FlatTolerance', 1), ...
+        {'For at least (ms)'; 'FlatDuration'}, d('FlatDuration', 200), ...
         'separator', 'Test window (ms, 0 to 0 = whole epoch):', ...
         {'Start'; 'TestStart'}, d('TestStart', 0), ...
         {'Stop'; 'TestStop'}, d('TestStop', 0), ...
@@ -129,6 +140,7 @@ end
 srate = EEG.srate;
 winN  = max(2, round(opt.Window / 1000 * srate));
 stepN = max(1, round(opt.Step   / 1000 * srate));
+opt.FlatSamples = max(2, round(opt.FlatDuration / 1000 * srate));
 
 rejectEpoch = strcmpi(opt.Scope, 'Whole epoch');
 interpolate = strcmpi(opt.Scope, 'Interpolate this channel');
@@ -176,6 +188,7 @@ for t = 1:nTrials
         end
     end
 end
+detFlags = spareTheReference(detFlags, EEG, opt, lo, hi);
 flags = any(detFlags, 3);
 
 % Recorded before the scope is applied, because the scope is what turns
@@ -335,8 +348,66 @@ function [bad, windows] = detectorTrips(method, sig, opt, winN, stepN, windows)
         case 'moving-windowpeak-to-peak'
             windows = ensureWindows(windows, sig, winN, stepN);
             bad = largestWindowValue(windows.W, 'peak-to-peak') > opt.Threshold;
+        case 'flatline'
+            bad = hasFlatStretch(sig, opt.FlatTolerance, opt.FlatSamples);
         otherwise
             bad = any(sig > opt.Maximum) || any(sig < opt.Minimum);
+    end
+end
+
+function bad = hasFlatStretch(sig, tolerance, n)
+%HASFLATSTRETCH  True when some N consecutive samples of SIG span no more
+%   than TOLERANCE uV, peak to peak.
+%
+%   The range of the voltage itself is tested, not the voltage against a
+%   fixed band, so an electrode stuck at +40 uV is as flat as one stuck at
+%   zero. Every start position is tested (the running maximum and minimum
+%   over N samples), so no stretch falls between two windows. A stretch
+%   holding NaN (a sample rejected upstream) is not called flat: it is
+%   already out, and flagging it again would count it twice. A test window
+%   shorter than N samples cannot hold a stretch that long, so it is not
+%   flat by this definition.
+    if numel(sig) < n
+        bad = false;
+        return;
+    end
+    range = movmax(sig, [0, n - 1], 'includenan', 'Endpoints', 'discard') ...
+        - movmin(sig, [0, n - 1], 'includenan', 'Endpoints', 'discard');
+    bad = any(range <= tolerance);
+end
+
+function detFlags = spareTheReference(detFlags, EEG, opt, lo, hi)
+%SPARETHEREFERENCE  Clear the flat-line detector's verdict on a channel that
+%   is exactly zero wherever it has data: the reference electrode, which
+%   ReRef keeps (or reconstructs) as a zero channel.
+%
+%   Such a channel is flat in every epoch by construction. Left in, it would
+%   reject every epoch under 'Whole epoch', which is a statement about the
+%   montage, not about the recording. A dead electrode is not exactly zero
+%   (it still carries amplifier noise), and a dropout zeroes some epochs,
+%   not all, so neither is spared by this. Samples already rejected (NaN)
+%   are ignored in deciding, so an earlier rejection pass does not hide the
+%   reference from this test.
+    flat = strcmpi(opt.Method, 'Flat line');
+    if ~any(flat)
+        return;
+    end
+    values = EEG.data(:, lo:hi, :);
+    isReference = all(values == 0 | isnan(values), [2 3]) & any(values == 0, [2 3]);
+    if ~any(isReference)
+        return;
+    end
+    detFlags(isReference, :, flat) = false;
+    labels = channelLabels(EEG, find(isReference));
+    fprintf(['ArtefactDetect: %s is exactly zero throughout (a reference channel), so the ' ...
+        'flat-line test leaves it alone.\n'], strjoin(labels, ', '));
+end
+
+function labels = channelLabels(EEG, idx)
+%CHANNELLABELS  Labels of channels IDX, or "channel N" where there are none.
+    labels = arrayfun(@(c) sprintf('channel %d', c), idx, 'UniformOutput', false);
+    if isfield(EEG, 'chanlocs') && isfield(EEG.chanlocs, 'labels') && numel(EEG.chanlocs) >= max(idx)
+        labels = {EEG.chanlocs(idx).labels};
     end
 end
 
@@ -411,6 +482,8 @@ function opt = normaliseOptions(options)
     opt.Threshold = TransTools.FieldOr(options, 'Threshold', 100);
     opt.Window    = TransTools.FieldOr(options, 'Window', 200);
     opt.Step      = TransTools.FieldOr(options, 'Step', 50);
+    opt.FlatTolerance = TransTools.FieldOr(options, 'FlatTolerance', 1);
+    opt.FlatDuration  = TransTools.FieldOr(options, 'FlatDuration', 200);
     opt.TestStart = TransTools.FieldOr(options, 'TestStart', 0);
     opt.TestStop  = TransTools.FieldOr(options, 'TestStop', 0);
     opt.Scope     = TransTools.FieldOr(options, 'Scope', 'Whole epoch');

@@ -8,6 +8,29 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **PREP, ASR and AutoReject**, the standardised automated cleaning methods
+  the field cites (Tools > 2. Artifact Rejection / Reduction). **PREP** runs
+  the PREP pipeline (Bigdely-Shamlo et al., 2015): line noise at the mains
+  frequency and its harmonics, bad channels found by robust statistics and
+  RANSAC and interpolated, and a robust average reference; the line
+  frequency defaults to 50 Hz where PREP's own is 60. **ASR** runs
+  clean_rawdata's bad-channel and burst stages (Artifact Subspace
+  Reconstruction), interpolates the removed channels back in their places,
+  and repairs bursts, or marks them rejected rather than cutting them out;
+  its criterion defaults to 20 SD. **AutoReject** implements local
+  autoreject (Jas et al., 2017): a peak-to-peak threshold per channel chosen
+  by cross-validation, and a consensus that rejects an epoch or interpolates
+  its worst channels, deterministic and checked against a literal
+  evaluation of autoreject's criterion. All three work on the scalp channels
+  with a position and leave the peripherals alone, record what they did, and
+  have their own table in the data-quality report's provenance section. PREP
+  is downloaded on first use, after consent, pinned to v0.56.0;
+  clean_rawdata ships with EEGLAB and is now on the startup plugin list.
+- **ArtefactDetect has a flat-line detector**: a channel whose voltage stays
+  within a set range (1 uV by default) for at least a set time (200 ms), at
+  any offset. A channel that is exactly zero throughout is the reference and
+  is not tested.
+
 - **A library of ready-made files**, in `library/` at the root: templates
   (`library/templates`), bin scripts (`library/binscripts`) and measurement
   windows (`library/measures`), gathered from `templates/`, `binscripts/` and
@@ -25,6 +48,12 @@ bar. Dates are those of the tag.
   in the library.
 
 ### Changed
+
+- **Interpolating flagged channel-epochs is faster**: trials that share a set
+  of bad channels are interpolated in one call, which gives the same result
+  (the spline weights depend only on the set) at a fraction of the calls.
+  ArtefactDetect's and ManualReject's interpolation benefit; AutoReject's
+  cross-validation depends on it.
 
 - **Apply Template, and DefineBins' and ERP Measure's Load..., open in the
   library** the first time in a session, and after that in whichever folder
