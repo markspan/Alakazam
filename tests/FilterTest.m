@@ -388,6 +388,170 @@ classdef FilterTest < matlab.unittest.TestCase
             [f, gain] = filterFrequencyResponse(filterOptions([], [], []), 250);
             testCase.verifyEqual(gain, ones(size(f)), 'AbsTol', 1e-12);
         end
+
+        % ---- the design's parameters (filterDesign) ------------------------
+        function anAutomaticDesignIsWhatItAlwaysWas(testCase)
+        %ANAUTOMATICDESIGNISWHATITALWAYSWAS  Stored settings carry only a
+        %   frequency and a dB rating, and must replay exactly as before the
+        %   rest of the design could be set: each kernel is compared, to the
+        %   last bit, with the former design, copied below.
+            % Each bound of the automatic transition band decides one case:
+            % a high-pass's 0.9 FREQ cap (0.1 Hz) and 1 Hz floor (2 Hz), a
+            % low-pass's FREQ/4 (30 Hz), 2 Hz floor (5 Hz) and Nyquist cap
+            % (120 Hz at 250 Hz), and the notch's fixed band.
+            cases = {'high', 0.1, 40, 250; 'high', 2, 60, 500; 'high', 1, 60, 500; ...
+                'low', 30, 40, 250; 'low', 5, 40, 250; 'low', 120, 40, 250; ...
+                'low', 100, 80, 1000; 'notch', 50, 40, 250; 'notch', 60, 30, 512};
+            for k = 1:size(cases, 1)
+                [type, freq, db, srate] = cases{k, :};
+                testCase.verifyEqual(designFilterKernel(type, freq, db, srate), ...
+                    formerKernel(type, freq, db, srate), sprintf('%s %g Hz', type, freq));
+            end
+        end
+
+        function anEditedTransitionBandGivesTheOrderFirfiltComputes(testCase)
+            dev = 10 ^ (-60 / 20);
+            d = filterDesign('low', struct('freq', 30, 'db', 60, 'auto', false, 'transition', 5), 250);
+            testCase.verifyEqual(d.order, firwsord('kaiser', 250, 5, dev));
+            testCase.verifyEqual(d.transition, 5);
+            testCase.verifyEqual(numel(designFilterKernel('low', 30, 60, 250, d)), d.order + 1);
+        end
+
+        function anEditedOrderGivesTheTransitionBandItImplies(testCase)
+        %ANEDITEDORDERGIVESTHETRANSITIONBANDITIMPLIES  invfirwsord's
+        %   transition band, the attenuation kept; and that transition band,
+        %   entered in its turn, gives the same order back.
+            dev = 10 ^ (-50 / 20);
+            d = filterDesign('low', struct('freq', 30, 'db', 50, 'auto', false, 'order', 100), 250);
+            testCase.verifyEqual(d.order, 100);
+            testCase.verifyEqual(d.transition, invfirwsord('kaiser', 250, 100, dev), 'RelTol', 1e-12);
+            back = filterDesign('low', struct('freq', 30, 'db', 50, 'auto', false, 'transition', d.transition), 250);
+            testCase.verifyEqual(back.order, 100);
+            odd = filterDesign('low', struct('freq', 30, 'db', 50, 'auto', false, 'order', 101), 250);
+            testCase.verifyEqual(odd.order, 102, 'An odd order is rounded up to the even one firws needs.');
+        end
+
+        function theRippleIsTheAttenuationInOtherUnits(testCase)
+            d = filterDesign('high', struct('freq', 1, 'db', 40), 250);
+            testCase.verifyEqual(d.dev, 0.01, 'RelTol', 1e-12);
+            testCase.verifyEqual(d.ripple, 20 * log10(1.01), 'RelTol', 1e-12);
+            testCase.verifyEqual(d.beta, kaiserbeta(0.01));
+        end
+
+        function aManualDesignStillMeetsItsAttenuation(testCase)
+        %AMANUALDESIGNSTILLMEETSITSATTENUATION  A low-pass at 30 Hz, 60 dB, a
+        %   4 Hz transition band: past the band's far edge the gain stays 60
+        %   dB down (to within a dB, the Kaiser formula being an estimate).
+            spec = struct('enabled', true, 'freq', 30, 'db', 60, 'auto', false, 'transition', 4, 'order', []);
+            opts = filterOptions([], [], []);
+            opts.lowpass = spec;
+            [f, gain] = filterFrequencyResponse(opts, 250);
+            stop = f >= 30 + 2;
+            testCase.verifyLessThan(max(20 * log10(gain(stop))), -59);
+            testCase.verifyEqual(interp1(f, gain, 30), 0.5, 'AbsTol', 0.01, 'The cutoff stays at -6 dB.');
+        end
+
+        function aManualDesignIsWhatFilterApplies(testCase)
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            opts = filterOptions([], [], []);
+            opts.lowpass = struct('enabled', true, 'freq', 20, 'db', 50, 'auto', false, 'transition', [], 'order', 120);
+            out = Filter(EEG, opts);
+            testCase.verifyEqual(out.etc.alz.filter.applied{1}.order, 120);
+            want = firfilt(EEG, designFilterKernel('low', 20, 50, 250, opts.lowpass));
+            testCase.verifyEqual(out.data, want.data, 'AbsTol', 1e-12);
+        end
+
+        % ---- a filter from the Filter Designer -----------------------------
+        function aDesignedIirIsAppliedForwardAndBackward(testCase)
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            d = designfilt('lowpassiir', 'FilterOrder', 6, 'HalfPowerFrequency', 20, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(d, 'lp');
+            out = Filter(EEG, opts);
+            testCase.verifyEqual(out.data, filtfilt(d.Coefficients, 1, EEG.data.').', 'AbsTol', 1e-10);
+            testCase.verifyEqual(out.etc.alz.filter.applied{end}.passes, 2);
+        end
+
+        function aLinearPhaseFirIsAppliedOnceAsTheOthersAre(testCase)
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            e = designfilt('lowpassfir', 'FilterOrder', 60, 'CutoffFrequency', 30, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(e, 'fir');
+            out = Filter(EEG, opts);
+            want = firfilt(EEG, e.Coefficients);
+            testCase.verifyEqual(out.data, want.data, 'AbsTol', 1e-12);
+            testCase.verifyEqual(out.etc.alz.filter.applied{end}.passes, 1);
+        end
+
+        function aRejectedStretchStaysRejectedAndSplitsTheRest(testCase)
+        %AREJECTEDSTRETCHSTAYSREJECTEDANDSPLITSTHEREST  An IIR filter's
+        %   response never ends, so a NaN stretch filtered over would take the
+        %   rest of the recording with it. It stays NaN, and each side is
+        %   filtered on its own.
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            EEG.data(1, 400:450) = NaN;
+            d = designfilt('lowpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 20, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(d, 'lp');
+            out = Filter(EEG, opts);
+            sos = d.Coefficients;
+            testCase.verifyTrue(all(isnan(out.data(1, 400:450))));
+            testCase.verifyEqual(out.data(1, 1:399), filtfilt(sos, 1, EEG.data(1, 1:399).').', 'AbsTol', 1e-10);
+            testCase.verifyEqual(out.data(1, 451:end), filtfilt(sos, 1, EEG.data(1, 451:end).').', 'AbsTol', 1e-10);
+            testCase.verifyEqual(out.data(2, :), filtfilt(sos, 1, EEG.data(2, :).').', 'AbsTol', 1e-10);
+        end
+
+        function eachEpochIsFilteredOnItsOwn(testCase)
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            EEG.data = reshape(EEG.data, 2, 250, 4);
+            EEG.pnts = 250;
+            EEG.trials = 4;
+            d = designfilt('highpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 2, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(d, 'hp');
+            out = Filter(EEG, opts);
+            for tr = 1:4
+                testCase.verifyEqual(out.data(:, :, tr), filtfilt(d.Coefficients, 1, EEG.data(:, :, tr).').', ...
+                    'AbsTol', 1e-10, sprintf('Epoch %d.', tr));
+            end
+        end
+
+        function aFilterForAnotherSampleRateIsRefused(testCase)
+            [EEG, ~] = eegFixture(5, 1);
+            d = designfilt('lowpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 20, 'SampleRate', 500);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(d, 'lp500');
+            testCase.verifyError(@() Filter(EEG, opts), 'Alakazam:Filter');
+            normalised = designfilt('lowpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 0.2);
+            testCase.verifyError(@() designedFilterFromObject(normalised, 'n'), 'Alakazam:Filter');
+        end
+
+        function theResponseIncludesTheDesignedFilterSquared(testCase)
+            d = designfilt('lowpassiir', 'FilterOrder', 6, 'HalfPowerFrequency', 20, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject(d, 'lp');
+            [f, gain] = filterFrequencyResponse(opts, 250);
+            testCase.verifyEqual(gain, abs(reshape(freqz(d.Coefficients, f, 250), 1, [])) .^ 2, 'AbsTol', 1e-12);
+            atCutoff = abs(freqz(d.Coefficients, [20 21], 250)) .^ 2;
+            testCase.verifyEqual(atCutoff(1), 0.5, 'AbsTol', 1e-9, ...
+                'Applied twice, the half-power point is the -6 dB point.');
+        end
+
+        function aDesignedFilterReplaysFromATemplate(testCase)
+        %ADESIGNEDFILTERREPLAYSFROMATEMPLATE  A template stores options as
+        %   JSON, which brings the coefficients back in other shapes; the
+        %   filter applied is the same.
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            opts = filterOptions([1 40], [], []);
+            opts.designed = designedFilterFromObject(designfilt('lowpassiir', 'FilterOrder', 6, ...
+                'HalfPowerFrequency', 20, 'SampleRate', 250), 'lp');
+            replayed = jsondecode(jsonencode(opts));
+            testCase.verifyEqual(Filter(EEG, replayed).data, Filter(EEG, opts).data, 'AbsTol', 1e-12);
+            fir = filterOptions([], [], []);
+            fir.designed = designedFilterFromObject(designfilt('lowpassfir', 'FilterOrder', 60, ...
+                'CutoffFrequency', 30, 'SampleRate', 250), 'fir');
+            testCase.verifyEqual(Filter(EEG, jsondecode(jsonencode(fir))).data, Filter(EEG, fir).data, 'AbsTol', 1e-12);
+        end
     end
 
     methods (Test, TestTags = {'Slow'})
@@ -462,7 +626,142 @@ classdef FilterTest < matlab.unittest.TestCase
                 cancel(1).ButtonPushedFcn(cancel(1), []);
             end
         end
+
+        function theDialogTiesTheDesignAsFirfiltDoes(testCase)
+        %THEDIALOGTIESTHEDESIGNASFIRFILTDOES  With the low-pass's Automatic
+        %   unticked, an entered order gives invfirwsord's transition band,
+        %   an entered transition band firwsord's order, and an entered ripple
+        %   its attenuation; OK returns them.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'Support')));
+            try
+                probe = uifigure('Visible', 'off');
+                delete(probe);
+            catch ME
+                testCase.assumeFail(['A uifigure could not be created here: ' ME.message]);
+            end
+            srate = 250;
+            seen = struct('transitionFromOrder', [], 'orderFromTransition', [], 'dbFromRipple', []);
+            timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
+                'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
+            cleanup = onCleanup(@() cleanupTimer(timerObj));
+            start(timerObj);
+            options = FilterDialog(srate, {'Ch1', 'Ch2'}, filterOptions([], [30 40], []));
+            clear cleanup;
+
+            dev = 10 ^ (-40 / 20);
+            testCase.verifyEqual(seen.transitionFromOrder, invfirwsord('kaiser', srate, 200, dev), 'RelTol', 1e-9);
+            testCase.verifyEqual(seen.orderFromTransition, firwsord('kaiser', srate, 3, dev));
+            testCase.verifyEqual(seen.dbFromRipple, -20 * log10(10 ^ (0.01 / 20) - 1), 'RelTol', 1e-9);
+            testCase.assertNotEmpty(options, 'OK returns the options.');
+            testCase.verifyFalse(options.lowpass.auto);
+            testCase.verifyEqual(options.lowpass.db, seen.dbFromRipple, 'RelTol', 1e-9);
+
+            function drive(src)
+                f = findall(groot, 'Type', 'figure', 'Name', 'Filter');
+                if isempty(f) || isempty(findobj(findall(f(1), 'Tag', 'FrequencyAxes'), 'Tag', 'FrequencyResponse'))
+                    return;
+                end
+                stop(src);
+                set1 = @(tag, value) setAndFire(findall(f(1), 'Tag', tag), value);
+                set1('lowpassAuto', false);
+                set1('lowpassOrder', 200);
+                seen.transitionFromOrder = findall(f(1), 'Tag', 'lowpassTransition').Value;
+                set1('lowpassTransition', 3);
+                seen.orderFromTransition = findall(f(1), 'Tag', 'lowpassOrder').Value;
+                set1('lowpassRipple', 0.01);
+                seen.dbFromRipple = findall(f(1), 'Tag', 'lowpassDb').Value;
+                ok = findall(f(1), 'Type', 'uibutton', 'Text', 'OK');
+                ok(1).ButtonPushedFcn(ok(1), []);
+            end
+        end
+
+        function thePickerTakesAnExportedFilter(testCase)
+        %THEPICKERTAKESANEXPORTEDFILTER  A digitalFilter in the workspace, as
+        %   the Filter Designer exports one, is listed and comes back as the
+        %   coefficients Filter stores.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'Support')));
+            try
+                probe = uifigure('Visible', 'off');
+                delete(probe);
+            catch ME
+                testCase.assumeFail(['A uifigure could not be created here: ' ME.message]);
+            end
+            d = designfilt('bandpassiir', 'FilterOrder', 8, 'HalfPowerFrequency1', 1, ...
+                'HalfPowerFrequency2', 30, 'SampleRate', 250);
+            assignin('base', 'alakazamTestBandpass', d);
+            testCase.addTeardown(@() evalin('base', 'clear alakazamTestBandpass'));
+            timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
+                'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
+            cleanup = onCleanup(@() cleanupTimer(timerObj));
+            start(timerObj);
+            spec = pickDesignedFilter(250);
+            clear cleanup;
+
+            testCase.assertNotEmpty(spec, 'Use returns the filter.');
+            testCase.verifyEqual(spec.sos, d.Coefficients);
+            testCase.verifyEqual(spec.srate, 250);
+            testCase.verifySubstring(spec.source, 'alakazamTestBandpass');
+
+            function drive(src)
+                f = findall(groot, 'Type', 'figure', 'Name', 'Use a designed filter');
+                if isempty(f)
+                    return;
+                end
+                choice = findall(f(1), 'Tag', 'DesignedFilterChoice');
+                hit = find(contains(choice.Items, 'alakazamTestBandpass'), 1);
+                if isempty(hit)
+                    return;
+                end
+                stop(src);
+                choice.Value = choice.ItemsData(hit);
+                use = findall(f(1), 'Tag', 'UseDesignedFilter');
+                use.ButtonPushedFcn(use, []);
+            end
+        end
     end
+end
+
+function setAndFire(control, value)
+%SETANDFIRE  Set a dialog control as a user would: the value, then its callback.
+    control.Value = value;
+    control.ValueChangedFcn(control, []);
+end
+
+function b = formerKernel(type, freq, db, srate)
+%FORMERKERNEL  designFilterKernel as it was before the rest of the design
+%   could be set, copied unchanged, so that an automatic design can be held
+%   to it.
+    nyq  = srate / 2;
+    dev  = 10 ^ (-db / 20);
+    beta = kaiserbeta(dev);
+    switch type
+        case 'high'
+            df    = min(max(freq * 0.25, 1), freq * 0.9);
+            fc    = freq / nyq;
+            ftype = 'high';
+        case 'low'
+            df    = min(max(freq * 0.25, 2), (nyq - freq) * 0.9);
+            fc    = freq / nyq;
+            ftype = '';
+        case 'notch'
+            hbw = 1;
+            df  = 1;
+            fc    = [(freq - hbw) / nyq, (freq + hbw) / nyq];
+            ftype = 'stop';
+    end
+    m = firwsord('kaiser', srate, df, dev);
+    m = m + mod(m, 2);
+    w = windows('kaiser', m + 1, beta);
+    if isempty(ftype)
+        b = firws(m, fc, w);
+    else
+        b = firws(m, fc, ftype, w);
+    end
+    b = reshape(b, 1, []);
 end
 
 function opts = filterOptions(highpass, lowpass, notch)

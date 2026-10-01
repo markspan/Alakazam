@@ -226,22 +226,29 @@ where every later step inherits the new rate.
 
 High-pass, low-pass and notch filtering with a zero-phase, linear-phase FIR
 filter: a windowed sinc with a Kaiser window, designed and applied by
-EEGLAB's `firfilt` plugin [@widmann2015]. Each filter is specified by two
-numbers only, a frequency and an attenuation; the order, the transition band
-and the window follow from them. The filter is applied with its group delay
-compensated, so it shifts no latency, and it does not filter across the
-boundaries of a discontinuous recording.
+EEGLAB's `firfilt` plugin [@widmann2015]. Each filter is specified by a
+frequency and an attenuation; by default the order, the transition band and
+the window follow from them, and they can also be set (@sec-filter-design-own).
+The filter is applied with its group delay compensated, so it shifts no
+latency, and it does not filter across the boundaries of a discontinuous
+recording. A filter made in MATLAB's Filter Designer app can be added as a
+fourth (@sec-filter-designer).
 
-![**Filter**, here a combination with a.o., 0.1 Hz high-pass at 12 dB.](images/filter-dialog.png){#fig-filter-dialog}
+![**Filter** at 200 Hz: an automatic 0.1 Hz high-pass, a 30 Hz low-pass with its order set by hand (160, which at 60 dB gives a 4.56 Hz transition band), and a line-noise band-stop from the Filter Designer, applied forward and backward. The plot is their response together.](images/filter-dialog.png){#fig-filter-dialog}
 
 | Option | Default | Meaning |
 |--------------------|------------------|-------------------------------------------------------|
 | **High-pass** | off; 0.1 Hz, 40 dB | Remove frequencies below the cutoff. |
 | **Low-pass** | off; 30 Hz, 40 dB | Remove frequencies above the cutoff. |
 | **Notch** | off; 50 Hz, 40 dB | Remove a narrow band around the frequency (line noise). |
-| **Per-channel settings** | off | Give each channel its own three filters; channels are matched by label on replay. |
+| **Automatic** | on | The transition band and the order follow from the frequency and the attenuation; unticked, they can be set. |
+| **Transition**, **Order** | automatic | The transition band in Hz, and the filter order (the kernel has one tap more); each follows from the other. |
+| **Attenuation**, **Ripple** | 40 dB; 0.0864 dB | The stopband attenuation and the passband ripple: one deviation in two units. |
+| **Stop width** | 2 Hz | The notch's stop band. |
+| **Designed** | off | A filter made in MATLAB's Filter Designer, applied after the other three. |
+| **Per-channel settings** | off | Give each channel its own three filters, designed automatically; channels are matched by label on replay. |
 
-: Filter's options. The attenuation is the stopband attenuation in dB. {#tbl-filter}
+: Filter's options. {#tbl-filter}
 
 ### The design
 
@@ -277,6 +284,47 @@ epoching**; on data shorter than the filter, the step refuses and says so.
 Second, for high-pass cutoffs below about 1 Hz the transition band is 90% of
 the cutoff, so the passband begins well above the nominal frequency.
 
+### Setting the design yourself {#sec-filter-design-own}
+
+Every filter shows its whole design: the transition band, the attenuation,
+the passband ripple and the order, and for the notch the width of its stop
+band. With **Automatic** ticked the transition band and the order are worked
+out as above and shown greyed. Untick it and they can be entered, and the
+rest follows as EEGLAB's `firfilt` ties them: a Kaiser-windowed sinc has one
+deviation, 10^-A/20^, in its passband and its stopband alike, so the
+attenuation and the ripple are the same quantity in two units, and changing
+either changes the other. Entering a transition band, an attenuation or a
+ripple gives the order it needs (`firwsord`); entering an order gives the
+transition band it implies (`invfirwsord`), the attenuation kept. The order
+is always even, rounded up, since `firws` needs a type I filter. A shorter
+filter with a wider transition band, or a longer one with a steeper band,
+is the trade to make here; the plot below the filters shows the result.
+
+### A filter from the Filter Designer {#sec-filter-designer}
+
+MATLAB's Filter Designer app designs filters of every kind: equiripple and
+least-squares FIRs, Butterworth, Chebyshev and elliptic IIRs, band-passes
+and band-stops. **Open designer** starts it. Design the filter for the
+data's own sample rate, then export it to the MATLAB workspace as a
+**Digital Filter Object** (or save it in a MAT-file), and press
+**Use exported…**, which lists the filters it finds and refuses one designed
+for another sample rate. Its coefficients are kept in the step's options, so
+replaying it, a template and Apply to All need neither the app nor MATLAB's
+workspace.
+
+The designed filter is applied after the other three, to every channel, in
+either mode. A linear-phase FIR of odd length is applied once, with its
+group delay compensated, like the filters above. Anything else, an IIR in
+particular, is applied forward and backward (`filtfilt`), zero-phase, as
+EEGLAB's IIR filtering and FieldTrip's default two-pass filtering apply one;
+its magnitude response is then squared, so its attenuation and its passband
+ripple both double in dB, and the plot shows the squared response, the one
+the data get. Each epoch, and each stretch of a continuous recording between
+boundaries, is filtered on its own, and so is each stretch between rejected
+samples, so that a rejected stretch does not spread through an IIR filter's
+unending response; a stretch shorter than three times the filter's order is
+left rejected, and the count is recorded.
+
 ### Choosing the cutoffs
 
 High-pass filtering is the step most capable of creating effects that are
@@ -297,16 +345,25 @@ response, and its ringing can pass for an oscillation. A methods section
 should therefore describe each filter in enough detail to reproduce it,
 ideally with a plot of its impulse or step response [@decheveigne2019]; the
 type, cutoff, transition band and order in @tbl-filter-design are the
-details to give. Under the three filters, the dialog plots the frequency
-response of the ticked ones together: the gain in dB from 0 Hz to the
-Nyquist frequency, with a dotted line at -6 dB, where each cutoff sits, and
-the axis reaching 20 dB below the deepest attenuation ticked. It shows which
-frequencies pass, how steep each transition band is, and how far the stop
-bands reach; zoom in on a transition band with the plot's toolbar to read it
-off. The plot is redrawn whenever a filter is ticked or a frequency or
-attenuation changes, and is not shown in per-channel mode. It is computed
-from the same kernels the step applies, so it is the response of the
-filtering that is done.
+details to give, and the step records the filters it applied in the
+result, with the whole design of each one in the panel. Under the filters, the dialog plots the frequency
+response of the ticked ones together, a designed filter included: the gain
+in dB from 0 Hz to the Nyquist frequency, with a dotted line at -6 dB, where
+each cutoff sits, and the axis reaching 20 dB below the deepest attenuation
+ticked, or below the curve's lowest point when a designed filter is ticked.
+It shows which frequencies pass, how steep each transition band is, and how
+far the stop bands reach; zoom in on a transition band with the plot's
+toolbar to read it off. The plot is redrawn whenever a setting changes, and
+is not shown in per-channel mode. It is computed from the same kernels and
+coefficients the step applies, so it is the response of the filtering that
+is done.
+
+**Toolbox or own code.** The design and the filtering are EEGLAB's
+`firfilt` (`firws`, `firwsord`, `invfirwsord`, `kaiserbeta`, `firfilt`), and
+a designed filter is MATLAB's (the Filter Designer's `digitalFilter`,
+applied with `filtfilt`). What is Alakazam's is the automatic choice of
+transition band, the dialog, and splitting the data where it must not be
+filtered across.
 
 ## DC-Detrend {#sec-tr-dcdetrend}
 

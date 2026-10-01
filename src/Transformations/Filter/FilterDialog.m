@@ -3,7 +3,9 @@ function options = FilterDialog(srate, labels, stored)
 %   a "Per-channel settings" tickbox:
 %     * global (default) -- three filters (high-pass, low-pass, notch), each an
 %       enable tickbox plus a frequency (Hz) and a dB rating (stopband
-%       attenuation), applied to every channel;
+%       attenuation), and the rest of its design (see DESIGN below), applied
+%       to every channel, and a fourth, a filter made in MATLAB's Filter
+%       Designer (see DESIGNED below);
 %     * per-channel -- the same global panel STAYS visible (it is the
 %       template the "Copy settings" button below it copies from, and
 %       editing it live still reseeds an untouched table the first time
@@ -20,7 +22,23 @@ function options = FilterDialog(srate, labels, stored)
 %       first-switch reseed, which leaves an already-customised row
 %       alone) -- a deliberate, repeatable "make every channel match the
 %       panel above, right now" action.
-%   Everything else about the FIR design is worked out by Filter.m.
+%   DESIGN. Each global filter also shows its transition band, passband
+%   ripple and order, and a notch its stop band's width (filterDesign).
+%   With Automatic ticked, as by default, the transition band and the order
+%   follow from the frequency and the attenuation as they always have. With
+%   it unticked they can be set, and the others follow as EEGLAB's firfilt
+%   ties them: the attenuation and the ripple are one deviation in two
+%   units, an edited transition band, attenuation or ripple gives the order
+%   it needs (firwsord), and an edited order the transition band it implies
+%   (invfirwsord), the attenuation kept. The per-channel table designs
+%   automatically.
+%
+%   DESIGNED. "Open Filter Designer" starts MATLAB's Filter Designer app;
+%   "Use exported filter" takes a filter it exported (a digitalFilter, in
+%   the workspace or a MAT-file, pickDesignedFilter), which Filter applies
+%   after the other three, to every channel in either mode. Its
+%   coefficients are kept in the options, so replaying needs neither the app
+%   nor the object.
 %
 %   In global mode, a plot under the three filters shows the frequency
 %   response of the enabled ones together (filterFrequencyResponse, from the
@@ -35,7 +53,9 @@ function options = FilterDialog(srate, labels, stored)
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
 %   channel labels (for the per-channel table); STORED a previous run's options
 %   (or [] on first use). Returns the options struct (.perChannel, the global
-%   .highpass/.lowpass/.notch each {enabled,freq,db}, and .perChannelRows -- a
+%   .highpass/.lowpass/.notch each {enabled,freq,db,auto,transition,order}
+%   (the notch also .width), .designed (designedFilterFromObject's struct,
+%   or one with enabled false), and .perChannelRows -- a
 %   struct array {label, hpEnabled, hpFreq, hpDb, lpEnabled, lpFreq, lpDb,
 %   notchEnabled, notchFreq, notchDb}), or [] on cancel.
     nyq = srate / 2;
@@ -44,15 +64,20 @@ function options = FilterDialog(srate, labels, stored)
     options = [];
 
     defaults = struct( ...
-        'highpass', struct('enabled', false, 'freq', 0.1, 'db', 40), ...
-        'lowpass',  struct('enabled', false, 'freq', 30,  'db', 40), ...
-        'notch',    struct('enabled', false, 'freq', 50,  'db', 40));
+        'highpass', struct('enabled', false, 'freq', 0.1, 'db', 40, 'auto', true, 'transition', [], 'order', []), ...
+        'lowpass',  struct('enabled', false, 'freq', 30,  'db', 40, 'auto', true, 'transition', [], 'order', []), ...
+        'notch',    struct('enabled', false, 'freq', 50,  'db', 40, 'auto', true, 'transition', [], 'order', [], 'width', 2));
     seed = mergeSeed(defaults, stored);
+    designed = struct('enabled', false);
+    if isstruct(stored) && isfield(stored, 'designed') && isstruct(stored.designed) ...
+            && isfield(stored.designed, 'kind')
+        designed = stored.designed;
+    end
     seedPerChannel = (isstruct(stored) && isfield(stored, 'perChannel') && logical(stored.perChannel));
 
     COLS = {'Channel', 'HP?', 'HP (Hz)', 'HP dB', 'LP?', 'LP (Hz)', 'LP dB', 'Notch?', 'Notch (Hz)', 'Notch dB'};
 
-    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 700 620]), 'Color', bgColor);
+    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 940 680]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
@@ -65,8 +90,10 @@ function options = FilterDialog(srate, labels, stored)
 
     descLabel = uilabel(outer, 'Text', [ ...
         'FIR windowed-sinc, zero-phase filtering. Give each filter a frequency and a dB rating ' ...
-        '(the stopband attenuation); the order and transition band are automatic. Filter the ' ...
-        'continuous recording before epoching.'], 'WordWrap', 'on');
+        '(the stopband attenuation). With Automatic ticked the transition band and the order follow; ' ...
+        'untick it to set them, and the rest follows as EEGLAB''s firfilt ties them. A filter made ' ...
+        'in MATLAB''s Filter Designer can be added below. Filter the continuous recording before ' ...
+        'epoching.'], 'WordWrap', 'on');
     descLabel.Layout.Row = 1;
 
     perChanBox = uicheckbox(outer, 'Text', 'Per-channel settings', 'Value', seedPerChannel);
@@ -76,25 +103,68 @@ function options = FilterDialog(srate, labels, stored)
 
     % --- Global panel (row 3, ALWAYS visible -- also per-channel mode's
     % "Copy settings" template, see copyRow below) ---
-    globalPanel = uigridlayout(outer, [4 3], 'ColumnWidth', {150, '1x', '1x'}, ...
-        'RowHeight', repmat({'fit'}, 1, 4), 'RowSpacing', 6, 'ColumnSpacing', 10, 'Padding', [0 0 0 0]);
+    globalPanel = uigridlayout(outer, [5 8], 'ColumnWidth', {110, '1x', 72, '1x', '1x', '1x', '1x', '1x'}, ...
+        'RowHeight', repmat({'fit'}, 1, 5), 'RowSpacing', 6, 'ColumnSpacing', 8, 'Padding', [0 0 0 0]);
     globalPanel.Layout.Row = 3;
-    uilabel(globalPanel, 'Text', '');
-    uilabel(globalPanel, 'Text', 'Frequency (Hz)', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
-    uilabel(globalPanel, 'Text', 'Attenuation (dB)', 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
-    rowDefs = struct('key', {'highpass', 'lowpass', 'notch'}, 'label', {'High-pass', 'Low-pass', 'Notch'});
+    headers = {'', 'Frequency (Hz)', 'Automatic', 'Transition (Hz)', 'Attenuation (dB)', ...
+        'Ripple (dB)', 'Order', 'Stop width (Hz)'};
+    tips = {'', 'The cutoff, where the gain is one half (-6 dB); for the notch, the centre of its stop band.', ...
+        'Ticked: the transition band and the order follow from the frequency and the attenuation.', ...
+        'The width of the band in which the gain falls from passband to stopband.', ...
+        'How far the stopband is attenuated.', ...
+        'The largest deviation in the passband; the same deviation as the attenuation, in other units.', ...
+        'The filter order: the kernel has this many taps plus one. Always even.', ...
+        'The notch''s stop band.'};
+    for h = 1:numel(headers)
+        uilabel(globalPanel, 'Text', headers{h}, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+            'WordWrap', 'on', 'Tooltip', tips{h});
+    end
+    rowDefs = struct('key', {'highpass', 'lowpass', 'notch'}, 'label', {'High-pass', 'Low-pass', 'Notch'}, ...
+        'type', {'high', 'low', 'notch'});
     ctl = struct();
     for i = 1:numel(rowDefs)
         key = rowDefs(i).key;
-        cb = uicheckbox(globalPanel, 'Text', rowDefs(i).label, 'Value', seed.(key).enabled);
-        f  = uieditfield(globalPanel, 'numeric', 'Value', seed.(key).freq, 'Limits', [0 Inf], 'LowerLimitInclusive', 'off');
-        d  = uieditfield(globalPanel, 'numeric', 'Value', seed.(key).db,   'Limits', [0 Inf], 'LowerLimitInclusive', 'off');
-        cb.ValueChangedFcn = @(src, ~) onFilterToggled(f, d, src.Value);
-        f.ValueChangedFcn = @(~, ~) updateResponse();
-        d.ValueChangedFcn = @(~, ~) updateResponse();
-        setRowEnabled(f, d, cb.Value);
-        ctl.(key) = struct('cb', cb, 'freq', f, 'db', d);
+        c = struct();
+        c.cb = uicheckbox(globalPanel, 'Text', rowDefs(i).label, 'Value', seed.(key).enabled);
+        c.freq = numberField(globalPanel, seed.(key).freq, [0 Inf], '%.4g', [key 'Freq']);
+        c.auto = uicheckbox(globalPanel, 'Text', '', 'Value', logical(seed.(key).auto), 'Tag', [key 'Auto']);
+        c.trans = numberField(globalPanel, 1, [0 Inf], '%.4g', [key 'Transition']);
+        c.db = numberField(globalPanel, seed.(key).db, [0 Inf], '%.4g', [key 'Db']);
+        c.ripple = numberField(globalPanel, 0.1, [0 Inf], '%.3g', [key 'Ripple']);
+        c.order = numberField(globalPanel, 2, [2 Inf], '%d', [key 'Order']);
+        c.order.RoundFractionalValues = 'on';
+        if strcmp(key, 'notch')
+            c.width = numberField(globalPanel, seed.notch.width, [0 Inf], '%.4g', 'notchWidth');
+        else
+            c.width = [];
+            uilabel(globalPanel, 'Text', '');
+        end
+        ctl.(key) = c;
+        ctl.(key).cb.ValueChangedFcn = @(~, ~) onFilterToggled(key);
+        ctl.(key).freq.ValueChangedFcn = @(~, ~) onEdited(key, 'freq');
+        ctl.(key).auto.ValueChangedFcn = @(~, ~) onEdited(key, 'auto');
+        ctl.(key).trans.ValueChangedFcn = @(~, ~) onEdited(key, 'transition');
+        ctl.(key).db.ValueChangedFcn = @(~, ~) onEdited(key, 'db');
+        ctl.(key).ripple.ValueChangedFcn = @(~, ~) onEdited(key, 'ripple');
+        ctl.(key).order.ValueChangedFcn = @(~, ~) onEdited(key, 'order');
+        if ~isempty(c.width)
+            ctl.(key).width.ValueChangedFcn = @(~, ~) onEdited(key, 'width');
+        end
+        showDesign(key, seed.(key));
     end
+
+    % The fourth filter: one made in MATLAB's Filter Designer.
+    designedBox = uicheckbox(globalPanel, 'Text', 'Designed', 'Value', logical(designed.enabled), ...
+        'Tag', 'designedEnabled', 'Tooltip', 'A filter made in MATLAB''s Filter Designer, applied after the three above.');
+    designedSummary = uilabel(globalPanel, 'Text', '', 'WordWrap', 'on', 'Tag', 'designedSummary');
+    designedSummary.Layout.Column = [2 6];
+    uibutton(globalPanel, 'Text', 'Open designer', 'Tag', 'openFilterDesigner', ...
+        'Tooltip', 'Start MATLAB''s Filter Designer app.', 'ButtonPushedFcn', @(~, ~) onOpenDesigner());
+    uibutton(globalPanel, 'Text', 'Use exported...', 'Tag', 'useDesignedFilter', ...
+        'Tooltip', 'Take a filter the Filter Designer exported to the workspace or a MAT-file.', ...
+        'ButtonPushedFcn', @(~, ~) onUseExported());
+    designedBox.ValueChangedFcn = @(~, ~) onDesignedToggled();
+    showDesignedSummary();
 
     % --- Frequency response of the global filters together (row 4, global
     % mode only; the per-channel table has a filter per channel instead).
@@ -156,9 +226,113 @@ function options = FilterDialog(srate, labels, stored)
         end
     end
 
-    function onFilterToggled(freqField, dbField, on)
-        setRowEnabled(freqField, dbField, on);
+    function onFilterToggled(key)
+        setRowEnabled(ctl.(key));
         updateResponse();
+    end
+
+    function onEdited(key, what)
+    %ONEDITED  Recompute KEY's design after WHAT was edited, keeping what the
+    %   user set and changing what follows from it (see the header: DESIGN).
+        c = ctl.(key);
+        spec = struct('freq', c.freq.Value, 'db', c.db.Value, 'auto', logical(c.auto.Value), ...
+            'transition', c.trans.Value, 'order', c.order.Value);
+        if ~isempty(c.width)
+            spec.width = c.width.Value;
+        end
+        switch what
+            case 'ripple'
+                deviation = 10 ^ (c.ripple.Value / 20) - 1;
+                if ~(deviation > 0 && deviation < 1)
+                    frequencyCaption.Text = 'The ripple has to be above 0 dB and below 6 dB.';
+                    return;
+                end
+                spec.db = -20 * log10(deviation);
+                spec.order = [];                       % the order follows the new deviation
+            case {'db', 'transition'}
+                spec.order = [];                       % the order follows
+            case 'order'
+                spec.transition = [];                  % the transition band follows
+        end
+        try
+            design = filterDesign(rowDefs(strcmp({rowDefs.key}, key)).type, spec, srate);
+        catch err
+            frequencyCaption.Text = err.message;
+            return;
+        end
+        showDesign(key, design);
+        updateResponse();
+    end
+
+    function showDesign(key, spec)
+    %SHOWDESIGN  Put SPEC's design (filterDesign's, or a stored setting from
+    %   which it is worked out) into KEY's fields.
+        c = ctl.(key);
+        if ~isfield(spec, 'order') || ~isfield(spec, 'ripple')
+            try
+                spec = filterDesign(rowDefs(strcmp({rowDefs.key}, key)).type, spec, srate);
+            catch
+                setRowEnabled(c);
+                return;                                % shown as it is; the plot says why
+            end
+        end
+        c.db.Value = spec.db;
+        c.ripple.Value = spec.ripple;
+        c.trans.Value = spec.transition;
+        c.order.Value = spec.order;
+        if ~isempty(c.width) && ~isempty(spec.width)
+            c.width.Value = spec.width;
+        end
+        setRowEnabled(c);
+    end
+
+    function onDesignedToggled()
+        if designedBox.Value && ~isfield(designed, 'kind')
+            designedBox.Value = false;
+            uialert(fig, ['There is no designed filter yet. Open the Filter Designer, design and ' ...
+                'export a filter, then press Use exported.'], 'No designed filter');
+            return;
+        end
+        designed.enabled = logical(designedBox.Value);
+        updateResponse();
+    end
+
+    function onOpenDesigner()
+        try
+            filterDesigner;
+        catch err
+            uialert(fig, sprintf('The Filter Designer could not be started: %s', err.message), ...
+                'Filter Designer');
+            return;
+        end
+        uialert(fig, sprintf(['Design the filter for a sample rate of %g Hz, the data''s. Then ' ...
+            'export it as a Digital Filter Object to the workspace (or save it in a MAT-file), and ' ...
+            'press Use exported.'], srate), 'Filter Designer', 'Icon', 'info');
+    end
+
+    function onUseExported()
+        picked = pickDesignedFilter(srate);
+        figure(fig);
+        if isempty(picked)
+            return;
+        end
+        designed = picked;
+        designedBox.Value = true;
+        showDesignedSummary();
+        updateResponse();
+    end
+
+    function showDesignedSummary()
+        if ~isfield(designed, 'kind')
+            designedSummary.Text = 'None yet: open the designer, export a filter, and use it.';
+            return;
+        end
+        how = 'applied once, zero-phase, as the filters above';
+        if designedFilterPasses(designed) == 2
+            how = 'applied forward and backward, zero-phase, so its attenuation doubles in dB';
+        end
+        designedSummary.Text = sprintf('%s: %s %s, order %d, %g Hz; %s.', designed.source, ...
+            upper(designed.kind), designed.response, designed.order, designed.srate, how);
     end
 
     function updateResponse()
@@ -167,7 +341,7 @@ function options = FilterDialog(srate, labels, stored)
     %   Filter would refuse (the message is Filter's own).
         cla(frequencyAxes);
         settings = currentGlobalSeed();
-        if ~any(cellfun(@(key) settings.(key).enabled, {'highpass', 'lowpass', 'notch'}))
+        if ~any(cellfun(@(key) settings.(key).enabled, {'highpass', 'lowpass', 'notch', 'designed'}))
             frequencyCaption.Text = 'No filter is ticked, so the data are left as they are.';
             return;
         end
@@ -178,7 +352,14 @@ function options = FilterDialog(srate, labels, stored)
             return;
         end
 
-        plotFrequencyResponse(frequencyAxes, frequencies, gain, gainFloorDb(settings), accentColor);
+        floorDb = gainFloorDb(settings);
+        if settings.designed.enabled
+            % A designed filter's depth is not one of the dB settings: the
+            % axis reaches 20 dB below the deepest point of the curve itself,
+            % to at most -200 dB.
+            floorDb = min(floorDb, max(-200, -10 * ceil((20 - 20 * log10(max(min(gain), 1e-10))) / 10)));
+        end
+        plotFrequencyResponse(frequencyAxes, frequencies, gain, floorDb, accentColor);
         frequencyCaption.Text = sprintf(['Frequency response of the ticked filters together, ' ...
             'from 0 Hz to Nyquist (%g Hz). The dotted line is at %.0f dB, where each cutoff sits.'], ...
             nyq, cutoffLevelDb());
@@ -216,9 +397,15 @@ function options = FilterDialog(srate, labels, stored)
         s = struct();
         for k = 1:numel(rowDefs)
             key = rowDefs(k).key;
-            s.(key) = struct('enabled', logical(ctl.(key).cb.Value), ...
-                'freq', ctl.(key).freq.Value, 'db', ctl.(key).db.Value);
+            c = ctl.(key);
+            s.(key) = struct('enabled', logical(c.cb.Value), 'freq', c.freq.Value, 'db', c.db.Value, ...
+                'auto', logical(c.auto.Value), 'transition', c.trans.Value, 'order', c.order.Value);
+            if ~isempty(c.width)
+                s.(key).width = c.width.Value;
+            end
         end
+        s.designed = designed;
+        s.designed.enabled = logical(designedBox.Value) && isfield(designed, 'kind');
     end
 
     function onOK()
@@ -226,12 +413,21 @@ function options = FilterDialog(srate, labels, stored)
         out = struct('perChannel', per);
 
         % Always carry the global settings through (so the panel round-trips).
+        live = currentGlobalSeed();
         for k = 1:numel(rowDefs)
             key = rowDefs(k).key;
-            en = logical(ctl.(key).cb.Value); f = ctl.(key).freq.Value; d = ctl.(key).db.Value;
-            if ~per && en && ~validOne(rowDefs(k).label, key, f, d); return; end
-            out.(key) = struct('enabled', en, 'freq', f, 'db', d);
+            row = live.(key);
+            if ~per && row.enabled
+                if ~validOne(rowDefs(k).label, key, row.freq, row.db); return; end
+                try
+                    filterDesign(rowDefs(k).type, row, srate);
+                catch err
+                    uialert(fig, err.message, 'Check the filters'); return;
+                end
+            end
+            out.(key) = row;
         end
+        out.designed = live.designed;
 
         % Per-channel rows. Each filter has its own tickbox now (columns
         % 2/5/8), independent of the other two on the same channel -- a
@@ -368,9 +564,28 @@ function level = cutoffLevelDb()
     level = 20 * log10(0.5);
 end
 
-function setRowEnabled(freqField, dbField, on)
-    state = 'off'; if on; state = 'on'; end
-    freqField.Enable = state; dbField.Enable = state;
+function setRowEnabled(c)
+%SETROWENABLED  A filter's fields follow its tickbox; its transition band
+%   and order are editable only with Automatic unticked.
+    on = logical(c.cb.Value);
+    manual = on && ~logical(c.auto.Value);
+    state = {'off', 'on'};
+    fields = {c.freq, c.auto, c.db, c.ripple, c.width};
+    for k = 1:numel(fields)
+        if ~isempty(fields{k})
+            fields{k}.Enable = state{1 + on};
+        end
+    end
+    c.trans.Enable = state{1 + manual};
+    c.order.Enable = state{1 + manual};
+end
+
+function field = numberField(parent, value, limits, format, tag)
+%NUMBERFIELD  A numeric field: above LIMITS(1) when that is 0 (a frequency, a
+%   width, dB), at least LIMITS(1) otherwise (an order of at least 2).
+    inclusive = {'off', 'on'};
+    field = uieditfield(parent, 'numeric', 'Value', value, 'Limits', limits, ...
+        'LowerLimitInclusive', inclusive{1 + (limits(1) > 0)}, 'ValueDisplayFormat', format, 'Tag', tag);
 end
 
 function v = num0(x)
@@ -391,6 +606,14 @@ function seed = mergeSeed(defaults, stored)
             % to stop this dialog from opening at all.
             if isfield(s, 'freq') && isnumeric(s.freq) && isscalar(s.freq) && s.freq > 0; seed.(k).freq = s.freq; end
             if isfield(s, 'db')   && isnumeric(s.db)   && isscalar(s.db)   && s.db > 0;   seed.(k).db   = s.db;   end
+            % The rest of the design, where a stored setting has it; one from
+            % before it existed stays automatic.
+            if isfield(s, 'auto') && ~isempty(s.auto); seed.(k).auto = logical(s.auto); end
+            for name = {'transition', 'order', 'width'}
+                if isfield(s, name{1}) && isnumeric(s.(name{1})) && isscalar(s.(name{1})) && s.(name{1}) > 0
+                    seed.(k).(name{1}) = s.(name{1});
+                end
+            end
         end
     end
 end

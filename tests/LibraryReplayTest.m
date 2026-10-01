@@ -108,14 +108,18 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
         function theN400WorkedExampleGivesTheManualsTable(testCase)
         %THEN400WORKEDEXAMPLEGIVESTHEMANUALSTABLE  Chapter 20 of the manual:
         %   N400.alztemplate on the ten chapter 3 subjects, the N400 window's
-        %   mean amplitude at Cz averaged over subjects, per bin.
+        %   mean amplitude at Cz averaged over subjects, per bin, and the
+        %   difference bin's mean and SD, as the chapter gives them.
         %
-        %   The manual also gives the difference bin as M = -2.79 uV, SD =
-        %   1.69, which does not agree with its own table (0.804 - 3.563 =
-        %   -2.759); a mean amplitude is linear, so the two cannot both be
-        %   right. The difference bin is checked here against the table,
-        %   bin by bin and subject by subject, and its mean and SD are logged
-        %   so the manual can be corrected to whichever is current.
+        %   The chapter's numbers are from one recorded run, on 1 October
+        %   2026, rendered by ERP & Report; reproduceN400Example
+        %   (src/help/examples) repeats it, report and all, and is how the
+        %   chapter is updated when this fails. The table they replaced (until
+        %   then 0.178, 0.186, 3.563 and 0.804 uV) could not be reproduced:
+        %   the code of the day it was written, the template, the data, the
+        %   cached recordings and GEDAI all gave these numbers instead, and
+        %   the run it came from was not recorded. Its difference bin did not
+        %   even agree with its own table.
             files = testCase.luckRecordings('ch3', '_N400_preprocessed.set');
             testCase.assumeNumElements(files, 10, sprintf( ...
                 'The worked example uses ten chapter 3 recordings; %d were found.', numel(files)));
@@ -128,15 +132,14 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
                 amplitude(s, :) = measured.measurements{1}.amplitude(1, 1:5);
             end
 
-            testCase.verifyEqual(mean(amplitude(:, 1:4), 1), [0.178, 0.186, 3.563, 0.804], ...
+            testCase.verifyEqual(mean(amplitude(:, 1:4), 1), [0.086, 0.173, 3.534, 0.747], ...
                 'AbsTol', 0.0006, 'The per-bin means no longer match the manual''s table.');
-            testCase.verifyEqual(std(amplitude(:, 1:4), 0, 1), [1.647, 2.027, 2.247, 1.763], ...
+            testCase.verifyEqual(std(amplitude(:, 1:4), 0, 1), [1.711, 2.050, 2.258, 1.682], ...
                 'AbsTol', 0.0006, 'The per-bin SDs no longer match the manual''s table.');
             testCase.verifyEqual(amplitude(:, 5), amplitude(:, 4) - amplitude(:, 3), 'AbsTol', 1e-9, ...
                 'The N400 bin should be bin 4 minus bin 3 in every subject.');
-            testCase.log(matlab.unittest.Verbosity.Terse, sprintf( ...
-                'N400 difference bin over ten subjects: M = %.3f uV, SD = %.3f.', ...
-                mean(amplitude(:, 5)), std(amplitude(:, 5))));
+            testCase.verifyEqual([mean(amplitude(:, 5)), std(amplitude(:, 5))], [-2.787, 1.674], ...
+                'AbsTol', 0.0006, 'The difference bin no longer matches the manual''s M and SD.');
         end
 
         function theRiftTemplateGivesItsRecordedCoherence(testCase)

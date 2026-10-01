@@ -2,7 +2,7 @@
 
 The **Help** button shows the manual. Its text lives in [`manual/`](../../manual)
 (Quarto), not here; this folder holds the tool that makes the manual's
-pictures.
+pictures, and the script that makes its worked example's numbers.
 
 ## Where the help page comes from
 
@@ -49,3 +49,17 @@ captureManualImages('Datasets', {'rift'});          % one dataset's
 
 A picture that is added to or dropped from the manual belongs in
 `manualShots` as well; `ManualTest` fails when the two disagree.
+
+## examples/
+
+`reproduceN400Example` reruns chapter 20's worked example from the template
+to the report: `N400.alztemplate` on Luck's ten chapter 3 recordings, then
+the measurements export and the statistics report as **ERP & Report** writes
+them. Every number the chapter quotes comes from that report, so when a
+change moves them, which `LibraryReplayTest` reports as a failure, this is
+how the chapter is brought up to date. It writes into a folder of its own
+(under `tempdir` unless `'Output'` says otherwise) and touches no workspace:
+
+```
+addpath('src/help/examples'); reproduceN400Example();
+```

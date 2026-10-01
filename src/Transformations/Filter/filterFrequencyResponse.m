@@ -2,8 +2,10 @@ function [f, gain] = filterFrequencyResponse(options, srate)
 %FILTERFREQUENCYRESPONSE  The frequency response of Filter's global filters together.
 %   [F, GAIN] = filterFrequencyResponse(OPTIONS, SRATE) returns the gain of
 %   the high-pass, low-pass and notch filters enabled in OPTIONS (the global
-%   .highpass/.lowpass/.notch, each {enabled, freq, db}) applied one after
-%   the other, as Filter applies them to data sampled at SRATE Hz. F is a
+%   .highpass/.lowpass/.notch, each {enabled, freq, db} with, optionally,
+%   the rest of its design, see filterDesign), and of the designed filter
+%   (OPTIONS.designed) when it is enabled, applied one after the other, as
+%   Filter applies them to data sampled at SRATE Hz. F is a
 %   row vector of frequencies in Hz running from 0 to the Nyquist frequency
 %   (SRATE / 2), both included, and GAIN the matching row vector of linear
 %   magnitudes: 1 passes a frequency unchanged, 0.5 is the -6 dB point at
@@ -15,8 +17,10 @@ function [f, gain] = filterFrequencyResponse(options, srate)
 %   impulse response (filterImpulseResponse), which is built from the same
 %   kernels Filter applies, so it is the response of the filtering that is
 %   done. Filter applies each kernel zero-phase, so the gain is the whole
-%   effect: no frequency is shifted in time. A setting Filter would refuse
-%   is refused here with the same message.
+%   effect: no frequency is shifted in time. A designed filter's own gain
+%   (freqz) multiplies in, squared when Filter applies it forward and
+%   backward (designedFilterPasses), which is the response the data get. A
+%   setting Filter would refuse is refused here with the same message.
 %
 %   RESOLUTION. The transform is zero-padded to OVERSAMPLE times the length
 %   of the impulse response, and to at least MIN_POINTS, so the points are
@@ -40,4 +44,15 @@ function [f, gain] = filterFrequencyResponse(options, srate)
     spectrum = fft(h, nfft, 2);
     gain = abs(spectrum(1:nfft / 2 + 1));
     f = (0:nfft / 2) * (srate / nfft);
+
+    if isfield(options, 'designed') && isstruct(options.designed) ...
+            && isfield(options.designed, 'enabled') && logical(options.designed.enabled)
+        designed = options.designed;
+        if strcmp(designed.kind, 'fir')
+            response = freqz(reshape(double(designed.b), 1, []), 1, f, srate);
+        else
+            response = freqz(double(designed.sos), f, srate);
+        end
+        gain = gain .* abs(reshape(response, 1, [])) .^ designedFilterPasses(designed);
+    end
 end

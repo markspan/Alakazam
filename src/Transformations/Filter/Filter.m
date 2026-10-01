@@ -1,20 +1,35 @@
 function [EEG, options] = Filter(input, varargin)
-%% Filter  FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering.
+%% Filter  FIR windowed-sinc, zero-phase high-pass / low-pass / notch filtering,
+%   and a filter designed in MATLAB's Filter Designer.
 %
-%   Each of the three filters is specified by just a frequency and a dB
-%   rating (the stopband attenuation); everything else -- the Kaiser window,
-%   the filter order and the transition bandwidth -- is worked out
-%   automatically. The design is EEGLAB's own windowed-sinc FIR (firfilt
-%   plugin): a linear-phase Kaiser-windowed sinc whose stopband attenuation
-%   equals the requested dB, applied with group-delay compensation so it is
-%   zero-phase (no latency shift), and boundary-aware (it does not filter
-%   across epoch/boundary discontinuities). FIR windowed-sinc, zero-phase, is
-%   the EEGLAB/Luck best-practice for EEG/ERP filtering.
+%   Each of the three filters is specified by a frequency and a dB rating
+%   (the stopband attenuation); by default everything else -- the Kaiser
+%   window, the filter order and the transition bandwidth -- is worked out
+%   automatically, and with .auto false the transition band and the order
+%   are set instead, each following from the other (filterDesign). The
+%   design is EEGLAB's own windowed-sinc FIR (firfilt plugin): a
+%   linear-phase Kaiser-windowed sinc whose stopband attenuation equals the
+%   requested dB, applied with group-delay compensation so it is zero-phase
+%   (no latency shift), and boundary-aware (it does not filter across
+%   epoch/boundary discontinuities). FIR windowed-sinc, zero-phase, is the
+%   EEGLAB/Luck best-practice for EEG/ERP filtering.
 %
-%   OPTIONS carries three sub-structs, each {enabled, freq (Hz), db}:
+%   OPTIONS carries three sub-structs, each {enabled, freq (Hz), db} and,
+%   optionally, {auto, transition (Hz), order} and, for the notch, width (Hz):
 %       options.highpass  -- keep frequencies above freq
 %       options.lowpass   -- keep frequencies below freq
 %       options.notch     -- reject a narrow band around freq (line noise)
+%   and, optionally, options.designed, a filter made in MATLAB's Filter
+%   Designer app and stored as its coefficients (designedFilterFromObject).
+%   It is applied after the other three, to every channel: a linear-phase
+%   FIR of odd length once with firfilt, as the others are, and anything
+%   else forward and backward with filtfilt, zero-phase, as EEGLAB's IIR
+%   filtering and FieldTrip's 'twopass' default apply one
+%   (designedFilterPasses). It must have been designed for the data's own
+%   sample rate; another is refused.
+%
+%   EEG.etc.alz.filter records every filter applied, with each parameter of
+%   its design.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Filter(input)        % interactive: open FilterDialog
@@ -44,20 +59,24 @@ end
 
 EEG = input;
 EEG.data = double(EEG.data);
+applied = {};
 
 if isfield(options, 'perChannel') && logical(options.perChannel)
     EEG = applyPerChannel(EEG, options.perChannelRows);
+    applied{end + 1} = struct('filter', 'per channel', 'rows', options.perChannelRows);
 else
-    if isEnabled(options, 'highpass')
-        EEG = applyFir(EEG, 'high', options.highpass.freq, options.highpass.db, []);
-    end
-    if isEnabled(options, 'lowpass')
-        EEG = applyFir(EEG, 'low', options.lowpass.freq, options.lowpass.db, []);
-    end
-    if isEnabled(options, 'notch')
-        EEG = applyFir(EEG, 'notch', options.notch.freq, options.notch.db, []);
+    for kind = {'highpass', 'high'; 'lowpass', 'low'; 'notch', 'notch'}'
+        if isEnabled(options, kind{1})
+            [EEG, design] = applyFir(EEG, kind{2}, options.(kind{1}), []);
+            applied{end + 1} = rmfield(design, {'fc', 'ftype'}); %#ok<AGROW>
+        end
     end
 end
+if isEnabled(options, 'designed')
+    [EEG, record] = applyDesigned(EEG, options.designed);
+    applied{end + 1} = record;
+end
+EEG.etc.alz.filter = struct('applied', {applied});
 end
 
 % ======================================================================= %
@@ -87,13 +106,13 @@ function EEG = applyPerChannel(EEG, rows)
             continue;
         end
         if TransTools.FieldOr(row, 'hpEnabled', true) && row.hpFreq > 0
-            EEG = applyFir(EEG, 'high', row.hpFreq, row.hpDb, c);
+            EEG = applyFir(EEG, 'high', struct('freq', row.hpFreq, 'db', row.hpDb), c);
         end
         if TransTools.FieldOr(row, 'lpEnabled', true) && row.lpFreq > 0
-            EEG = applyFir(EEG, 'low', row.lpFreq, row.lpDb, c);
+            EEG = applyFir(EEG, 'low', struct('freq', row.lpFreq, 'db', row.lpDb), c);
         end
         if TransTools.FieldOr(row, 'notchEnabled', true) && row.notchFreq > 0
-            EEG = applyFir(EEG, 'notch', row.notchFreq, row.notchDb, c);
+            EEG = applyFir(EEG, 'notch', struct('freq', row.notchFreq, 'db', row.notchDb), c);
         end
     end
 end
@@ -106,12 +125,13 @@ function labels = channelLabels(EEG)
     end
 end
 
-function EEG = applyFir(EEG, type, freq, db, chanind)
-%APPLYFIR  Design a Kaiser windowed-sinc FIR for one filter (from FREQ and DB,
-%   see designFilterKernel) and apply it zero-phase with EEGLAB's firfilt.
-%   CHANIND (a channel index, or [] for all channels) limits the filter to one
-%   channel for per-channel mode.
-    b = designFilterKernel(type, freq, db, EEG.srate);
+function [EEG, design] = applyFir(EEG, type, spec, chanind)
+%APPLYFIR  Design a Kaiser windowed-sinc FIR for one filter (from SPEC's
+%   freq and db, and its auto/transition/order/width where given, see
+%   filterDesign) and apply it zero-phase with EEGLAB's firfilt. CHANIND (a
+%   channel index, or [] for all channels) limits the filter to one channel
+%   for per-channel mode. DESIGN is filterDesign's record of it.
+    [b, design] = designFilterKernel(type, spec.freq, spec.db, EEG.srate, spec);
 
     if numel(b) > size(EEG.data, 2)
         throw(MException('Alakazam:Filter', sprintf([ ...
@@ -156,6 +176,86 @@ function EEG = firfiltBins(EEG, b, chanind)
         filtered(:, :, k) = binEEG.data;
     end
     EEG.data = filtered;
+end
+
+function [EEG, record] = applyDesigned(EEG, spec)
+%APPLYDESIGNED  Apply a filter made in the Filter Designer, to every channel:
+%   once with firfilt when it is a linear-phase FIR of odd length, forward
+%   and backward with filtfilt otherwise (designedFilterPasses). It has to
+%   have been designed for this sample rate; its cutoffs are in Hz.
+    if abs(double(spec.srate) - double(EEG.srate)) > 1e-6
+        throw(MException('Alakazam:Filter', sprintf([ ...
+            'Problem in Filter: the designed filter (%s) was made for a sample rate of %g Hz, ' ...
+            'and this dataset is sampled at %g Hz, so its cutoffs would land elsewhere. Would ' ...
+            'you design it again for %g Hz?'], spec.source, spec.srate, EEG.srate, EEG.srate)));
+    end
+    passes = designedFilterPasses(spec);
+    record = struct('filter', 'designed', 'source', spec.source, 'kind', spec.kind, ...
+        'order', spec.order, 'response', spec.response, 'srate', spec.srate, 'passes', passes, ...
+        'shortStretches', 0);
+    if passes == 1
+        b = reshape(double(spec.b), 1, []);
+        if numel(b) > size(EEG.data, 2)
+            throw(MException('Alakazam:Filter', sprintf([ ...
+                'Problem in Filter: the designed filter needs %d samples, but this data is only ' ...
+                '%d long.'], numel(b), size(EEG.data, 2))));
+        end
+        EEG = firfiltBins(EEG, b, []);
+        return;
+    end
+    [EEG, record.shortStretches] = twoPass(EEG, spec);
+end
+
+function [EEG, nShort] = twoPass(EEG, spec)
+%TWOPASS  filtfilt over every stretch of data that may be filtered as one:
+%   each epoch, or each bin of an average, and in a continuous recording the
+%   stretches between boundary events, as firfilt splits them. Within a
+%   stretch, a channel's rejected samples (NaN) split it again, so that one
+%   rejected stretch does not, through the filter's infinite response, take
+%   the rest of the recording with it. A run too short for filtfilt (three
+%   times the filter's order) is left NaN, and the number of such runs is
+%   returned.
+    if strcmp(spec.kind, 'fir')
+        num = reshape(double(spec.b), 1, []);
+    else
+        num = double(spec.sos);
+    end
+    minLength = 3 * max(1, double(spec.order)) + 1;
+    [nChan, nPnts, nPages] = size(EEG.data);
+    if nPages == 1 && TransTools.FieldOr(EEG, 'trials', 1) <= 1
+        edges = findboundaries(TransTools.FieldOr(EEG, 'event', struct([])));
+        edges = edges(edges >= 1 & edges <= nPnts);
+        edges = unique([edges, nPnts + 1]);
+    else
+        edges = [1, nPnts + 1];
+    end
+    if ~any(diff(edges) >= minLength)
+        throw(MException('Alakazam:Filter', sprintf([ ...
+            'Problem in Filter: the designed filter needs stretches of at least %d samples, and ' ...
+            'this data has none that long.'], minLength)));
+    end
+    nShort = 0;
+    for page = 1:nPages
+        for e = 1:numel(edges) - 1
+            span = edges(e):edges(e + 1) - 1;
+            for c = 1:nChan
+                x = EEG.data(c, span, page);
+                finite = isfinite(x);
+                starts = find(diff([false, finite]) == 1);
+                stops  = find(diff([finite, false]) == -1);
+                for r = 1:numel(starts)
+                    stretch = starts(r):stops(r);
+                    if numel(stretch) < minLength
+                        x(stretch) = NaN;
+                        nShort = nShort + 1;
+                    else
+                        x(stretch) = filtfilt(num, 1, x(stretch).').';
+                    end
+                end
+                EEG.data(c, span, page) = x;
+            end
+        end
+    end
 end
 
 function EEG = firfiltOne(EEG, b, chanind)

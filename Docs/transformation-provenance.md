@@ -27,7 +27,7 @@ Thirteen transformations.
 | `Resample` | `pop_resample` (EEGLAB) |
 | `SelectData` | `pop_select` (EEGLAB) |
 | `Interpolate` | `pop_interp` (EEGLAB) |
-| `Filter` | `firfilt` (EEGLAB firfilt plugin) |
+| `Filter` | `firfilt`, with `firws`, `firwsord`, `invfirwsord` and `kaiserbeta` for the design (EEGLAB firfilt plugin); a filter from MATLAB's Filter Designer (`digitalFilter`), applied with `filtfilt` unless it is a linear-phase FIR |
 | `AutoEyeICA` | `pop_runica` / `fastica`, `iclabel`, `pop_subcomp`, `pop_select`; `pop_chanedit` fills positions |
 | `RemoveComponents` | the same ICA stack, plus `eeg_checkset`; dipfit's `pop_dipfit_settings` and `pop_multifit` for the component dipoles; `topoplot` through `TransTools.DrawScalpMap` for the maps |
 | `AutoGEDAI` | `GEDAI` (GEDAI plugin), `pop_select`, `readlocs`; `pop_chanedit` fills positions |

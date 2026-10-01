@@ -8,6 +8,26 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **Filter shows its whole design, and it can be set.** Each filter shows
+  its transition band, passband ripple and order beside its frequency and
+  attenuation, and the notch the width of its stop band. With **Automatic**
+  ticked, the default, they follow as before and stored settings replay
+  unchanged; unticked, they can be entered and the rest follows as EEGLAB's
+  firfilt ties them: the attenuation and the ripple are one deviation in two
+  units, an entered transition band, attenuation or ripple gives the order
+  `firwsord` computes, and an entered order the transition band
+  `invfirwsord` gives.
+- **A filter from MATLAB's Filter Designer.** Filter's fourth row opens the
+  Filter Designer and takes the filter it exports (a `digitalFilter`, from
+  the workspace or a MAT-file), refusing one designed for another sample
+  rate. Its coefficients are kept in the step, so replay, templates and Apply
+  to All need neither the app nor the workspace. A linear-phase FIR is
+  applied once with firfilt, like the other filters; anything else forward
+  and backward (`filtfilt`), zero-phase, as EEGLAB and FieldTrip apply an IIR
+  filter, between boundaries and rejected stretches, and the dialog plots the
+  squared response the data get. Every filter applied is recorded in
+  `etc.alz.filter`.
+
 - **PREP, ASR and AutoReject**, the standardised automated cleaning methods
   the field cites (Tools > 2. Artifact Rejection / Reduction). **PREP** runs
   the PREP pipeline (Bigdely-Shamlo et al., 2015): line noise at the mains
@@ -246,6 +266,15 @@ bar. Dates are those of the tag.
 
 ### Documentation
 
+- **Chapter 20's N400 worked example has numbers that can be reproduced.**
+  Its table and statistics could not be: the code of the day they were
+  written, the template, the data and GEDAI all give other values, the run
+  they came from was not recorded, and the table and the difference bin
+  below it disagreed with each other. Both are now from one recorded run,
+  rendered by **ERP & Report**; `src/help/examples/reproduceN400Example.m`
+  repeats that run, report and all, and `LibraryReplayTest` checks the table
+  and the difference bin against it. The Friedman test it quoted is gone, as
+  the report no longer runs one; the Bayes factors are given instead.
 - The documents in `Docs/` are brought up to date: the transformation
   provenance re-verified for all 35 transformations, the RIFT companion with
   RESS and the current templates, and the Luck companion with the current
