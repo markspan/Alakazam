@@ -264,6 +264,14 @@ bar. Dates are those of the tag.
   the letters themselves (α, χ²), from one place (`ReportDoc.symbol`), and a
   test fails on TeX math in any report source. Reports are also written and
   read explicitly as UTF-8.
+- **AutoGEDAI silenced every MATLAB warning for the rest of the session.**
+  GEDAI v1.7 switches all warnings off before its wavelet stage and never
+  switches them on again, so after one AutoGEDAI run no warning was shown,
+  Alakazam's own notes included (RESS's empty components, the photodiode
+  lag, event edits that did not apply). AutoGEDAI now puts the warning
+  state back as soon as GEDAI returns, or stops with an error. Found by the
+  test suite's new warning guard, which named LibraryReplayTest: its N400
+  template runs AutoGEDAI.
 - **Eight tests failed in a full run on a warning the code still gives.** A
   toolbox that switches every warning off around a call and on again after
   it (EEGLAB's `topoplot`, ERPLAB's studio functions) leaves them all off

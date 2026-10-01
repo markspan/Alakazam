@@ -181,10 +181,20 @@ if strcmpi(opts.Parallel, 'yes') && ~useParallel
 end
 
 %% Denoise just the positioned channels.
+%  GEDAI v1.7 switches every MATLAB warning off before its wavelet stage
+%  (GEDAI.m, "warning('off')") and never switches them on again, so one run
+%  silenced every warning for the rest of the session, Alakazam's own notes
+%  included; v1.8 restores the state itself. Holding it here keeps that true
+%  whichever release is installed, and when GEDAI stops with an error too.
+%  It is restored as soon as GEDAI returns, not when this function does, so
+%  nothing said below is silenced either.
 eegOnly = pop_select(EEG, 'channel', eegIdx);
+warningState = warning();
+restoreWarnings = onCleanup(@() warning(warningState));
 [EEGclean, ~, SENSAI_score, ~, ~, ~, ENOVA_per_epoch, ~, ~, ENOVA_per_channel] = GEDAI( ...
     eegOnly, opts.Strength, 12, opts.LowCut, opts.Leadfield, useParallel, false, ...
     epochThreshold, channelThreshold, 'eeg', Inf);
+clear restoreWarnings
 
 %% Re-insert the excluded (non-EEG) channels at their original positions,
 %  unmodified, so the returned dataset still has every original channel.
