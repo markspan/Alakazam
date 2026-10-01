@@ -166,6 +166,8 @@ then decides, per epoch, whether to reject it or repair it:
    consensus) and how many are interpolated are chosen by the same
    cross-validation.
 
+![**AutoReject** with its defaults: ten folds, and autoreject's own candidates for the number of channels to interpolate.](images/autoreject-dialog.png){#fig-autoreject-dialog}
+
 | Option | Default | Meaning |
 |------------------------------------|---------|-------------------------------------------------------|
 | **Folds** | 10 | The number of blocks the cross-validation uses. |
@@ -181,6 +183,8 @@ channel, and the interpolated channel-epochs are recorded, so the
 data-quality report shows the share of the data that was rebuilt; its
 provenance section lists, per subject, the epochs rejected, the channel-epochs
 interpolated and the range of the learnt thresholds.
+
+![The epochs of the ERP CORE N400 recording at FP1 after AutoReject, grouped by bin in recording order. Rejected epochs are blank rows; in the others, the channels found bad were interpolated.](images/autoreject-result.jpg){#fig-autoreject-result}
 
 The folds are autoreject's own, contiguous and not shuffled, so the result is
 deterministic and a replay reproduces it. Two details differ from the Python
@@ -366,6 +370,8 @@ on the reference, and the reference depends on which channels are bad, so the
 two are estimated in turn until they agree. The bad channels are then
 interpolated and every channel is put on the robust reference.
 
+![**PREP** on the unreferenced ERP CORE N400 recording, with the line frequency set to 60 Hz, the mains frequency where it was recorded.](images/prep-dialog.png){#fig-prep-dialog}
+
 | Option | Default | Meaning |
 |----------------------------------|--------|-------------------------------------------------------|
 | **Line frequency** | 50 Hz | The mains frequency; its harmonics below the Nyquist frequency are removed too. **none** skips the step. |
@@ -404,6 +410,8 @@ more than the **burst criterion** along some direction, the offending
 components are reconstructed from the clean ones. Large, brief artefacts
 (movement, electrode pops, muscle bursts) are repaired, and the rest of the
 recording is untouched.
+
+![**ASR** with its defaults, on the filtered ERP CORE N400 recording.](images/asr-dialog.png){#fig-asr-dialog}
 
 | Option | Default | Meaning |
 |------------------------------------|---------|-------------------------------------------------------|

@@ -125,7 +125,7 @@ not phase-locked to the event. The ERP itself contributes to it; to see
 induced activity alone, subtract the average from each trial first, which
 Alakazam does not do for you.
 
-![The ERSP of the N400 epochs at Oz, one map per bin, in dB relative to the prestimulus baseline.](images/timefrequency-result.jpg){#fig-timefrequency-result}
+![The ERSP of the N400 recording at Oz, one map per bin, in dB relative to the -200 to 0 ms baseline, with the bins epoched from -1000 to 1500 ms for this analysis. The blank margins are where a frequency's wavelet reaches past the epoch, widest at the lowest frequencies; with the ERP's own -200 to 800 ms epochs, every frequency below about 16 Hz would have no baseline at all.](images/timefrequency-result.jpg){#fig-timefrequency-result}
 
 The view shows one heat map per bin with a channel menu; the arrow keys and
 the mouse wheel step the channel. Maps from several subjects can be combined
@@ -227,7 +227,7 @@ the largest coherence in any of them, so conditions compare as they stand.
 The column on the right has a tickbox per bin, named with the frequency its
 map is drawn at: untick the bins not being compared.
 
-![Coherence to the photodiode at 64 Hz in the RIFT 64 Hz condition: an occipital focus.](images/coherencetopography-result.jpg){#fig-coherencetopography-result}
+![Coherence to the photodiode in each condition of a RIFT recording, side by side on one colour scale, each at the frequency read from the photodiode for that condition. The column on the right chooses the conditions shown.](images/coherencetopography-result.jpg){#fig-coherencetopography-result}
 
 **Toolbox or own code.** The coherence is Spectral Measure's frame-averaged
 estimator (@sec-tr-spectralmeasure), which agrees with FieldTrip frame by

@@ -164,14 +164,23 @@ end
 function params = resolveParams(repo, params)
 %RESOLVEPARAMS  A stage's options, or those of a template node when the
 %   stage names one (struct with .template and .node), so the manual's
-%   pictures use the settings the shipped templates use.
+%   pictures use the settings the shipped templates use. A template node may
+%   carry .override, fields that replace the template's own: the same bins
+%   epoched longer, say, for a picture that needs it.
     if isstruct(params) && isscalar(params) && isfield(params, 'template')
+        override = struct();
+        if isfield(params, 'override')
+            override = params.override;
+        end
         raw = jsondecode(fileread(fullfile(repo, params.template)));
         if isfield(raw, 'nodes'); items = raw.nodes; else; items = raw.steps; end
         if isstruct(items); items = num2cell(items); end
         params = items{params.node}.params;
         if isstruct(params) && isfield(params, 'bins') && isfield(params, 'script')
             params = rmfield(params, 'bins');   % as the app's templateParams does
+        end
+        for f = fieldnames(override)'
+            params.(f{1}) = override.(f{1});
         end
     end
 end
