@@ -97,6 +97,19 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **TimeFrequency reported power that was not there** at low frequencies. It
+  computed the baseline over the start of the epoch, where the wavelet
+  reaches past the data and the power comes out too low, so everything after
+  it came out too high: on stationary noise, +1.3 to +1.5 dB after the
+  stimulus at 4 to 6 Hz in a -200 to 800 ms epoch. Samples within half a
+  wavelet of either end are now left blank, as FieldTrip leaves them, a
+  frequency with no baseline clear of the edge is blank and the view says
+  below which frequency, and the baseline is the dB of the mean power, as in
+  `newtimef` and `ft_freqbaseline`. On short epochs the lowest frequencies are
+  now blank: epoch longer for them. Recalculate time-frequency nodes made
+  before this. Found by an audit of every hand-written computation against
+  the toolboxes (`Docs/toolbox-audit.md`).
+
 - **A bin script could define the same bin number twice**, and both were
   accepted without a word, although a bin's number is how events and
   combination bins refer to it. It is now refused with a message naming the

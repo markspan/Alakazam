@@ -8,10 +8,11 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
 %   Exact Morlet-wavelet convolution output is hard to hand-derive
 %   safely, so most tests here lean on two properties that hold
 %   EXACTLY, by construction, regardless of the input signal:
-%     1. The mean ERSP value over the baseline window's own samples is
-%        exactly 0 for every frequency -- ersp = logPower - mean(logPower
-%        over the baseline), so subtracting a segment's own mean from
-%        itself and averaging again is 0 by definition.
+%     1. Over the baseline samples clear of the epoch's edges, the mean
+%        POWER ratio is exactly 1 at every frequency that has such samples
+%        (ersp = 10*log10(power / mean(baseline power)): the dB of the
+%        mean as in newtimef and ft_freqbaseline), so averaging the ratio
+%        back over the same samples gives 1 by definition.
 %     2. A combination (difference) bin's ERSP is the coefficient-
 %        weighted sum of the referenced bins' own (already computed)
 %        ERSP -- a direct, code-visible summation (see ComputeErsp.m's
@@ -58,15 +59,66 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             testCase.verifyEqual(ratios, repmat(ratios(1), 1, numel(ratios)), 'RelTol', 1e-9);
         end
 
-        function meanErspOverBaselineWindowIsZero(testCase)
+        function theBaselineIsTheDbOfItsMeanPower(testCase)
+        %THEBASELINEISTHEDBOFITSMEANPOWER  As in EEGLAB's newtimef and
+        %   FieldTrip's ft_freqbaseline('db'): the mean of the power ratio
+        %   over the baseline is 1 (0 dB). The mean of the dB values, the
+        %   old convention, is lower than that.
             EEG = erspFixture(3);
             opts = defaultOpts();
 
-            [ersp, ~] = ComputeErsp(EEG, opts);
+            [ersp, ~, info] = ComputeErsp(EEG, opts);
 
             baseIdx = EEG.times >= opts.BaselineStart & EEG.times <= opts.BaselineStop;
-            meanOverBaseline = mean(ersp(:, :, baseIdx, 1), 3);
-            testCase.verifyEqual(meanOverBaseline, zeros(EEG.nbchan, opts.NumFreqs), 'AbsTol', 1e-9);
+            withBaseline = find(~info.noBaseline);
+            testCase.assertNotEmpty(withBaseline);
+            ratio = 10 .^ (squeeze(ersp(1, withBaseline, baseIdx, 1)) / 10);
+            testCase.verifyEqual(mean(ratio, 2, 'omitnan'), ones(numel(withBaseline), 1), 'AbsTol', 1e-9);
+        end
+
+        function noSampleWithinHalfAWaveletOfAnEdgeIsComputed(testCase)
+        %NOSAMPLEWITHINHALFAWAVELETOFANEDGEISCOMPUTED  Part of the wavelet
+        %   would lie over no data there, and the power be too low; FieldTrip
+        %   leaves such samples out too.
+            EEG = erspFixture(3);
+            opts = defaultOpts();
+
+            [ersp, ~, info] = ComputeErsp(EEG, opts);
+
+            fi = find(~info.noBaseline, 1, 'last');
+            edge = round(info.halfWaveletMs(fi) / 1000 * EEG.srate);
+            row = squeeze(ersp(1, fi, :, 1));
+            testCase.verifyTrue(all(isnan(row(1:edge))), 'The start of the epoch.');
+            testCase.verifyTrue(all(isnan(row(end - edge + 1:end))), 'The end of the epoch.');
+            testCase.verifyTrue(all(isfinite(row(edge + 1:end - edge))), 'Everything in between.');
+        end
+
+        function stationaryNoiseShowsNoEventRelatedPower(testCase)
+        %STATIONARYNOISESHOWSNOEVENTRELATEDPOWER  The regression case. White
+        %   noise has the same power at every time, so the ERSP is 0 dB. With
+        %   an ordinary -200 to 800 ms epoch and a -200 to 0 ms baseline, the
+        %   edge zone covers the whole baseline below about 20 Hz; computed
+        %   over it, the baseline was too low and the noise came out as +1.3
+        %   dB of power after the stimulus at 4 to 6 Hz. Those frequencies are
+        %   now blank, and the ones with a baseline are right.
+            EEG = noiseFixture(20, 200, -200, 796);
+            opts = defaultOpts();
+            opts.BaselineStart = -200;
+            opts.BaselineStop = 0;
+
+            [ersp, freqs, info] = ComputeErsp(EEG, opts);
+
+            testCase.verifyTrue(info.noBaseline(1), 'No baseline sample at 4 Hz is clear of the edge.');
+            testCase.verifyTrue(all(isnan(ersp(:, 1, :, 1)), 'all'), 'So 4 Hz is blank, not biased.');
+            % Averaged over twenty independent channels: a frequency whose
+            % baseline has only a few samples clear of the edge is unbiased
+            % but noisy on one channel (about 0.3 dB), and 0.13 dB at worst
+            % over twenty, across seeds.
+            after = EEG.times >= 100 & EEG.times <= 500;
+            for fi = find(~info.noBaseline)
+                level = mean(ersp(:, fi, after, 1), 'all', 'omitnan');
+                testCase.verifyLessThan(abs(level), 0.4, sprintf('%.1f Hz: %+.2f dB of noise.', freqs(fi), level));
+            end
         end
 
         function combinationBinIsTheWeightedSumOfReferencedBins(testCase)
@@ -88,7 +140,7 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             [ersp, ~] = ComputeErsp(EEG, opts);
 
             testCase.verifyTrue(all(isnan(ersp(:, :, :, 2)), 'all'));
-            testCase.verifyFalse(any(isnan(ersp(:, :, :, 1)), 'all'));
+            testCase.verifyTrue(any(isfinite(ersp(:, :, :, 1)), 'all'), 'The bin with trials has a map.');
         end
 
         function burstAfterBaselineIncreasesPowerAtItsOwnFrequency(testCase)
@@ -109,8 +161,8 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             burstIdx = EEG.times >= 150 & EEG.times <= 350; % well inside the injected burst
             baseIdx  = EEG.times >= opts.BaselineStart & EEG.times <= opts.BaselineStop;
 
-            duringBurst = mean(ersp(1, fi, burstIdx, 1));
-            duringBaseline = mean(ersp(1, fi, baseIdx, 1));
+            duringBurst = mean(ersp(1, fi, burstIdx, 1), 'omitnan');
+            duringBaseline = mean(ersp(1, fi, baseIdx, 1), 'omitnan');   % the edge zone is blank
             testCase.verifyGreaterThan(duringBurst, duringBaseline + 3); % clearly higher, generous margin (dB)
         end
 
@@ -130,7 +182,8 @@ classdef TimeFrequencyTest < matlab.unittest.TestCase
             [ersp, ~] = ComputeErsp(EEG, opts);
             [expected, ~] = ComputeErsp(kept, opts);
 
-            testCase.verifyFalse(any(isnan(ersp(:))), 'One rejected trial made the map NaN.');
+            testCase.verifyEqual(isnan(ersp), isnan(expected), ...
+                'One rejected trial made the map NaN beyond the edges every map leaves blank.');
             testCase.verifyEqual(ersp, expected, 'AbsTol', 1e-9);
         end
 
@@ -192,6 +245,17 @@ function EEG = erspFixture(nTrialsPerBin, nBins)
     end
     EEG.data = data;
     EEG.bindesc = bindesc;
+end
+
+function EEG = noiseFixture(nChannels, nTrials, startMs, stopMs)
+%NOISEFIXTURE  NCHANNELS channels of white noise, NTRIALS trials at 250 Hz
+%   from STARTMS to STOPMS: the same power at every time.
+    rng(11, 'twister');
+    srate = 250;
+    times = startMs:1000 / srate:stopMs;
+    EEG = struct('DataFormat', 'EPOCHED', 'times', times, 'nbchan', nChannels, 'srate', srate, ...
+        'data', randn(nChannels, numel(times), nTrials));
+    EEG.bindesc = struct('index', 1, 'label', 'Noise', 'trials', 1:nTrials, 'combo', []);
 end
 
 function opts = defaultOpts()

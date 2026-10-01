@@ -1,4 +1,4 @@
-function [ersp, freqs] = ComputeErsp(input, opts)
+function [ersp, freqs, info] = ComputeErsp(input, opts)
 %COMPUTEERSP  nChan x nFreqs x nTime x nBins dB-baseline-corrected power,
 %   via complex Morlet wavelet convolution -- the event-related spectral
 %   perturbation (ERSP) computation TimeFrequency.m's per-bin heatmaps
@@ -22,6 +22,29 @@ function [ersp, freqs] = ComputeErsp(input, opts)
 %   NumFreqs (Hz range and count, log-spaced), MinCycles, MaxCycles
 %   (wavelet cycles at the frequency extremes, linearly interpolated in
 %   between), BaselineStart, BaselineStop (ms, for the dB correction).
+%
+%   THE EDGES ARE LEFT OUT, as FieldTrip leaves them out. A sample closer
+%   to either end of the epoch than half its frequency's wavelet has part of
+%   the wavelet over no data, so its power is too low, and by more the lower
+%   the frequency. Those samples are NaN (drawn blank), and so is a whole
+%   frequency whose baseline window lies entirely in that zone, since no
+%   baseline can be taken for it. Computed over them, as this did until
+%   30 September, the pre-stimulus baseline of an ordinary -200 to 800 ms
+%   epoch was too low at every frequency below about 20 Hz, and stationary
+%   noise came out as +1.3 dB of "event-related" power at 4 to 6 Hz. The
+%   remedy for a blank low frequency is a longer epoch, which is the usual
+%   advice for time-frequency analysis in any toolkit.
+%
+%   THE BASELINE IS THE dB OF THE MEAN POWER, 10*log10(P ./ mean(P_base)),
+%   as in EEGLAB's newtimef and FieldTrip's ft_freqbaseline('db'). It used
+%   to be the mean of the dB values, which is lower (Jensen's inequality)
+%   by an amount that grows with how much the power varies over the
+%   baseline, and so disagreed with both.
+%
+%   INFO describes what could be computed: .halfWaveletMs (1 x nFreqs), how
+%   far from each end of the epoch a frequency's first and last computed
+%   sample lie, and .noBaseline (1 x nFreqs logical), the frequencies left
+%   blank for want of a baseline sample clear of the edge.
 %
 %   Every channel and every bin is computed in one pass, reporting its
 %   progress to the app's busy indicator (TransTools.BusyGate) -- the
@@ -55,6 +78,7 @@ function [ersp, freqs] = ComputeErsp(input, opts)
 
     waveletFFTs = cell(1, opts.NumFreqs);
     halfLens    = zeros(1, opts.NumFreqs);
+    valid       = false(opts.NumFreqs, nT);   % clear of the edges, per frequency
     for fi = 1:opts.NumFreqs
         f = freqs(fi);
         sigmaT = cycles(fi) / (2 * pi * f);
@@ -64,7 +88,11 @@ function [ersp, freqs] = ComputeErsp(input, opts)
         wavelet = wavelet / sqrt(sum(abs(wavelet).^2)); % unit energy
         waveletFFTs{fi} = fft(wavelet, nfft);
         halfLens(fi) = halfLen;
+        valid(fi, halfLen + 1 : nT - halfLen) = true;
     end
+    baseValid = valid & baseIdx(:)';
+    noBaseline = ~any(baseValid, 2)';
+    info = struct('halfWaveletMs', halfLens / srate * 1000, 'noBaseline', noBaseline);
 
     % Combination (difference) bins defined in DefineBins ("bin N = bin A
     % - bin B") have no trials of their own (DefineBins.m leaves
@@ -119,9 +147,12 @@ function [ersp, freqs] = ComputeErsp(input, opts)
                 continue;
             end
             power = power / numel(kept);
-            logPower = 10 * log10(power);
-            baseline = mean(logPower(:, baseIdx), 2);
-            ersp(ch, :, :, b) = logPower - baseline;
+            power(~valid) = NaN;   % within half a wavelet of an edge: see the header
+            baseline = nan(opts.NumFreqs, 1);
+            for fi = find(~noBaseline)
+                baseline(fi) = mean(power(fi, baseValid(fi, :)));
+            end
+            ersp(ch, :, :, b) = 10 * log10(power ./ baseline);
 
             done = done + 1;
             TransTools.BusyGate('progress', done / total);

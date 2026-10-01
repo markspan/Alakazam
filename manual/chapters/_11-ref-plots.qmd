@@ -92,10 +92,26 @@ precision [@cohen2014].
 : TimeFrequency's options. {#tbl-timefrequency}
 
 For each channel, frequency and bin, the map is
-$10\log_{10} P(f,t)$ minus its mean over the baseline interval, with
-$P$ the power averaged over the bin's trials. A combination bin is the
-weighted sum of its bins' maps: a difference of decibels, which is a log
-ratio of power. Rejected trials are left out, per channel.
+$10\log_{10}\left(P(f,t) / \bar{P}_\text{base}(f)\right)$, with $P$ the
+power averaged over the bin's trials and $\bar{P}_\text{base}$ its mean over
+the baseline interval: the decibel change from the mean baseline power, as
+EEGLAB's `newtimef` and FieldTrip's `ft_freqbaseline` compute it. A
+combination bin is the weighted sum of its bins' maps: a difference of
+decibels, which is a log ratio of power. Rejected trials are left out, per
+channel.
+
+**The edges of the epoch are left blank.** A wavelet of $c$ cycles at $f$ Hz
+reaches $3c/(2\pi f)$ seconds to either side of the sample it describes: 360
+ms for 3 cycles at 4 Hz, 150 ms for 6 cycles at 20 Hz. Nearer the ends of the
+epoch than that, part of the wavelet lies over no data and the power comes
+out too low, so those samples are not drawn, as FieldTrip leaves them out. A
+frequency whose whole baseline lies that close to the epoch start has no
+baseline and is left blank altogether; the view says below which frequency.
+Computed over the edge, as Alakazam did before 30 September, stationary noise
+showed about +1.3 dB of power after the stimulus at 4 to 6 Hz in an ordinary
+-200 to 800 ms epoch. For low frequencies, epoch generously: for the whole of a
+-200 to 0 ms baseline to count at 4 Hz with 3 cycles, the epoch has to start
+by -560 ms, and end 360 ms after the last time you want to see.
 
 Power averaged over trials is **total** power: it includes activity that is
 not phase-locked to the event. The ERP itself contributes to it; to see

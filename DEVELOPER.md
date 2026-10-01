@@ -271,6 +271,38 @@ options table, and the entry on the Recalculate list. It refuses to
 overwrite anything. What it cannot write is the method, its tests of
 substance and its description.
 
+From the MATLAB prompt, with the repository's `src` folders on the path (as
+they are while Alakazam runs):
+
+```matlab
+newTransformation('Smooth', ...
+    'Section', '1. Preprocessing', ...          % the ribbon group
+    'Description', 'Smooth each channel with a moving average.', ...
+    'Input', 'epoched', ...                     % 'continuous' | 'epoched' | 'averaged' | 'any'
+    'Fields', struct( ...                       % the dialog, one element per field
+        'label',   {'Window (ms)', 'Mode', 'Channels'}, ...
+        'name',    {'WindowMs', 'Mode', 'Channels'}, ...   % the options' field names
+        'default', {20, {'fast', 'slow'}, {}}, ...        % number, drop-down, picker
+        'kind',    {'', '', 'channels'}, ...               % 'channels' or 'bins': a picker by label
+        'help',    {'Width of the average.', 'How.', 'Which channels.'}));   % the manual's "Meaning"
+```
+
+Then:
+
+1. Write the computation in `src/Transformations/Smooth/Smooth.m`, under
+   `% ---- the method ----`. The dialog, the replay, the input check and the
+   record in `etc.alz.smooth` are already there.
+2. Redraw `src/Icons/Smooth.svg` and rasterize it (step 1 below).
+3. Run `runtests('tests/SmoothTest.m')`, which passes as generated, and add
+   the tests of what the method must get right.
+4. Restart Alakazam: the ribbon is built at startup, and the button appears
+   in its section.
+
+`help newTransformation` lists every option (`'Category'`, `'Manual'`,
+`'Repository'`). A step with no fields gets no dialog and is not put on the
+Recalculate list. The rest of this checklist is what the generator cannot do
+for you.
+
 1. The folder, entry function, manifest and icon, following the contract.
    The icon is drawn as `src/Icons/<Name>.svg` (24 x 24, the ribbon blue
    `#4a7fc9`) and the PNG beside the manifest is rasterized from it:

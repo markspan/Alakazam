@@ -149,7 +149,7 @@ classdef TimeFrequencyView < AlakazamView
                 showImageData(this.Images(b), squeeze(ersp(ch, :, :, b)));
                 this.Axes(b).CLim = [-climAbs, climAbs];
             end
-            this.ChannelLabel.Text = sprintf('(%d/%d)', ch, this.EEG.nbchan);
+            this.ChannelLabel.Text = sprintf('(%d/%d)%s', ch, this.EEG.nbchan, blankNote(this.EEG));
             this.ChannelDropdown.Value = ch;
         end
 
@@ -228,4 +228,26 @@ classdef TimeFrequencyView < AlakazamView
             this.redraw();
         end
     end
+end
+
+function note = blankNote(eeg)
+%BLANKNOTE  Why the lowest frequencies are blank, when they are: their
+%   wavelet reaches past the start of the epoch over the whole baseline
+%   (see ComputeErsp). Empty for a map made before that was recorded, or
+%   with a baseline at every frequency.
+    note = '';
+    try
+        noBaseline = eeg.etc.alz.timeFrequency.noBaseline;
+    catch
+        return;
+    end
+    if ~any(noBaseline)
+        return;
+    end
+    if all(noBaseline)
+        note = '   No baseline at any frequency: the epoch is too short for these wavelets.';
+        return;
+    end
+    note = sprintf(['   Blank below %.3g Hz: the wavelet reaches past the epoch start ' ...
+        'over the whole baseline; a longer epoch gives them one.'], eeg.freqs(find(~noBaseline, 1)));
 end

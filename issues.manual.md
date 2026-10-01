@@ -36,6 +36,7 @@ decision before anything changes), **won't fix** (decided to leave as is).
 | M23 | fixed | Cluster dialog | Said "Home tab" where the ribbon tab is "Alakazam" |
 | M24 | fixed | Data quality | Rectification is now reported |
 | M25 | fixed | Spectral view | Now keeps the bin as well as the channel |
+| M26 | fixed | TimeFrequency | Edge samples entered the baseline, and the baseline was the mean of dB |
 
 ---
 
@@ -473,6 +474,32 @@ Moving between nodes keeps the channel but resets the bin to the first,
 unlike the waveform and ERP-image views. Found when the capture tool asked for
 the 60 Hz bin and got the 64 Hz one; the tool now steps the bin with the arrow
 key. The manual's chapter 5 says "the channel, and in most views the bin".
+
+### M26. TimeFrequency computed its baseline over the epoch's edge
+
+*Status: fixed 2026-09-30, found by the audit in
+`Docs/toolbox-audit.md`. Samples within half a wavelet of either end of the
+epoch are left out (NaN), as FieldTrip leaves them; a frequency with no
+baseline sample clear of the edge is left blank, recorded in
+`etc.alz.timeFrequency.noBaseline` and named in the view; and the baseline is
+the dB of the mean power, as in `newtimef` and `ft_freqbaseline('db')`. Tests
+in `tests/TimeFrequencyTest.m` (stationaryNoiseShowsNoEventRelatedPower,
+noSampleWithinHalfAWaveletOfAnEdgeIsComputed,
+theBaselineIsTheDbOfItsMeanPower). Manual chapter 11 updated.*
+
+*Was: `src/Transformations/TimeFrequency/ComputeErsp.m` convolved the
+zero-padded epoch and kept every sample. Near the ends part of the wavelet
+lies over no data, so the power is too low, and the default baseline (the
+epoch start to 0 ms) lies there at every frequency below about 20 Hz for a
+-200 ms epoch. On stationary white noise, whose ERSP is 0 dB, a -200 to 800
+ms epoch gave +1.3 to +1.5 dB after the stimulus at 4 to 6 Hz and +0.6 dB at
+10 Hz. The baseline was also the mean of the dB values rather than the dB of
+the mean power, which is lower and disagreed with both reference toolboxes,
+by about 0.1 dB in the same test.*
+
+Nodes computed before the fix keep their old maps until recalculated. With
+the default settings on short epochs the lowest frequencies are now blank:
+that is the honest answer, and a longer epoch is the remedy.
 
 ---
 

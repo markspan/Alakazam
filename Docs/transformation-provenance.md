@@ -132,7 +132,12 @@ the thresholded labels rather than from the previous candidate's.
 **`TimeFrequency` is not a `newtimef` wrapper.** `ComputeErsp` builds its own
 Morlet wavelets, `exp(2i*pi*f*t) * exp(-t^2 / 2*sigma^2)`, unit-energy
 normalised and convolved by FFT. `newtimef` appears in its folder only inside
-comments, naming the time-frequency trade-off the two share.
+comments, naming the time-frequency trade-off the two share. Since 30
+September its conventions are theirs: samples within half a wavelet of an
+edge are left out, as FieldTrip leaves them, and the baseline is the dB of
+the mean power, as in `newtimef` and `ft_freqbaseline`. Before, it computed
+its baseline over the edge (M26; see [`toolbox-audit.md`](toolbox-audit.md),
+which asks this question of every hand-written transformation).
 
 **The source estimates are FieldTrip's filters, applied here.** Until 3
 September the minimum norm was Alakazam's own closed form
