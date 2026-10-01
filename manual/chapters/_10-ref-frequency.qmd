@@ -86,6 +86,12 @@ The choice of measure matters as much as the choice of window
   test without a window at all with a cluster test
   (@sec-cluster-statistics).
 
+**Toolbox or own code.** These are ERPLAB's measures, written in Alakazam so
+that they work on its averages and grand averages, pooled channels and
+reference-channel peaks, with the SME beside each value. On all ten of
+Luck's N400 erpsets [@luckApplied] they match ERPLAB 13.10 to a relative
+4e-8, and the latencies exactly.
+
 ## Fourier {#sec-tr-fourier}
 
 *Tools > 4. Frequency and Component Analysis > Fourier · epoched or
@@ -140,6 +146,13 @@ segment is always transformed and such a value gives the same spectrum as
 
 ![The PSD of the N400 epochs at Oz, averaged per bin, with the frequency bands of @sec-settings shaded beneath it and the alpha peak near 10 Hz.](images/fourier-result.jpg){#fig-fourier-result}
 
+**Toolbox or own code.** The transform is MATLAB's `fft` with the Signal
+Processing Toolbox's windows. The amplitude outputs reproduce BrainVision
+Analyzer's, and the complex output lets Average form an evoked spectrum,
+neither of which EEGLAB's `spectopo` or FieldTrip offers. The calibrated
+**PSD** is the quantity FieldTrip's `ft_freqanalysis` computes, and matches
+it to 1e-15.
+
 ## Welch PSD {#sec-tr-welch}
 
 *Tools > 4. Frequency and Component Analysis > Welch PSD · continuous →
@@ -167,6 +180,11 @@ each trial further would spend resolution twice.
 
 ![The Welch PSD of the continuous N400 recording at Oz, 2 s segments.](images/welch-result.jpg){#fig-welch-result}
 
+**Toolbox or own code.** MATLAB's `pwelch` computes the same spectrum, and
+on clean data Welch PSD matches it exactly. It is not called because a
+segment holding rejected samples would make its whole result missing, where
+Welch PSD leaves that segment out.
+
 ## Spectral Measure {#sec-tr-spectralmeasure}
 
 *Tools > 4. Frequency and Component Analysis > Spectral Measure · epoched →
@@ -181,7 +199,7 @@ responses (SSVEP) and rapid invisible frequency tagging (RIFT)
 | **power**, **amplitude** | of the evoked (trial-averaged) complex coefficient, since a tagged response is phase-locked to the stimulation |
 | **SNR** | the power at the frequency divided by the mean power at the neighbouring frequencies on each side, beyond a guard band |
 | **ITC** | inter-trial phase coherence, $\lvert \frac{1}{N}\sum_n X_n/\lvert X_n\rvert \rvert$, between 0 and 1 [@tallonbaudry1996; @lachaux1999] |
-| **phase** | the angle of the evoked coefficient |
+| **phase** | the angle of the evoked coefficient, measured from the event (time zero), as FieldTrip measures it |
 | **coherence**, **phase lag** | magnitude-squared coherence and cross phase to a reference channel such as a photodiode |
 
 : What Spectral Measure reports. {#tbl-spectralmeasure-quantities}
@@ -191,7 +209,23 @@ Frequencies are written as expressions over named fundamentals: after
 `2*f1-f2` (intermodulation terms). Each coefficient is computed by a tapered
 discrete Fourier transform evaluated exactly at the requested frequency, so a
 harmonic or intermodulation frequency that falls between the bins of the
-epoch's own spectrum is still measured exactly.
+epoch's own spectrum is still measured exactly. Phase is measured from the
+event, so the same response reads the same phase however long before the
+event the epoch starts.
+
+**Toolbox or own code.** The transform is the Signal Processing Toolbox's
+`goertzel`, the Fourier transform at a single frequency, with its `hann` and
+`dpss` tapers. FieldTrip's `ft_freqanalysis` was the alternative, but it
+rounds every frequency to the grid of the epoch's own spectrum, so a harmonic
+or intermodulation row could not be read at its exact frequency; at a
+frequency on that grid the two give the same coefficients. Amplitude, SNR and
+ITC are their textbook definitions applied to those coefficients, since
+neither FieldTrip nor EEGLAB has them as functions for a single frequency.
+The frame-averaged coherence is FieldTrip's coherence estimator on the same
+coefficients, with one difference that matters only when trials are rejected
+per channel: the reference's power is taken over the same trials as the
+cross-spectrum. Every one of these quantities is checked against FieldTrip
+in the test suite and agrees with it to rounding.
 
 ![**Spectral Measure** on a RIFT recording: the fundamental, the reference channel, the taper and SNR settings, the coherence estimator, and one row per tagged frequency.](images/spectralmeasure-dialog.png){#fig-spectralmeasure-dialog}
 
@@ -212,15 +246,19 @@ single-channel quantities do not.
 
 - **Frame-averaged** (the default) cuts the signals into overlapping frames
   (75% overlap), computes the coherence across trials in each frame at the
-  exact frequency, and averages over frames. It agrees with EEGLAB's
-  `newcrossf` and with the Coherence Map and CohTopo views, so the number in
-  a report and the map beside it are the same quantity.
+  exact frequency, and averages over frames. It agrees frame by frame with
+  FieldTrip's sliding-window coherence (`ft_freqanalysis` with `mtmconvol`,
+  then `ft_connectivityanalysis`), closely with EEGLAB's `newcrossf`, and
+  with the Coherence Map and CohTopo views, so the number in a report and the
+  map beside it are the same quantity.
 - **Window** uses the whole analysis window as one tapered segment per trial.
   It is cheap but biased upwards, since far fewer independent samples enter
   the average: on ten RIFT recordings it read 2.4 to 2.9 times the
   frame-averaged value.
 - **newcrossf** calls EEGLAB's own function, the estimator the RIFT study
   used [@dimigen2025], and can only report frequencies inside its band.
+  Rejected trials are left out before the call, as the other estimators
+  leave them out.
 
 The report states which estimator was used. **Spectral & Report** on the
 **Export/Report** tab collects every Spectral Measure result into a CSV and
@@ -289,6 +327,10 @@ maps and eigenvalues are kept for the report.
 
 ![The spectrum of the 60 Hz RESS component in the same trials: SNR at 60 Hz about 460, against about 100 at Oz (@fig-spectralmeasure-result), with the 50 Hz line noise largely gone.](images/ress-result.jpg){#fig-ress-result}
 
+**Toolbox or own code.** No toolbox implements RESS. Alakazam's follows
+Cohen and Gulbinaite's own script [@cohen2017] and reproduces its filters to
+ten decimals.
+
 ## Covariance {#sec-tr-covariance}
 
 *Tools > 4. Frequency and Component Analysis > Covariance · epoched →
@@ -325,6 +367,11 @@ shown with each matrix.
 
 ![The correlation matrix of the N400 epochs of one bin, with the number of observations used and dropped in the title. The EOG channels, at the bottom right, correlate little with the rest.](images/covariance-result.jpg){#fig-covariance-result}
 
+**Toolbox or own code.** MATLAB's `cov` and `corrcoef` give the raw
+estimate, which Covariance matches on clean data. The shrinkage, which no
+MATLAB, EEGLAB or FieldTrip function offers, and the handling of rejected
+samples are Alakazam's.
+
 ## Cross Correlation {#sec-tr-crosscorrelation}
 
 *Tools > 4. Frequency and Component Analysis > Cross Correlation · epoched
@@ -360,6 +407,12 @@ Analyzer's, for instance):
   pairs is left empty rather than estimated from almost no data.
 
 ![The cross-correlation of FP1 with VEOG in one N400 bin: a negative peak at 0 ms, since eye activity appears with opposite signs in FP1 and in the bipolar VEOG channel.](images/crosscorrelation-result.jpg){#fig-crosscorrelation-result}
+
+**Toolbox or own code.** MATLAB's `xcorr` normalises every lag by the whole
+signals' energies. Cross Correlation reports a true correlation coefficient
+at each lag, over the samples that overlap and were not rejected, which no
+toolbox function computes, so it is checked against a direct per-lag
+calculation instead.
 
 ## Source Estimate {#sec-tr-sourceestimate}
 

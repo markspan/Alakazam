@@ -59,6 +59,43 @@ classdef DCDetrendTest < matlab.unittest.TestCase
             testCase.verifyEqual(double(quadOut.data(1, :, 1)), zeros(1, n), 'AbsTol', 1e-7);
         end
 
+        function aWholeEpochFitIsMatlabsDetrend(testCase)
+        %AWHOLEEPOCHFITISMATLABSDETREND  Least squares fitted over the whole
+        %   epoch is what MATLAB's detrend does at the same order; checked
+        %   against detrend itself, on noise with a curved drift, for orders
+        %   0, 1 and 2. What detrend cannot do (fit on one range, skip
+        %   rejected samples, a robust fit) is what the other cases check.
+            previous = rng(5);
+            testCase.addTeardown(@rng, previous);
+            EEG = testCase.flatFixture();
+            [nChan, n, nTrials] = size(EEG.data);
+            t = (1:n) / n;
+            EEG.data = randn(nChan, n, nTrials) + 4 * t + 3 * t .^ 2;
+            series = reshape(permute(EEG.data, [2 1 3]), n, []);     % one column per channel-trial
+            for choice = {'0 - mean only', '1 - linear', '2 - quadratic'}
+                order = str2double(choice{1}(1));
+                out = DCDetrend(EEG, testCase.opts(choice{1}));
+                expected = permute(reshape(detrend(series, order), n, nChan, nTrials), [2 1 3]);
+                testCase.verifyEqual(double(out.data), expected, 'AbsTol', 1e-6, choice{1});
+            end
+        end
+
+        function aContinuousRecordsRangeIsReadInMs(testCase)
+        %ACONTINUOUSRECORDSRANGEISREADINMS  A continuous recording keeps its
+        %   time axis in seconds; the fitting range is in ms. A step at 2 s on
+        %   a 4 s record at 250 Hz, fitted (order 0) over 0 to 1000 ms only:
+        %   the level before the step is what is removed, so the record before
+        %   the step comes out at zero and the step stays. Read as 0 to 1000
+        %   seconds, the range would cover the whole record and the mean of
+        %   both levels would be removed instead.
+            EEG = struct('DataFormat', 'CONTINUOUS', 'srate', 250, 'nbchan', 1, 'trials', 1, ...
+                'times', (0:999) / 250, 'chanlocs', struct('labels', {'Fz'}));
+            EEG.data = [3 * ones(1, 500), 7 * ones(1, 500)];
+            out = DCDetrend(EEG, struct('Channels', {{}}, 'Order', '0 - mean only', ...
+                'Method', 'Least squares', 'FitStart', 0, 'FitStop', 1000));
+            testCase.verifyEqual(double(out.data), [zeros(1, 500), 4 * ones(1, 500)], 'AbsTol', 1e-9);
+        end
+
         function robustBeatsLeastSquaresOnASpike(testCase)
         %ROBUSTBEATSLEASTSQUARESONASPIKE  The headline reason the robust
         %   option exists. One large transient inside the record should not

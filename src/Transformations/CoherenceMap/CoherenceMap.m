@@ -38,6 +38,9 @@ function [EEG, opts] = CoherenceMap(varargin)
 %                         where the flicker actually was, so a condition tagged
 %                         outside the band can be recognised as such.
 %
+%   TOOLBOX OR OWN CODE: see ComputeCoherenceMap, which does the computation
+%   and says why it is Alakazam's and how it is held to FieldTrip.
+%
 %   Signature (Alakazam transformation contract, matching TimeFrequency.m):
 %   [EEG, opts] = CoherenceMap(input) pops the options dialog and stores the
 %   chosen settings; [EEG, opts] = CoherenceMap(input, opts) replays a stored
@@ -76,7 +79,10 @@ if interactive
 
     opts = TransformOptionsDialog( ...
         'Description', ['Time-resolved coherence of every channel to a reference ' ...
-            '(e.g. a photodiode), per bin. Pick the reference and a decomposition.'], ...
+            '(e.g. a photodiode), per bin. Pick the reference and a decomposition. ' ...
+            'With the wavelet, samples within half a wavelet of either end of the epoch ' ...
+            'are left blank, as FieldTrip leaves them: 3c/(2*pi*f) s for c cycles at f Hz, ' ...
+            '72 ms for 3 cycles at 20 Hz.'], ...
         'title', 'CoherenceMap options', ...
         'separator', 'Reference and method:', ...
         {'Reference channel'; 'RefChannel'}, refList, ...
@@ -150,7 +156,12 @@ end
 
 computeOpts = opts;
 computeOpts.RefIndex = refIdx;
-[coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(work, computeOpts);
+[coh, freqs, cohTimes, refPower, info] = ComputeCoherenceMap(work, computeOpts);
+if any(info.blankFrequencies)
+    fprintf(['CoherenceMap: blank below %.3g Hz. At those frequencies the wavelet is longer ' ...
+        'than the epoch, so no sample is clear of its edges; a longer epoch shows them.\n'], ...
+        freqs(find(~info.blankFrequencies, 1)));
+end
 [refSpectrum, refSpecFreqs, refPeakHz] = TransTools.ReferenceSpectrum(work, refIdx);
 if strcmp(refName, sineLabel)
     coh = coh(1:end - 1, :, :, :);
@@ -173,4 +184,9 @@ EEG.cohRefSpecFreqs = refSpecFreqs;
 EEG.cohRefPeakHz   = refPeakHz;
 EEG.cohRef         = refLabel;
 EEG.cohMethod      = char(string(opts.Method));
+% What could not be computed, for the view to say and a reader to check:
+% the wavelet's edge zone per frequency, and the frequencies blank
+% throughout (see ComputeCoherenceMap).
+EEG.etc.alz.coherenceMap = struct('options', opts, ...
+    'halfWaveletMs', info.halfWaveletMs, 'blankFrequencies', info.blankFrequencies);
 end

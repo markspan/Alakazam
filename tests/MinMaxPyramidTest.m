@@ -89,8 +89,12 @@ end
 
 % ======================================================================= %
 function [pyramid, y] = signal()
-%SIGNAL  Three channels of random walk, long enough for four levels.
+%SIGNAL  Three channels of random walk, long enough for four levels and for
+%   every window above to lie inside it: the widest, 400 samples a column
+%   over 1000 columns, ends at sample 401 000. At 200 000 samples the
+%   pyramid rightly stopped at the last one, and a window reaching past the
+%   end was being tested as if it were complete.
     rng(7, 'twister');
-    y = cumsum(randn(200000, 3));
+    y = cumsum(randn(500000, 3));
     pyramid = MinMaxPyramid(y);
 end

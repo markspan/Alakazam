@@ -26,27 +26,44 @@ function [EEG, options] = DCDetrend(input, varargin)
 %      trend, which is the drift estimate absorbing the very signal being
 %      measured. Fitting on the pre-stimulus baseline (and, if you like, a
 %      late tail) and extrapolating across the response avoids that. A
-%      two-interval scheme can only ever fit where it also subtracts.
+%      two-interval scheme can only ever fit where it also subtracts. The
+%      range goes to samples by FieldTrip's rule, the nearest sample at each
+%      end (TransTools.NearestSample), as Baseline's window does.
 %
 %   3. A ROBUST OPTION, because drift estimation is precisely where
 %      outliers hurt. 'Robust (Huber)' reweights the fit iteratively so a
 %      large transient contributes like a moderate one instead of
-%      dominating the slope. Implemented here directly (a handful of IRLS
-%      iterations) rather than through robustfit, so this needs no
-%      Statistics Toolbox -- the same reasoning SpectralMeasure applies to
-%      its own dpss dependency, one fewer thing that can be missing.
+%      dominating the slope: MATLAB's robustfit with Huber weights.
 %
 %   4. REJECTED SAMPLES ARE EXCLUDED FROM THE FIT. Alakazam writes rejection
 %      as NaN (see TransTools.InterpolateFlaggedCells), so a fit that does
-%      not skip NaNs returns NaN coefficients and destroys the channel. The
-%      fit here runs over finite samples only, and NaNs stay NaN in the
-%      output. (Baseline.m, for contrast, takes a plain mean() -- correct
-%      for data that has not been rejected yet, which is where it sits in
-%      the pipeline, but not something to copy here.)
+%      not skip NaNs returns NaN coefficients and destroys the channel. Both
+%      fits run over finite samples only, and NaNs stay NaN in the output.
 %
 %   A channel with too few finite samples to determine the fit (fewer than
 %   order+1) is left untouched rather than being handed a degenerate
 %   solution; the count is reported.
+%
+%   TOOLBOX OR OWN CODE. Both fits are a toolbox's. Least squares is
+%   MATLAB's polyfit and polyval, centred and scaled, on the finite samples
+%   of the fitting range, subtracted from the whole epoch: what FieldTrip's
+%   ft_preproc_polyremoval does (the function ft_preprocessing's
+%   polyremoval and demean call), and on an epoch the same numbers. It is
+%   not called because, as FieldTrip itself calls it, it fits the raw
+%   sample index, and an order-2 trend on a long continuous record is then
+%   lost entirely (50 uV off on 300 000 samples); its standardising option
+%   needs a function private to another FieldTrip folder. The robust fit is
+%   robustfit (Statistics and Machine Learning Toolbox) with Huber weights,
+%   on the sample index z-scored over the epoch. MATLAB's detrend fits over
+%   every sample it is given, so it could not serve. What is Alakazam's is
+%   the choice of channels, the guard above and the report. This used to fit
+%   by its own mldivide and a five-iteration Huber IRLS, and to take the
+%   samples inside the fitting range rather than the nearest; least squares
+%   is unchanged by the switch, the robust fit moves slightly (robustfit
+%   adjusts for leverage and iterates to convergence).
+%   FieldTripReferenceTest holds the least-squares fit to ft_preprocessing
+%   and ft_preproc_polyremoval on epochs; DCDetrendTest checks known drifts
+%   and MATLAB's detrend over the whole epoch.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = DCDetrend(input)        % interactive dialog
@@ -94,43 +111,49 @@ end
 
 order  = orderOf(TransTools.FieldOr(options, 'Order', ORDERS{1}));
 robust = startsWith(lower(char(string(TransTools.FieldOr(options, 'Method', METHODS{1})))), 'robust');
-
 chanIdx = TransTools.LabelsToIdx(input, TransTools.FieldOr(options, 'Channels', {}));
 if isempty(chanIdx)
     chanIdx = 1:size(input.data, 1);   % empty selection means every channel
 end
 
+nSamp = size(input.data, 2);
 [fitLo, fitHi] = fitRange(input, TransTools.FieldOr(options, 'FitStart', 0), ...
-    TransTools.FieldOr(options, 'FitStop', 0), size(input.data, 2));
+    TransTools.FieldOr(options, 'FitStop', 0), nSamp);
 
 EEG = input;
 nTrials = size(input.data, 3);
 nSkipped = 0;
 slopes = [];
 
-% x is centred and scaled on the FITTING range, not on sample index: a raw
-% 1..n index with a quadratic term is badly conditioned (Vandermonde columns
-% of wildly different magnitude), and centring costs nothing.
-xAll = (1:size(input.data, 2)).';
-xMid = mean([fitLo, fitHi]);
-xScale = max(1, (fitHi - fitLo) / 2);
-xAll = (xAll - xMid) / xScale;
+% The robust fit's basis: the sample index z-scored over the epoch, raised
+% to the powers 0 to ORDER (constant included, so robustfit adds none). A raw
+% index with a quadratic term is badly conditioned, and on a long continuous
+% record unusable; polyfit centres and scales its own for the same reason.
+sampleIndex = (0:nSamp - 1).';
+z = (sampleIndex - mean(sampleIndex)) / std(sampleIndex);
+basis = z .^ (0:order);                           % nSamp x (order + 1)
+fitIdx = (fitLo:fitHi).';
 
 for tr = 1:nTrials
     for c = chanIdx
         y = double(EEG.data(c, :, tr)).';
-        fitMask = false(numel(y), 1);
-        fitMask(fitLo:fitHi) = true;
-        fitMask = fitMask & isfinite(y);
-        if nnz(fitMask) < order + 1
+        use = fitIdx(isfinite(y(fitIdx)));
+        if numel(use) < order + 1
             nSkipped = nSkipped + 1;
             continue;
         end
-        coeff = polyFit(xAll(fitMask), y(fitMask), order, robust);
-        trend = polyEval(coeff, xAll);
-        EEG.data(c, :, tr) = single2likeInput(y - trend, EEG.data(c, :, tr));
+        if robust
+            b = robustfit(basis(use, :), y(use), 'huber', [], 'off');
+            trend = basis * b;
+            slope = b(min(2, end)) * (z(min(2, end)) - z(1));            % per sample
+        else
+            [p, ~, mu] = polyfit(sampleIndex(use), y(use), order);
+            trend = polyval(p, sampleIndex, [], mu);
+            slope = p(max(1, end - 1)) / mu(2);                           % per sample
+        end
+        EEG.data(c, :, tr) = cast(reshape(y - trend, 1, []), 'like', EEG.data);
         if order >= 1
-            slopes(end + 1) = coeff(end - 1); %#ok<AGROW>
+            slopes(end + 1) = slope; %#ok<AGROW>
         end
     end
 end
@@ -139,54 +162,6 @@ report(order, robust, numel(chanIdx), nTrials, fitLo, fitHi, input, slopes, nSki
 end
 
 % ======================================================================= %
-function coeff = polyFit(x, y, order, robust)
-%POLYFIT  Least-squares (or Huber-weighted) polynomial coefficients, highest
-%   power first -- the same ordering polyval expects. Solved through
-%   mldivide on the Vandermonde matrix rather than polyfit(), so the robust
-%   path can reuse exactly the same design matrix with weights applied.
-    V = vander(x, order);
-    coeff = V \ y;
-    if ~robust
-        return;
-    end
-
-    % IRLS with Huber weights. Five iterations: the weights settle well
-    % before that on real drift data, and a fixed small count keeps a
-    % per-channel-per-trial loop predictable rather than occasionally slow.
-    for iter = 1:5
-        r = y - V * coeff;
-        s = 1.4826 * median(abs(r - median(r)));   % robust sigma (MAD)
-        if s <= 0
-            return;      % a perfect fit: nothing for the weights to do
-        end
-        u = r / (1.345 * s);                       % Huber's usual tuning
-        w = ones(size(u));
-        big = abs(u) > 1;
-        w(big) = 1 ./ abs(u(big));
-        sw = sqrt(w);
-        coeff = (V .* sw) \ (y .* sw);
-    end
-end
-
-function V = vander(x, order)
-%VANDER  [x.^order ... x 1], highest power first.
-    V = ones(numel(x), order + 1);
-    for k = order:-1:1
-        V(:, order + 1 - k) = x(:) .^ k;
-    end
-end
-
-function y = polyEval(coeff, x)
-    y = vander(x, numel(coeff) - 1) * coeff;
-end
-
-function out = single2likeInput(values, template)
-%SINGLE2LIKEINPUT  Put VALUES back in the row shape and class the data
-%   already had: EEGLAB commonly stores single, and silently widening one
-%   channel to double would make EEG.data a mixed-class assignment error.
-    out = cast(reshape(values, size(template)), 'like', template);
-end
-
 function order = orderOf(choice)
     token = regexp(char(string(choice)), '^\s*(\d+)', 'tokens', 'once');
     if isempty(token)
@@ -199,19 +174,23 @@ end
 function [lo, hi] = fitRange(EEG, startMs, stopMs, nSamp)
 %FITRANGE  Sample range to ESTIMATE the trend over. A degenerate or absent
 %   window means the whole epoch, the same convention ArtefactDetect's own
-%   testRange uses.
+%   testRange uses. Each end goes to the nearest sample, FieldTrip's rule
+%   (TransTools.WindowSamples), and a range wholly outside the data is
+%   refused rather than shrunk to its edge sample.
+%
+%   The range is given in ms, and a continuous recording keeps its time axis
+%   in seconds (DEVELOPER.md), so there it is converted first: compared
+%   directly, a 0 to 5000 ms range was read as 0 to 5000 seconds.
     lo = 1; hi = nSamp;
     if stopMs <= startMs || ~isfield(EEG, 'times') || isempty(EEG.times)
         return;
     end
-    a = find(EEG.times >= startMs, 1, 'first');
-    b = find(EEG.times <= stopMs,  1, 'last');
-    if isempty(a) || isempty(b) || b < a
-        return;
+    timesMs = double(EEG.times);
+    if strcmpi(char(string(TransTools.FieldOr(EEG, 'DataFormat', ''))), 'CONTINUOUS')
+        timesMs = timesMs * 1000;
     end
-    lo = a; hi = b;
+    [lo, hi] = TransTools.WindowSamples(timesMs, startMs, stopMs, 'Alakazam:DCDetrend', 'fitting range');
 end
-
 
 function report(order, robust, nChan, nTrials, fitLo, fitHi, input, slopes, nSkipped)
 %REPORT  What was removed, in units a user can check against the trace.
@@ -220,16 +199,12 @@ function report(order, robust, nChan, nTrials, fitLo, fitHi, input, slopes, nSki
     method = 'least squares';
     if robust; method = 'robust (Huber)'; end
     if order >= 1 && ~isempty(slopes) && isfield(input, 'srate') && input.srate > 0
-        % coeff is in the centred/scaled x of the fit; one scaled unit is
-        % (fitHi-fitLo)/2 samples, so convert back to per second.
-        %
         % MEDIAN AND WORST, not just the median: on a recording where one
         % electrode drifts and the rest are steady, the median across
         % channel-trials is ~0 and says nothing about the drift that was
         % actually worth removing. The worst case is the number that
         % answers "did this dataset drift?".
-        xScale = max(1, (fitHi - fitLo) / 2);
-        perSecond = abs(slopes) / xScale * input.srate;
+        perSecond = abs(slopes) * input.srate;
         trendText = sprintf(', |slope| removed: median %.3g, worst %.3g uV/s', ...
             median(perSecond), max(perSecond));
     else

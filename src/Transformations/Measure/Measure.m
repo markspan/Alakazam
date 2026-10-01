@@ -76,6 +76,14 @@ function [EEG, options] = Measure(input, varargin)
 %              .area for Area. The CSV exporter picks the right field(s) per
 %              window from .measure/.areaMode/.scope.
 %
+%   TOOLBOX OR OWN CODE. These are ERPLAB's measures (geterpvalues), but
+%   ERPLAB is not a toolbox Alakazam installs, and geterpvalues reads ERPLAB's
+%   ERPsets, where this works on Alakazam's averages and grand averages, pools
+%   channels, searches a peak on a reference channel, and reports the SME
+%   beside each value. Measured against ERPLAB 13.10's geterpvalues on all ten
+%   published N400 erpsets, 100 cells per measure (Docs/luck.md): amplitudes
+%   and areas to a relative 4e-8, latencies exactly.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Measure(input)        % interactive: open MeasureDialog
 %     [EEG, options] = Measure(input, opts)  % replay: opts.windows is a
@@ -769,13 +777,10 @@ end
 
 function [loIdx, hiIdx] = windowSampleRange(times, startMs, stopMs)
 %WINDOWSAMPLERANGE  The [loIdx, hiIdx] sample range nearest [STARTMS,
-%   STOPMS] in TIMES -- nearest-sample snapping (the same t -> sample
-%   lookup ScalpDistributionView.redraw uses), not a range search, so a
-%   window edge a few ms outside the true data range still clamps to the
-%   nearest real edge sample instead of returning an empty range.
-    [~, loIdx] = min(abs(times - startMs));
-    [~, hiIdx] = min(abs(times - stopMs));
-    if loIdx > hiIdx
-        [loIdx, hiIdx] = deal(hiIdx, loIdx);
-    end
+%   STOPMS] in TIMES: FieldTrip's rule for a latency range, which is also
+%   ERPLAB's (TransTools.WindowSamples). A window edge a few ms outside the
+%   data clamps to the edge sample; a window wholly outside is refused,
+%   where it used to be measured on the single edge sample.
+    [loIdx, hiIdx] = TransTools.WindowSamples(times, min(startMs, stopMs), ...
+        max(startMs, stopMs), 'Alakazam:Measure', 'measurement window');
 end

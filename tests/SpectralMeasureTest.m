@@ -70,9 +70,9 @@ classdef SpectralMeasureTest < matlab.unittest.TestCase
             m = runSpectralMeasure(EEG, row);
 
             t = (0:nsamp - 1) / srate;
-            taper = 0.5 - 0.5 * cos(2 * pi * (0:nsamp - 1)' / (nsamp - 1)); % same Hann formula as buildTapers
+            taper = 0.5 - 0.5 * cos(2 * pi * (0:nsamp - 1)' / (nsamp - 1)); % the symmetric Hann, buildTapers' hann(nsamp)
             V = A * cos(2 * pi * f0 * t + phi);
-            X = sum(taper .* V(:) .* exp(-1i * 2 * pi * f0 * t(:)));       % same as tdft, single trial/taper
+            X = sum(taper .* V(:) .* exp(-1i * 2 * pi * f0 * t(:)));       % the DFT TransTools.Tdft takes with goertzel
             expectedAmplitude = (2 / sum(taper)) * abs(X);
             expectedPhase = angle(X);
 
@@ -161,6 +161,57 @@ classdef SpectralMeasureTest < matlab.unittest.TestCase
             row = defaultRow();
             m = runSpectralMeasure(EEG, row);
             testCase.verifyGreaterThan(m.snr, 10);
+        end
+
+        function aRejectedTrialIsLeftOut(testCase)
+        %AREJECTEDTRIALISLEFTOUT  Rejection blanks a trial to NaN and leaves
+        %   it in its bin: here trial 2 on Ch1 only, and trial 5 on both
+        %   channels. Every measure of Ch1, its coherence to ChRef included,
+        %   must then be what the four intact trials give on their own.
+            rng(17);
+            srate = 250; nsamp = 250; t = (0:nsamp - 1) / srate;
+            data = zeros(2, nsamp, 6);
+            for tr = 1:6
+                tone = cos(2 * pi * 10 * t + 0.6 * randn);
+                data(1, :, tr) = tone + 0.3 * randn(1, nsamp);
+                data(2, :, tr) = tone + 0.3 * randn(1, nsamp);
+            end
+            intact = struct('DataFormat', 'EPOCHED', 'srate', srate, 'times', t * 1000, ...
+                'chanlocs', struct('labels', {'Ch1', 'ChRef'}), 'data', data(:, :, [1 3 4 6]), ...
+                'bindesc', struct('index', 1, 'label', 'Bin1', 'trials', 1:4));
+            rejected = intact;
+            rejected.data = data;
+            rejected.data(1, :, 2) = NaN;
+            rejected.data(:, :, 5) = NaN;
+            rejected.bindesc.trials = 1:6;
+            opts = spectralOpts(defaultRow(), 'ChRef');
+            opts.coherenceMethod = 'frames';
+            opts.crossf = struct('WinSize', 100);
+
+            want = SpectralMeasure(intact, opts).spectralMeasures{1};
+            got = SpectralMeasure(rejected, opts).spectralMeasures{1};
+            for name = {'amplitude', 'phase', 'itc', 'snr', 'coherence', 'phaselag'}
+                testCase.verifyEqual(got.(name{1}), want.(name{1}), 'AbsTol', 1e-12, name{1});
+            end
+        end
+
+        function phaseIsMeasuredFromTimeZero(testCase)
+        %PHASEISMEASUREDFROMTIMEZERO  The same 10 Hz cosine, at phase 0.5 at
+        %   the event, epoched from -125 and from -130 ms: both read 0.5, as
+        %   FieldTrip reads it. Measured from the first sample, as it used to
+        %   be, they read 0.5 + 2.5 pi and 0.5 + 2.6 pi, wrapped.
+            srate = 1000; nsamp = 1000;
+            for startMs = [-125, -130]
+                times = startMs + (0:nsamp - 1);
+                v = 3 * cos(2 * pi * 10 * times / 1000 + 0.5);
+                EEG = struct('DataFormat', 'EPOCHED', 'srate', srate, 'times', times, ...
+                    'chanlocs', struct('labels', {'Ch1', 'ChRef'}), 'data', repmat(v, [2 1 2]), ...
+                    'bindesc', struct('index', 1, 'label', 'Bin1', 'trials', 1:2));
+                [result, ~] = SpectralMeasure(EEG, spectralOpts(defaultRow(), ''));
+                testCase.verifyEqual(result.spectralMeasures{1}.phase, 0.5, 'AbsTol', 1e-3, ...
+                    sprintf('Epoch from %d ms.', startMs));
+                testCase.verifyEqual(result.etc.alz.spectralMeasure.phaseReference, 'time zero');
+            end
         end
 
         function rejectsNonEpochedData(testCase)

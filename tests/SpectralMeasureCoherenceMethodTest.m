@@ -124,6 +124,28 @@ classdef SpectralMeasureCoherenceMethodTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(result.spectralMeasures{1}.coherence, 0.5);
         end
 
+        function newcrossfLeavesARejectedTrialOut(testCase)
+        %NEWCROSSFLEAVESAREJECTEDTRIALOUT  Rejection blanks a trial to NaN. Handed
+        %   to newcrossf, one such trial made its whole image NaN, so every row's
+        %   coherence went missing. It is left out, as the other estimators leave
+        %   it out: the result is what the remaining trials give on their own.
+            testCase.assumeTrue(testCase.haveNewcrossf(), 'EEGLAB''s newcrossf is not available.');
+            EEG = testCase.recording(20, 30);
+            opts = testCase.options(struct('Method', 'newcrossf', 'WinSize', 100, 'PadRatio', 4, ...
+                'TimesOut', 60, 'MinFreq', 12, 'MaxFreq', 30));
+            without = EEG;
+            without.data = EEG.data(:, :, [1:6, 8:30]);
+            without.bindesc.trials = 1:29;
+            EEG.data(1, :, 7) = NaN;
+
+            got = SpectralMeasure(EEG, opts).spectralMeasures{1};
+            want = SpectralMeasure(without, opts).spectralMeasures{1};
+
+            testCase.verifyEqual(got.coherence, want.coherence, 'AbsTol', 1e-12);
+            testCase.verifyEqual(got.phaselag, want.phaselag, 'AbsTol', 1e-12);
+            testCase.verifyGreaterThan(got.coherence, 0.5);
+        end
+
         function theSavedSettingsKeepABlankWindowBlank(testCase)
         %THESAVEDSETTINGSKEEPABLANKWINDOWBLANK  The node's settings used to hold
         %   the resolved values, NaN for a blank window, and recalculating the

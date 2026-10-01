@@ -49,8 +49,8 @@ if (n_distinct(by_bin$bin) >= 2 && n_distinct(by_bin$dataset) >= 2) {
       ft <- friedman.test(mat)
       # The chi-square symbol is the letters themselves, written as \u
       # escapes that R's parser turns into them, not TeX math: MathJax does
-      # not run in the app's report viewer, so $\chi^2$ reached readers as
-      # "\(\chi^2\)" (see ReportDoc.symbol).
+      # not run in the app's report viewer, so the TeX form reached readers
+      # as its escaped source (see ReportDoc.symbol).
       cat(sprintf(paste0("\nA Friedman test across %d subject(s) with a complete set of bins ",
                          "found %s evidence that rejection rate differs between conditions, ",
                          "\u03c7\u00b2(%d) = %s, *p* %s.\n\n"),

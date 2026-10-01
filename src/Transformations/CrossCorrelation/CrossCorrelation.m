@@ -55,8 +55,16 @@ function [EEG, options] = CrossCorrelation(input, varargin)
 %      handling affordable at all -- the naive triple loop over channels,
 %      trials and lags is the reason implementations reach for
 %      whole-segment statistics in the first place. Implemented with fft
-%      directly rather than xcorr, so this needs no Signal Processing
-%      Toolbox.
+%      directly: xcorr normalises differently, see TOOLBOX OR OWN CODE.
+%
+%      TOOLBOX OR OWN CODE. MATLAB's xcorr computes a cross-correlation, but
+%      its normalised form divides every lag by the whole signals' energies,
+%      the classic formulation point 1 above sets aside. No toolbox gives the
+%      per-lag Pearson r over the overlapping, non-rejected samples, averaged
+%      in Fisher-z; the sums are formed with MATLAB's fft.
+%      CrossCorrelationTest checks the result against an independent per-lag
+%      loop rather than against xcorr, since xcorr computes a different
+%      quantity.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = CrossCorrelation(input)        % interactive dialog
@@ -302,12 +310,9 @@ function [lo, hi] = windowRange(EEG, startMs, stopMs, nSamp)
     if stopMs <= startMs || ~isfield(EEG, 'times') || isempty(EEG.times)
         return;
     end
-    a = find(EEG.times >= startMs, 1, 'first');
-    b = find(EEG.times <= stopMs,  1, 'last');
-    if isempty(a) || isempty(b) || b < a
-        return;
-    end
-    lo = a; hi = b;
+    % FieldTrip's rule for a latency range: the nearest sample at each end,
+    % and a window wholly outside the epoch refused (TransTools.WindowSamples).
+    [lo, hi] = TransTools.WindowSamples(EEG.times, startMs, stopMs, 'Alakazam:CrossCorrelation', 'window');
 end
 
 function ms = windowMs(EEG, lo, hi)

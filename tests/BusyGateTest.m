@@ -158,7 +158,9 @@ classdef BusyGateTest < matlab.unittest.TestCase
 
             pause(1.2);
             busyGate('progress', 0.5);
-            lines = string(dlg.Message);
+            % uiprogressdlg keeps a two-line message as one string with a
+            % line break in it, whatever form it was given in.
+            lines = splitlines(string(dlg.Message));
             testCase.verifyNumElements(lines, 2);
             testCase.verifyEqual(lines(1), "Running Something...");
             testCase.verifyMatches(lines(2), "^About \d+ s left$");

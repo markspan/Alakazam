@@ -134,7 +134,7 @@ classdef CoherenceView < AlakazamView
             if isfield(this.EEG, 'cohRef') && ~isempty(this.EEG.cohRef)
                 ref = sprintf('  vs %s', char(string(this.EEG.cohRef)));
             end
-            this.ChannelLabel.Text = sprintf('(%d/%d)%s', ch, this.EEG.nbchan, ref);
+            this.ChannelLabel.Text = sprintf('(%d/%d)%s%s', ch, this.EEG.nbchan, ref, blankNote(this.EEG));
             this.ChannelDropdown.Value = ch;
         end
 
@@ -215,4 +215,28 @@ classdef CoherenceView < AlakazamView
             this.redraw();
         end
     end
+end
+
+% ======================================================================= %
+function note = blankNote(eeg)
+%BLANKNOTE  Why the lowest frequencies are blank, when they are: their
+%   wavelet is longer than the epoch, so no sample is clear of its edges
+%   (see ComputeCoherenceMap). Empty for a map made before that was
+%   recorded, for the STFT and filter-Hilbert methods, or when every
+%   frequency has samples.
+    note = '';
+    try
+        blank = eeg.etc.alz.coherenceMap.blankFrequencies;
+    catch
+        return;
+    end
+    if ~any(blank)
+        return;
+    end
+    if all(blank)
+        note = '   Blank throughout: the epoch is shorter than these wavelets.';
+        return;
+    end
+    note = sprintf(['   Blank below %.3g Hz: the wavelet there is longer than the epoch; ' ...
+        'a longer epoch shows them.'], eeg.cohFreqs(find(~blank, 1)));
 end

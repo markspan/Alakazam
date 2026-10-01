@@ -32,6 +32,12 @@ function [EEG, opts] = ScalpDistribution(input, varargin)
 %   channels x time x bins with DataFormat = "Averaged", so nothing here
 %   needs to tell them apart.
 %
+%   TOOLBOX OR OWN CODE. Nothing is computed here but the electrode positions,
+%   which come from EEGLAB's readlocs and the 10-5 template
+%   (TransTools.ResolveScalpDistribution). The maps are drawn by
+%   TransTools.DrawScalpMap, a port of EEGLAB's topoplot, which draws only
+%   into the current classic figure.
+%
 %   Signature (Alakazam transformation contract, matching Average.m):
 %   ScalpDistribution has no real options, so OPTS is accepted and
 %   returned unchanged, purely to satisfy the two-output/replay contract.

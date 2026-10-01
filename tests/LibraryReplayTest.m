@@ -209,7 +209,7 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
                 'The gaze and pupil channels should be typed EYE.');
 
             fitted = results{stepIndex(nodes, 'Deconvolve')};
-            testCase.verifyEqual(fitted.DataFormat, 'Averaged');
+            testCase.verifyEqual(char(fitted.DataFormat), 'Averaged');   % a string, as Average sets it
             testCase.verifyNotEmpty(fitted.bindesc);
             testCase.verifyTrue(any(isfinite(fitted.data(:))), 'The fit returned no numbers.');
         end
@@ -239,8 +239,15 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
         function results = replay(testCase, nodes, file)
         %REPLAY  Every step on its parent's result, as onApplyTemplate walks
         %   the node list, after the toolboxes the steps need are confirmed.
+        %   Each dataset carries a cache path in .File, as in the app, where
+        %   the workspace gives the recording one and every result gets
+        %   resultCacheFile's (see replayBranch): AutoEyeICA and AutoGEDAI
+        %   name their output after it and ScalpDistribution keeps it.
             testCase.requireToolboxesFor(nodes);
+            cache = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
             raw = loadRecording(file);
+            [~, name] = fileparts(file);
+            raw.File = fullfile(cache, [name '.mat']);
             results = cell(1, numel(nodes));
             for k = 1:numel(nodes)
                 if nodes(k).parent < 1
@@ -249,6 +256,7 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
                     input = results{nodes(k).parent};
                 end
                 results{k} = TransTools.invoke(nodes(k).transformId, input, nodes(k).params);
+                results{k}.File = resultCacheFile(input.File, nodes(k).transformId);
             end
         end
 

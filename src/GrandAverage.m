@@ -14,12 +14,15 @@ function EEG = GrandAverage(sourceFiles, weighted)
 %       sqrt(nSubjects).
 %     - WEIGHTED = true: the MEAN is a trial-count-weighted average
 %       instead (a subject with more trials counts more, matching
-%       ERPLAB's weighted grand-average option). The reported SEM is
-%       still the plain across-subject SEM either way, since that answers
-%       "how much do subjects vary", which does not itself depend on how
-%       the mean was weighted. A combination (difference) bin has no
-%       trial count of its own, so weighting falls back to equal weights
-%       for that bin specifically.
+%       ERPLAB's weighted grand-average option). The reported standard
+%       error is then the standard error of that weighted mean, so the
+%       band belongs to the line it is drawn around (see combineSubjects).
+%       With equal trial counts it is the plain SEM above. A combination
+%       (difference) bin has no trial count of its own, so weighting falls
+%       back to equal weights for that bin specifically.
+%
+%   The pooled aSME follows the same weights: sqrt(sum(w.^2 .* SME.^2))
+%   over the subjects, which with equal weights is sqrt(sum(SME.^2)) / N.
 %
 %   Every subject must have the same number of channels, the same number
 %   of time samples, and the same set of bin labels; see
@@ -30,6 +33,14 @@ function EEG = GrandAverage(sourceFiles, weighted)
 %   'nSubjects', ...) recording how it was produced. The caller is
 %   responsible for setting EEG.File and EEG.id and saving the result --
 %   this function only computes.
+%
+%   TOOLBOX OR OWN CODE. ERPLAB's gaverager forms grand averages too, but
+%   ERPLAB is not a toolbox Alakazam installs, it reads ERPLAB's ERPsets, and
+%   its weighted standard error is not the standard error of the weighted mean
+%   (Docs/toolbox-audit.md). EEGLAB has no grand average of binned averages.
+%   Measured against independently computed means of Luck's ten N400 erpsets
+%   (Docs/luck.md): 3.6e-15 uV, equal and weighted; GrandAverageTest holds the
+%   error band.
 
     if numel(sourceFiles) < 2
         throw(MException('Alakazam:GrandAverage', ...
@@ -96,16 +107,18 @@ function EEG = GrandAverage(sourceFiles, weighted)
         end
     end
 
-    [grandMean, grandSEM] = combineSubjects(data, trialCount, weighted);
+    [grandMean, grandSEM, weights] = combineSubjects(data, trialCount, weighted);
 
     EEG = subjects{1};
     EEG.data  = grandMean;
     EEG.stErr = grandSEM;
-    % Pool the analytic SME across subjects: for a grand average (a mean of N
-    % subject means), the SME is the root of the summed squared subject SMEs,
-    % divided by N. Only where every subject contributed a value.
+    % Pool the analytic SME across subjects with the weights the mean used:
+    % the grand average is sum(w .* subject means), so its SME is
+    % sqrt(sum(w.^2 .* SME.^2)), which with equal weights is the root of the
+    % summed squared SMEs divided by N. Only where every subject contributed
+    % a value.
     present  = sum(~isnan(aSMEstack), 3);
-    EEG.aSME = sqrt(sum(aSMEstack .^ 2, 3, 'omitnan')) ./ nSubjects;
+    EEG.aSME = sqrt(sum(reshape(weights, 1, nBins, nSubjects) .^ 2 .* aSMEstack .^ 2, 3, 'omitnan'));
     EEG.aSME(present < nSubjects) = NaN;
     EEG.ntrials = NaN;   % a grand average has no single "original trial count"
     EEG.event = struct([]);   % stale per-subject event/epoch info; a grand
@@ -224,13 +237,23 @@ function validateMapCompatibility(subjects, sourceFiles, field)
     end
 end
 
-function [grandMean, grandSEM] = combineSubjects(data, trialCount, weighted)
-%COMBINESUBJECTS  Combine subjects' per-bin means (and report the
-%   across-subject spread). DATA is nchan x npnts x nbin x nsubjects;
-%   GRANDMEAN/GRANDSEM are nchan x npnts x nbin.
+function [grandMean, grandSEM, weights] = combineSubjects(data, trialCount, weighted)
+%COMBINESUBJECTS  Combine subjects' per-bin means and give the standard
+%   error of each combined mean. DATA is nchan x npnts x nbin x nsubjects;
+%   GRANDMEAN/GRANDSEM are nchan x npnts x nbin, and WEIGHTS (nbin x
+%   nsubjects, each row summing to 1) are the weights the mean used.
+%
+%   With weights w the mean is sum(w .* x). Its standard error is
+%   sqrt(V * sum(w.^2)), where V = sum(w .* (x - mean).^2) / (1 - sum(w.^2))
+%   is the weighted variance across subjects, unbiased whatever the
+%   weights. With equal weights V is the ordinary sample variance and the
+%   standard error is std / sqrt(N), the plain across-subject SEM. Using
+%   that plain SEM around a weighted line would draw the spread of a
+%   different mean.
     [nChan, nPnts, nBins, nSubjects] = size(data);
     grandMean = nan(nChan, nPnts, nBins);
-    grandSEM  = std(data, 0, 4) / sqrt(nSubjects);
+    grandSEM  = nan(nChan, nPnts, nBins);
+    weights   = nan(nBins, nSubjects);
 
     for b = 1:nBins
         if weighted && ~any(isnan(trialCount(b, :)))
@@ -238,7 +261,11 @@ function [grandMean, grandSEM] = combineSubjects(data, trialCount, weighted)
         else
             w = ones(1, nSubjects) / nSubjects;
         end
-        grandMean(:, :, b) = sum(data(:, :, b, :) .* reshape(w, 1, 1, 1, nSubjects), 4);
+        weights(b, :) = w;
+        w4 = reshape(w, 1, 1, 1, nSubjects);
+        grandMean(:, :, b) = sum(data(:, :, b, :) .* w4, 4);
+        variance = sum(w4 .* (data(:, :, b, :) - grandMean(:, :, b)) .^ 2, 4) / (1 - sum(w .^ 2));
+        grandSEM(:, :, b) = sqrt(variance * sum(w .^ 2));
     end
 end
 

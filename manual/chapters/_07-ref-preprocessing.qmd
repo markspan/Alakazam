@@ -7,6 +7,19 @@ view of its own, and notes on its limits. Each section opens with a line
 giving the ribbon path, the formats it accepts and returns, and its internal
 name, which is the name a template or an exported script uses.
 
+**Conventions.** Where EEGLAB or FieldTrip has a rule for an operation,
+Alakazam follows it, so that its numbers can be set beside theirs. A time
+window given in ms takes the nearest sample at each end, the earlier one
+when an end lies exactly halfway between two, and an end beyond the epoch
+takes the epoch's own first or last sample, as FieldTrip selects a latency
+range; a window lying wholly outside the epoch is refused rather than
+replaced by the whole epoch. The exceptions follow the toolbox that does the
+same job: a time-frequency baseline takes the samples inside its window, as
+`ft_freqbaseline` and `newtimef` do, and so does Deconvolve's baseline, as
+Unfold's does. Rejected samples are left out of every mean and fit. Each
+section ends with **Toolbox or own code**: the toolbox that does the same
+job, and how Alakazam's result is held to it.
+
 The transformations of **Tools > 1. Preprocessing** are described here in
 the order in which they are usually applied rather than in the ribbon's
 alphabetical order: first the channels and events, then the signal, then
@@ -73,6 +86,10 @@ is applied on replay only to an event that still matches them.
 
 Not recalculable: the dialog opens on the dataset's own events.
 
+**Toolbox or own code.** EEGLAB's `pop_editeventvals` edits events too, but
+an edit made there is not a step that Recalculate or Apply to All can
+replay; here every change is.
+
 ## Photodiode {#sec-tr-photodiode}
 
 *Tools > 1. Preprocessing > Photodiode · continuous → the same ·
@@ -135,6 +152,11 @@ Detection therefore has three stages:
 : Photodiode's options. {#tbl-photodiode}
 
 Not recalculable: the dialog opens on the dataset's own signal.
+
+**Toolbox or own code.** EEGLAB's `pop_chanevent` turns a channel's
+threshold crossings into events. Finding onsets at the foot or at half
+height, pairing each with the trigger that caused it, and measuring the
+delay and its spread have no toolbox equivalent, so they are Alakazam's.
 
 ## Eye tracking {#sec-tr-eyetracking}
 
@@ -275,19 +297,16 @@ response, and its ringing can pass for an oscillation. A methods section
 should therefore describe each filter in enough detail to reproduce it,
 ideally with a plot of its impulse or step response [@decheveigne2019]; the
 type, cutoff, transition band and order in @tbl-filter-design are the
-details to give. The dialog draws that plot: under the three filters it
-shows the impulse response of the ticked ones together, centred on the
-impulse, with its length. Below it, at the bottom of the dialog, is their
-frequency response: the gain in dB from 0 Hz to the Nyquist frequency, with
-a dotted line at -6 dB, where each cutoff sits, and the axis reaching 20 dB
-below the deepest attenuation ticked. It shows which frequencies pass, how
-steep each transition band is, and how far the stop bands reach; zoom in on
-a transition band with the plot's toolbar to read it off. Both plots are
-redrawn whenever a filter is ticked or a frequency or attenuation changes,
-and neither is shown in per-channel mode. They are computed from the same
-kernels the step applies, so they are the responses of the filtering that is
-done; with a 0.1 Hz high-pass the impulse response is 25 seconds long, which
-is the first lesson of the plots.
+details to give. Under the three filters, the dialog plots the frequency
+response of the ticked ones together: the gain in dB from 0 Hz to the
+Nyquist frequency, with a dotted line at -6 dB, where each cutoff sits, and
+the axis reaching 20 dB below the deepest attenuation ticked. It shows which
+frequencies pass, how steep each transition band is, and how far the stop
+bands reach; zoom in on a transition band with the plot's toolbar to read it
+off. The plot is redrawn whenever a filter is ticked or a frequency or
+attenuation changes, and is not shown in per-channel mode. It is computed
+from the same kernels the step applies, so it is the response of the
+filtering that is done.
 
 ## DC-Detrend {#sec-tr-dcdetrend}
 
@@ -321,13 +340,22 @@ four respects:
   the drift estimate absorbs part of the signal being measured. Fitting on
   the prestimulus interval, perhaps with a late tail, and extrapolating
   across the response avoids that.
-- **A robust fit is offered**: iteratively reweighted least squares with
-  Huber's weights [@huber1964] (tuning constant 1.345, scale from the median
-  absolute deviation, five iterations), so that a large transient counts
-  like a moderate one.
+- **A robust fit is offered**: MATLAB's `robustfit` with Huber's weights
+  [@huber1964] (tuning constant 1.345), iterated to convergence, so that a
+  large transient counts like a moderate one.
 - **Rejected samples are left out of the fit** and stay rejected. A channel
   with too few samples left to determine the fit is left untouched, and the
   count is reported.
+
+**Toolbox or own code.** Both fits are MATLAB's: least squares is
+`polyfit`, centred and scaled, on the samples of the fitting range that were
+not rejected, and the robust fit is `robustfit`. FieldTrip's
+`ft_preproc_polyremoval` does the same least-squares fit, and on an epoch
+DC-Detrend matches it in the test suite; as FieldTrip calls it, though, it
+fits the raw sample index and loses an order-2 trend on a long continuous
+recording. MATLAB's `detrend` fits over every sample it is given, and over
+the whole epoch DC-Detrend matches it too. The fitting range takes the
+nearest sample at each end, as above.
 
 ## ReRef {#sec-tr-reref}
 
@@ -462,6 +490,11 @@ the two replaces every derived channel when it runs, which is what makes a
 recalculation or a replay idempotent, so use one place or the other: derive
 here and leave Measure's field empty.
 
+**Toolbox or own code.** ERPLAB's `pop_eegchanoperator` does channel
+arithmetic too, but ERPLAB is not one of the toolboxes Alakazam installs,
+and its formulas are not steps that Recalculate can replay. The arithmetic
+itself is MATLAB's.
+
 ## Rectify {#sec-tr-rectify}
 
 *Tools > 1. Preprocessing > Rectify · any time-domain format → the same ·
@@ -490,11 +523,19 @@ dataset which channels it rectified, which order applied and, for the
 squared mode, the change of unit; the data-quality report shows all three
 per subject (@sec-dq-provenance). Rejected samples stay rejected.
 
+**Toolbox or own code.** The operation itself is MATLAB's absolute value or
+square; what Rectify adds is that it is a recorded, replayable step on the
+channels you choose.
+
 ## Baseline {#sec-tr-baseline}
 
 *Tools > 1. Preprocessing > Baseline · epoched → epoched · `Baseline`*
 
 Subtracts from every trial and channel the mean of a baseline interval.
+Each end of the interval takes the nearest sample, the earlier one on an
+exact tie, as FieldTrip and ERPLAB take it; rejected samples inside it are
+left out of the mean, as FieldTrip leaves them out, and stay rejected; an
+interval wholly outside the epoch is refused.
 
 ![**Baseline**: the interval, in ms relative to the time-locking event, and a preview of it shaded over every channel's average, redrawn as the interval changes.](images/baseline-dialog.png){#fig-baseline-dialog}
 
@@ -512,6 +553,12 @@ threshold-based artefact detection, which follows it, tests amplitudes
 relative to the baseline. An interval of 100 to 200 ms before the event is
 usual; a longer interval reduces noise in the correction, provided nothing
 event-related falls within it [@luckApplied].
+
+**Toolbox or own code.** The rule is FieldTrip's (the baseline window of
+`ft_preprocessing`) and ERPLAB's, and the result matches FieldTrip's in the
+test suite; it is one mean and one subtraction, so it is written out rather
+than called. EEGLAB's `pop_rmbase` takes the samples inside the interval
+instead, so where the ends fall between samples it can differ by a sample.
 
 ## Collapse Hemispheres {#sec-tr-collapsehemispheres}
 
@@ -559,3 +606,8 @@ assignments, by combining Derive Channels (`let C34 = C4 - C3`) with a
 difference bin (`bin 3 = 0.5 bin 1 - 0.5 bin 2`), which agrees with ERPLAB
 to within 10^-14^ µV. What that route cannot give is contra and ipsi
 separately, or every pair at once.
+
+**Toolbox or own code.** ERPLAB reaches the same waveforms by composing a
+channel operation and a bin operation, as in Luck's `BinOps_Contra`
+[@luckApplied]; Alakazam does it in one step, and agrees with ERPLAB's
+result to 6.7e-15 µV.

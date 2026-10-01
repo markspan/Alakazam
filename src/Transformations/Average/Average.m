@@ -31,6 +31,16 @@ function [EEG, opts] = Average(input, varargin)
 %   averages across all trials, as before. A trial in several bins contributes
 %   to each of them.
 %
+%   TOOLBOX OR OWN CODE. The arithmetic is MATLAB's mean and std. ERPLAB's
+%   pop_averager does the same job, but ERPLAB is not a toolbox Alakazam
+%   installs, and its averager reads ERPLAB's EVENTLIST and drops whole
+%   flagged epochs, where this leaves a rejected channel of a trial out (NaN)
+%   and keeps the rest, counts the trials per channel, and forms combination
+%   bins with their propagated standard errors in the same step. EEGLAB has no
+%   binned average with a standard error. Measured against Luck's own
+%   1_N400.erp (Docs/luck.md): the same accepted and rejected counts per bin,
+%   and waveforms to 0.0004 uV; LibraryReplayTest replays those chapters.
+%
 opts = TransTools.InitGuard(nargin, 'Alakazam:Average', varargin{:});
 
 % Validate input data

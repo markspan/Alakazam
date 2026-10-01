@@ -25,6 +25,12 @@ function [EEG, options] = Photodiode(input, varargin)
 %   was checked against real recordings from this lab that contain no
 %   patches, where the right answer is nothing and that is what it gives.
 %
+%   TOOLBOX OR OWN CODE. EEGLAB's pop_chanevent turns a channel's threshold
+%   crossings into events, which is what 'events' does with more care; the
+%   rest (onsets at the foot or at half height, pairing each with the trigger
+%   that caused it, the delay and its spread, how separable the two light
+%   levels are) has no toolbox equivalent. Checked by PhotodiodeTest.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Photodiode(input)        % interactive dialog
 %     [EEG, options] = Photodiode(input, opts)  % replay stored settings

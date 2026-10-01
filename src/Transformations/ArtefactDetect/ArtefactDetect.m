@@ -50,6 +50,15 @@ function [EEG, options] = ArtefactDetect(EEG, varargin)
 %   Backward compatible: an old options struct carrying only Minimum/Maximum
 %   is treated as the Absolute-threshold method over the whole epoch.
 %
+%   TOOLBOX OR OWN CODE. These are ERPLAB's detectors (pop_artextval,
+%   pop_artmwppth, pop_artstep, pop_artdiff, pop_artflatline), but ERPLAB is
+%   not a toolbox Alakazam installs, and its detectors flag whole epochs in
+%   ERPLAB's own EVENTLIST, where this can reject one channel of a trial
+%   (NaN), interpolate it instead, and record each detector's verdicts.
+%   Measured against ERPLAB on Luck's data (Docs/luck.md): the absolute
+%   threshold flags the same 346 of 346 trials, the moving window 345 of 346,
+%   the one difference an artefact ERPLAB's version misses.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ArtefactDetect(input)        % interactive dialog
 %     [EEG, options] = ArtefactDetect(input, opts)  % replay a stored struct
@@ -501,11 +510,10 @@ function [lo, hi] = testRange(EEG, startMs, stopMs, nSamp)
     if stopMs <= startMs || ~isfield(EEG, 'times') || isempty(EEG.times)
         lo = 1; hi = nSamp; return;   % whole epoch
     end
-    lo = find(EEG.times >= startMs, 1, 'first');
-    hi = find(EEG.times <= stopMs,  1, 'last');
-    if isempty(lo); lo = 1; end
-    if isempty(hi); hi = nSamp; end
-    if hi < lo; lo = 1; hi = nSamp; end
+    % The nearest sample at each end, as ERPLAB's window2sample rounds and
+    % FieldTrip's nearest picks; a window wholly outside the epoch is refused
+    % rather than quietly widened to the whole epoch (TransTools.WindowSamples).
+    [lo, hi] = TransTools.WindowSamples(EEG.times, startMs, stopMs, 'Alakazam:ArtefactDetect', 'test window');
 end
 
 function test = ticked(detectors)

@@ -38,12 +38,21 @@ which leaves them out.
   more. A combination bin has no trial count of its own and falls back to
   equal weights.
 
-Either way, the standard error drawn around each waveform is the
-across-subject standard error of the mean, the standard deviation of the
-subjects' averages divided by $\sqrt{N}$: it describes how much subjects
-vary, which does not depend on how the mean was weighted. The unweighted
-mean is the right default for inference, since the subject, not the trial,
-is the unit of observation.
+The band drawn around each waveform is the standard error of the mean it is
+drawn around. Unweighted, that is the across-subject standard error, the
+standard deviation of the subjects' averages divided by $\sqrt{N}$. Weighted,
+it is the standard error of the weighted mean: with weights $w_i$ summing to
+1, the weighted variance $V = \sum w_i (x_i - \bar{x}_w)^2 / (1 - \sum w_i^2)$
+times $\sum w_i^2$, under a square root. With equal trial counts the two are
+the same. The pooled aSME follows the same weights. The unweighted mean is
+the right default for inference, since the subject, not the trial, is the
+unit of observation.
+
+**Toolbox or own code.** ERPLAB's grand averager does the same job, but its
+weighted error band is not the standard error of the weighted mean, so the
+computation is Alakazam's. On Luck's ten N400 erpsets [@luckApplied] it
+matches independently computed grand averages to 3.6e-15 µV, weighted and
+unweighted.
 
 ![A grand average of the ten ERP CORE N400 subjects at Pz: the four conditions and the N400 difference bin, each with its across-subject standard error.](images/ga-view.jpg){#fig-ga-view}
 

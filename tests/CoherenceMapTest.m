@@ -11,6 +11,11 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
 %   holds regardless of the wavelet/STFT machinery in between, so it does
 %   not require re-deriving that machinery's own numerics.
 %
+%   The wavelet leaves the samples within half a wavelet of either end of
+%   the epoch blank (see ComputeCoherenceMap), so the wavelet cases compare
+%   the interior, which INFO's half-wavelets mark, and the edge cases pin
+%   the blank zone against arithmetic done here.
+%
 %   Run with: runtests('tests/CoherenceMapTest.m').
 
     methods (TestClassSetup)
@@ -27,8 +32,66 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
         function coherenceIsOneForAScalarMultipleWavelet(testCase)
             EEG = coherenceFixture();
             opts = waveletOpts();
-            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
-            testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6);
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, opts);
+            inside = clearOfEdges(info, EEG);
+            c = squeeze(coh(2, :, :, 1));
+            testCase.verifyEqual(c(inside), ones(nnz(inside), 1), 'AbsTol', 1e-6);
+        end
+
+        % ---- the wavelet's edges ------------------------------------------
+        function theWaveletEdgesAreBlank(testCase)
+        %THEWAVELETEDGESAREBLANK  At 10 Hz with 3 cycles the wavelet's sigma
+        %   is 3 / (2 pi 10) s and it runs to three sigma, ceil(35.8) = 36
+        %   samples at 250 Hz: the first and last 36 samples are blank and
+        %   every sample between them is computed.
+            EEG = coherenceFixture();
+            opts = waveletOpts();
+            [coh, freqs, ~, ~, info] = ComputeCoherenceMap(EEG, opts);
+            testCase.assertEqual(freqs(1), 10, 'AbsTol', 1e-9);
+
+            testCase.verifyEqual(info.halfWaveletMs(1), 36 / 250 * 1000, 'AbsTol', 1e-9);
+            row = squeeze(coh(2, 1, :, 1))';
+            nT = numel(EEG.times);
+            testCase.verifyTrue(all(isnan(row([1:36, nT - 35:nT]))), 'The edges are blank.');
+            testCase.verifyTrue(all(isfinite(row(37:nT - 36))), 'Everything between them is computed.');
+        end
+
+        function theReferencePowerIsBlankAtTheEdgesToo(testCase)
+            EEG = coherenceFixture();
+            [~, ~, ~, refPower, info] = ComputeCoherenceMap(EEG, waveletOpts());
+            inside = clearOfEdges(info, EEG);
+            power = refPower(:, :, 1);
+            testCase.verifyTrue(all(isnan(power(~inside))));
+            testCase.verifyTrue(all(isfinite(power(inside))));
+        end
+
+        function aWaveletLongerThanTheEpochLeavesItsFrequencyBlank(testCase)
+        %AWAVELETLONGERTHANTHEEPOCHLEAVESITSFREQUENCYBLANK  A 200 ms epoch:
+        %   at 2 Hz with 3 cycles half the wavelet is 179 samples, longer
+        %   than the epoch, so the row is blank and recorded as blank; at
+        %   30 Hz with 5 cycles it is 20 samples, and the row has values.
+            EEG = coherenceFixture();
+            EEG.data = EEG.data(:, 1:50, :);
+            EEG.times = EEG.times(1:50);
+            opts = waveletOpts();
+            opts.MinFreq = 2;
+
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, opts);
+
+            testCase.verifyTrue(info.blankFrequencies(1));
+            testCase.verifyFalse(info.blankFrequencies(end));
+            testCase.verifyTrue(all(isnan(coh(2, 1, :, 1)), 'all'));
+            testCase.verifyTrue(any(isfinite(coh(2, end, :, 1)), 'all'));
+        end
+
+        function theStftAndFilterHilbertHaveNoEdgeZone(testCase)
+            EEG = coherenceFixture();
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, stftOpts());
+            testCase.verifyEmpty(info.halfWaveletMs);
+            testCase.verifyFalse(any(info.blankFrequencies));
+            testCase.verifyFalse(any(isnan(coh(2, :, :, 1)), 'all'));
+            [~, ~, ~, ~, info] = ComputeCoherenceMap(EEG, filterHilbertOpts());
+            testCase.verifyEmpty(info.halfWaveletMs);
         end
 
         function coherenceIsOneForAScalarMultipleStft(testCase)
@@ -48,10 +111,13 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG.bindesc.trials = 1:3;
             opts = waveletOpts();
 
-            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, opts);
 
-            testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6);
-            testCase.verifyFalse(any(isnan(coh(3, :, :, 1)), 'all'));
+            inside = clearOfEdges(info, EEG);
+            c2 = squeeze(coh(2, :, :, 1));
+            c3 = squeeze(coh(3, :, :, 1));
+            testCase.verifyEqual(c2(inside), ones(nnz(inside), 1), 'AbsTol', 1e-6);
+            testCase.verifyFalse(any(isnan(c3(inside))));
         end
 
         function aChannelRejectedInOneTrialKeepsItsOtherTrials(testCase)
@@ -66,11 +132,14 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             EEG.bindesc.trials = 1:3;
             opts = waveletOpts();
 
-            [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, opts);
 
-            testCase.verifyEqual(coh(2, :, :, 1), ones(1, opts.NumFreqs, numel(EEG.times)), 'AbsTol', 1e-6, ...
+            inside = clearOfEdges(info, EEG);
+            c2 = squeeze(coh(2, :, :, 1));
+            c3 = squeeze(coh(3, :, :, 1));
+            testCase.verifyEqual(c2(inside), ones(nnz(inside), 1), 'AbsTol', 1e-6, ...
                 'With the reference power over the same two trials, this is still exactly 1.');
-            testCase.verifyFalse(any(isnan(coh(3, :, :, 1)), 'all'));
+            testCase.verifyFalse(any(isnan(c3(inside))));
         end
 
         function referenceChannelRowIsNaN(testCase)
@@ -97,7 +166,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             opts.MaxFreq = 20;
             [~, freqs, ~, refPower] = ComputeCoherenceMap(EEG, opts);
 
-            perFreq = mean(refPower(:, :, 1), 2);
+            perFreq = mean(refPower(:, :, 1), 2, 'omitnan');   % the edges are blank
             [~, fIdx] = max(perFreq);
             testCase.verifyEqual(freqs(fIdx), 20, 'AbsTol', 1e-6);
         end
@@ -126,9 +195,10 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
         %   (it is one trial's spectrum) and is what names the tag.
             EEG = coherenceFixture();
             EEG.bindesc(1).trials = 1;
-            [coh, ~, ~, refPower] = ComputeCoherenceMap(EEG, waveletOpts());
+            [coh, ~, ~, refPower, info] = ComputeCoherenceMap(EEG, waveletOpts());
             testCase.verifyTrue(all(isnan(coh(:, :, :, 1)), 'all'));
-            testCase.verifyTrue(all(isfinite(refPower(:, :, 1)), 'all'));
+            power = refPower(:, :, 1);
+            testCase.verifyTrue(all(isfinite(power(clearOfEdges(info, EEG)))));
         end
 
         function boxcarTaperStillGivesUnitCoherenceForAScalarMultiple(testCase)
@@ -259,7 +329,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
 
             [coh, ~, ~] = ComputeCoherenceMap(EEG, opts);
 
-            testCase.verifyLessThan(mean(coh(2, :, :, 1), 'all'), 0.5);
+            testCase.verifyLessThan(mean(coh(2, :, :, 1), 'all', 'omitnan'), 0.5);
         end
     end
 end
@@ -287,6 +357,17 @@ function EEG = coherenceFixture()
     EEG.srate  = srate;
     EEG.data   = data;
     EEG.bindesc = struct('index', 1, 'label', 'Bin1', 'trials', 1:nTrials, 'combo', []);
+end
+
+function inside = clearOfEdges(info, EEG)
+%CLEAROFEDGES  nFreqs x nTime: the samples more than half a wavelet from
+%   either end of the epoch, from INFO's half-wavelets.
+    nT = numel(EEG.times);
+    halfLen = round(info.halfWaveletMs * EEG.srate / 1000);
+    inside = false(numel(halfLen), nT);
+    for f = 1:numel(halfLen)
+        inside(f, halfLen(f) + 1:nT - halfLen(f)) = true;
+    end
 end
 
 function opts = waveletOpts()

@@ -1,15 +1,34 @@
 function [EEG, opts] = Baseline(input, varargin)
-%% corrects the EEG data by subtracting
-%   the mean of a specified baseline period from each data point within each trial.
+%% Baseline  Subtract each channel's mean over a time window, per trial.
+%
+%   The window is given in ms and taken to the nearest sample at each end,
+%   the earlier one when an end lies exactly halfway between two samples,
+%   and an end beyond the epoch is taken to the epoch's first or last sample
+%   (TransTools.NearestSample): FieldTrip's rule (ft_preprocessing's
+%   baselinewindow, ft_timelockbaseline) and ERPLAB's. A window lying wholly
+%   outside the epoch is refused, where FieldTrip would skip the correction.
+%   Rejected samples (NaN) inside the window are left out of the mean, as
+%   FieldTrip's ft_preproc_baselinecorrect leaves them out, and stay NaN.
 %
 %   Inputs:
 %       input - Struct containing the EEG dataset and related information.
-%       opts  - Struct containing options for baseline correction. If not provided,
-%               default settings dialog is prompted.
+%       opts  - Struct with Start and Stop (ms). If not provided, the
+%               options dialog is shown.
 %
 %   Outputs:
-%       EEG   - Struct of the baseline-corrected EEG dataset.
-%       opts  - Struct containing the used or updated baseline options.
+%       EEG   - The baseline-corrected dataset; EEG.etc.alz.baseline records
+%               the window as asked (ms) and as used (samples and ms).
+%       opts  - The options used.
+%
+%   TOOLBOX OR OWN CODE. The rule is FieldTrip's and ERPLAB's, so the result
+%   is theirs: FieldTripReferenceTest holds it to ft_preprocessing's
+%   demean with the same window. It is written out here rather than called
+%   because it is one mean and one subtraction over Alakazam's own data
+%   layout. EEGLAB's pop_rmbase takes the samples inside the window instead
+%   and refuses a window reaching past the epoch, so it would differ by a
+%   sample wherever a window's ends fall between samples. This used to take
+%   the sample at or before each end, one sample earlier than FieldTrip and
+%   ERPLAB for a window starting between samples.
 
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:Baseline', varargin{:});
 
@@ -69,18 +88,18 @@ if interactive
     TransformSettings.set('Baseline', opts);
 end
 
-[~,zeropoint] = min(abs(input.times));
-
-start = max(1, floor((opts.Start * input.srate / 1000)) + zeropoint);
-stop = min(size(input.data,2), floor((opts.Stop * input.srate / 1000)) + zeropoint);
+times = double(input.times(:)).';
+if opts.Stop < opts.Start
+    throw(MException('Alakazam:Baseline', sprintf([ ...
+        'Problem in Baseline: the window''s start (%g ms) comes after its stop (%g ms), ' ...
+        'I''m afraid. Would you swap them?'], opts.Start, opts.Stop)));
+end
+[first, last] = TransTools.WindowSamples(times, opts.Start, opts.Stop, 'Alakazam:Baseline', 'baseline window');
 
 EEG = input;
-for i = 1:EEG.trials
-    for c = 1:EEG.nbchan
-        bl = mean(EEG.data(c,start:stop,i));
-        EEG.data(c,:,i) = EEG.data(c,:,i) - bl;
-    end
-end
+EEG.data = EEG.data - mean(EEG.data(:, first:last, :), 2, 'omitnan');
+EEG.etc.alz.baseline = struct('windowMs', [opts.Start, opts.Stop], ...
+    'samples', [first, last], 'samplesMs', times([first, last]));
 end
 
 % ======================================================================= %

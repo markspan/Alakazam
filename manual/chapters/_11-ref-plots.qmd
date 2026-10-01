@@ -26,6 +26,10 @@ The bin menu offers the bins ticked in the dataset's own waveform view, when
 that is open, and every bin otherwise. The slider redraws the map as it
 moves; **Play** runs through the epoch.
 
+**Toolbox or own code.** Nothing is computed here but the electrode
+positions, which come from EEGLAB; the map is drawn by a port of EEGLAB's
+`topoplot`.
+
 ## Brain (3D) {#sec-tr-brain3d}
 
 *Tools > 5. Plots > Brain (3D) · averaged → averaged, with scalp positions ·
@@ -66,6 +70,9 @@ view uses it and adopts the sheet it was computed on. What any of these
 estimates can and cannot show is set out in @sec-source-estimation; in
 short, this is a template-based approximation and not a localisation of an
 individual's generators.
+
+**Toolbox or own code.** The electrode positions come from EEGLAB, as for
+Scalp; the source-estimate mode is FieldTrip's (@sec-tr-sourceestimate).
 
 ## TimeFrequency {#sec-tr-timefrequency}
 
@@ -124,6 +131,13 @@ The view shows one heat map per bin with a channel menu; the arrow keys and
 the mouse wheel step the channel. Maps from several subjects can be combined
 into a grand average (@sec-grand-averages).
 
+**Toolbox or own code.** EEGLAB's `newtimef` and FieldTrip's
+`ft_freqanalysis` compute the same ERSP, and Alakazam follows their
+conventions: the edge rule and the dB of the mean power above. The
+computation is Alakazam's because it does every channel and bin in one pass,
+leaves rejected trials out per channel and builds combination bins. In the
+test suite it agrees with FieldTrip to 0.03 dB.
+
 ## Coherence Map {#sec-tr-coherencemap}
 
 *Tools > 5. Plots > Coherence Map · epoched → coherence maps ·
@@ -157,12 +171,27 @@ recognisable as such, and the tagging frequency in the reports is read from
 the reference rather than from a noisy channel's coherence to it. Rejected
 trials are left out, per channel.
 
+With the wavelet, **the edges of the epoch are left blank**, by the same
+rule as TimeFrequency (@sec-tr-timefrequency): within $3c/(2\pi f)$ seconds
+of either end, the wavelet lies partly over no data, so it is in effect
+shorter and each value there mixes in the neighbouring frequencies, which at
+60 Hz smears the response into the 64 Hz row just where its onset is read.
+A frequency whose wavelet is longer than the epoch is blank throughout, and
+the view says below which frequency. The STFT and FilterHilbert maps are
+unaffected.
+
 ![The coherence of Oz to the photodiode in three RIFT conditions. In the 30 Hz SSVEP condition (middle), coherence appears at 30 Hz and its 60 Hz harmonic; the 60 and 64 Hz RIFT responses are weaker, and a line-noise band near 50 Hz runs through all three.](images/coherencemap-result.jpg){#fig-coherencemap-result}
 
 The frequency resolution of a short window is limited: at 2000 Hz, a
 510-sample frame lasts 255 ms and cannot separate 60 from 64 Hz, so that a
 64 Hz readout in 60 Hz trials is 60 Hz leaking through. Resampling to 960 Hz
 first, as the RIFT template does, makes the same frames 531 ms long.
+
+**Toolbox or own code.** EEGLAB's `newcrossf` and FieldTrip compute
+coherence over time too, with the same estimator. The three decompositions
+are Alakazam's so that this map, Spectral Measure's numbers and CohTopo
+share their frames, estimator and rejection rule. The wavelet map agrees
+with FieldTrip to 0.006.
 
 ## CohTopo {#sec-tr-coherencetopography}
 
@@ -199,3 +228,8 @@ The column on the right has a tickbox per bin, named with the frequency its
 map is drawn at: untick the bins not being compared.
 
 ![Coherence to the photodiode at 64 Hz in the RIFT 64 Hz condition: an occipital focus.](images/coherencetopography-result.jpg){#fig-coherencetopography-result}
+
+**Toolbox or own code.** The coherence is Spectral Measure's frame-averaged
+estimator (@sec-tr-spectralmeasure), which agrees with FieldTrip frame by
+frame; the positions come from EEGLAB and the maps from a port of its
+`topoplot`.

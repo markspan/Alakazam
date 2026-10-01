@@ -23,6 +23,12 @@ function [EEG, options] = Welch(input, varargin)
 %   what this provides, and it is why it refuses epoched input rather than
 %   quietly duplicating the other route.
 %
+%   TOOLBOX OR OWN CODE. MATLAB's pwelch computes the same averaged
+%   periodogram, and on clean data this matches it exactly (WelchTest). It is
+%   not called because it cannot leave out a segment that holds rejected (NaN)
+%   samples: its result would be NaN. So the segmentation is done here, and
+%   each intact segment's periodogram is formed with fft as pwelch forms it.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Welch(input)       % interactive dialog
 %     [EEG, options] = Welch(input, opts) % replay a stored struct

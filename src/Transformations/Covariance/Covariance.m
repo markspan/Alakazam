@@ -45,6 +45,14 @@ function [EEG, options] = Covariance(input, varargin)
 %      40 trials and one from 4 should not look alike in the output when
 %      they are not alike in reliability.
 %
+%      TOOLBOX OR OWN CODE. MATLAB's cov and corrcoef give the raw estimate,
+%      and on clean data this matches them (CovarianceTest). MATLAB, EEGLAB
+%      and FieldTrip have no Ledoit-Wolf covariance estimator (robustcov, in
+%      the Statistics and Machine Learning Toolbox, is a different,
+%      outlier-resistant one), so the shrinkage is Ledoit and Wolf's closed
+%      form written here, as are the complete-observation rule and the per-bin
+%      pooling.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Covariance(input)        % interactive dialog
 %     [EEG, options] = Covariance(input, opts)  % replay a stored options struct
@@ -242,12 +250,9 @@ function [lo, hi] = windowRange(EEG, startMs, stopMs, nSamp)
     if stopMs <= startMs || ~isfield(EEG, 'times') || isempty(EEG.times)
         return;
     end
-    a = find(EEG.times >= startMs, 1, 'first');
-    b = find(EEG.times <= stopMs,  1, 'last');
-    if isempty(a) || isempty(b) || b < a
-        return;
-    end
-    lo = a; hi = b;
+    % FieldTrip's rule for a latency range: the nearest sample at each end,
+    % and a window wholly outside the epoch refused (TransTools.WindowSamples).
+    [lo, hi] = TransTools.WindowSamples(EEG.times, startMs, stopMs, 'Alakazam:Covariance', 'window');
 end
 
 function ms = windowMs(EEG, lo, hi)

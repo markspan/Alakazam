@@ -73,8 +73,8 @@ noise and the re-referencing) and reads its record; a stage that fails inside
 `Filter` is the one worth a note: the filtering is `firfilt`, but the
 parameter design is Alakazam's. You give a frequency and a stopband
 attenuation in dB, and the order, transition band and window are derived
-from those rather than asked for. The impulse and frequency responses the
-dialog plots come from the same kernels.
+from those rather than asked for. The frequency response the dialog plots
+comes from the same kernels.
 
 ## Own algorithm, another toolkit for support only
 
@@ -86,8 +86,8 @@ Six transformations.
 | `AutoReject` | local autoreject (Jas et al., 2017): the cross-validated thresholds, the consensus and the repair plan, 400 lines | `eeg_interp`, the same |
 | `ManualReject` | the rejection view, 382 lines | `eeg_interp`, the same |
 | `ChannelEditor` | the editor, 312 lines | `readlocs` and the 10-5 template file (`TransTools.Template1005File`) |
-| `CoherenceTopography` | the coherence, 333 lines | `readlocs` and the template file, for electrode positions |
-| `SpectralMeasure` | every quantity, and the frame-averaged coherence that is the default estimator, 956 lines | `newcrossf` (EEGLAB), when the older estimator is chosen |
+| `CoherenceTopography` | the coherence, 333 lines | `readlocs` and the template file, for electrode positions; `goertzel` and `hann` (Signal Processing Toolbox), through `TransTools.Tdft` and `TransTools.FrameCoherence` |
+| `SpectralMeasure` | amplitude, SNR, ITC and the coherence normalisation on the exact-frequency coefficients, 956 lines; why these stay its own is in `toolbox-audit.md` | `goertzel`, `hann` and `dpss` (Signal Processing Toolbox) for the transform and the tapers; `newcrossf` (EEGLAB), when that estimator is chosen |
 
 ## Written for Alakazam
 

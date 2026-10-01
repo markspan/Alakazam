@@ -242,6 +242,15 @@ subject) reads what it returns. So:
   `'FrequencyDomain'`, with its own axis.
 - **Time is in seconds when continuous, milliseconds when epoched or
   averaged**, as every loader leaves it.
+- **Follow the toolbox's convention.** Where EEGLAB or FieldTrip has a rule
+  for the same operation, use it, so that a result can be set beside
+  theirs; look the rule up in their source, and test against it. A time
+  window in ms becomes samples through `TransTools.WindowSamples`,
+  FieldTrip's rule for a latency range: the nearest sample at each end, the
+  earlier on an exact tie, an end beyond the data clamped to it, and a window
+  wholly outside the data refused. The exceptions follow the toolbox that
+  does the job: a time-frequency baseline takes the samples inside its
+  window, as `ft_freqbaseline` and `newtimef` do.
 - **Channels and bins are labels.** Options store labels, resolved against
   the dataset at compute time (`TransTools.LabelsToIdx`), so a stored choice
   replays on a montage in another order, or one lacking a channel.
@@ -421,6 +430,12 @@ Conventions the suite depends on:
   when no `uihtml` is alive: MATLAB hangs.
 - A green test proves nothing until it has been seen to fail: break the code
   it guards, watch it fail, restore.
+- **A hand-written computation with a toolbox equivalent is held to it by a
+  test**, skipped when the toolbox is absent and never downloading it.
+  `FieldTripReferenceTest` compares the wavelet ERSP, the wavelet coherence
+  and Fourier's PSD with FieldTrip; its header says what differs between the
+  two and why each tolerance is as tight as it is, which has to stay tighter
+  than the error the test exists to catch (`Docs/toolbox-audit.md`).
 - Lint every edited file with `checkcode`.
 
 ## Documentation

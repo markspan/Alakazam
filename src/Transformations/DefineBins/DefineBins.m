@@ -9,6 +9,13 @@ function [EEG, options] = DefineBins(input, varargin)
 % bin membership, so a later EpochBins step can cut the epochs and an
 % AverageBins step can average per bin.
 %
+% TOOLBOX OR OWN CODE. This replaces ERPLAB's EVENTLIST and BINLISTER, which
+% Alakazam does not install; ERPLAB bin descriptor files are translated into
+% this language (erplabBdfToBinScript) rather than run. Epoching follows
+% EEGLAB's and ERPLAB's latency rule (floor, below). Measured against
+% BINLISTER on Luck's N2pc data (Docs/luck.md): 642 of 642 events in the same
+% bins, and the epochs bit-identical to pop_epochbin.
+%
 % Signature (Alakazam transformation contract):
 %   [EEG, options] = DefineBins(input)        % interactive: prompt for a script
 %   [EEG, options] = DefineBins(input, opts)  % replay: opts is a stored struct

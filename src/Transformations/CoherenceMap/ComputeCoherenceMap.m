@@ -1,4 +1,4 @@
-function [coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(input, opts)
+function [coh, freqs, cohTimes, refPower, info] = ComputeCoherenceMap(input, opts)
 %COMPUTECOHERENCEMAP Time-resolved magnitude-squared coherence between every
 %   channel and a reference channel (e.g. a photodiode), as an nChan x nFreqs
 %   x nTime x nBins array -- the RIFT / frequency-tagging read-out drawn by
@@ -63,20 +63,57 @@ function [coh, freqs, cohTimes, refPower] = ComputeCoherenceMap(input, opts)
 %   RIFT/SSVEP conditions tagged at different true frequencies, averaging
 %   coherence over every EEG channel picked the same wrong frequency for
 %   two different conditions.
+%
+%   THE WAVELET'S EDGES ARE LEFT OUT, as in ComputeErsp and as FieldTrip
+%   leaves them out. A sample closer to either end of the epoch than half its
+%   frequency's wavelet has part of the wavelet over no data: the wavelet is
+%   effectively shorter there, so the estimate mixes in neighbouring
+%   frequencies (a 60 Hz response bleeds into the 64 Hz row) exactly where a
+%   reader looks for the onset. Those samples are NaN, drawn blank, in the
+%   coherence and in REFPOWER, and a frequency whose wavelet is longer than
+%   the whole epoch is blank throughout. The STFT frames lie inside the epoch
+%   and the filter-Hilbert bands are padded, so neither method is affected.
+%
+%   INFO describes what could be computed: .halfWaveletMs (1 x nFreqs), how
+%   far from each end of the epoch a frequency's first and last computed
+%   sample lie, and .blankFrequencies (1 x nFreqs logical), the frequencies
+%   whose wavelet is longer than the epoch. Both are empty and all false for
+%   the STFT and filter-Hilbert methods.
+%
+%   TOOLBOX OR OWN CODE. EEGLAB's newcrossf, and FieldTrip's ft_freqanalysis
+%   with ft_connectivityanalysis('coh'), compute coherence over time too, and
+%   the estimator here is FieldTrip's: the trial-averaged cross-spectrum
+%   normalised by the trial-averaged powers. The three decompositions are kept
+%   as Alakazam's so that they share their frames, estimator and rejection
+%   rule with SpectralMeasure and CoherenceTopography (the map, the reported
+%   number and the topography are one quantity), give the reference's own
+%   power alongside, and leave a rejected trial out per channel with the
+%   reference power taken over the same trials. The wavelet map agrees with
+%   ft_connectivityanalysis to 0.006 (FieldTripReferenceTest); the STFT map
+%   equals TransTools.FrameCoherence at a grid frequency (FrameCoherenceTest),
+%   which agrees with FieldTrip's sliding-window coherence frame by frame.
     switch lower(char(string(opts.Method)))
         case 'stft'
             [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts);
+            info = noEdges(freqs);
         case 'filterhilbert'
             [coh, freqs, cohTimes, refPower] = filterHilbertCoherence(input, opts);
+            info = noEdges(freqs);
         otherwise
-            [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts);
+            [coh, freqs, cohTimes, refPower, info] = waveletCoherence(input, opts);
     end
 end
 
+function info = noEdges(freqs)
+%NOEDGES  INFO for a method that computes every sample it returns.
+    info = struct('halfWaveletMs', [], 'blankFrequencies', false(1, numel(freqs)));
+end
+
 % ======================================================================= %
-function [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts)
+function [coh, freqs, cohTimes, refPower, info] = waveletCoherence(input, opts)
 %WAVELETCOHERENCE  Morlet-wavelet time-frequency coherence, reusing the same
-%   variable-cycle wavelet-FFT precompute as ComputeErsp.
+%   variable-cycle wavelet-FFT precompute as ComputeErsp, and its edge rule
+%   (see this file's header).
     times = input.times;
     nT    = numel(times);
     nChan = input.nbchan;
@@ -107,16 +144,21 @@ function [coh, freqs, cohTimes, refPower] = waveletCoherence(input, opts)
     analytic = @(sig) waveletTransform(sig, waveletFFTs, halfLens, nfft, nT, nF);
     [coh, refPower] = coherenceOverBins(input, nChan, nF, nT, nBins, refIdx, analytic);
     cohTimes = times;
+    info = struct('halfWaveletMs', halfLens / srate * 1000, 'blankFrequencies', 2 * halfLens >= nT);
 end
 
 function A = waveletTransform(sig, waveletFFTs, halfLens, nfft, nT, nF)
-%WAVELETTRANSFORM  nF x nT complex coefficients for one trial's signal.
+%WAVELETTRANSFORM  nF x nT complex coefficients for one trial's signal,
+%   NaN within half a wavelet of either end of the epoch (see the header):
+%   a NaN coefficient makes the sums it enters NaN, so the coherence and the
+%   reference power are blank there too.
     sigFFT = fft(sig(:).', nfft);
     A = zeros(nF, nT);
     for fi = 1:nF
         conv = ifft(sigFFT .* waveletFFTs{fi});
         hl = halfLens(fi);
         A(fi, :) = conv(hl + 1 : hl + nT);
+        A(fi, [1:min(hl, nT), max(nT - hl + 1, 1):nT]) = NaN;
     end
 end
 

@@ -22,6 +22,9 @@ function [EEG, opts] = TimeFrequency(varargin)
 %   rather than re-running the wavelet convolution live on every
 %   keypress.
 %
+%   TOOLBOX OR OWN CODE: see ComputeErsp, which does the computation and says
+%   why it is Alakazam's and how it is held to FieldTrip.
+%
 %   Signature (Alakazam transformation contract, matching Fourier.m):
 %   [EEG, opts] = TimeFrequency(input) pops the options dialog and stores
 %   the chosen settings in TransformSettings for next time; [EEG, opts] =

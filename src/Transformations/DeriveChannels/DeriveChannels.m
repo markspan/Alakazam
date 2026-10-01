@@ -49,6 +49,12 @@ function [EEG, options] = DeriveChannels(input, varargin)
 %   this node added. Measure is a no-op when its field is blank, which is
 %   the combination to use: derive here, leave Measure's field empty.
 %
+%   TOOLBOX OR OWN CODE. ERPLAB's pop_eegchanoperator does channel arithmetic,
+%   but ERPLAB is not a toolbox Alakazam installs, and its formulas are not
+%   replayable steps; here a derived channel is replaced, not duplicated, on
+%   Recalculate (above). The arithmetic itself is MATLAB's. Checked by
+%   DeriveChannelsTest.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = DeriveChannels(input)        % interactive dialog
 %     [EEG, options] = DeriveChannels(input, opts)  % replay a stored struct

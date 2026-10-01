@@ -60,6 +60,9 @@ function [EEG, options] = Rectify(input, varargin)
 %   would be a second way to do the same thing, with its own bugs. Rectify
 %   rectifies; SelectData selects.
 %
+%      TOOLBOX OR OWN CODE. The operation is MATLAB's abs and power; what is
+%      Alakazam's is the bookkeeping that makes it a step (above).
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = Rectify(input)        % interactive dialog
 %     [EEG, options] = Rectify(input, opts)  % replay a stored options struct

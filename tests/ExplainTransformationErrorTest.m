@@ -88,7 +88,8 @@ classdef ExplainTransformationErrorTest < matlab.unittest.TestCase
                 [title, message] = explainTransformationError('Filter', shapeError(), c{1}{:}, ...
                     'Dataset', makeTestEEG());
                 text = strjoin([{title}, message], newline);
-                testCase.verifyFalse(contains(text, char(8212)) || contains(text, ' -- '), strjoin(c{1}, ' '));
+                testCase.verifyFalse(contains(text, char(8212)) || contains(text, ' -- '), ...
+                    strjoin(cellfun(@(v) char(string(v)), c{1}, 'UniformOutput', false), ' '));
             end
         end
     end

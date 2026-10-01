@@ -13,7 +13,8 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %       side, past a guard band): the standard SSVEP signal-to-noise ratio.
 %     * itc -- inter-trial coherence / phase-locking value in [0,1],
 %       |mean_trials(X/|X|)|; reference-free consistency of the response.
-%     * phase -- angle of the evoked complex.
+%     * phase -- angle of the evoked complex, measured from the event (time
+%       zero), as FieldTrip measures it; see phaseTimeAxis.
 %     * coherence / phaselag -- magnitude-squared coherence and cross phase
 %       to the reference channel (e.g. a photodiode), pooled over trials;
 %       NaN when no reference is set.
@@ -21,11 +22,40 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %   Frequencies are written as expressions over named fundamentals (see
 %   spectralFreqSpecs): a "let f1 = 63" block plus rows like f1, 2*f1 (a
 %   harmonic) or f1+f2 / 2*f1-f2 (intermodulation terms). The complex
-%   coefficient is computed by a tapered single-frequency DFT evaluated
-%   directly at the requested frequency, so harmonic/intermodulation terms
-%   off the fs/N grid are still exact. A single Hann taper by default;
-%   optional DPSS multitaper (Signal Processing Toolbox) averages over K
-%   tapers to cut variance.
+%   coefficient is the DFT of the tapered epoch at exactly the requested
+%   frequency (TransTools.Tdft), so harmonic/intermodulation terms off the
+%   fs/N grid are still exact. A single Hann taper by default; optional DPSS
+%   multitaper averages over K tapers to cut variance.
+%
+%   TOOLBOX OR OWN CODE.
+%     The transform and the tapers are the Signal Processing Toolbox's:
+%       goertzel (the DFT at one frequency, fractional indices included),
+%       hann and dpss. FieldTrip's ft_freqanalysis is the obvious
+%       alternative, but it rounds every requested frequency to the grid of
+%       the padded epoch, 1/T Hz (ft_specest_mtmfft), so a row is read at its
+%       exact frequency only when the epoch or its padding holds a whole
+%       number of that frequency's cycles, which a harmonic or
+%       intermodulation row generally does not. At a frequency on the grid
+%       the two give the same coefficients.
+%     What is computed from the coefficients is Alakazam's, because neither
+%       FieldTrip nor EEGLAB has it as a function for one exact frequency:
+%       the calibrated amplitude (2 |X| / sum(taper)), the SNR (power over
+%       the mean power of the neighbouring bins past a guard band) and the
+%       ITC (|mean(X ./ |X|)|). Each is its one-line textbook definition.
+%     The coherence is FieldTrip's estimator, the trial-averaged
+%       cross-spectrum normalised by the trial-averaged powers
+%       (ft_connectivity_corr, squared), computed on these exact-frequency
+%       coefficients rather than on FieldTrip's grid. One deliberate
+%       difference: the reference's power is averaged over the trials the
+%       cross-spectrum used. FieldTrip averages it over every trial the
+%       reference has, so once trials are rejected per channel its ratio is
+%       no longer quite a coherence. EEGLAB's newcrossf stays available as
+%       a coherence method (below).
+%     FieldTripReferenceTest holds the amplitude, phase, ITC and SNR to
+%       ft_freqanalysis('mtmfft') at frequencies on its grid, rejected trials
+%       included, and the frame coherence to ft_freqanalysis('mtmconvol') with
+%       ft_connectivityanalysis('coh') on the same frames; all agree to
+%       rounding.
 %
 %   THREE WAYS TO ESTIMATE COHERENCE (options.coherenceMethod). Only the
 %   coherence and phase-lag depend on it; power, amplitude, SNR, ITC and phase
@@ -218,7 +248,7 @@ if ~isempty(strtrim(char(string(refChannel))))
 end
 
 nBins = numel(EEG.bindesc);
-t = (0:nsamp - 1) / srate;
+[t, phaseReference] = phaseTimeAxis(EEG, nsamp);
 df = srate / nsamp;
 
 %% Per-row computation
@@ -238,6 +268,7 @@ for w = 1:numel(rows)
         nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache);
 end
 EEG.spectralMeasures = measurements;
+EEG.etc.alz.spectralMeasure = struct('options', options, 'phaseReference', phaseReference);
 
 %% Evoked amplitude spectrum per channel x bin, for the view
 [EEG.spectrum, EEG.specFreqs] = evokedSpectrum(EEG, tapers(:, 1), df);
@@ -361,6 +392,17 @@ function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, c
     else
         Vc   = poolWave(EEG, members, trials);          % nsamp x nTrials
         Vref = poolWave(EEG, refIdx, trials);            % nsamp x nTrials
+        % REJECTED TRIALS ARE LEFT OUT, as the other two estimators leave them
+        % out: rejection blanks a trial to NaN, and newcrossf, handed one,
+        % returned NaN for the whole image, so a single rejected trial left
+        % every row's coherence missing.
+        intact = all(isfinite(Vc), 1) & all(isfinite(Vref), 1);
+        Vc = Vc(:, intact);
+        Vref = Vref(:, intact);
+        if size(Vc, 2) < 2   % with one trial the coherence is 1 by construction
+            coh = NaN; phlag = NaN;
+            return;
+        end
 
         % newcrossf wants each signal flattened to 1 x (frames*nepochs),
         % frame-then-epoch -- exactly what reshape(V, 1, []) gives a
@@ -389,7 +431,14 @@ function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, c
     if isnan(crossf.TimeStart) || isnan(crossf.TimeStop)
         tIdx = true(size(img.times));
     else
-        tIdx = img.times >= crossf.TimeStart & img.times <= crossf.TimeStop;
+        % FieldTrip's rule for a latency range over the image's time points:
+        % the nearest at each end (TransTools.NearestSample); a window wholly
+        % outside them holds none.
+        tIdx = false(size(img.times));
+        if crossf.TimeStop >= img.times(1) && crossf.TimeStart <= img.times(end)
+            tIdx(TransTools.NearestSample(img.times, crossf.TimeStart): ...
+                TransTools.NearestSample(img.times, crossf.TimeStop)) = true;
+        end
     end
     if ~any(tIdx)
         coh = NaN; phlag = NaN;
@@ -442,7 +491,9 @@ function V = poolWave(EEG, members, trials)
 end
 
 function tapers = buildTapers(method, nsamp, K)
-%BUILDTAPERS  nsamp x K taper matrix: a single Hann taper, or K DPSS tapers.
+%BUILDTAPERS  nsamp x K taper matrix: a single Hann taper, or K DPSS tapers,
+%   both the Signal Processing Toolbox's (hann, the symmetric window, and
+%   dpss), which Alakazam requires.
     if strcmpi(char(string(method)), 'Multitaper')
         if exist('dpss', 'file') ~= 2
             throw(MException('Alakazam:SpectralMeasure', ...
@@ -453,8 +504,25 @@ function tapers = buildTapers(method, nsamp, K)
         NW = (K + 1) / 2;                 % time-bandwidth; K = 2*NW-1
         tapers = dpss(nsamp, NW, K);      % nsamp x K
     else
-        n = (0:nsamp - 1)';
-        tapers = 0.5 - 0.5 * cos(2 * pi * n / (nsamp - 1));   % Hann, nsamp x 1
+        tapers = hann(nsamp);             % nsamp x 1
+    end
+end
+
+function [t, reference] = phaseTimeAxis(EEG, nsamp)
+%PHASETIMEAXIS  The time axis, in seconds, the DFT measures phase against:
+%   the epoch's own, so that phase is measured from the event (time zero),
+%   as FieldTrip measures it, and the same response reads the same phase
+%   however long before the event the epoch starts. Phase used to be taken
+%   from the epoch's first sample, which moved it by 2*pi*f times the
+%   prestimulus interval. A dataset without a usable time axis falls back to
+%   the first sample, and REFERENCE says which was used.
+    times = TransTools.FieldOr(EEG, 'times', []);
+    if numel(times) == nsamp && all(isfinite(times))
+        t = double(times(:)).' / 1000;
+        reference = 'time zero';
+    else
+        t = (0:nsamp - 1) / EEG.srate;
+        reference = 'first sample';
     end
 end
 

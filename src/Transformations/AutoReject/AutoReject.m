@@ -38,6 +38,12 @@ function [EEG, options] = AutoReject(input, varargin)
 %   the chosen kappa and rho and the loss grid they were chosen from, and
 %   which epochs were examined, rejected and repaired.
 %
+%   TOOLBOX OR OWN CODE. Autoreject exists only as a Python package, so it is
+%   implemented here, with the departures listed above; the repairs use
+%   EEGLAB's eeg_interp. AutoRejectTest checks the threshold search against a
+%   literal evaluation of autoreject's cross-validation criterion, and its
+%   consensus rules.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = AutoReject(input)        % interactive dialog
 %     [EEG, options] = AutoReject(input, opts)  % replay a stored options struct

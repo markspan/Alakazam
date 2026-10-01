@@ -87,6 +87,16 @@ function [ output, options ] = Fourier( varargin )
 %   % Compute Fourier transform with default options
 %   [output, options] = Fourier(EEG);
 %
+%         TOOLBOX OR OWN CODE. The transform is MATLAB's fft and the windows
+%         are the Signal Processing Toolbox's (TransTools.WindowByName).
+%         EEGLAB's spectopo gives a Welch spectrum in dB and FieldTrip's
+%         ft_freqanalysis('mtmfft') a power spectrum; neither offers the
+%         amplitude outputs that reproduce BrainVision Analyzer's (Volt and
+%         the rest, kept for continuity with analyses made there), nor the
+%         complex output that lets Average form an evoked spectrum. The
+%         calibrated output, PSD, is the quantity FieldTrip computes:
+%         FieldTripReferenceTest holds it to ft_freqanalysis to 1e-15.
+%
 %   See also: fft, TransTools.BusyGate
 %
 %   Author: M.M.Span

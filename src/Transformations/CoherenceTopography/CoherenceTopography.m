@@ -21,6 +21,9 @@ function [EEG, opts] = CoherenceTopography(varargin)
 %   out of the map, exactly as ScalpDistribution does); coherence is still
 %   computed for every channel and kept for export.
 %
+%   TOOLBOX OR OWN CODE: see ComputeCoherenceTopography, which does the
+%   computation and says which parts are a toolbox's.
+%
 %   Signature (Alakazam transformation contract):
 %   [EEG, opts] = CoherenceTopography(input)       % options dialog
 %   [EEG, opts] = CoherenceTopography(input, opts) % replay a stored struct

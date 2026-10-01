@@ -64,7 +64,13 @@ function [coh, lag, nFrames] = FrameCoherence(X, R, srate, freqs, opts)
     t1 = TransTools.FieldOr(opts, 'TimeStop', NaN);
     if ~isempty(times) && ~isempty(t0) && ~isempty(t1) && ~isnan(t0) && ~isnan(t1)
         centreMs = double(times(min(centres, numel(times))));
-        keep = centreMs >= t0 & centreMs <= t1;
+        % FieldTrip's rule for a latency range over the frames' centres: the
+        % nearest centre at each end (TransTools.NearestSample); a window
+        % wholly outside them holds no frame.
+        keep = false(size(centreMs));
+        if t1 >= centreMs(1) && t0 <= centreMs(end)
+            keep(TransTools.NearestSample(centreMs, t0):TransTools.NearestSample(centreMs, t1)) = true;
+        end
         starts = starts(keep);
     end
     nFrames = numel(starts);
@@ -74,23 +80,26 @@ function [coh, lag, nFrames] = FrameCoherence(X, R, srate, freqs, opts)
         return;
     end
 
-    taper = frameTaper(TransTools.FieldOr(opts, 'Taper', 'Hann'), win).';      % win x 1
-    kernel = exp(-2i * pi * ((0:win - 1).' * freqs) / srate) .* taper;         % win x nF
-    index = starts(:) + (0:win - 1);                                           % nFrames x win
+    % Each frame is transformed by the Signal Processing Toolbox's goertzel,
+    % at a fractional index where the frequency is off the frame's own grid,
+    % with the phase measured from the frame's first sample (see TransTools.Tdft).
+    taper = frameTaper(TransTools.FieldOr(opts, 'Taper', 'Hann'), win);        % win x 1
+    dftIndex = freqs * win / srate + 1;                                        % 1 x nF
+    frames = starts(:).' + (0:win - 1).';                                      % win x nFrames
 
     nTrials = size(X, 2);
     Cx = zeros(nFrames, nF, nTrials);
     Cr = zeros(nFrames, nF, nTrials);
     for tr = 1:nTrials
-        % Rows, as ComputeCoherenceMap's own: when only one frame fits, INDEX is
-        % a row vector, and a vector indexed by a vector keeps its own shape, so
-        % a column here gave a win x 1 segment and the product below failed.
-        % That was every epoch less than a quarter window longer than the
-        % window, including any shorter than it (510 samples by default).
-        x = double(X(:, tr)).';
-        r = double(R(:, tr)).';
-        Cx(:, :, tr) = x(index) * kernel;
-        Cr(:, :, tr) = r(index) * kernel;
+        % A column indexed by a matrix takes the matrix's shape, so x(frames)
+        % is win x nFrames even when only one frame fits (every epoch less than
+        % a quarter window longer than the window, including any shorter than
+        % it: 510 samples by default), where a row index used to give a
+        % segment of the wrong orientation.
+        x = double(X(:, tr));
+        r = double(R(:, tr));
+        Cx(:, :, tr) = framesDft(x(frames) .* taper, dftIndex).';
+        Cr(:, :, tr) = framesDft(r(frames) .* taper, dftIndex).';
     end
 
     usable = ~isnan(Cx) & ~isnan(Cr);
@@ -110,13 +119,26 @@ function [coh, lag, nFrames] = FrameCoherence(X, R, srate, freqs, opts)
     lag(all(isnan(frameCoh), 1)) = NaN;
 end
 
+function C = framesDft(segments, dftIndex)
+%FRAMESDFT  goertzel of every frame (a column of SEGMENTS) at DFTINDEX, as
+%   numel(DFTINDEX) x nFrames. goertzel refuses non-finite input, so a frame
+%   holding a NaN (a rejected trial) is left NaN, and the usable-trial mask
+%   below leaves it out.
+    C = complex(nan(numel(dftIndex), size(segments, 2)));
+    intact = all(isfinite(segments), 1);
+    if any(intact)
+        C(:, intact) = reshape(goertzel(segments(:, intact), dftIndex), numel(dftIndex), []);
+    end
+end
+
 function w = frameTaper(kind, n)
-%FRAMETAPER  Hann or boxcar, as ComputeCoherenceMap's STFT window.
+%FRAMETAPER  Hann (the Signal Processing Toolbox's symmetric window) or
+%   boxcar, as ComputeCoherenceMap's STFT window; n x 1.
     switch lower(char(string(kind)))
         case 'hann'
-            w = 0.5 - 0.5 * cos(2 * pi * (0:n - 1) / (n - 1));
+            w = hann(n);
         case {'boxcar', 'rectangular'}
-            w = ones(1, n);
+            w = ones(n, 1);
         otherwise
             throw(MException('Alakazam:FrameCoherence', ...
                 'I''m afraid "%s" is not a window taper I know. Please use Hann or Boxcar.', char(string(kind))));

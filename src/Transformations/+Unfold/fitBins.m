@@ -341,6 +341,8 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
     end
     trials = trials(:, :, usable);
     if ~isempty(opts.BaselineMs)
+        % The samples inside the window, as Unfold's own baseline
+        % (uf_plotParam) takes them.
         inWindow = times >= opts.BaselineMs(1) & times <= opts.BaselineMs(2);
         trials = trials - mean(trials(:, inWindow, :), 2);
     end
@@ -455,7 +457,7 @@ function data = applyBaseline(data, fitted, times, window)
     if isempty(window)
         return;
     end
-    inWindow = times >= window(1) & times <= window(2);
+    inWindow = times >= window(1) & times <= window(2);   % inside, as Unfold's uf_plotParam
     for b = find(fitted)
         slice = data(:, :, b);
         data(:, :, b) = slice - mean(slice(:, inWindow), 2);

@@ -270,10 +270,11 @@ classdef FilterTest < matlab.unittest.TestCase
             testCase.verifyError(@() Filter(EEG, opts), 'Alakazam:Filter');
         end
 
-        % ---- the impulse response the dialog plots ------------------------
+        % ---- the response the dialog's frequency plot is computed from ----
         function theImpulseResponseIsWhatFilterDoesToAnImpulse(testCase)
-        %THEIMPULSERESPONSEISWHATFILTERDOESTOANIMPULSE  The dialog plots
-        %   filterImpulseResponse; this pins that plot to the step itself.
+        %THEIMPULSERESPONSEISWHATFILTERDOESTOANIMPULSE  The dialog plots the
+        %   Fourier transform of filterImpulseResponse; this pins that
+        %   response to the step itself.
         %   Filtering a single impulse with all three filters must give
         %   exactly that response, centred on the impulse.
             srate = 250;
@@ -392,11 +393,11 @@ classdef FilterTest < matlab.unittest.TestCase
     methods (Test, TestTags = {'Slow'})
         function theDialogPlotsTheResponseAndFollowsTheSettings(testCase)
         %THEDIALOGPLOTSTHERESPONSEANDFOLLOWSTHESETTINGS  The dialog is modal,
-        %   so a timer finds it, reads both plots (the impulse response, and
-        %   the frequency response from 0 Hz to Nyquist), unticks the
-        %   high-pass, reads them again, and presses Cancel. The timer
-        %   repeats until the dialog is up, so the test does not depend on
-        %   how long that takes.
+        %   so a timer finds it, reads its one plot (the frequency response
+        %   from 0 Hz to Nyquist), unticks the high-pass, reads it again,
+        %   unticks the low-pass too, and presses Cancel. The timer repeats
+        %   until the dialog is up, so the test does not depend on how long
+        %   that takes.
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'Support')));
@@ -408,13 +409,11 @@ classdef FilterTest < matlab.unittest.TestCase
             end
             srate = 250;
             stored = filterOptions([1 40], [30 40], []);
-            [~, both] = filterImpulseResponse(stored, srate);
-            [~, lowOnly] = filterImpulseResponse(filterOptions([], [30 40], []), srate);
             bothFrequencies = filterFrequencyResponse(stored, srate);
             lowOnlyFrequencies = filterFrequencyResponse(filterOptions([], [30 40], []), srate);
 
-            seen = struct('both', [], 'lowOnly', [], 'caption', '', ...
-                'span', [], 'bothFrequencies', [], 'lowOnlyFrequencies', [], 'frequencyCaption', '');
+            seen = struct('impulseAxes', [], 'span', [], 'bothFrequencies', [], ...
+                'lowOnlyFrequencies', [], 'frequencyCaption', '', 'noneCaption', '', 'noneCurves', []);
             timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                 'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
             cleanup = onCleanup(@() cleanupTimer(timerObj));
@@ -422,9 +421,7 @@ classdef FilterTest < matlab.unittest.TestCase
             FilterDialog(srate, {'Ch1', 'Ch2'}, stored);
             clear cleanup;
 
-            testCase.verifyEqual(seen.both, numel(both), 'The plot shows both filters together.');
-            testCase.verifySubstring(seen.caption, sprintf('%d samples', numel(both)));
-            testCase.verifyEqual(seen.lowOnly, numel(lowOnly), 'Unticking the high-pass redraws it.');
+            testCase.verifyEmpty(seen.impulseAxes, 'Only the frequency response is plotted.');
             testCase.verifyEqual(seen.span, [0, srate / 2], 'AbsTol', 1e-12, ...
                 'The frequency response runs from 0 Hz to Nyquist.');
             testCase.verifyEqual(seen.bothFrequencies, numel(bothFrequencies), ...
@@ -432,26 +429,35 @@ classdef FilterTest < matlab.unittest.TestCase
             testCase.verifySubstring(seen.frequencyCaption, sprintf('Nyquist (%g Hz)', srate / 2));
             testCase.verifyEqual(seen.lowOnlyFrequencies, numel(lowOnlyFrequencies), ...
                 'Unticking the high-pass redraws the frequency response.');
+            testCase.verifySubstring(seen.noneCaption, 'No filter is ticked');
+            testCase.verifyEmpty(seen.noneCurves, 'With no filter ticked there is nothing to plot.');
 
             function drive(src)
                 f = findall(groot, 'Type', 'figure', 'Name', 'Filter');
                 if isempty(f)
                     return;   % not up yet: the timer comes back
                 end
-                stop(src);
-                axesOf = findall(f(1), 'Tag', 'ResponseAxes');
+                % The window exists before the dialog is built and its plot
+                % drawn, and a timer can run in between: wait for the curve.
                 frequencyAxes = findall(f(1), 'Tag', 'FrequencyAxes');
-                seen.both = numel(findobj(axesOf, 'Type', 'line').XData);
-                seen.caption = findall(f(1), 'Tag', 'ResponseCaption').Text;
                 curve = findobj(frequencyAxes, 'Tag', 'FrequencyResponse');
+                if isempty(curve)
+                    return;
+                end
+                stop(src);
+                seen.impulseAxes = findall(f(1), 'Tag', 'ResponseAxes');
                 seen.span = curve.XData([1 end]);
                 seen.bothFrequencies = numel(curve.XData);
                 seen.frequencyCaption = findall(f(1), 'Tag', 'FrequencyCaption').Text;
                 highPass = findall(f(1), 'Type', 'uicheckbox', 'Text', 'High-pass');
                 highPass.Value = false;
                 highPass.ValueChangedFcn(highPass, []);
-                seen.lowOnly = numel(findobj(axesOf, 'Type', 'line').XData);
                 seen.lowOnlyFrequencies = numel(findobj(frequencyAxes, 'Tag', 'FrequencyResponse').XData);
+                lowPass = findall(f(1), 'Type', 'uicheckbox', 'Text', 'Low-pass');
+                lowPass.Value = false;
+                lowPass.ValueChangedFcn(lowPass, []);
+                seen.noneCaption = findall(f(1), 'Tag', 'FrequencyCaption').Text;
+                seen.noneCurves = findobj(frequencyAxes, 'Tag', 'FrequencyResponse');
                 cancel = findall(f(1), 'Type', 'uibutton', 'Text', 'Cancel');
                 cancel(1).ButtonPushedFcn(cancel(1), []);
             end

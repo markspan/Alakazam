@@ -43,6 +43,16 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
 %   REFAMP (numel(AMPFREQS) x nBins, the reference's evoked amplitude over the
 %   search grid, NaN columns where the band was not searched) and AMPFREQS
 %   (the search-grid frequency vector).
+%
+%   TOOLBOX OR OWN CODE. The coherence is TransTools.FrameCoherence, the
+%   estimator SpectralMeasure reports: its transform and taper are the Signal
+%   Processing Toolbox's goertzel and hann, and it agrees with FieldTrip's
+%   sliding-window coherence (ft_freqanalysis 'mtmconvol' with
+%   ft_connectivityanalysis) frame by frame (FieldTripReferenceTest). What is
+%   Alakazam's is the choice of each bin's tagged frequency and the assembly
+%   into one map per bin; the electrode positions are EEGLAB's (readlocs and
+%   the 10-5 template) and the map is drawn by TransTools.DrawScalpMap, a port
+%   of EEGLAB's topoplot.
     srate = input.srate;
     [nChan, nSamp, ~] = size(input.data);
     refIdx = opts.RefIndex;
@@ -158,9 +168,7 @@ function [lo, hi] = windowRange(input, startMs, stopMs, nSamp)
     if stopMs <= startMs || ~isfield(input, 'times') || isempty(input.times)
         lo = 1; hi = nSamp; return;
     end
-    lo = find(input.times >= startMs, 1, 'first');
-    hi = find(input.times <= stopMs,  1, 'last');
-    if isempty(lo); lo = 1; end
-    if isempty(hi); hi = nSamp; end
-    if hi < lo; lo = 1; hi = nSamp; end
+    % FieldTrip's rule for a latency range: the nearest sample at each end,
+    % and a window wholly outside the epoch refused (TransTools.WindowSamples).
+    [lo, hi] = TransTools.WindowSamples(input.times, startMs, stopMs, 'Alakazam:CoherenceTopography', 'window');
 end

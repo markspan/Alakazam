@@ -132,6 +132,13 @@ of the trials in any condition is the conventional point at which a subject
 is excluded, and the data-quality report flags it. AutoReject, below, chooses
 a threshold per channel from the data itself.
 
+**Toolbox or own code.** The detectors are ERPLAB's, written in Alakazam
+because ERPLAB marks whole epochs, where Alakazam can reject or interpolate
+one channel of a trial and records each detector's verdicts. On Luck's data
+[@luckApplied] they flag the same 346 of 346 trials as ERPLAB's absolute
+threshold, and 345 of 346 with the moving window, the one difference an
+artefact ERPLAB misses.
+
 ## AutoReject {#sec-tr-autoreject}
 
 *Tools > 2. Artifact Rejection / Reduction > AutoReject · epoched →
@@ -183,6 +190,10 @@ them by Bayesian optimisation. And each number of channels to interpolate is
 scored from the thresholded channels alone, where autoreject's
 cross-validation carries one candidate's interpolations into the next. Both
 are the algorithm as the paper states it.
+
+**Toolbox or own code.** Autoreject exists only as a Python package, so it
+is implemented in Alakazam, with the differences described above; its
+repairs use EEGLAB's interpolation.
 
 ## ManualReject {#sec-tr-manualreject}
 

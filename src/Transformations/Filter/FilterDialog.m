@@ -22,18 +22,15 @@ function options = FilterDialog(srate, labels, stored)
 %       panel above, right now" action.
 %   Everything else about the FIR design is worked out by Filter.m.
 %
-%   In global mode, two plots under the three filters describe the enabled
-%   ones together, both from the same kernels Filter applies, and are redrawn
-%   whenever a filter is ticked or a frequency or dB changes:
-%     * the impulse response (filterImpulseResponse), with its length: how
-%       far one sample is smeared and what ringing the filters add;
-%     * at the bottom, the frequency response (filterFrequencyResponse) as
-%       gain in dB from 0 Hz to Nyquist, with a dotted line at -6 dB, the
-%       level at which each cutoff is defined: which frequencies pass, where
-%       they are cut off, and how far the rest is attenuated.
-%   A methods section should report both alongside the settings. A setting
-%   Filter would refuse is shown there instead, with the reason. Per-channel
-%   mode has no such plots, since every channel may have its own filters.
+%   In global mode, a plot under the three filters shows the frequency
+%   response of the enabled ones together (filterFrequencyResponse, from the
+%   same kernels Filter applies): the gain in dB from 0 Hz to Nyquist, with a
+%   dotted line at -6 dB, the level at which each cutoff is defined. It shows
+%   which frequencies pass, where they are cut off, and how far the rest is
+%   attenuated, and is redrawn whenever a filter is ticked or a frequency or
+%   dB changes. A setting Filter would refuse is shown there instead, with
+%   the reason. Per-channel mode has no such plot, since every channel may
+%   have its own filters.
 %
 %   SRATE is the sample rate (for validating against Nyquist); LABELS the
 %   channel labels (for the per-channel table); STORED a previous run's options
@@ -55,7 +52,7 @@ function options = FilterDialog(srate, labels, stored)
 
     COLS = {'Channel', 'HP?', 'HP (Hz)', 'HP dB', 'LP?', 'LP (Hz)', 'LP dB', 'Notch?', 'Notch (Hz)', 'Notch dB'};
 
-    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 700 760]), 'Color', bgColor);
+    fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 700 620]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
@@ -99,18 +96,13 @@ function options = FilterDialog(srate, labels, stored)
         ctl.(key) = struct('cb', cb, 'freq', f, 'db', d);
     end
 
-    % --- Impulse and frequency response of the global filters together
-    % (row 4, global mode only; the per-channel table has a filter per
-    % channel instead). The row takes all the height the global mode has
-    % left, so the plots shrink with the window rather than overflow it. ---
-    responsePanel = uigridlayout(outer, [4 1], 'RowHeight', {'fit', '1x', 'fit', '1x'}, ...
+    % --- Frequency response of the global filters together (row 4, global
+    % mode only; the per-channel table has a filter per channel instead).
+    % The row takes all the height the global mode has left, so the plot
+    % shrinks with the window rather than overflow it. ---
+    responsePanel = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, ...
         'RowSpacing', 2, 'Padding', [0 0 0 0]);
     responsePanel.Layout.Row = 4;
-    responseCaption = uilabel(responsePanel, 'Text', '', 'WordWrap', 'on', 'FontSize', 11, ...
-        'Tag', 'ResponseCaption');
-    responseAxes = uiaxes(responsePanel, 'FontSize', 9, 'Tag', 'ResponseAxes');
-    xlabel(responseAxes, 'Time (s)');
-    box(responseAxes, 'on');
     frequencyCaption = uilabel(responsePanel, 'Text', '', 'WordWrap', 'on', 'FontSize', 11, ...
         'Tag', 'FrequencyCaption');
     frequencyAxes = uiaxes(responsePanel, 'FontSize', 9, 'Tag', 'FrequencyAxes');
@@ -170,31 +162,21 @@ function options = FilterDialog(srate, labels, stored)
     end
 
     function updateResponse()
-    %UPDATERESPONSE  Redraw the impulse and frequency responses of the
-    %   ticked filters, or say (in the first caption) why they cannot be
-    %   drawn: none ticked, or a setting Filter would refuse (the message is
-    %   Filter's own).
-        cla(responseAxes);
+    %UPDATERESPONSE  Redraw the frequency response of the ticked filters, or
+    %   say in its caption why it cannot be drawn: none ticked, or a setting
+    %   Filter would refuse (the message is Filter's own).
         cla(frequencyAxes);
-        frequencyCaption.Text = '';
         settings = currentGlobalSeed();
+        if ~any(cellfun(@(key) settings.(key).enabled, {'highpass', 'lowpass', 'notch'}))
+            frequencyCaption.Text = 'No filter is ticked, so the data are left as they are.';
+            return;
+        end
         try
-            [t, h] = filterImpulseResponse(settings, srate);
             [frequencies, gain] = filterFrequencyResponse(settings, srate);
         catch err
-            responseCaption.Text = err.message;
+            frequencyCaption.Text = err.message;
             return;
         end
-        if isscalar(h)
-            responseCaption.Text = 'No filter is ticked, so the data are left as they are.';
-            return;
-        end
-
-        plot(responseAxes, t, h, 'Color', accentColor, 'LineWidth', 1);
-        xlim(responseAxes, [t(1), t(end)]);
-        responseCaption.Text = sprintf(['Impulse response of the ticked filters together: ' ...
-            '%d samples, %.3g s at %g Hz, centred on the impulse (zero-phase).'], ...
-            numel(h), numel(h) / srate, srate);
 
         plotFrequencyResponse(frequencyAxes, frequencies, gain, gainFloorDb(settings), accentColor);
         frequencyCaption.Text = sprintf(['Frequency response of the ticked filters together, ' ...

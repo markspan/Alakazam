@@ -224,6 +224,12 @@ what Deconvolve fits against. The time to the next and to the previous event
 of every type is measured for each trial as it is cut, and becomes a sort key
 of the ERP image (@fig-first-epochs).
 
+**Toolbox or own code.** DefineBins replaces ERPLAB's EVENTLIST and
+BINLISTER; an ERPLAB bin descriptor file is translated into a bin script
+rather than run. On Luck's N2pc data [@luckApplied] it puts 642 of 642
+events in the same bins as BINLISTER, and its epochs are identical to
+ERPLAB's.
+
 ## Average {#sec-tr-average}
 
 *Tools > 3. Epoching and Averaging > Average · epoched → averaged ·
@@ -258,6 +264,13 @@ The aSME describes one score, the mean amplitude over the whole epoch. The
 data-quality report computes the SME of the scores actually measured, in
 their own windows and by bootstrap where no formula exists
 (@sec-data-quality).
+
+**Toolbox or own code.** The averaging is MATLAB's mean and standard
+deviation. ERPLAB's averager does the same job but drops whole flagged
+epochs, where Alakazam leaves out only the rejected channel of a trial,
+counts the trials per channel, and computes combination bins with their
+errors in the same step. On Luck's N400 data [@luckApplied] it matches
+ERPLAB's average to 0.0004 µV, with the same trial counts.
 
 ## Deconvolve {#sec-tr-deconvolve}
 

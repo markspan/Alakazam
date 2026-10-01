@@ -59,11 +59,11 @@ function plan = RESSPlan(EEG, options)
         if t0 >= t1
             fail('The window start must be before the window stop.');
         end
-        plan.window = EEG.times >= t0 & EEG.times <= t1;
-        if ~any(plan.window)
-            fail('The window from %g to %g ms holds no sample of these epochs (%g to %g ms).', ...
-                t0, t1, EEG.times(1), EEG.times(end));
-        end
+        % FieldTrip's rule for a latency range: the nearest sample at each end,
+        % and a window wholly outside the epoch refused (TransTools.WindowSamples).
+        [lo, hi] = TransTools.WindowSamples(EEG.times, t0, t1, 'Alakazam:RESS', 'window');
+        plan.window = false(1, EEG.pnts);
+        plan.window(lo:hi) = true;
     end
 
     rows = TransTools.FieldOr(options, 'rows', {});

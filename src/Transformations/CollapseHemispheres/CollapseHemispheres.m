@@ -50,6 +50,13 @@ function [EEG, options] = CollapseHemispheres(input, varargin)
 %   aSME propagate as the root of the summed squared errors, the same
 %   convention Average.m uses for its own combination bins.
 %
+%   TOOLBOX OR OWN CODE. ERPLAB reaches the same waveforms by composing a
+%   channel and a bin operation (Luck's BinOps_Contra), but ERPLAB is not a
+%   toolbox Alakazam installs, and, as above, neither operation alone can
+%   express them. The result agrees with ERPLAB's BinOps_Contra on Luck's
+%   chapter 10 subject to 6.7e-15 uV (Docs/luck.md), and
+%   CollapseHemispheresTest holds it to the composed route that reproduces it.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = CollapseHemispheres(input)        % interactive dialog
 %     [EEG, options] = CollapseHemispheres(input, opts)  % replay a stored struct

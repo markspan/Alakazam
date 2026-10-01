@@ -105,7 +105,7 @@ classdef RawFormatsTest < matlab.unittest.TestCase
         % ---- the reader chain ----------------------------------------------
         function theFirstReaderThatReturnsDataWins(testCase)
             format = testCase.fakeFormat( ...
-                @(path) error('Fake:first', 'this one fails'), ...
+                @(path) failing('Fake:first', 'this one fails'), ...
                 @(path) struct('data', ones(2, 5)), ...
                 @(path) struct('data', 2 * ones(2, 5)));
 
@@ -126,8 +126,8 @@ classdef RawFormatsTest < matlab.unittest.TestCase
 
         function whenAllFailTheErrorSaysWhatEachSaid(testCase)
             format = testCase.fakeFormat( ...
-                @(path) error('Fake:first', 'header is corrupt'), ...
-                @(path) error('Fake:second', 'unknown file type'));
+                @(path) failing('Fake:first', 'header is corrupt'), ...
+                @(path) failing('Fake:second', 'unknown file type'));
 
             try
                 readRecording('/nowhere/rec.fake', format);
@@ -202,6 +202,15 @@ classdef RawFormatsTest < matlab.unittest.TestCase
 end
 
 % ======================================================================= %
+function EEG = failing(id, message)
+%FAILING  A reader that fails with MESSAGE. It declares an output: an
+%   anonymous @(path) error(...) does not, and asked for a dataset it fails
+%   with "Too many output arguments" before error is ever reached, so the
+%   chain reported that instead of the message under test.
+    EEG = [];
+    error(id, '%s', message);
+end
+
 function writeBytes(path, bytes)
     fid = fopen(path, 'w');
     fwrite(fid, bytes, 'uint8');

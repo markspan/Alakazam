@@ -41,14 +41,12 @@ function [values, times] = RestrictAndDecimate(values, times, window, targetHz, 
     end
 
     if ~isempty(window)
-        keep = times >= window(1) & times <= window(2);
-        if ~any(keep)
-            throw(MException(errorId, '%s', sprintf( ...
-                'The time window [%g %g] ms contains no samples of this epoch (%g to %g ms).', ...
-                window(1), window(2), times(1), times(end))));
-        end
-        values = values(:, keep);
-        times  = times(keep);
+        % FieldTrip's rule for a latency range, as ft_selectdata applies it:
+        % the nearest sample at each end, and a window wholly outside the
+        % epoch refused (TransTools.WindowSamples).
+        [lo, hi] = TransTools.WindowSamples(times, window(1), window(2), errorId, 'time window');
+        values = values(:, lo:hi);
+        times  = times(lo:hi);
     end
 
     if isempty(targetHz) || numel(times) < 2

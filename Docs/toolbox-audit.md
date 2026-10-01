@@ -64,16 +64,16 @@ longer epoch, as it is in either toolbox.
 
 | Transformation | What it computes itself | The toolbox that does the same | Checked against it | Verdict |
 |---|---|---|---|---|
-| TimeFrequency | Morlet ERSP, dB baseline | `newtimef`; `ft_freqanalysis('wavelet')` with `ft_freqbaseline('db')` | No; conventions now match both (M26) | Keep, add a reference test |
-| CoherenceMap | wavelet, STFT and filter-Hilbert coherence over time | `newcrossf`; `ft_freqanalysis` with `ft_connectivityanalysis('coh')` | Its estimator family, through SpectralMeasure's, against `newcrossf` | Apply the edge rule, add a reference test |
-| SpectralMeasure | power, amplitude, SNR, ITC, phase, coherence at named frequencies | `ft_freqanalysis('mtmfft')`; `newcrossf` (already an option) | Frame coherence against `newcrossf` to about 0.001; group means against Dimigen et al. | Keep |
-| CoherenceTopography | the same frame coherence, one frequency per bin | as SpectralMeasure | Through `LibraryReplayTest`'s RIFT means | Keep |
-| Fourier | calibrated FFT spectra (amplitude, power, PSD, complex) | `spectopo`; `ft_freqanalysis('mtmfft')` | Closed-form cases in `FourierTest` | Keep, add a PSD test against FieldTrip |
+| TimeFrequency | Morlet ERSP, dB baseline | `newtimef`; `ft_freqanalysis('wavelet')` with `ft_freqbaseline('db')` | Against FieldTrip in `FieldTripReferenceTest`, to 0.027 dB | Keep |
+| CoherenceMap | wavelet, STFT and filter-Hilbert coherence over time | `newcrossf`; `ft_freqanalysis` with `ft_connectivityanalysis('coh')` | Its estimator family, through SpectralMeasure's, against `newcrossf`; the wavelet against FieldTrip, to 0.006 | Keep; edge rule applied |
+| SpectralMeasure | amplitude, SNR, ITC and the coherence normalisation on exact-frequency coefficients; the transform and tapers are the Signal Processing Toolbox's (`goertzel`, `hann`, `dpss`) | `ft_freqanalysis('mtmfft'/'mtmconvol')`, `ft_connectivityanalysis('coh')`; `newcrossf` (an option) | Against FieldTrip in `FieldTripReferenceTest`, to rounding; frame coherence against `newcrossf` to about 0.001 on RIFT data; group means against Dimigen et al. | Toolbox transform; keep the rest (below) |
+| CoherenceTopography | the same frame coherence, one frequency per bin | as SpectralMeasure | Its frame coherence against FieldTrip, through SpectralMeasure's case; the RIFT means in `LibraryReplayTest` | Keep |
+| Fourier | calibrated FFT spectra (amplitude, power, PSD, complex) | `spectopo`; `ft_freqanalysis('mtmfft')` | Closed-form cases in `FourierTest`; the PSD against FieldTrip, to 1e-15 | Keep |
 | Welch | averaged periodogram, skipping segments with rejected samples | `pwelch` (cannot skip them) | Against `pwelch` in `WelchTest` | Keep |
-| CrossCorrelation | FFT-based normalised cross-correlation | `xcorr` | Against `xcorr` | Keep |
+| CrossCorrelation | FFT-based per-lag Pearson r, averaged in Fisher-z | `xcorr` (a different normalisation) | Against an independent per-lag loop; `xcorr`'s normalised form divides by the whole signals' energies, a different quantity | Keep |
 | Covariance | channel covariance per bin | `cov` | Against `cov` | Keep |
-| DCDetrend | least-squares polynomial drift, fitted on a chosen range | `detrend`, `polyfit` | Against `detrend` | Keep |
-| Baseline | mean subtraction | `pop_rmbase` | Trivial | Keep |
+| DCDetrend | the fitting range and the report; the fits are `polyfit` and `robustfit` | `ft_preproc_polyremoval`, `detrend` | Against `ft_preprocessing` and `ft_preproc_polyremoval` on epochs, `detrend` over the whole epoch, and known drifts | Toolbox fits (below) |
+| Baseline | mean subtraction, on FieldTrip's window rule | `ft_preprocessing` demean, `ft_timelockbaseline`; `pop_rmbase`; ERPLAB's `blvalue2` | Against `ft_preprocessing` in `FieldTripReferenceTest`; identical to ERPLAB on Luck's data | Keep (below) |
 | Average | mean of the kept trials, standard error, aSME | `pop_averager` (ERPLAB) | Against Luck's `1_N400.erp` to 0.0004 uV, with its trial counts | Keep |
 | Measure | mean and peak amplitude, area and fractional-area latencies, SME | `pop_geterpvalues` (ERPLAB) | Against ERPLAB 13.10 (`Docs/luck.md`) | Keep |
 | CollapseHemispheres | contralateral and ipsilateral waveforms with their errors | ERPLAB's channel and bin operations, by hand | Against ERPLAB in its test | Keep |
@@ -93,34 +93,113 @@ is kept only as an independent check on FieldTrip's in the tests.
 
 1. **Done: the time-frequency edge and baseline** (M26, above).
 
-2. **Apply the same edge rule to CoherenceMap's wavelet method.** It has no
+2. **Done: the same edge rule in CoherenceMap's wavelet method.** It has no
    baseline, so the M26 bias does not arise, but near the ends of the epoch
    the wavelet is effectively shorter, so each coherence value there mixes in
    neighbouring frequencies: a 60 Hz response bleeds into the 64 Hz row
-   exactly where the reader looks for the onset. FieldTrip returns `NaN` there.
-   The change is the same few lines as in `ComputeErsp`.
+   exactly where the reader looks for the onset. FieldTrip returns `NaN` there,
+   and now so does `ComputeCoherenceMap`, for the coherence and the reference
+   power alike; the half-wavelets and the frequencies blank throughout are
+   recorded in `etc.alz.coherenceMap`, and the view names them.
 
-3. **Test against the toolbox where one exists and nothing compares yet**,
-   skipped cleanly when it is not installed, as `RawFormatsTest` does with
-   BIOSIG: TimeFrequency against `ft_freqanalysis('wavelet')` and
-   `ft_freqbaseline('db')` (same `sigma_t = c / (2 pi f)`, same three-sigma
-   support); CoherenceMap against `ft_connectivityanalysis('coh')`; Fourier's
-   PSD against `ft_freqanalysis('mtmfft')` with a Hann taper. FieldTrip is
-   already pinned and installed on demand for the source estimates. These are
-   the tests that would have caught M26.
+3. **Done: tests against the toolbox where one exists and nothing compared
+   yet**, in `FieldTripReferenceTest`, skipped cleanly when FieldTrip is not
+   installed: TimeFrequency against `ft_freqanalysis('wavelet')` and
+   `ft_freqbaseline('db')`, CoherenceMap's wavelet against
+   `ft_connectivityanalysis('coh')`, Fourier's PSD against
+   `ft_freqanalysis('mtmfft')` with a Hann taper. The PSD agrees to 1e-15.
+   The wavelet comparisons needed one convention matched first: FieldTrip
+   cuts its wavelet to a whole number of samples counted from -3 sigma, and
+   with ordinary cycle counts that alone moved the ERSP by up to 0.13 dB,
+   more than M26's mean-of-dB baseline (0.04 to 0.08 dB here). With cycles
+   that put 3 sigma just past a whole sample, the ERSPs agree to 0.027 dB and
+   their means per channel and frequency to 0.002 dB, and the coherences to
+   0.006. Each check was seen to fail on the error it guards: the mean-of-dB
+   baseline, power or coherence computed over the edges, and a PSD that
+   doubles 0 Hz and Nyquist.
 
-4. **Check the grand average's error band when subjects are weighted.** With
-   weighting on, the line is the trial-weighted mean of the subjects, but the
-   band is the unweighted standard error across them
-   (`GrandAverage.combineSubjects`). The two describe different estimators;
-   either the band should use the weighted variance, or the report and the
-   manual should say which it is.
+4. **Done: the grand average's error band when subjects are weighted.** With
+   weighting on, the line was the trial-weighted mean of the subjects, but the
+   band was the unweighted standard error across them
+   (`GrandAverage.combineSubjects`): two different estimators. The band is now
+   the standard error of the weighted mean, the square root of
+   `V * sum(w.^2)` with `V = sum(w .* (x - mean).^2) / (1 - sum(w.^2))`, which
+   is the plain standard error when the weights are equal, and the pooled
+   aSME is `sqrt(sum(w.^2 .* SME.^2))`. ERPLAB 13.10 is no reference here:
+   its `gaverager` sums the squares weighted by the raw trial counts but
+   subtracts the squared mean and divides as if they were unweighted. With
+   every subject on `n` trials, the variance it reports is `n` times the
+   right one plus `(n - 1) N / (N - 1)` times the squared grand mean, so its
+   weighted band is several times too wide (read from its source, not run).
 
 5. **Do not replace the rest.** Each swap would trade a checked computation
    for a dependency and lose per-channel rejection, combination bins and the
    provenance record, for no change in the numbers. The pattern that works
    here is the one Average, Measure and Welch already follow: the own
    implementation, held to the reference by a test.
+
+## SpectralMeasure, examined again (1 October)
+
+Asked to use toolbox computations wherever they fit, SpectralMeasure was read
+quantity by quantity against FieldTrip and EEGLAB, FieldTrip counting as
+available like any optional toolbox.
+
+- **The transform** is now the Signal Processing Toolbox's `goertzel`, which
+  evaluates the DFT at a fractional index and so at any frequency, with its
+  `hann` and `dpss` tapers. FieldTrip's spectral estimators round each
+  requested frequency to the padded epoch's grid (`ft_specest_mtmfft` and
+  `ft_specest_mtmconvol`, `freqoi = (freqboi - 1) ./ endtime`), so they read a
+  harmonic or intermodulation row at the nearest bin, not at its frequency.
+  At a frequency on the grid the coefficients are the same.
+- **Amplitude, SNR and ITC** stay as their definitions: FieldTrip and EEGLAB
+  have no function for any of them at one exact frequency.
+- **The coherence** is FieldTrip's estimator, which averages the cross-spectra
+  over trials ignoring NaN and normalises by the averaged powers
+  (`ft_connectivity_corr`), on the exact-frequency coefficients. One
+  difference is kept on purpose: FieldTrip averages each power over every
+  trial that channel has, so under per-channel rejection the reference power
+  in its denominator covers trials the cross-spectrum does not.
+- **The phase** was measured from the epoch's first sample; it is now measured
+  from time zero, as FieldTrip measures it.
+- **A bug found on the way**: with `newcrossf` as the estimator, one rejected
+  (NaN) trial made the whole coherence image NaN. Rejected trials are now left
+  out first.
+
+`FieldTripReferenceTest` holds amplitude, phase, ITC and SNR to `mtmfft`, and
+the frame coherence to `mtmconvol` with `ft_connectivityanalysis`, frame by
+frame, both with rejected trials, to rounding. With an even frame length
+FieldTrip centres each frame one sample earlier than `TransTools.FrameStarts`,
+which moves the average coherence by about 0.002; the test uses an odd length.
+
+## Decisions taken (1 October)
+
+Writing the reasons for keeping each computation into its code turned up two
+places where the reason did not hold. Both were decided the same day, with a
+general rule: where EEGLAB or FieldTrip has a convention for an operation,
+Alakazam adopts it.
+
+- **Time windows.** When a window's ends fall between samples, `pop_rmbase`
+  takes the samples inside it, FieldTrip (`nearest`, as `ft_preprocessing`,
+  `ft_timelockbaseline` and `ft_selectdata` use it) and ERPLAB (`closest`)
+  the sample nearest each end, earlier on a tie, and Baseline took the sample
+  at or before each end; most other steps took the samples inside. All now
+  use FieldTrip's rule through `TransTools.WindowSamples`, which also refuses
+  a window wholly outside the epoch, as `ft_selectdata` does. Baseline also
+  leaves rejected samples out of its mean, as `ft_preproc_baselinecorrect`
+  does. The exceptions follow their own toolbox: TimeFrequency's baseline
+  takes the samples inside, as `ft_freqbaseline` and `newtimef` do, and
+  Deconvolve's, as Unfold's does. `FieldTripReferenceTest` holds Baseline to
+  `ft_preprocessing`'s demean.
+- **DC-Detrend's fits.** The robust fit is now `robustfit` with Huber weights.
+  Least squares was meant to become FieldTrip's `ft_preproc_polyremoval`,
+  which does exactly this job, but as FieldTrip calls it (without its
+  standardising flag, which needs a function private to another FieldTrip
+  folder) it fits the raw sample index: an order-2 trend on a recording of
+  300 000 samples or more comes out 50 uV wrong, the whole trend lost, where
+  orders 0 and 1 and every epoch length up to 5000 samples agree to 3e-6 uV
+  or better. Least squares is therefore MATLAB's `polyfit`, centred and
+  scaled, and `FieldTripReferenceTest` holds it to `ft_preprocessing` and
+  `ft_preproc_polyremoval` on epochs.
 
 ## How this was read
 

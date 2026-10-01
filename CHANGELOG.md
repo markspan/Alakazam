@@ -64,9 +64,51 @@ bar. Dates are those of the tag.
   checked (Docs/luck.md, Docs/dimigen.md, chapters 17 and 20 of the manual).
   `AutoEyeICA.alztemplate`, which was never checked against its data, is not
   in the library.
+- **Reference tests against FieldTrip** (`FieldTripReferenceTest`, skipped
+  when FieldTrip is not installed): the TimeFrequency ERSP against
+  `ft_freqanalysis` and `ft_freqbaseline('db')`, the Coherence Map's wavelet
+  coherence against `ft_connectivityanalysis('coh')`, Fourier's PSD
+  against `ft_freqanalysis('mtmfft')`, and Spectral Measure's amplitude,
+  phase, ITC, SNR and frame-averaged coherence against `ft_freqanalysis`
+  (`mtmfft`, `mtmconvol`) and `ft_connectivityanalysis`. They agree to 0.027
+  dB, 0.006, 1e-15 and, for Spectral Measure, to rounding, rejected trials
+  included, and each fails on the error it is there to catch, including both
+  halves of the time-frequency baseline bug fixed below.
 
 ### Changed
 
+- The Filter dialog plots only the frequency response of the ticked filters
+  now; the impulse response above it is gone.
+- **Time windows follow FieldTrip's rule.** Baseline, DC-Detrend's fitting
+  range, ArtefactDetect's test window, Covariance, Cross Correlation, CohTopo,
+  RESS, Source Estimate (and the source cluster statistics) and Spectral
+  Measure's coherence window take the nearest sample at each end of a window
+  in ms, the earlier one on an exact tie, as FieldTrip selects a latency
+  range and ERPLAB a baseline. They took the samples inside the window, and
+  Baseline the sample at or before each end. A window lying wholly outside
+  the epoch is now refused, where it silently became the whole epoch (or, in
+  ERP Measure, the edge sample). Where a window's ends fall between samples
+  the result moves by at most one sample at each end; recalculate to bring
+  older nodes in line. TimeFrequency's baseline and Deconvolve's keep the
+  samples inside the window, as `ft_freqbaseline`, `newtimef` and Unfold do.
+- **Baseline leaves rejected samples out of the mean**, as FieldTrip does: one
+  rejected sample inside the window used to make that channel of the trial
+  entirely missing.
+- **DC-Detrend's fits are MATLAB's**: `polyfit` for least squares (the same
+  numbers) and `robustfit` for the robust fit, which moves slightly, since
+  `robustfit` adjusts for leverage and iterates to convergence where the
+  hand-written fit stopped after five iterations.
+- **Spectral Measure's phase is measured from the event** (time zero), as
+  FieldTrip measures it. It was measured from the epoch's first sample, so
+  the same response read a different phase depending on how long before the
+  event the epoch started. Recalculate Spectral Measure nodes whose phase you
+  report; amplitude, power, SNR, ITC, coherence and phase lag are unchanged.
+- **Spectral Measure's transform and tapers are the Signal Processing
+  Toolbox's** (`goertzel` at the exact frequency, `hann`, `dpss`), and so is
+  the transform of the frame-averaged coherence. The numbers agree with the
+  previous code to about 1e-13. Why these and not FieldTrip's `ft_freqanalysis`,
+  which rounds every frequency to the epoch's grid, is set out in the manual
+  and in the code.
 - **CohTopo shows every bin's map in one plot**, side by side on one colour
   scale, with a tickbox per bin in a column on the right (as the ERP view has
   for its lines), instead of one map at a time behind a dropdown.
@@ -97,6 +139,17 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **DC-Detrend read a continuous recording's fitting range in seconds.** The
+  range is entered in ms, but a continuous recording keeps its time axis in
+  seconds, so a 0 to 1000 ms range covered the first 1000 seconds. It is now
+  converted first.
+
+- **Spectral Measure's newcrossf coherence went missing after artefact
+  rejection.** A rejected trial is NaN, and handed to `newcrossf` it made the
+  whole coherence image NaN, so every row's coherence and phase lag were
+  missing. Rejected trials are now left out first, as the other two
+  estimators leave them out.
+
 - **TimeFrequency reported power that was not there** at low frequencies. It
   computed the baseline over the start of the epoch, where the wavelet
   reaches past the data and the power comes out too low, so everything after
@@ -109,6 +162,23 @@ bar. Dates are those of the tag.
   now blank: epoch longer for them. Recalculate time-frequency nodes made
   before this. Found by an audit of every hand-written computation against
   the toolboxes (`Docs/toolbox-audit.md`).
+
+- **The Coherence Map's wavelet method computed coherence at the very ends
+  of the epoch**, where the wavelet reaches past the data and is in effect
+  shorter, so each value there mixed in neighbouring frequencies. Those
+  samples are now blank by the same rule as TimeFrequency, recorded in
+  `etc.alz.coherenceMap`, and a frequency whose wavelet is longer than the
+  epoch is blank throughout, with the view saying below which frequency. The
+  STFT and filter-Hilbert methods are unchanged. Recalculate wavelet
+  coherence maps made before this.
+
+- **A weighted grand average drew the wrong error band.** The line was the
+  trial-count-weighted mean, but the band around it was the unweighted
+  standard error, which belongs to a different mean. It is now the standard
+  error of the weighted mean, and the pooled aSME uses the same weights.
+  Unweighted grand averages, and weighted ones whose subjects kept equal
+  trial counts, are unchanged. Recalculate weighted grand averages made
+  before this.
 
 - **A bin script could define the same bin number twice**, and both were
   accepted without a word, although a bin's number is how events and
@@ -181,6 +251,15 @@ bar. Dates are those of the tag.
   RESS and the current templates, and the Luck companion with the current
   ribbon, report and data download. The fifth pass of the capability review
   is added as `Docs/where-alakazam-stands.md`.
+- **Why each computation is Alakazam's own, or a toolbox's.** Every
+  transformation that computes something a toolbox also computes now says,
+  in its code (a TOOLBOX OR OWN CODE paragraph in its header) and in its
+  manual section, which toolbox that is, why the computation is kept or
+  handed over, and what holds it to the toolbox. Writing them down corrected
+  two claims (Cross Correlation is checked against a per-lag calculation, not
+  `xcorr`, which normalises differently; DC-Detrend is now also checked
+  against `detrend`) and raised two decisions, since taken: Baseline's window
+  rule and DC-Detrend's fits (under Changed).
 
 ## V0.4.4.3 (2026-09-28)
 

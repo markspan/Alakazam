@@ -434,8 +434,8 @@ minimum-phase IIR filter can. You give each filter a **frequency** and a **dB**
 stopband attenuation; the filter order and transition bandwidth needed to reach
 that attenuation are computed for you. High-pass, low-pass and notch are
 independent toggles, with a **per-channel** mode. Below the settings, the
-dialog plots the impulse response and the frequency response of the filters
-you have ticked, computed from the very kernels it will apply, from 0 Hz to
+dialog plots the frequency response of the filters you have ticked,
+computed from the very kernels it will apply, from 0 Hz to
 the Nyquist frequency with a line at -6 dB, so you see what a cutoff and an
 attenuation mean before you run it. Filter the *continuous* recording before
 DefineBins.

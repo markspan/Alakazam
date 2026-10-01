@@ -45,6 +45,10 @@ function [EEG, options] = RESS(input, varargin)
 %   timeStart/timeStop (ms; blank for the whole epoch), peakFWHM,
 %   neighbourDistance, neighbourFWHM (Hz), shrinkage (0 to 1).
 %
+%   TOOLBOX OR OWN CODE. No toolbox implements RESS. This follows Cohen and
+%   Gulbinaite's own script, whose filters it reproduces to ten decimals
+%   (RESSTest), with the generalised eigendecomposition done by MATLAB's eig.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = RESS(input)        % interactive dialog
 %     [EEG, options] = RESS(input, opts)  % replay a stored struct

@@ -52,11 +52,27 @@ function [ersp, freqs, info] = ComputeErsp(input, opts)
 %   only has to re-slice this already-computed array per channel step,
 %   an instant operation, rather than re-running the wavelet convolution
 %   live on every channel step.
+%
+%   TOOLBOX OR OWN CODE. EEGLAB's newtimef and FieldTrip's ft_freqanalysis
+%   ('wavelet') compute the same ERSP, and the conventions here are theirs:
+%   sigma_t = cycles / (2 pi f), the wavelet cut at three sigma, the edges
+%   left blank, the baseline the dB of the mean power. The convolution stays
+%   Alakazam's because neither fits the job as it stands: newtimef takes one
+%   channel at a time, and ft_freqanalysis rounds each log-spaced frequency to
+%   the epoch's own frequency grid, while this pass computes every channel and
+%   bin at once, leaves rejected trials out per channel, builds a combination
+%   bin from its bins' maps and records which frequencies had no baseline.
+%   FieldTripReferenceTest holds it to ft_freqanalysis and ft_freqbaseline, to
+%   0.027 dB.
     times   = input.times;
     nT      = numel(times);
     nChan   = input.nbchan;
     nBins   = numel(input.bindesc);
     srate   = input.srate;
+    % The samples INSIDE the baseline window, as ft_freqbaseline and
+    % newtimef take them; FieldTrip's nearest-sample rule (Baseline,
+    % TransTools.WindowSamples) is for a latency range, and is not what its
+    % time-frequency baseline does.
     baseIdx = times >= opts.BaselineStart & times <= opts.BaselineStop;
     if ~any(baseIdx)
         throw(MException('Alakazam:TimeFrequency', sprintf([ ...

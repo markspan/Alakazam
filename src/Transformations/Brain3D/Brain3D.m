@@ -15,6 +15,11 @@ function [EEG, opts] = Brain3D(input, varargin)
 %   Works on either a per-subject Average or a Grand Average, same as
 %   ScalpDistribution.
 %
+%   TOOLBOX OR OWN CODE. As ScalpDistribution: only the electrode positions
+%   are resolved here, from EEGLAB's readlocs and the 10-5 template; the brain
+%   projection is drawn by Brain3DView, and its source-estimate mode is
+%   FieldTrip's (SourceEstimate).
+%
 %   Signature (Alakazam transformation contract, matching Average.m):
 %   Brain3D has no real options, so OPTS is accepted and returned
 %   unchanged, purely to satisfy the two-output/replay contract.

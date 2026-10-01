@@ -25,6 +25,11 @@ function [EEG, options] = EventEditor(input, varargin)
 %   "Apply to All Raw Files" worth having here. See applyEventOps, which is
 %   where that reasoning is spelled out, and which does the work.
 %
+%   TOOLBOX OR OWN CODE. EEGLAB's pop_editeventvals edits events too, but an
+%   edit made there is not a step Recalculate or Apply to All can replay,
+%   which is what this exists for (above). The edits are table operations,
+%   with no computation a toolbox would do differently.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = EventEditor(input)        % interactive dialog
 %     [EEG, options] = EventEditor(input, opts)  % replay the stored ops
