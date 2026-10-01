@@ -1,7 +1,11 @@
 ---
 title: "Alakazam"
 subtitle: "User manual for EEG and ERP analysis"
-date: last-modified
+# The day it is rendered: the release workflow renders it when a version is
+# tagged, and it is rendered here whenever a chapter changes. last-modified
+# read this file's own time, which no chapter edit moves (a manual rendered
+# on 1 October 2026 said 27 September), and which a fresh checkout resets.
+date: today
 date-format: "D MMMM YYYY"
 lang: en-GB
 bibliography: references.bib
