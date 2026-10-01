@@ -23,6 +23,14 @@ classdef SpectralMeasureCoherenceMethodTest < matlab.unittest.TestCase
         end
     end
 
+    methods (TestMethodSetup)
+        function enableTheWarningsChecked(testCase)
+        %ENABLETHEWARNINGSCHECKED  On whatever an earlier test or toolbox left
+        %   switched off; see EnabledWarningsFixture.
+            testCase.applyFixture(EnabledWarningsFixture('Alakazam:SpectralMeasure:outsideCrossfBand'));
+        end
+    end
+
     methods (Test)
         function framesIsTheFrameCoherenceOfTheChannelAndTheReference(testCase)
             EEG = testCase.recording(20, 30);

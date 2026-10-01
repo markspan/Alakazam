@@ -28,6 +28,14 @@ classdef ClearWorkspaceCacheTest < matlab.unittest.TestCase
         end
     end
 
+    methods (TestMethodSetup)
+        function enableTheWarningsChecked(testCase)
+        %ENABLETHEWARNINGSCHECKED  On whatever an earlier test or toolbox left
+        %   switched off; see EnabledWarningsFixture.
+            testCase.applyFixture(EnabledWarningsFixture('Alakazam:clearWorkspaceCache'));
+        end
+    end
+
     methods (Test)
         function normalKeepsTheRecordingsButRemovesTheirAnalyses(testCase)
             [cache, nodes] = testCase.buildCache();

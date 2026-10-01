@@ -428,6 +428,13 @@ Conventions the suite depends on:
   rather than deleting the figure.
 - **Never call `drawnow` right after deleting a `uifigure`** in `-batch`
   when no `uihtml` is alive: MATLAB hangs.
+- **A test that checks a warning turns that warning on itself**, with
+  `EnabledWarningsFixture` in `TestMethodSetup`. Which warnings are on is
+  global, and a toolbox that switches them all off and stops with an error
+  before switching them on again silences every later `verifyWarning`.
+  `runAlakazamTests` also restores the state after each class and lists a
+  class that changed it, at the end of the run under "left the warnings
+  changed"; a class named there has a call to look at.
 - A green test proves nothing until it has been seen to fail: break the code
   it guards, watch it fail, restore.
 - **A hand-written computation with a toolbox equivalent is held to it by a

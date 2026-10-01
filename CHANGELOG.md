@@ -264,6 +264,14 @@ bar. Dates are those of the tag.
   the letters themselves (α, χ²), from one place (`ReportDoc.symbol`), and a
   test fails on TeX math in any report source. Reports are also written and
   read explicitly as UTF-8.
+- **Eight tests failed in a full run on a warning the code still gives.** A
+  toolbox that switches every warning off around a call and on again after
+  it (EEGLAB's `topoplot`, ERPLAB's studio functions) leaves them all off
+  when the call stops with an error in between, and a warning that is off is
+  not issued, so `verifyWarning` saw none. A test that checks a warning now
+  turns it on for itself (`EnabledWarningsFixture`), and `runAlakazamTests`
+  restores the warning state after any test class that changed it and lists
+  that class at the end of the run (`WarningStateGuardPlugin`).
 
 ### Documentation
 

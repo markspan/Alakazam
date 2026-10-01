@@ -44,6 +44,12 @@ function results = runAlakazamTests(scope, opts)
 %   Run with "Report" after adding cases, and move the tag if the ordering
 %   has changed: a tag left where it no longer belongs is how a quick
 %   suite stops being quick.
+%
+%   THE WARNING GUARD. Every test class runs under WarningStateGuardPlugin.
+%   A class that leaves MATLAB's warnings changed has them restored before
+%   the next class, and is listed at the end of the run. A plain runtests()
+%   has no guard, which is why a test that checks a warning also turns it
+%   on for itself (EnabledWarningsFixture).
     arguments
         scope (1, 1) string {mustBeMember(scope, ["quick", "full", "slow"])} = "quick"
         opts.Report (1, 1) logical = false
@@ -69,8 +75,14 @@ function results = runAlakazamTests(scope, opts)
         return;
     end
 
+    % The guard keeps a class that leaves warnings switched off from
+    % silencing the warning checks after it, and says which class it was.
+    guard = WarningStateGuardPlugin();
+    runner = matlab.unittest.TestRunner.withTextOutput();
+    runner.addPlugin(guard);
+
     started = tic;
-    results = suite.run();
+    results = runner.run(suite);
     elapsed = toc(started);
 
     fprintf('\n=== %s: PASS %d FAIL %d SKIP %d of %d, %s ===\n', ...
@@ -83,8 +95,26 @@ function results = runAlakazamTests(scope, opts)
         fprintf('  %s\n', failed.Name);
     end
 
+    reportWarningLeaks(guard.Leaks);
+
     if opts.Report
         reportSlowest(results);
+    end
+end
+
+% ======================================================================= %
+function reportWarningLeaks(leaks)
+%REPORTWARNINGLEAKS  The classes that left MATLAB's warnings changed.
+%   Their changes were undone before the next class ran, so no result above
+%   depends on them. They are listed because the same call leaves the
+%   warnings changed in a working session too, where a warning the user
+%   needed to see then goes unseen.
+    if isempty(leaks)
+        return;
+    end
+    fprintf('\nleft the warnings changed (restored before the next class):\n');
+    for k = 1:numel(leaks)
+        fprintf('  %s: %s\n', leaks(k).TestClass, strjoin(leaks(k).Changes, '; '));
     end
 end
 

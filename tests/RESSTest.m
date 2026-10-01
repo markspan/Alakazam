@@ -39,6 +39,14 @@ classdef RESSTest < matlab.unittest.TestCase
         end
     end
 
+    methods (TestMethodSetup)
+        function enableTheWarningsChecked(testCase)
+        %ENABLETHEWARNINGSCHECKED  On whatever an earlier test or toolbox left
+        %   switched off; see EnabledWarningsFixture.
+            testCase.applyFixture(EnabledWarningsFixture('Alakazam:RESS:noTrials'));
+        end
+    end
+
     methods (Test)
         function theGaussianFilterHasUnitGainAndNoPhaseShift(testCase)
             srate = 500; t = (0:1999) / srate;

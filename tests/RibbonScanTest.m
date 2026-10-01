@@ -35,6 +35,12 @@ classdef RibbonScanTest < matlab.unittest.TestCase
                 matlab.unittest.fixtures.TemporaryFolderFixture());
             testCase.Root = f.Folder;
         end
+
+        function enableTheWarningsChecked(testCase)
+        %ENABLETHEWARNINGSCHECKED  On whatever an earlier test or toolbox left
+        %   switched off; see EnabledWarningsFixture.
+            testCase.applyFixture(EnabledWarningsFixture('Alakazam:AlakazamRibbon'));
+        end
     end
 
     methods (Access = private)
