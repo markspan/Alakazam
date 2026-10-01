@@ -304,13 +304,21 @@ is the trade to make here; the plot below the filters shows the result.
 
 MATLAB's Filter Designer app designs filters of every kind: equiripple and
 least-squares FIRs, Butterworth, Chebyshev and elliptic IIRs, band-passes
-and band-stops. **Open designer** starts it. Design the filter for the
-data's own sample rate, then export it to the MATLAB workspace as a
-**Digital Filter Object** (or save it in a MAT-file), and press
-**Use exported…**, which lists the filters it finds and refuses one designed
-for another sample rate. Its coefficients are kept in the step's options, so
-replaying it, a template and Apply to All need neither the app nor MATLAB's
-workspace.
+and band-stops. **Open designer** starts it. Design the filter in Hz for the
+data's own sample rate, or in normalised frequency, then export it to the
+MATLAB workspace as a **Digital Filter Object** (or save it in a MAT-file),
+and press **Use exported…**, which lists the filters it finds and refuses one
+designed in Hz for another sample rate. Its coefficients are kept in the
+step's options, so replaying it, a template and Apply to All need neither the
+app nor MATLAB's workspace.
+
+A filter designed in normalised frequency has no sample rate of its own: its
+band edges are fractions of the Nyquist frequency, and its coefficients are
+the same at any rate. It is read at the rate of the data it is chosen for, so
+on data sampled at 500 Hz a normalised frequency of 0.2 lies at 50 Hz, and
+the picker says where 1 lies. That rate is then kept as the filter's own:
+replayed onto data sampled at another rate, it is refused like a filter
+designed in Hz, rather than having its band edges move with the rate.
 
 The designed filter is applied after the other three, to every channel, in
 either mode. A linear-phase FIR of odd length is applied once, with its

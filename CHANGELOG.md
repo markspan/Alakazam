@@ -19,8 +19,9 @@ bar. Dates are those of the tag.
   `invfirwsord` gives.
 - **A filter from MATLAB's Filter Designer.** Filter's fourth row opens the
   Filter Designer and takes the filter it exports (a `digitalFilter`, from
-  the workspace or a MAT-file), refusing one designed for another sample
-  rate. Its coefficients are kept in the step, so replay, templates and Apply
+  the workspace or a MAT-file), refusing one designed in Hz for another
+  sample rate. One designed in normalised frequency is read at the data's
+  rate, which it then keeps for every replay. Its coefficients are kept in the step, so replay, templates and Apply
   to All need neither the app nor the workspace. A linear-phase FIR is
   applied once with firfilt, like the other filters; anything else forward
   and backward (`filtfilt`), zero-phase, as EEGLAB and FieldTrip apply an IIR

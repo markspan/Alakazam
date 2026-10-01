@@ -6,7 +6,8 @@ function spec = pickDesignedFilter(srate)
 %   MAT-file the app saved. The chosen one comes back as Filter stores it
 %   (designedFilterFromObject), or [] on Cancel. One designed for another
 %   sample rate than SRATE, the data's, is refused here, with the reason,
-%   rather than later by the step.
+%   rather than later by the step. One designed in normalised frequency is
+%   read at SRATE, and the details say where its band edges then lie.
 %
 %   See also DESIGNEDFILTERFROMOBJECT, FILTERDIALOG, FILTERDESIGNER.
     spec = [];
@@ -18,8 +19,9 @@ function spec = pickDesignedFilter(srate)
     grid = uigridlayout(fig, [4 1], 'RowHeight', {'fit', 'fit', 'fit', 'fit'}, 'Padding', [12 12 12 12]);
     uilabel(grid, 'WordWrap', 'on', 'Text', sprintf([ ...
         'Filters exported from the Filter Designer (Export > Digital Filter Object) to the MATLAB ' ...
-        'workspace, or saved there in a MAT-file. The data are sampled at %g Hz, and the filter ' ...
-        'has to have been designed for that rate.'], srate));
+        'workspace, or saved there in a MAT-file. The data are sampled at %g Hz: the filter has ' ...
+        'to have been designed for that rate, or in normalised frequency, which is then read ' ...
+        'at it.'], srate));
     choice = uidropdown(grid, 'Tag', 'DesignedFilterChoice');
     details = uilabel(grid, 'WordWrap', 'on', 'Text', '', 'Tag', 'DesignedFilterDetails');
     buttons = uigridlayout(grid, [1 5], 'ColumnWidth', {130, 80, '1x', 80, 80}, 'Padding', [0 0 0 0]);
@@ -53,7 +55,11 @@ function spec = pickDesignedFilter(srate)
             return;
         end
         obj = candidates(choice.Value).object;
-        if obj.NormalizedFrequency || abs(obj.SampleRate - srate) > 1e-6
+        if obj.NormalizedFrequency
+            details.Text = sprintf(['Designed in normalised frequency, so it will be read at the ' ...
+                'data''s %g Hz: a normalised frequency w lies at w x %g Hz. It keeps that rate ' ...
+                'when it is replayed.'], srate, srate / 2);
+        elseif abs(obj.SampleRate - srate) > 1e-6
             details.Text = sprintf('This one was designed for %s, not for %g Hz, and cannot be used here.', ...
                 rateText(obj), srate);
         else
@@ -97,7 +103,7 @@ function spec = pickDesignedFilter(srate)
         end
         picked = candidates(choice.Value);
         try
-            candidate = designedFilterFromObject(picked.object, picked.name);
+            candidate = designedFilterFromObject(picked.object, picked.name, srate);
         catch err
             uialert(fig, err.message, 'Cannot use this filter');
             return;

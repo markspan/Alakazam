@@ -305,9 +305,10 @@ function options = FilterDialog(srate, labels, stored)
                 'Filter Designer');
             return;
         end
-        uialert(fig, sprintf(['Design the filter for a sample rate of %g Hz, the data''s. Then ' ...
-            'export it as a Digital Filter Object to the workspace (or save it in a MAT-file), and ' ...
-            'press Use exported.'], srate), 'Filter Designer', 'Icon', 'info');
+        uialert(fig, sprintf(['Design the filter in Hz for a sample rate of %g Hz, the data''s, ' ...
+            'or in normalised frequency, where 1 is %g Hz. Then export it as a Digital Filter ' ...
+            'Object to the workspace (or save it in a MAT-file), and press Use exported.'], ...
+            srate, srate / 2), 'Filter Designer', 'Icon', 'info');
     end
 
     function onUseExported()
@@ -331,8 +332,14 @@ function options = FilterDialog(srate, labels, stored)
         if designedFilterPasses(designed) == 2
             how = 'applied forward and backward, zero-phase, so its attenuation doubles in dB';
         end
-        designedSummary.Text = sprintf('%s: %s %s, order %d, %g Hz; %s.', designed.source, ...
-            upper(designed.kind), designed.response, designed.order, designed.srate, how);
+        % The source names the rate a normalised design was read at; one
+        % designed in Hz carries it as its own.
+        rate = sprintf(', %g Hz', designed.srate);
+        if TransTools.FieldOr(designed, 'normalised', false)
+            rate = '';
+        end
+        designedSummary.Text = sprintf('%s: %s %s, order %d%s; %s.', designed.source, ...
+            upper(designed.kind), designed.response, designed.order, rate, how);
     end
 
     function updateResponse()

@@ -523,7 +523,40 @@ classdef FilterTest < matlab.unittest.TestCase
             opts.designed = designedFilterFromObject(d, 'lp500');
             testCase.verifyError(@() Filter(EEG, opts), 'Alakazam:Filter');
             normalised = designfilt('lowpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 0.2);
-            testCase.verifyError(@() designedFilterFromObject(normalised, 'n'), 'Alakazam:Filter');
+            testCase.verifyError(@() designedFilterFromObject(normalised, 'n'), 'Alakazam:Filter', ...
+                'Without the data''s rate there is nothing to read it at.');
+        end
+
+        function aNormalisedDesignIsReadAtTheDataRate(testCase)
+        %ANORMALISEDDESIGNISREADATTHEDATARATE  A filter designed in normalised
+        %   frequency has the same coefficients at any rate; read at the
+        %   data's 250 Hz, a half-power point at 0.16 lies at 20 Hz, and the
+        %   filter applied is the one designed in Hz for 20 Hz at 250 Hz.
+            [EEG, ~] = eegFixture([5 40], [1 1]);
+            normalised = designfilt('lowpassiir', 'FilterOrder', 6, 'HalfPowerFrequency', 20 / 125);
+            inHz = designfilt('lowpassiir', 'FilterOrder', 6, 'HalfPowerFrequency', 20, 'SampleRate', 250);
+            opts = filterOptions([], [], []);
+
+            opts.designed = designedFilterFromObject(normalised, 'n', 250);
+
+            testCase.verifyTrue(opts.designed.normalised);
+            testCase.verifyEqual(opts.designed.srate, 250);
+            testCase.verifySubstring(opts.designed.source, 'read at 250 Hz');
+            expected = opts;
+            expected.designed = designedFilterFromObject(inHz, 'hz');
+            testCase.verifyEqual(Filter(EEG, opts).data, Filter(EEG, expected).data, 'AbsTol', 1e-10);
+        end
+
+        function aNormalisedDesignKeepsTheRateItWasReadAt(testCase)
+        %ANORMALISEDDESIGNKEEPSTHERATEITWASREADAT  Read at 500 Hz, its band
+        %   edges are fixed in Hz; replayed onto data at 250 Hz they would
+        %   halve, so the replay is refused as for a filter designed in Hz.
+            [EEG, ~] = eegFixture(5, 1);
+            opts = filterOptions([], [], []);
+            opts.designed = designedFilterFromObject( ...
+                designfilt('lowpassiir', 'FilterOrder', 4, 'HalfPowerFrequency', 0.2), 'n', 500);
+
+            testCase.verifyError(@() Filter(EEG, opts), 'Alakazam:Filter');
         end
 
         function theResponseIncludesTheDesignedFilterSquared(testCase)
