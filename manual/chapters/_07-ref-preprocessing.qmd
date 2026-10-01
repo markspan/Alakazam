@@ -358,7 +358,8 @@ result, with the whole design of each one in the panel. Under the filters, the d
 response of the ticked ones together, a designed filter included: the gain
 in dB from 0 Hz to the Nyquist frequency, with a dotted line at -6 dB, where
 each cutoff sits, and the axis reaching 20 dB below the deepest attenuation
-ticked, or below the curve's lowest point when a designed filter is ticked.
+ticked, or, when a designed filter is ticked, 20 dB below the curve's lowest
+point, down to -200 dB at most.
 It shows which frequencies pass, how steep each transition band is, and how
 far the stop bands reach; zoom in on a transition band with the plot's
 toolbar to read it off. The plot is redrawn whenever a setting changes, and
