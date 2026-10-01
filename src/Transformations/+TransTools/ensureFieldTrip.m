@@ -11,8 +11,8 @@ function ensureFieldTrip(featureLabel)
 %   FieldTrip is only needed for Brain3DView's optional "Source estimate"
 %   mode (TransTools.BuildSourceForwardModel/ComputeSourceEstimate) -- the
 %   default "Scalp projection" mode (TransTools.DrawBrainMap) needs
-%   nothing beyond what Alakazam already ships. Like AutoGEDAI's own
-%   ensureGEDAI, this is installed lazily on first use, only after the
+%   nothing beyond what Alakazam already ships. Like AutoGEDAI's GEDAI
+%   (ensureLatestGEDAI), this is installed lazily on first use, only after the
 %   user explicitly agrees: unlike the small EEGLAB registry plugins
 %   EEGLabEnvironment installs quietly at startup, this is a ~400 MB
 %   download every user should get to decline.
@@ -53,7 +53,7 @@ function ensureFieldTrip(featureLabel)
 
     fieldTripUrl = 'https://download.fieldtriptoolbox.org/fieldtrip-20260812.zip';
 
-    % LEGACY-JAVA-GUI: questdlg, matching AutoGEDAI's own ensureGEDAI --
+    % LEGACY-JAVA-GUI: questdlg, matching AutoGEDAI's ensureLatestGEDAI:
     % the same "optional heavy download, consent-gated" pattern, not
     % (yet) migrated to a uiconfirm anywhere in this codebase.
     answer = questdlg([ ...

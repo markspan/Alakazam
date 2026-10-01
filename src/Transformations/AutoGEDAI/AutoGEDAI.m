@@ -8,14 +8,18 @@ function [EEG, opts] = AutoGEDAI(input, varargin)
 %   alternative (or complement) to AutoEyeICA: run whichever suits the
 %   dataset, or neither.
 %
-%   GEDAI is not bundled with Alakazam or the EEGLAB plugin registry (it is
-%   licensed PolyForm Noncommercial 1.0.0: free for personal, noncommercial
-%   research use, a separate licence is required for commercial use -- see
-%   https://github.com/neurotuning/GEDAI-master/blob/master/LICENSE). The
-%   first time this transformation runs on a machine without it, a dialog
-%   explains this and asks permission before downloading it into
-%   Documents/MATLAB; declining leaves it uninstalled and throws, with
-%   instructions to install it manually instead.
+%   GEDAI is not bundled with Alakazam (it is licensed PolyForm
+%   Noncommercial 1.0.0: free for personal, noncommercial research use, a
+%   separate licence is required for commercial use; see
+%   https://github.com/neurotuning/GEDAI-master/blob/master/LICENSE). It
+%   runs the newest GEDAI release there is (ensureLatestGEDAI): the first
+%   time this transformation runs on a machine without GEDAI, a dialog
+%   explains the licence and asks permission before downloading it into
+%   Documents/MATLAB/GEDAI, and declining leaves it uninstalled and throws,
+%   with instructions to install it manually instead. A newer release is
+%   installed without asking again, and offline the newest installed one
+%   runs. The version that ran is recorded in EEG.etc.GEDAI.version, since
+%   a new release can change the result.
 %
 %   Inputs:
 %       input - EEG dataset to denoise.
@@ -31,7 +35,8 @@ function [EEG, opts] = AutoGEDAI(input, varargin)
 %
 %   Outputs:
 %       EEG   - Denoised dataset. Diagnostics (SENSAI score, per-epoch and
-%               per-channel ENOVA) are kept in EEG.etc.GEDAI.
+%               per-channel ENOVA) and the GEDAI version that ran are kept
+%               in EEG.etc.GEDAI.
 %       opts  - Struct with the settings used.
 %
 %   GEDAI's leadfield-based denoising only works on real scalp EEG channels.
@@ -61,9 +66,10 @@ function [EEG, opts] = AutoGEDAI(input, varargin)
 
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:AutoGEDAI', varargin{:});
 
-%% GEDAI is an optional, noncommercially-licensed plugin: make sure it is
-%  installed (with consent) before configuring or running anything.
-ensureGEDAI();
+%% GEDAI is an optional, noncommercially-licensed plugin: make sure its
+%  newest release is installed (with consent, the first time) and is the
+%  one on the path before configuring or running anything.
+gedai = ensureLatestGEDAI();
 ensureGpuDeviceCountShim();
 
 if interactive
@@ -168,7 +174,11 @@ EEG = TransTools.FillChanlocs(EEG, 'Alakazam:AutoGEDAI', gedaiElc);
 
 %% Map the options onto GEDAI's positional arguments. What is not offered
 %  keeps GEDAI's own default: signal_type 'eeg', no artefact plot, and the
-%  output reference GEDAI leaves the data in (see the manual).
+%  output reference GEDAI leaves the data in (see the manual). That is the
+%  average reference in the form that keeps the data's rank, 1/(n+1) per
+%  channel: v1.7 always returns it, and v1.8, which can return others,
+%  does unless asked. It is left to the default rather than asked for: a
+%  release before v1.8 takes a twelfth argument as something else.
 epochThreshold = inf;
 if strcmpi(opts.RejectEpochs, 'yes')
     epochThreshold = opts.EpochENOVA;
@@ -265,9 +275,13 @@ EEG.id = name;
 EEG.etc.GEDAI = struct('SENSAI_score', SENSAI_score, ...
     'ENOVA_per_epoch', ENOVA_per_epoch, 'ENOVA_per_channel', ENOVA_per_channel, ...
     'channelIndices', eegIdx, 'excludedChannels', {{EEG.chanlocs(otherIdx).labels}}, ...
-    'nSamplesRejected', nRejected, 'options', opts);
+    'nSamplesRejected', nRejected, 'options', opts, 'version', gedai.Version);
 
-fprintf('AutoGEDAI: SENSAI score %.3f.\n', SENSAI_score);
+ran = 'an unnumbered GEDAI';
+if ~isempty(gedai.Version)
+    ran = ['GEDAI v' gedai.Version];
+end
+fprintf('AutoGEDAI: %s, SENSAI score %.3f.\n', ran, SENSAI_score);
 if epochThreshold < inf
     fprintf('AutoGEDAI: %d epoch(s) exceeded the ENOVA threshold (%.2f).\n', ...
         sum(ENOVA_per_epoch > epochThreshold), epochThreshold);
@@ -283,7 +297,7 @@ function opts = withGedaiDefaults(opts)
 %   stored filled in with GEDAI's own defaults, pop_GEDAI's: 12 wave cycles
 %   per epoch and one threshold for the whole recording. Settings saved
 %   before these were offered, and the library's N400 template, ran with
-%   exactly these values, so a replay of them still gives the same result.
+%   exactly these values, so a replay of them runs as they did.
     opts.EpochCycles   = TransTools.FieldOr(opts, 'EpochCycles', 12);
     opts.SlidingWindow = TransTools.FieldOr(opts, 'SlidingWindow', Inf);
 end
@@ -320,55 +334,6 @@ function keep = keptSampleMask(EEGclean, nOriginalSamples, nKeptSamples)
     end
 end
 
-function ensureGEDAI()
-%ENSUREGEDAI  Make sure the GEDAI plugin is on the path, with consent.
-%   GEDAI is not in the EEGLAB plugin registry and is licensed for
-%   noncommercial use only, so -- unlike the registry plugins and FastICA,
-%   which EEGLabEnvironment installs quietly at startup -- it is installed
-%   lazily here, on first use, only after the user explicitly agrees.
-    if ~isempty(which('GEDAI'))
-        return; % already available this session
-    end
-
-    % addpath (inside installFromZip) is deliberately session-only, so a
-    % previous install is not back on the path in a fresh MATLAB session
-    % even though it is still on disk. Reattach it quietly here instead of
-    % re-asking for consent (already given) and re-downloading (unnecessary)
-    % every single time Alakazam starts.
-    existing = EEGLabEnvironment.findInstalled('GEDAI', 'GEDAI.m');
-    if ~isempty(existing)
-        addpath(existing);
-        return;
-    end
-
-    gedaiUrl = 'https://github.com/neurotuning/GEDAI-master/archive/refs/tags/v1.7.zip';
-
-    % LEGACY-JAVA-GUI: questdlg is a classic Java/AWT dialog, not a
-    % uifigure -- see migration.md's "old-style Java-based graphics"
-    % checklist.
-    answer = questdlg([ ...
-        'AutoGEDAI needs the GEDAI EEGLAB plugin (neurotuning/GEDAI-master), ', ...
-        'which was not found on the MATLAB path.', newline, newline, ...
-        'GEDAI is licensed under the PolyForm Noncommercial License 1.0.0: ', ...
-        'free for personal, noncommercial research use; a separate licence ', ...
-        'is required for commercial use. Full terms: ', ...
-        'https://github.com/neurotuning/GEDAI-master/blob/master/LICENSE', newline, newline, ...
-        'Download and install GEDAI v1.7 now into your Documents/MATLAB folder?'], ...
-        'GEDAI not found', ...
-        'Download and install', 'Cancel', 'Download and install');
-
-    if ~strcmp(answer, 'Download and install')
-        throw(MException('Alakazam:AutoGEDAI', ...
-            ['I''m afraid GEDAI is required but could not be found on the MATLAB path, and its ' ...
-             'installation was declined. Please install it manually from ' ...
-             'https://github.com/neurotuning/GEDAI-master (extract into your ' ...
-             'eeglab/plugins folder), or run AutoGEDAI again and accept the ' ...
-             'download prompt.']));
-    end
-
-    EEGLabEnvironment.installFromZip(gedaiUrl, 'GEDAI', 'GEDAI.m');
-end
-
 % ======================================================================= %
 function ensureGpuDeviceCountShim()
 %ENSUREGPUDEVICECOUNTSHIM  Work around a GEDAI bug: it calls the real
@@ -401,8 +366,8 @@ function elc = gedaiElcFile()
 %   containing 'auxiliaries' folder to the path itself
 %   (fileparts(which('GEDAI'))), so this is resolved the same way rather
 %   than depending on dipfit for something GEDAI already provides. Called
-%   after ensureGEDAI, so GEDAI (and hence this file) is guaranteed to be on
-%   the path already.
+%   after ensureLatestGEDAI, so GEDAI (and hence this file) is guaranteed to
+%   be on the path already.
     gedaiRoot = fileparts(which('GEDAI'));
     elc = fullfile(gedaiRoot, 'auxiliaries', 'standard_1005.elc');
     if exist(elc, 'file') ~= 2

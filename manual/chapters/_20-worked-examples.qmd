@@ -178,31 +178,33 @@ subjects contributed a value in every condition:
 
 | Bin | *M* (µV) | *SD* | *n* |
 |-----------------|--------|-----|-----|
-| Prime, related | 0.086 | 1.711 | 10 |
-| Prime, unrelated | 0.173 | 2.050 | 10 |
-| Target, related | 3.534 | 2.258 | 10 |
-| Target, unrelated | 0.747 | 1.682 | 10 |
+| Prime, related | 0.125 | 1.602 | 10 |
+| Prime, unrelated | 0.144 | 1.912 | 10 |
+| Target, related | 3.192 | 2.062 | 10 |
+| Target, unrelated | 0.661 | 1.478 | 10 |
 
 : N400 mean amplitude at Cz, 300 to 500 ms, in the ten ERP CORE subjects. {#tbl-n400-results}
 
 The maximal mixed model (a random intercept and slope per subject) did not
 converge to a non-singular fit with ten subjects and four conditions, and the
 report fell back to a random intercept, saying so. That model found an
-effect of condition, *F*(3, 27) = 19.98, *p* < .001, partial
-$\eta^2$ = .689, 95% CI [.494, 1.000], with a Bayes factor above 1000.
+effect of condition, *F*(3, 27) = 20.33, *p* < .001, partial
+$\eta^2$ = .693, 95% CI [.500, 1.000], with a Bayes factor above 1000.
 Holm-corrected pairwise contrasts located it: Target, related differed from
 each of the other three conditions (all *p* < .001), which did not differ
-from each other (all *p* > .6). The N400 difference bin, tested against
-zero, was *M* = -2.79 µV, *SD* = 1.67, *t*(9) = -5.27, *p* < .001, Cohen's
-$d_z$ = -1.67, 95% CI [-2.22, -1.16], BF~10~ = 71.
+from each other (all *p* > .7). The N400 difference bin, tested against
+zero, was *M* = -2.53 µV, *SD* = 1.90, *t*(9) = -4.21, *p* = .002, Cohen's
+$d_z$ = -1.33, 95% CI [-1.83, -0.71], BF~10~ = 20.6.
 
 These numbers are the report's own, from one run of the repository's
-template on the ten recordings, on 1 October 2026, rendered by **ERP &
-Report**. `src/help/examples/reproduceN400Example.m` repeats that run and
-writes the export and the report; `LibraryReplayTest` replays the template on
-the same data and checks the table and the difference bin against them, so a
-change that moves them shows up as a failing test rather than as a stale
-chapter.
+template on the ten recordings, with GEDAI v1.8, on 1 October 2026, rendered
+by **ERP & Report**. `src/help/examples/reproduceN400Example.m` repeats that
+run and writes the export and the report; `LibraryReplayTest` replays the
+template on the same data and checks the table and the difference bin
+against them, so a change that moves them shows up as a failing test rather
+than as a stale chapter. A new GEDAI release is such a change: AutoGEDAI
+runs the newest (@sec-tr-autogedai), and v1.8 moved the table by up to
+0.34 µV from v1.7's.
 
 **What it means.** A semantically unrelated target elicits a larger
 centro-parietal negativity than a related one between 300 and 500 ms, the

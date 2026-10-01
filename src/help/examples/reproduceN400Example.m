@@ -11,6 +11,7 @@ function result = reproduceN400Example(varargin)
 %     .means, .sds the four bins' mean and SD over subjects, the chapter's
 %                  table
 %     .difference  the difference bin's [mean, SD]
+%     .gedaiVersion the GEDAI release AutoGEDAI ran, which the chapter names
 %     .csvFile     the measurements export
 %     .reportFile  the rendered report ('' when not rendered)
 %
@@ -31,12 +32,14 @@ function result = reproduceN400Example(varargin)
 %   intermediate results stay in memory, and the cache paths the steps are
 %   given point into OUTPUT/cache, where nothing but empty folders is written.
 %
-%   NEEDS EEGLAB, GEDAI (AutoGEDAI installs it the first time it runs in the
-%   app), Luck's chapter 3 recordings in Data/Luck/ch3 (DATA.md,
-%   downloadLuckData), and Quarto and R for the report. LibraryReplayTest
+%   NEEDS EEGLAB, GEDAI (its newest release, installed or updated as
+%   AutoGEDAI does, with a dialog before a first install), Luck's chapter 3
+%   recordings in Data/Luck/ch3 (DATA.md, downloadLuckData), and Quarto and
+%   R for the report. LibraryReplayTest
 %   (theN400WorkedExampleGivesTheManualsTable) replays the same steps and
-%   holds the results to the chapter's table, so a change that moves them
-%   fails a test; rerun this to regenerate the chapter's statistics.
+%   holds the results to the chapter's table, so a change that moves them,
+%   a new GEDAI release among them, fails a test; rerun this to regenerate
+%   the chapter's statistics.
 %
 %   Run it from the repository root:
 %       addpath('src/help/examples'); reproduceN400Example();
@@ -55,14 +58,8 @@ function result = reproduceN400Example(varargin)
     repo = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
     addAppPaths(fullfile(repo, 'src'));
     EEGLabEnvironment.ensure();
-    if isempty(which('GEDAI'))
-        installed = EEGLabEnvironment.findInstalled('GEDAI', 'GEDAI.m');
-        if isempty(installed)
-            error('reproduceN400Example:noGEDAI', ['GEDAI is not installed. Run AutoGEDAI once ' ...
-                'in Alakazam, which offers to install it, then run this again.']);
-        end
-        addpath(installed);
-    end
+    gedai = ensureLatestGEDAI();   % installed or updated now, before the minutes the steps take
+    fprintf('GEDAI v%s\n', gedai.Version);
 
     [ids, params] = templateSteps(fullfile(repo, 'library', 'templates', 'N400.alztemplate'));
     files = recordings(fullfile(repo, 'Data', 'Luck', 'ch3'));
@@ -78,6 +75,7 @@ function result = reproduceN400Example(varargin)
         'session', {}, 'EEG', {}, 'file', {});
     amplitude = nan(numel(files), 5);
     subjects = cell(1, numel(files));
+    gedaiVersions = cell(1, numel(files));
     for s = 1:numel(files)
         [~, subjects{s}] = fileparts(files{s});
         fprintf('%s ...\n', subjects{s});
@@ -87,6 +85,9 @@ function result = reproduceN400Example(varargin)
             input = EEG;
             EEG = TransTools.invoke(ids{k}, input, params{k});
             EEG.File = resultCacheFile(input.File, ids{k});
+            if strcmp(ids{k}, 'AutoGEDAI')
+                gedaiVersions{s} = EEG.etc.GEDAI.version;
+            end
         end
         amplitude(s, :) = EEG.measurements{1}.amplitude(1, 1:5);
         entries(end + 1) = struct('subject', subjects{s}, 'datasetType', 'subject', 'group', '', ...
@@ -96,8 +97,10 @@ function result = reproduceN400Example(varargin)
     result = struct('subjects', {subjects}, 'amplitude', amplitude, ...
         'means', mean(amplitude(:, 1:4), 1), 'sds', std(amplitude(:, 1:4), 0, 1), ...
         'difference', [mean(amplitude(:, 5)), std(amplitude(:, 5))], ...
+        'gedaiVersion', strjoin(unique(gedaiVersions), ', '), ...
         'csvFile', fullfile(outDir, 'measurements_n400.csv'), 'reportFile', '');
-    fprintf('\nN400 at Cz, 300 to 500 ms, over %d subjects\n', numel(files));
+    fprintf('\nN400 at Cz, 300 to 500 ms, over %d subjects, GEDAI v%s\n', numel(files), ...
+        result.gedaiVersion);
     fprintf('  bin means %s, SDs %s\n', mat2str(round(result.means, 3)), mat2str(round(result.sds, 3)));
     fprintf('  difference bin M %.3f, SD %.3f\n', result.difference);
 

@@ -347,14 +347,22 @@ Three properties of the output are easy to miss:
 
 Only channels in GEDAI's 10-5 template are denoised; the others are set aside
 and put back unchanged. GEDAI's diagnostics (the SENSAI score and the ENOVA
-per epoch and per channel) are kept with the result.
+per epoch and per channel) are kept with the result, and so is the GEDAI
+version that ran.
 
-GEDAI is not bundled: it is downloaded on first use, after consent, and its
-licence (PolyForm Noncommercial 1.0.0) allows noncommercial research use
-only (@tbl-toolboxes). Its parallel processing on the CPU can silently
-corrupt the output when one of its frequency bands fails and is retried, so
-Alakazam uses parallel processing only on a GPU; the problem has been
-reported to its authors.
+GEDAI is not bundled, and its licence (PolyForm Noncommercial 1.0.0) allows
+noncommercial research use only (@tbl-toolboxes). AutoGEDAI runs its newest
+release. The first run downloads it, after consent. After that, once in each
+MATLAB session, AutoGEDAI asks GitHub whether a newer release is out; if one
+is, it is installed beside the older ones, without asking again, and used
+from then on. Offline, or when the download fails, the newest installed
+release runs. A new release can change the result, so the version is
+recorded, and a step replayed later runs the release installed then, not
+necessarily the one it first ran with.
+
+Its parallel processing on the CPU can silently corrupt the output when one
+of its frequency bands fails and is retried, so Alakazam uses parallel
+processing only on a GPU; the problem has been reported to its authors.
 
 ## PREP {#sec-tr-prep}
 

@@ -111,34 +111,49 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
         %   mean amplitude at Cz averaged over subjects, per bin, and the
         %   difference bin's mean and SD, as the chapter gives them.
         %
-        %   The chapter's numbers are from one recorded run, on 1 October
-        %   2026, rendered by ERP & Report; reproduceN400Example
+        %   The chapter's numbers are from one recorded run, with GEDAI v1.8,
+        %   on 1 October 2026, rendered by ERP & Report; reproduceN400Example
         %   (src/help/examples) repeats it, report and all, and is how the
-        %   chapter is updated when this fails. The table they replaced (until
-        %   then 0.178, 0.186, 3.563 and 0.804 uV) could not be reproduced:
-        %   the code of the day it was written, the template, the data, the
-        %   cached recordings and GEDAI all gave these numbers instead, and
-        %   the run it came from was not recorded. Its difference bin did not
-        %   even agree with its own table.
+        %   chapter is updated when this fails.
+        %
+        %   THE GEDAI RELEASE. AutoGEDAI runs the newest GEDAI release, and a
+        %   release changes these numbers: v1.8 moved the means by up to
+        %   0.34 uV from v1.7's (0.086, 0.173, 3.534 and 0.747 uV, difference
+        %   bin -2.787, SD 1.674). So the release that ran is checked first,
+        %   and a different one stops the case with what to regenerate,
+        %   rather than failing on every number.
+        %
+        %   The v1.7 table replaced an earlier one (0.178, 0.186, 3.563 and
+        %   0.804 uV) that could not be reproduced: the code of the day it was
+        %   written, the template, the data, the cached recordings and GEDAI
+        %   all gave v1.7's numbers instead, and the run it came from was not
+        %   recorded. Its difference bin did not even agree with its own
+        %   table.
             files = testCase.luckRecordings('ch3', '_N400_preprocessed.set');
             testCase.assumeNumElements(files, 10, sprintf( ...
                 'The worked example uses ten chapter 3 recordings; %d were found.', numel(files)));
             nodes = testCase.templateNodes('N400.alztemplate');
 
+            tableGEDAI = '1.8';   % the release chapter 20's numbers came from
             amplitude = zeros(numel(files), 5);
             for s = 1:numel(files)
                 results = testCase.replay(nodes, files{s});
+                ran = results{stepIndex(nodes, 'AutoGEDAI')}.etc.GEDAI.version;
+                testCase.assertEqual(ran, tableGEDAI, sprintf(['The manual''s table was computed ' ...
+                    'with GEDAI v%s, and v%s ran. AutoGEDAI runs the newest release, so a new one ' ...
+                    'changes these numbers: rerun reproduceN400Example (src/help/examples) and ' ...
+                    'update chapter 20, the GEDAI version it names, and this case.'], tableGEDAI, ran));
                 measured = results{stepIndex(nodes, 'Measure')};
                 amplitude(s, :) = measured.measurements{1}.amplitude(1, 1:5);
             end
 
-            testCase.verifyEqual(mean(amplitude(:, 1:4), 1), [0.086, 0.173, 3.534, 0.747], ...
+            testCase.verifyEqual(mean(amplitude(:, 1:4), 1), [0.125, 0.144, 3.192, 0.661], ...
                 'AbsTol', 0.0006, 'The per-bin means no longer match the manual''s table.');
-            testCase.verifyEqual(std(amplitude(:, 1:4), 0, 1), [1.711, 2.050, 2.258, 1.682], ...
+            testCase.verifyEqual(std(amplitude(:, 1:4), 0, 1), [1.602, 1.912, 2.062, 1.478], ...
                 'AbsTol', 0.0006, 'The per-bin SDs no longer match the manual''s table.');
             testCase.verifyEqual(amplitude(:, 5), amplitude(:, 4) - amplitude(:, 3), 'AbsTol', 1e-9, ...
                 'The N400 bin should be bin 4 minus bin 3 in every subject.');
-            testCase.verifyEqual([mean(amplitude(:, 5)), std(amplitude(:, 5))], [-2.787, 1.674], ...
+            testCase.verifyEqual([mean(amplitude(:, 5)), std(amplitude(:, 5))], [-2.531, 1.903], ...
                 'AbsTol', 0.0006, 'The difference bin no longer matches the manual''s M and SD.');
         end
 
@@ -273,13 +288,19 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
                 testCase.assumeTrue(~isempty(which('fastica')) && ~isempty(which('iclabel')), ...
                     'FastICA or ICLabel is not available.');
             end
-            if ismember('AutoGEDAI', ids) && isempty(which('GEDAI'))
-                % Installed but not on this session's path: attach it here,
-                % as AutoGEDAI would, since its install prompt is a dialog a
-                % headless test cannot answer.
-                installed = EEGLabEnvironment.findInstalled('GEDAI', 'GEDAI.m');
-                testCase.assumeNotEmpty(installed, 'GEDAI is not installed.');
-                testCase.applyFixture(matlab.unittest.fixtures.PathFixture(installed));
+            if ismember('AutoGEDAI', ids)
+                % AutoGEDAI updates GEDAI to its newest release itself, as it
+                % does in the app, but a first install asks in a dialog a
+                % headless test cannot answer: declined here, and the case
+                % skipped, when nothing is installed.
+                try
+                    ensureLatestGEDAI('Consent', @(~) false);
+                catch notInstalled
+                    if ~strcmp(notInstalled.identifier, 'Alakazam:AutoGEDAI:notInstalled')
+                        rethrow(notInstalled);
+                    end
+                    testCase.assumeFail('GEDAI is not installed.');
+                end
             end
             if ismember('Deconvolve', ids)
                 testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');

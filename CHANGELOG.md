@@ -104,6 +104,21 @@ bar. Dates are those of the tag.
 
 ### Changed
 
+- **AutoGEDAI runs the newest GEDAI release**, no longer v1.7 pinned. Once
+  per MATLAB session it looks up GEDAI-master's highest version tag on
+  GitHub; a newer release is downloaded into a folder of its own under
+  Documents/MATLAB/GEDAI, without asking again (the licence is agreed to
+  before the first install only), said in the command window, and put first
+  on the path, older releases staying on disk. Offline, or when the
+  download fails, the newest installed release runs, and a failed update is
+  not retried for every recording of an Apply to All. The release is read
+  from its folder's name, which comes from the tag: GEDAI's own plugin file
+  is not kept up to date (v1.7.1's says v1.7). The version that ran is
+  recorded in `EEG.etc.GEDAI.version` and printed with the SENSAI score.
+  The newest release is now v1.8, which changes the result: the N400 worked
+  example (chapter 20) and its check in `LibraryReplayTest` were rerun with
+  it, and the test now stops with a message to regenerate them when another
+  release is installed.
 - The Filter dialog plots only the frequency response of the ticked filters
   now; the impulse response above it is gone.
 - **Time windows follow FieldTrip's rule.** Baseline, DC-Detrend's fitting

@@ -169,8 +169,8 @@ classdef EEGLabEnvironment
         %   savepath), so a previously-downloaded plugin is not back on the
         %   path in a fresh MATLAB session even though it is still on disk.
         %   Callers use this to reattach an existing install (addpath the
-        %   returned folder) instead of re-downloading, and -- for installs
-        %   gated behind their own consent prompt, e.g. AutoGEDAI's -- to
+        %   returned folder) instead of re-downloading, and, for installs
+        %   gated behind their own consent prompt such as Unfold's, to
         %   skip re-asking every session for something already agreed to.
             folder = '';
             home = getenv('USERPROFILE');
@@ -197,7 +197,7 @@ classdef EEGLabEnvironment
         %   unzipped tree and adds that folder to the MATLAB path. Errors if
         %   the download, unzip or probe-file lookup fails. We do not call
         %   savepath. Public (not just used at startup): individual
-        %   transformations, e.g. AutoGEDAI, call this directly to install an
+        %   transformations, e.g. Deconvolve, call this directly to install an
         %   optional plugin on first use, after their own consent prompt.
             existing = EEGLabEnvironment.findInstalled(targetName, probeFile);
             if ~isempty(existing)

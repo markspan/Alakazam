@@ -3,8 +3,11 @@ classdef AutoGEDAITest < matlab.unittest.TestCase
 %
 %   GEDAI is replaced by a stand-in (tests/fixtures/GEDAIStandIn) that
 %   records its arguments and returns the data unchanged, so these cases
-%   need neither the plugin nor its computation. They need EEGLAB, for
-%   pop_select and the electrode template, and skip without it.
+%   need neither the plugin nor its computation. Its updater is replaced
+%   too, by one that names the stand-in as the release to run, so that no
+%   case reaches GitHub or puts the real GEDAI in front of the stand-in.
+%   They need EEGLAB, for pop_select and the electrode template, and skip
+%   without it.
 %
 %   Two things are pinned. The dialog's epoch size and sliding window reach
 %   GEDAI, and settings stored before they were offered still run with
@@ -47,7 +50,7 @@ classdef AutoGEDAITest < matlab.unittest.TestCase
             testCase.addTeardown(@warning, warning());
             folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture()).Folder;
             root = fileparts(fileparts(mfilename('fullpath')));
-            copyfile(fullfile(root, 'tests', 'fixtures', 'GEDAIStandIn', 'GEDAI.m'), folder);
+            copyfile(fullfile(root, 'tests', 'fixtures', 'GEDAIStandIn', '*.m'), folder);
             mkdir(fullfile(folder, 'auxiliaries'));
             copyfile(TransTools.Template1005File('Alakazam:AutoGEDAITest'), ...
                 fullfile(folder, 'auxiliaries', 'standard_1005.elc'));
@@ -102,6 +105,14 @@ classdef AutoGEDAITest < matlab.unittest.TestCase
             AutoGEDAI(recording(), options(struct()));
 
             testCase.verifyEmpty(WarningStateGuardPlugin.stateChanges(before, warning()));
+        end
+
+        function theVersionThatRanIsRecorded(testCase)
+        %THEVERSIONTHATRANISRECORDED  GEDAI is kept at its newest release,
+        %   so the result says which one made it.
+            out = AutoGEDAI(recording(), options(struct()));
+
+            testCase.verifyEqual(out.etc.GEDAI.version, 'stand-in');
         end
 
         function aChannelGEDAICannotUseComesBackUntouched(testCase)

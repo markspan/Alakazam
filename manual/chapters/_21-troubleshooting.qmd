@@ -90,7 +90,8 @@ montages (@tbl-source-reuse). The report says how many were reused.
 **A toolbox download is requested.** FieldTrip, GEDAI, the Unfold toolbox,
 EYE-EEG and FastICA are installed on first use, after consent
 (@tbl-toolboxes). Declining leaves the step unavailable, with instructions
-for a manual installation.
+for a manual installation. A newer GEDAI release is installed without
+asking, and said in the command window (@sec-tr-autogedai).
 
 **Apply to All Raw Files runs out of memory.** Each parallel worker holds a
 whole recording and its intermediate results. Lower **Most recordings at

@@ -817,6 +817,8 @@ splicing EOG/ECG back untouched. `Chapter9.wksp` preloads `Strength = auto`,
 GEDAI is not bundled: it is licensed **PolyForm Noncommercial** (free for personal,
 noncommercial research; a separate licence for commercial use). The first time you
 run it, Alakazam asks permission and downloads it; declining leaves it uninstalled.
+After that it is kept at the newest GEDAI release, and each result records which
+release made it.
 
 ### ICA vs GEDAI, in one table
 
