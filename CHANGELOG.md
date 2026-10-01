@@ -29,6 +29,12 @@ bar. Dates are those of the tag.
   squared response the data get. Every filter applied is recorded in
   `etc.alz.filter`.
 
+- **AutoGEDAI asks for GEDAI's epoch size and sliding window**, as GEDAI's
+  own dialog does: the epoch size in wave cycles (default 12) and a sliding
+  window in seconds over which the threshold adapts (default Inf, one
+  threshold for the whole recording). Both were fixed at those defaults
+  before, and a step saved then replays with them.
+
 - **PREP, ASR and AutoReject**, the standardised automated cleaning methods
   the field cites (Tools > 2. Artifact Rejection / Reduction). **PREP** runs
   the PREP pipeline (Bigdely-Shamlo et al., 2015): line noise at the mains

@@ -318,18 +318,20 @@ SENSAI criterion. It is broadband, so it addresses muscle and electrode noise
 as well as ocular artefacts, and it can be used instead of AutoICA or after
 it.
 
-![**AutoGEDAI**: the denoising strength, the leadfield, the low cut, and optional rejection of epochs and channels by their ENOVA.](images/autogedai-dialog.png){#fig-autogedai-dialog}
+![**AutoGEDAI**: the denoising strength, the leadfield, the epoch size, the low cut, the sliding window, and optional rejection of epochs and channels by their ENOVA.](images/autogedai-dialog.png){#fig-autogedai-dialog}
 
 | Option | Default | Meaning |
 |--------------------------------------------|-----------|-------------------------------------------------------|
 | **Denoising strength** | auto | **auto**; **auto+** removes more noise at some cost to signal, **auto-** keeps more signal at some cost in noise. |
 | **Leadfield matrix** | precomputed | GEDAI's precomputed leadfield, matched by channel label, or **interpolated** to the montage. |
+| **Epoch size (wave cycles)** | 12 | How long a stretch GEDAI judges at a time, in cycles of each wavelet band's lowest frequency: 12 cycles are 1.5 s in a band starting at 8 Hz, and longer in slower bands. |
 | **Low-cut frequency** | 0.5 Hz | Wavelet bands below this frequency are removed, which high-pass filters the output. |
+| **Sliding window** | Inf | **Inf** sets one threshold for the whole recording. A number of seconds lets the threshold follow noise that changes over the recording, recomputed in windows of that length. |
 | **Reject bad epochs**, **Epoch ENOVA threshold** | no, 0.9 | Reject GEDAI's internal epochs whose share of variance explained as noise (ENOVA) exceeds the threshold. |
 | **Reject bad channels**, **Channel ENOVA threshold** | no, 0.9 | The same for channels, which GEDAI then interpolates back. |
 | **Use parallel processing** | | Honoured only when a GPU is present (below). |
 
-: AutoGEDAI's options. GEDAI's other settings are left at its own defaults. {#tbl-autogedai}
+: AutoGEDAI's options, as GEDAI's own dialog asks them. GEDAI's other settings are left at its own defaults; a step saved before the epoch size and the sliding window were offered runs with their defaults, as it did then. {#tbl-autogedai}
 
 Three properties of the output are easy to miss:
 

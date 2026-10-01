@@ -19,13 +19,15 @@ function [EEG, opts] = AutoGEDAI(input, varargin)
 %
 %   Inputs:
 %       input - EEG dataset to denoise.
-%       opts  - Struct with fields Strength, Leadfield, LowCut, RejectEpochs,
-%               EpochENOVA, RejectChannels, ChannelENOVA, Parallel. If not
-%               provided, a settings dialog prompts for them once; the chosen
-%               values are returned so a later replay skips the dialog. Only
-%               a subset of GEDAI's own options is exposed -- everything else
-%               (epoch size, smoothing window, visualisation) uses GEDAI's
-%               own defaults.
+%       opts  - Struct with fields Strength, Leadfield, EpochCycles, LowCut,
+%               SlidingWindow, RejectEpochs, EpochENOVA, RejectChannels,
+%               ChannelENOVA, Parallel. If not provided, a settings dialog
+%               prompts for them once; the chosen values are returned so a
+%               later replay skips the dialog. The dialog asks what GEDAI's
+%               own (pop_GEDAI) asks, in its order, apart from the output
+%               reference and the artefact plot. Settings stored before
+%               EpochCycles and SlidingWindow were offered run with GEDAI's
+%               defaults for them, 12 cycles and Inf (see withGedaiDefaults).
 %
 %   Outputs:
 %       EEG   - Denoised dataset. Diagnostics (SENSAI score, per-epoch and
@@ -84,6 +86,7 @@ if interactive
             'RejectEpochs', 'no', 'EpochENOVA', 0.9, ...
             'RejectChannels', 'no', 'ChannelENOVA', 0.9, 'Parallel', parallelChoices{1});
     end
+    stored = withGedaiDefaults(stored);
     strengthChoices       = TransTools.PutFirst({'auto', 'auto+', 'auto-'}, stored.Strength);
     leadfieldChoices      = TransTools.PutFirst({'precomputed', 'interpolated'}, stored.Leadfield);
     rejectEpochsChoices   = TransTools.PutFirst({'no', 'yes'}, stored.RejectEpochs);
@@ -96,7 +99,14 @@ if interactive
         'separator', 'Denoising:', ...
         {'Denoising strength'; 'Strength'}, strengthChoices, ...
         {'Leadfield matrix'; 'Leadfield'}, leadfieldChoices, ...
+        {'Epoch size (wave cycles)'; 'EpochCycles'}, DialogFields.Number(stored.EpochCycles, ...
+            'Limits', [1 Inf], 'Tooltip', ['How long a stretch GEDAI judges at a time, in ' ...
+            'cycles of each wavelet band''s lowest frequency (GEDAI''s default: 12).']), ...
         {'Low-cut frequency (Hz)'; 'LowCut'}, stored.LowCut, ...
+        {'Sliding window (s, Inf = whole recording)'; 'SlidingWindow'}, DialogFields.Number( ...
+            stored.SlidingWindow, 'Limits', [1 Inf], 'Tooltip', ['Inf sets one threshold for ' ...
+            'the whole recording (GEDAI''s default). A number of seconds lets the threshold ' ...
+            'follow noise that changes over the recording.']), ...
         'separator', 'Bad epoch rejection:', ...
         {'Reject bad epochs'; 'RejectEpochs'}, rejectEpochsChoices, ...
         {'Epoch ENOVA threshold (0-1)'; 'EpochENOVA'}, stored.EpochENOVA, ...
@@ -118,6 +128,7 @@ if interactive
     end
     TransformSettings.set('AutoGEDAI', opts);
 end
+opts = withGedaiDefaults(opts);
 
 EEG = input;
 [~, name, ~] = fileparts(EEG.File);
@@ -155,9 +166,9 @@ end
 % used for eligibility, so positions and matching stay consistent.
 EEG = TransTools.FillChanlocs(EEG, 'Alakazam:AutoGEDAI', gedaiElc);
 
-%% Map the exposed options onto GEDAI's positional arguments; everything not
-%  exposed here keeps GEDAI's own default (epoch size 12 cycles, no
-%  smoothing window, signal_type 'eeg', no visualisation popup).
+%% Map the options onto GEDAI's positional arguments. What is not offered
+%  keeps GEDAI's own default: signal_type 'eeg', no artefact plot, and the
+%  output reference GEDAI leaves the data in (see the manual).
 epochThreshold = inf;
 if strcmpi(opts.RejectEpochs, 'yes')
     epochThreshold = opts.EpochENOVA;
@@ -192,8 +203,8 @@ eegOnly = pop_select(EEG, 'channel', eegIdx);
 warningState = warning();
 restoreWarnings = onCleanup(@() warning(warningState));
 [EEGclean, ~, SENSAI_score, ~, ~, ~, ENOVA_per_epoch, ~, ~, ENOVA_per_channel] = GEDAI( ...
-    eegOnly, opts.Strength, 12, opts.LowCut, opts.Leadfield, useParallel, false, ...
-    epochThreshold, channelThreshold, 'eeg', Inf);
+    eegOnly, opts.Strength, opts.EpochCycles, opts.LowCut, opts.Leadfield, useParallel, false, ...
+    epochThreshold, channelThreshold, 'eeg', opts.SlidingWindow);
 clear restoreWarnings
 
 %% Re-insert the excluded (non-EEG) channels at their original positions,
@@ -265,6 +276,16 @@ if channelThreshold < inf
     fprintf('AutoGEDAI: %d channel(s) exceeded the ENOVA threshold (%.2f).\n', ...
         sum(ENOVA_per_channel > channelThreshold), channelThreshold);
 end
+end
+
+function opts = withGedaiDefaults(opts)
+%WITHGEDAIDEFAULTS  OPTS with the settings offered since it may have been
+%   stored filled in with GEDAI's own defaults, pop_GEDAI's: 12 wave cycles
+%   per epoch and one threshold for the whole recording. Settings saved
+%   before these were offered, and the library's N400 template, ran with
+%   exactly these values, so a replay of them still gives the same result.
+    opts.EpochCycles   = TransTools.FieldOr(opts, 'EpochCycles', 12);
+    opts.SlidingWindow = TransTools.FieldOr(opts, 'SlidingWindow', Inf);
 end
 
 function keep = keptSampleMask(EEGclean, nOriginalSamples, nKeptSamples)
