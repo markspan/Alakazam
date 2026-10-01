@@ -270,8 +270,9 @@ bar. Dates are those of the tag.
   when the call stops with an error in between, and a warning that is off is
   not issued, so `verifyWarning` saw none. A test that checks a warning now
   turns it on for itself (`EnabledWarningsFixture`), and `runAlakazamTests`
-  restores the warning state after any test class that changed it and lists
-  that class at the end of the run (`WarningStateGuardPlugin`).
+  restores the warning state after any test class that changed it and names
+  that class as it happens and at the end of the run
+  (`WarningStateGuardPlugin`).
 
 ### Documentation
 

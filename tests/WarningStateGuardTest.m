@@ -111,12 +111,15 @@ classdef WarningStateGuardTest < matlab.unittest.TestCase
             runner = matlab.unittest.TestRunner.withNoPlugins();
             runner.addPlugin(guard);
 
-            runner.run(suite);
+            printed = evalc('runner.run(suite);');
 
             testCase.verifyEqual([guard.Leaks.TestClass], "LeakyWarningsTest");
             testCase.verifyEqual(guard.Leaks(1).Changes, "all: on to off");
             testCase.verifyEmpty(WarningStateGuardPlugin.stateChanges(before, warning()), ...
                 'The state from before the class is restored.');
+            testCase.verifySubstring(printed, 'LeakyWarningsTest left the warnings changed (all: on to off)', ...
+                'Said when it happens, so a run stopped early has still named it.');
+            testCase.verifyFalse(contains(printed, 'TidyWarningsTest'));
         end
     end
 end

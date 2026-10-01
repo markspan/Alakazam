@@ -432,9 +432,10 @@ Conventions the suite depends on:
   `EnabledWarningsFixture` in `TestMethodSetup`. Which warnings are on is
   global, and a toolbox that switches them all off and stops with an error
   before switching them on again silences every later `verifyWarning`.
-  `runAlakazamTests` also restores the state after each class and lists a
-  class that changed it, at the end of the run under "left the warnings
-  changed"; a class named there has a call to look at.
+  `runAlakazamTests` also restores the state after each class and names a
+  class that changed it, in the command window as it happens ("... left the
+  warnings changed") and again at the end of the run; a class named there
+  has a call to look at.
 - A green test proves nothing until it has been seen to fail: break the code
   it guards, watch it fail, restore.
 - **A hand-written computation with a toolbox equivalent is held to it by a

@@ -11,8 +11,10 @@ classdef WarningStateGuardPlugin < matlab.unittest.plugins.TestRunnerPlugin
 %
 %   Around each test class this plugin compares the warning state before
 %   and after. When they differ it restores the state from before, so the
-%   next class starts as this one did, and records the class and what it
-%   changed in Leaks. runAlakazamTests lists them at the end of the run.
+%   next class starts as this one did, records the class and what it
+%   changed in Leaks, and says so at once in the command window, so a run
+%   stopped before its end has still named it. runAlakazamTests lists them
+%   all again at the end of the run.
 %
 %   Only whether each warning is on or off is compared. Two states are
 %   equal when every warning would be issued in one exactly when it would
@@ -44,6 +46,8 @@ classdef WarningStateGuardPlugin < matlab.unittest.plugins.TestRunnerPlugin
                 plugin.Leaks(end + 1) = struct('TestClass', string(pluginData.Name), ...
                     'Changes', changes);
                 warning(before);
+                fprintf('%s left the warnings changed (%s); restored before the next class.\n', ...
+                    pluginData.Name, strjoin(changes, '; '));
             end
         end
     end
