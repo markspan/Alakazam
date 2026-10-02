@@ -32,7 +32,17 @@ function exportGrandAveragesCSV(nodes, targetFile)
 
     for i = 1:numel(nodes)
         loaded = load(nodes(i).UserData, 'EEG');
-        writeGrandAverage(fid, csvField(nodes(i).Name), loaded.EEG);
+        writeGrandAverage(fid, csvField(gaName(nodes(i), loaded.EEG)), loaded.EEG);
+    end
+end
+
+function name = gaName(node, EEG)
+%GANAME  A grand average's own name rather than its tree label, which notes
+%   deleted sources (grandAverageLabel) and is no part of the name. For a
+%   step run on a grand average the label is what there is.
+    name = node.Name;
+    if isfield(node, 'IsRoot') && node.IsRoot && isfield(EEG, 'id') && ~isempty(EEG.id)
+        name = char(string(EEG.id));
     end
 end
 

@@ -189,6 +189,7 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             cache = fullfile(testCase.Folder, 'cache');
             mkdir(fullfile(cache, 'GrandAverages'));
             owned = fullfile(cache, 'subject1.mat');
+            write(owned, 'a recording''s cache file');
             ours = fullfile(cache, 'GrandAverages', 'ours.mat');
             theirs = fullfile(cache, 'GrandAverages', 'theirs.mat');
             testCase.grandAverageNode(ours, 'Ours', {owned});
@@ -206,6 +207,34 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.verifyEqual(grandTree.Added{1, 1}, 'Ours');
             testCase.verifyEqual(grandTree.Added{1, 4}, ours);
             testCase.verifyTrue(grandTree.Added{1, 5}.canRecalculate);
+        end
+
+        function aGrandAverageWhoseSourcesWereDeletedIsListedAndSaysSo(testCase)
+        %AGRANDAVERAGEWHOSESOURCESWEREDELETEDISLISTEDANDSAYSSO  Its sources
+        %   lay in this workspace's recordings' folders, and were deleted. It
+        %   used to vanish at the next opening, like another study's grand
+        %   average; it is listed, its label saying what happened. Another
+        %   study's grand average is still left out.
+            cache = fullfile(testCase.Folder, 'cache');
+            mkdir(fullfile(cache, 'GrandAverages'));
+            owned = fullfile(cache, 'subject1.mat');
+            write(owned, 'a recording''s cache file');
+            gone = fullfile(cache, 'GrandAverages', 'gone.mat');
+            testCase.grandAverageNode(gone, 'Gone', {fullfile(cache, 'subject1', 'Average01.mat'), ...
+                fullfile(cache, 'subject2', 'Average01.mat')});
+            testCase.grandAverageNode(fullfile(cache, 'GrandAverages', 'theirs.mat'), 'Theirs', ...
+                {fullfile(cache, 'elsewhere', 'Average01.mat')});
+
+            grandTree = FakeTree();
+            app = FakeApp(struct('CacheDirectory', cache, 'Tree', FakeTree({owned}), ...
+                'GrandAveragesTree', grandTree, 'treeTraverse', @(varargin) []));
+            testCase.copyMethod('loadGrandAverages', 'gaCopy', '@WorkSpace');
+
+            gaCopy(app);
+
+            testCase.assertEqual(size(grandTree.Added, 1), 1);
+            testCase.verifyEqual(grandTree.Added{1, 1}, 'Gone (sources deleted)');
+            testCase.verifyEqual(grandTree.Added{1, 4}, gone);
         end
 
         function aStepOnAGrandAverageIsListedUnderItAgain(testCase)
@@ -391,7 +420,8 @@ classdef BranchReplayTest < matlab.unittest.TestCase
 
             reason = moveCopy(app, testCase.branchNode(source), testCase.targetNode(1000), tree);
 
-            testCase.verifySubstring(reason, 'the grand average "node1" draws');
+            testCase.verifySubstring(reason, 'the grand average "GA" draws', ...
+                'Named by its own name, not its place in the tree.');
             testCase.verifyEmpty(app.Persisted, 'Nothing is made.');
             testCase.verifyTrue(isfile(child), 'Nothing is removed.');
             testCase.verifyEmpty(tree.Removed);

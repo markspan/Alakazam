@@ -59,6 +59,7 @@ function onExportMeasurements(this)
     % console dump. Best effort: a failure here must not lose the CSV the
     % user just exported.
     reportNote = '';
+    waveformNote = '';   % set when grand averages exist but none is from these datasets
     try
         [~, stem] = fileparts(fileName);
         reportsDir = this.Workspace.reportsDirectory();
@@ -115,17 +116,26 @@ function onExportMeasurements(this)
         % behind if it throws -- exactly what a silent catch below used
         % to produce, with no way to tell why.
         % THE WAVEFORMS THE MEASUREMENTS CAME FROM, written beside the
-        % report so it can draw them. Best effort in both directions: a
-        % workspace with no grand averages simply gets a report without
-        % waveform sections, and a write that fails costs the figures
-        % rather than the export. Naming it after the same stem keeps the
-        % pair together if the folder is later moved.
+        % report so it can draw them: only the grand averages made from the
+        % datasets measured (grandAveragesForReport). Every grand average in
+        % the tree used to be drawn, so a report on one pipeline could show
+        % another's waveforms, made from branches deleted since. Best effort
+        % in both directions: without a matching grand average the report
+        % has no waveform sections, and the completion message says why;
+        % a write that fails costs the figures rather than the export.
+        % Naming it after the same stem keeps the pair together if the
+        % folder is later moved.
         gaCsvName = '';
         try
-            gaNodes = this.Workspace.GrandAveragesTree.allNodes();
+            allGrandAverages = this.Workspace.GrandAveragesTree.allNodes();
+            gaNodes = grandAveragesForReport(allGrandAverages, {entries.file});
             if ~isempty(gaNodes)
                 gaCsvName = [stem '_' stampTxt '_grandaverages.csv'];
                 exportGrandAveragesCSV(gaNodes, fullfile(reportsDir, gaCsvName));
+            elseif ~isempty(allGrandAverages) && any([allGrandAverages.IsRoot])
+                waveformNote = sprintf(['\n\nNo grand average was made from the datasets ' ...
+                    'measured, so the report draws no waveforms. Define one from them ' ...
+                    '(Define Grand) to have them drawn.']);
             end
         catch
             gaCsvName = '';
@@ -183,6 +193,7 @@ function onExportMeasurements(this)
     end
 
     % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
-    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s', numel(entries), targetFile, reportNote), ...
+    msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s%s', numel(entries), ...
+        targetFile, reportNote, waveformNote), ...
         'Export complete');
 end

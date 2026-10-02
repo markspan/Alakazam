@@ -28,7 +28,10 @@ Measure node. Once groups, persons or sessions are assigned
 Two companion files are written when their material exists:
 `..._grandaverages.csv`, the waveforms the measurements were read from
 (@sec-grand-averages), and `..._trials.csv`, one row per trial, when ERP
-Measure was also run on an epoched node. The report reads both.
+Measure was also run on an epoched node. The report reads both. Only a grand
+average made from the datasets measured is written: one from another
+analysis, or one whose datasets were deleted since, would show waveforms the
+numbers did not come from (@sec-ga-current).
 
 ## The report
 

@@ -24,6 +24,14 @@ function loadGrandAverages(this)
 %   the time open() calls this -- holds exactly the cache files reachable
 %   from this workspace's own recordings, so the two are intersected.
 %
+%   A source belongs here when it is one of those files, or lies in the
+%   folder of one of this workspace's recordings (CacheDirectory/<recording>,
+%   where every result computed from it is cached) though it has been
+%   deleted since. Without the second, a grand average whose branches were
+%   all deleted vanished from the tree at the next opening, as if it belonged
+%   to another study; it is shown instead, its label saying its sources were
+%   deleted (grandAverageLabel), so it is not taken for a current result.
+%
 %   A grand average counts as belonging here when ANY of its sources does,
 %   not all of them. Requiring all would make a legitimate result disappear
 %   the moment one subject's raw file was moved out of the Raw directory,
@@ -44,7 +52,7 @@ function loadGrandAverages(this)
         return; % nothing saved yet
     end
 
-    owned = ownedCacheFiles(this);
+    [owned, recordingFolders] = ownedCacheFiles(this);
 
     found = dir(fullfile(gaDir, '*.mat'));
     for i = 1:numel(found)
@@ -53,14 +61,18 @@ function loadGrandAverages(this)
         % its name, its recorded sources and the flags optsFor reads are
         % needed here.
         proxy = eegProxyFromCacheMeta(readEegCacheMeta(file));
-        if ~belongsHere(proxy, owned)
+        if ~belongsHere(proxy, owned, recordingFolders)
             continue;
+        end
+        label = grandAverageLabel(file);
+        if isempty(label)
+            label = proxy.id;
         end
         % 'grandAverage', matching Alakazam.saveGrandAverage's own fresh-
         % creation path -- its own dedicated icon regardless of the
         % underlying data's time/frequency domain, not a borrowed
         % time/freq badge (see alakazam-tree.js's ICONS map comment).
-        gaNode = this.GrandAveragesTree.addNode(proxy.id, '', 'grandAverage', file, ...
+        gaNode = this.GrandAveragesTree.addNode(label, '', 'grandAverage', file, ...
             WorkSpaceTree.optsFor(proxy, 'GrandAverage', true));
         % The steps run on it (a Filter, a Measure) are cached in a folder
         % named after it, as every node's children are (persistResultNode).
@@ -70,20 +82,27 @@ function loadGrandAverages(this)
 end
 
 % ======================================================================= %
-function owned = ownedCacheFiles(this)
+function [owned, recordingFolders] = ownedCacheFiles(this)
 %OWNEDCACHEFILES  Every cache file reachable from this workspace's own
-%   recordings, as a normalised set for membership testing.
+%   recordings, as a normalised set for membership testing, and the folder
+%   each recording's results are cached in (see registerRootNode), each with
+%   a trailing separator.
     owned = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+    recordingFolders = {};
     nodes = this.Tree.allNodes();
     for i = 1:numel(nodes)
         key = normalisePath(nodes(i).UserData);
         if ~isempty(key)
             owned(key) = true;
         end
+        if nodes(i).IsRoot && ~isempty(nodes(i).UserData)
+            [~, stem] = fileparts(char(nodes(i).UserData));
+            recordingFolders{end + 1} = [normalisePath(fullfile(this.CacheDirectory, stem)) filesep]; %#ok<AGROW>
+        end
     end
 end
 
-function tf = belongsHere(EEG, owned)
+function tf = belongsHere(EEG, owned, recordingFolders)
 %BELONGSHERE  Does this grand average descend from data in this workspace?
     tf = true;
     if owned.Count == 0
@@ -107,7 +126,7 @@ function tf = belongsHere(EEG, owned)
     end
     for i = 1:numel(sources)
         key = normalisePath(sources{i});
-        if ~isempty(key) && isKey(owned, key)
+        if ~isempty(key) && (isKey(owned, key) || (~isempty(recordingFolders) && any(startsWith(key, recordingFolders))))
             return;   % tf is already true
         end
     end

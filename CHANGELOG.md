@@ -27,6 +27,22 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **A report could draw another analysis's grand average, and a grand
+  average could outlive its sources unnoticed.** A grand average is a fixed
+  list of datasets; recalculating one of them refreshes it, but deleting
+  one left it with its old numbers and nothing said so, and ERP & Report
+  drew every grand average in the tree. So a report on one pipeline showed
+  the waveforms of another, made from branches deleted since. Now:
+  - ERP & Report draws only the grand averages made from the datasets it
+    measured, and says so when none was;
+  - Delete and Clear Other Analyses name the grand averages made from what
+    they would delete, before deleting;
+  - a grand average whose sources were deleted says so in its label,
+    "(sources deleted)" or "(3 of 10 sources deleted)", and is still listed
+    when the workspace is opened again, where it used to vanish as if it
+    belonged to another study;
+  - the waveform export names a grand average by its own name, not its
+    label.
 - **AutoICA opened EEGLAB's ICA dialog when FastICA was missing.** FastICA
   is installed when Alakazam starts, but only when its download works;
   without it AutoICA called `pop_runica` with no options, which opens

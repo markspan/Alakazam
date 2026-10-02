@@ -60,6 +60,24 @@ A grand average is drawn like any average (@sec-plot-area), and every
 averaged-data step applies to it: ERP Measure, Scalp, Brain (3D), Derive
 Channels, Collapse Hemispheres.
 
+## Keeping a grand average current {#sec-ga-current}
+
+A grand average is computed once, from the datasets ticked in its dialog,
+and keeps both the result and the list of files it came from. What happens
+to those files afterwards decides whether it is still current:
+
+- **Recalculate** a step in a subject's branch, and every grand average
+  made from it is computed again.
+- **Delete** a branch it was made from, or **Clear Other Analyses**, and it
+  keeps its numbers, which nothing can now recompute. Both name the grand
+  averages concerned before deleting anything. Afterwards its label says so,
+  "(sources deleted)" or "(3 of 10 sources deleted)", and it is still
+  listed when the workspace is opened again. Recalculate it on datasets that
+  exist, and the note goes. A **Shift-drop** that would move such a branch
+  is refused (@sec-dragging-nodes).
+- A new branch, or another pipeline applied to every recording, does not
+  change which datasets a grand average uses: define a new one for it.
+
 ## One grand average per design cell
 
 **Grand Average > Group Averages > Per Design Cell** builds one grand
@@ -84,4 +102,7 @@ GA all,Target unrelated,Pz,400,-2.31,0.58,10
 This is the shape R's `read.csv` and `ggplot2` expect without reshaping, for
 instance `ggplot(df, aes(time_ms, amplitude, colour = bin)) + geom_line() +
 facet_wrap(~channel)`. The statistical reports use the same file to draw the
-waveforms behind their numbers (@sec-statistics).
+waveforms behind their numbers (@sec-statistics), with only the grand
+averages made from the datasets they measured, so that a report on one
+analysis never shows another's waveforms. When none was, the report draws
+no waveforms, and the message at the end of the export says so.

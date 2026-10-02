@@ -82,10 +82,23 @@ function onClearOtherAnalyses(this)
     % survives and how much is being deleted, since (unlike a full workspace
     % wipe) that detail is the one thing worth double-checking before
     % confirming.
+    % Name the grand averages that would lose datasets: they keep their
+    % numbers without them, and are marked so afterwards.
+    victimFiles = {};
+    for k = 1:numel(victims)
+        victimFiles = [victimFiles, branchCacheFiles(victims(k).UserData)]; %#ok<AGROW>
+    end
+    users = grandAveragesUsing(this.Workspace.GrandAveragesTree.allNodes(), victimFiles);
+    staleNote = '';
+    if ~isempty(users)
+        staleNote = sprintf([' The grand average(s) %s were made from these branches, and would ' ...
+            'keep their numbers without the datasets behind them, marked as such.'], ...
+            strjoin(strcat('"', users, '"'), ', '));
+    end
     ok = confirmAction(this.MainFigure, ...
         sprintf(['Are you sure you want to delete every OTHER subject''s analysis, keeping ' ...
-        'only "%s"? This removes %d branch(es) across %d subject(s), and cannot be undone -- a Grand ' ...
-        'Average built from a branch being removed will go stale.'], keepName, numel(victims), affectedSubjects), ...
+        'only "%s"? This removes %d branch(es) across %d subject(s), and cannot be undone.%s'], ...
+        keepName, numel(victims), affectedSubjects, staleNote), ...
         'Clear Other?', 'Yes, delete!', 'Sorry, what? No!', 'Icon', 'warning');
     if ~ok
         return;
@@ -95,5 +108,8 @@ function onClearOtherAnalyses(this)
     for k = 1:numel(victims)
         this.deleteBranchFiles(victims(k).UserData);
         this.Workspace.Tree.removeNode(victims(k).Id);
+    end
+    if ~isempty(users)
+        markGrandAverageSources(this.Workspace.GrandAveragesTree);
     end
 end

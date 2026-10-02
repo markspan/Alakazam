@@ -96,7 +96,7 @@ A node's icon says what it holds: a person for a raw recording, a waveform
 for a time-domain result, bars for a frequency-domain result, and a fan for
 a grand average. Its right-click menu is described in @tbl-context-menu.
 
-### Dragging nodes
+### Dragging nodes {#sec-dragging-nodes}
 
 Dragging a node onto a recording's root replays the step, and every step
 below it, onto that recording (@sec-replay). Dragging an averaged dataset

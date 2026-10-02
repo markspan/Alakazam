@@ -35,15 +35,9 @@ function reason = moveDroppedBranch(this, source, target, tree)
 
     % The datasets the move removes, as evaluateDroppedBranch walks them: the
     % node's own file and every result cached under its folder.
-    branchFiles = {sourceFile};
-    if isfolder(branchFolder)
-        found = dir(fullfile(branchFolder, '**', '*.mat'));
-        for k = 1:numel(found)
-            branchFiles{end + 1} = fullfile(found(k).folder, found(k).name); %#ok<AGROW>
-        end
-    end
+    branchFiles = branchCacheFiles(sourceFile);
 
-    users = grandAveragesUsing(this, branchFiles);
+    users = grandAveragesUsing(this.Workspace.GrandAveragesTree.allNodes(), branchFiles);
     if ~isempty(users)
         if isscalar(users)
             who = sprintf('the grand average "%s" draws', users{1});
@@ -69,36 +63,4 @@ function reason = moveDroppedBranch(this, source, target, tree)
 
     this.deleteBranchFiles(sourceFile);
     tree.removeNode(source.Id);
-end
-
-% ======================================================================= %
-function names = grandAveragesUsing(this, files)
-%GRANDAVERAGESUSING  The names of the grand averages whose recorded sources
-%   include any of FILES, read from each one's meta record as
-%   recalculateAffectedGrandAverages reads them.
-    names = {};
-    gaNodes = this.Workspace.GrandAveragesTree.allNodes();
-    for i = 1:numel(gaNodes)
-        gaFile = gaNodes(i).UserData;
-        % A grand average is a root of its tree; a step run on one carries
-        % its record along, but is not another grand average.
-        if ~gaNodes(i).IsRoot || isempty(gaFile) || exist(gaFile, "file") ~= 2
-            continue;
-        end
-        gaEEG = eegProxyFromCacheMeta(readEegCacheMeta(gaFile));
-        if ~isfield(gaEEG, "etc") || ~isfield(gaEEG.etc, "GrandAverage")
-            continue;
-        end
-        if any(ismember(pathKey(gaEEG.etc.GrandAverage.sources), pathKey(files)))
-            names{end + 1} = char(string(gaNodes(i).Name)); %#ok<AGROW>
-        end
-    end
-end
-
-function keys = pathKey(paths)
-%PATHKEY  PATHS as they compare: Windows paths are not case-sensitive.
-    keys = cellstr(paths);
-    if ispc
-        keys = lower(keys);
-    end
 end

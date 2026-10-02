@@ -8,6 +8,7 @@ classdef FakeTree < handle
         Nodes = struct('Id', {}, 'Name', {}, 'UserData', {}, 'IsRoot', {})
         Added = {}          % one {label, parentId, icon, file, opts} per addNode
         Removed = {}        % the id of each removeNode, in order
+        Renamed = {}        % one {id, label} per renameNode
     end
 
     methods
@@ -29,6 +30,14 @@ classdef FakeTree < handle
 
         function removeNode(this, id)
             this.Removed{end + 1} = id;
+        end
+
+        function renameNode(this, id, label)
+            this.Renamed(end + 1, :) = {id, char(label)};
+            k = find(strcmp({this.Nodes.Id}, id), 1);
+            if ~isempty(k)
+                this.Nodes(k).Name = char(label);
+            end
         end
 
         function nodes = allNodes(this)
