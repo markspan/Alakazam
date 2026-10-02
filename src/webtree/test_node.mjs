@@ -248,7 +248,7 @@ console.log('before drag: a children =', parentAContentsBefore)
 simulateDrag(tree, leafC2, parentAData)          // drop 'c' back onto its own parent 'a'
 console.log('after drag: a children =', childIds(parentAData))
 console.log('events:', JSON.stringify(events))
-assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'c', targetId: 'a' }]))
+assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'c', targetId: 'a', move: false }]))
 assert.strictEqual(JSON.stringify(childIds(parentAData)), JSON.stringify(parentAContentsBefore), 'tree structure must be unchanged (reverted)')
 
 // --- 5b. dropped onto a DIFFERENT parent: must revert to the true original parent ---
@@ -259,7 +259,7 @@ const aChildrenBefore = childIds(parentAData)
 simulateDrag(tree, leafB2, tree._root)           // drag 'b' out to root level
 console.log('after drag to root: root children =', childIds(tree._root), ' a children =', childIds(parentAData))
 console.log('events:', JSON.stringify(events))
-assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'b', targetId: null }]))
+assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'b', targetId: null, move: false }]))
 assert.strictEqual(JSON.stringify(childIds(tree._root)), JSON.stringify(rootChildrenBefore), 'root children reverted')
 assert.strictEqual(JSON.stringify(childIds(parentAData)), JSON.stringify(aChildrenBefore), 'b should be back under a, not left at root')
 
@@ -271,7 +271,7 @@ console.log('before drag: root children =', childIds(tree._root), ' a children =
 simulateDrag(tree, leafD, parentAData)           // drop 'd' onto 'a'
 console.log('after drag: root children =', childIds(tree._root), ' a children =', childIds(parentAData))
 console.log('events:', JSON.stringify(events))
-assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'd', targetId: 'a' }]))
+assert.strictEqual(JSON.stringify(events), JSON.stringify([{ type: 'nodeDropped', sourceId: 'd', targetId: 'a', move: false }]))
 assert.ok(!childIds(parentAData).includes('d'), 'd must NOT end up as a child of a -- there is no move/reparent gesture anymore')
 assert.ok(childIds(tree._root).includes('d'), 'd should still be a top-level/root child, unchanged')
 
@@ -417,6 +417,7 @@ window.document.body.dispatchEvent(new window.MouseEvent('mouseup'))
 assert.strictEqual(events.length, 1, 'a real mouseup after returning in time should complete the drag normally')
 assert.strictEqual(events[0].type, 'nodeDropped')
 assert.strictEqual(events[0].sourceId, 'b')
+assert.strictEqual(events[0].move, false, 'a drop without Shift is a copy, not a move')
 assert.ok(html.classList.contains('alz-busy'), 'busy cursor should turn on for this real, completed drop')
 console.log('returning to the tree within the grace period keeps the drag alive: OK')
 
@@ -454,6 +455,52 @@ if (origOffsetHeight) {
     delete window.HTMLElement.prototype.offsetHeight
 }
 console.log('drag spacer reserves the dragged row\'s space, then clears on drop: OK')
+
+// --- 13b. Shift turns a drop into a move. Shift pressed or released mid-drag
+//     shows at once (the alz-moving class, the move cursor); what the drop
+//     sends is Shift at the mouseup itself, read before yy-tree's own
+//     Input._up emits 'move'. A mousemove is dispatched on document, not
+//     body, so only the wrapper's listener sees it (Input._move would read
+//     pageX, which jsdom's MouseEvent leaves unset). ---
+html.classList.remove('alz-busy')
+events.length = 0
+const leafShift = findLeafByLabel('Fourier1')
+down(leafShift, 10, 10)
+move(30, 30) // past the threshold: a drag
+assert.ok(!html.classList.contains('alz-moving'), 'no Shift yet: the drag is a copy')
+window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Shift' }))
+assert.ok(html.classList.contains('alz-moving'), 'Shift pressed mid-drag should show the move cursor')
+window.document.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Shift' }))
+assert.ok(!html.classList.contains('alz-moving'), 'Shift released mid-drag should show the copy cursor again')
+window.document.dispatchEvent(new window.MouseEvent('mousemove', { shiftKey: true }))
+assert.ok(html.classList.contains('alz-moving'), 'a mousemove with Shift held should show the move cursor')
+window.document.body.dispatchEvent(new window.MouseEvent('mouseup', { shiftKey: true }))
+assert.strictEqual(events.length, 1, 'the Shift-drop should be sent')
+assert.strictEqual(events[0].type, 'nodeDropped')
+assert.strictEqual(events[0].sourceId, 'b')
+assert.strictEqual(events[0].move, true, 'a drop with Shift held is a move')
+assert.ok(!html.classList.contains('alz-moving'), 'the move cursor must be gone once the drop completes')
+
+// Shift held during the drag but let go before the drop: a copy.
+html.classList.remove('alz-busy')
+events.length = 0
+down(findLeafByLabel('Fourier1'), 10, 10)
+move(30, 30)
+window.document.dispatchEvent(new window.MouseEvent('mousemove', { shiftKey: true }))
+window.document.body.dispatchEvent(new window.MouseEvent('mouseup', { shiftKey: false }))
+assert.strictEqual(events[0].move, false, 'Shift released before the drop: a copy')
+
+// A Shift left over from an earlier drag must not carry into the next.
+html.classList.remove('alz-busy')
+events.length = 0
+tree._setMoveIntent(true)
+const leafFresh = findLeafByLabel('Average1')
+tree._tree.emit('move-pending', leafFresh, tree._tree)
+assert.ok(!html.classList.contains('alz-moving'), 'a new drag starts as a copy')
+tree._tree.emit('move', leafFresh, tree._tree)
+assert.strictEqual(events[0].move, false, 'a drag with no Shift seen is a copy')
+html.classList.remove('alz-busy')
+console.log('Shift turns a drop into a move, and only Shift at the drop counts: OK')
 
 // --- 14. context menu is clamped into the viewport so it is never cut off by
 //     the fixed-size uihtml panel. Stub the layout metrics _positionMenu

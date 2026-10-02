@@ -5,7 +5,9 @@
 // move yy-tree performs internally is always reverted, and a nodeDropped
 // bridge event is emitted instead, so MATLAB can apply the dropped branch's
 // transformation chain to the target dataset itself, building the actual new
-// result node(s) -- see Alakazam.evaluateDroppedBranch), and a modernised
+// result node(s) -- see Alakazam.evaluateDroppedBranch; with Shift held the
+// event says move, and MATLAB removes the original branch once its copy is
+// made -- see _setMoveIntent), and a modernised
 // look (see TREE_STYLES/icons override below and
 // alakazam-tree.css): yy-tree ships with its own default row styling
 // injected at runtime (Tree._addStyles, from its styleDefaults) unless a
@@ -159,6 +161,7 @@ class AlakazamTree {
         this._dropTargetLeaf = null  // see _setDropTargetHighlight
         this._leaveGraceTimer = null // see _cancelDrag
         this._dragPlaceholder = null // see the _pickup wrap / _removeDragPlaceholder
+        this._moveIntent = false     // Shift held during a drag: see _setMoveIntent
 
         this._root = { id: ROOT_ID, name: '', children: [], expanded: true }
 
@@ -291,7 +294,33 @@ class AlakazamTree {
         // always reaches document AFTER body, regardless of source order,
         // so by the time this runs, Input._move() has already repositioned
         // the drop indicator for this event -- see _onDragPointerMove.
-        document.addEventListener('mousemove', () => this._onDragPointerMove())
+        document.addEventListener('mousemove', (e) => this._onDragPointerMove(e))
+
+        // Shift turns a drop into a move. What counts is Shift at the drop
+        // itself: read from the mouseup in the CAPTURE phase on document, so
+        // it is known before yy-tree's Input._up (a bubble-phase listener on
+        // document.body) emits 'move' and _onMove sends the event. Shift
+        // pressed or released mid-drag, with or without moving the mouse,
+        // changes the cursor at once (mousemove above, keydown/keyup here).
+        document.addEventListener('mouseup', (e) => {
+            if (this._pending) this._setMoveIntent(!!e.shiftKey)
+        }, true)
+        document.addEventListener('keydown', (e) => {
+            if (this._pending && e.key === 'Shift') this._setMoveIntent(true)
+        })
+        document.addEventListener('keyup', (e) => {
+            if (this._pending && e.key === 'Shift') this._setMoveIntent(false)
+        })
+    }
+
+    // Whether the drag in progress is a move (Shift held) or the default
+    // copy, mirrored on <html> as alz-moving for the cursor (see
+    // alakazam-tree.css). A move is a copy whose original MATLAB then
+    // removes (see Alakazam.onNodeDropped): the branch is replayed onto the
+    // target either way, since its results depend on the dataset under it.
+    _setMoveIntent(on) {
+        this._moveIntent = on
+        document.documentElement.classList.toggle('alz-moving', on)
     }
 
     /**
@@ -388,8 +417,9 @@ class AlakazamTree {
     // own `.data` is the prospective target) or this._tree.element itself
     // (the root container, i.e. a targetId:null/no-target drop -- nothing
     // to highlight).
-    _onDragPointerMove() {
+    _onDragPointerMove(e) {
         if (!this._pending) return
+        if (e) this._setMoveIntent(!!e.shiftKey)
         const indicatorEl = this._tree._input._indicator.get()
         const parentEl = indicatorEl && indicatorEl.parentNode
         if (parentEl && parentEl.isLeaf && parentEl.data !== this._pending.data) {
@@ -461,6 +491,7 @@ class AlakazamTree {
             oldParent: leaf.data.parent,
             oldIndex: leaf.data.parent.children.indexOf(leaf.data)
         }
+        this._setMoveIntent(false) // until a Shift is seen (see the constructor)
         // A drag is now in progress: swap the cursor to signal "apply", not
         // "move" (see alakazam-tree.css). yy-tree's Input._up() always
         // pairs a 'move-pending' with a later 'move' once the drag
@@ -476,15 +507,18 @@ class AlakazamTree {
         const data = leaf.data
         const newParent = data.parent
         const targetId = newParent.id === ROOT_ID ? null : newParent.id
+        const move = this._moveIntent
         document.documentElement.classList.remove('alz-dragging')
+        this._setMoveIntent(false)
         this._setDropTargetHighlight(null)
         this._removeDragPlaceholder()
 
         // Always undo the reparent yy-tree just performed: dropping a node
         // onto another applies that node's transformation chain to the
         // target dataset instead of moving it (see the file header comment)
-        // -- there is no plain "move a branch" gesture in this tree. MATLAB
-        // builds the actual new result node(s) itself.
+        // -- even a Shift-drop, a move, is that copy with the original then
+        // removed by MATLAB, never yy-tree's reparent. MATLAB builds the
+        // actual new result node(s) itself.
         if (this._pending && this._pending.data === data) {
             const { oldParent, oldIndex } = this._pending
             newParent.children.splice(newParent.children.indexOf(data), 1)
@@ -503,7 +537,7 @@ class AlakazamTree {
         // Alakazam.onNodeDropped pushes via onCleanup (see alakazam-tree.css
         // for why cursor:wait, not a custom image).
         document.documentElement.classList.add('alz-busy')
-        this._onEvent({ type: 'nodeDropped', sourceId: data.id, targetId })
+        this._onEvent({ type: 'nodeDropped', sourceId: data.id, targetId, move })
     }
 
     // Called after the pointer has been outside the tree for LEAVE_GRACE_MS
@@ -527,6 +561,7 @@ class AlakazamTree {
         input._moving = null
         this._pending = null
         document.documentElement.classList.remove('alz-dragging')
+        this._setMoveIntent(false)
         this._setDropTargetHighlight(null)
         this._removeDragPlaceholder()
         this._tree.update()

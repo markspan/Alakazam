@@ -338,6 +338,95 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             gaRefresh(app, {'unrelated.mat'});
             testCase.verifyEmpty(app.SavedSpec, 'No source was touched, so nothing is rebuilt.');
         end
+
+        % --- A Shift-drop moves a branch (moveDroppedBranch) --------------- %
+
+        function aReplayCountsTheNodesItMade(testCase)
+        %AREPLAYCOUNTSTHENODESITMADE  What a move compares with the branch to
+        %   know every dataset was made again: three for the fork, none for an
+        %   overlay.
+            source = testCase.sourceBranch();
+            app = testCase.makeApp(false);
+            testCase.verifyEqual(evalRecurse(app, source.step1, testCase.targetNode(1000)), 3);
+
+            file = fullfile(testCase.Folder, 'avg.mat');
+            saveEegCache(file, testCase.averaged('Average', 7));
+            target = testCase.targetNode(0);
+            target.UserData = fullfile(testCase.Folder, 'avgtarget.mat');
+            saveEegCache(target.UserData, testCase.averaged('Average', 3));
+            testCase.verifyEqual(evalRecurse(app, file, target), 0);
+        end
+
+        function aShiftDropMovesTheWholeBranch(testCase)
+        %ASHIFTDROPMOVESTHEWHOLEBRANCH  The fork is made again on the target,
+        %   and the original goes from disk, from the tabs and from the tree.
+            source = testCase.sourceBranch();
+            [app, tree] = testCase.moveApp({});
+
+            reason = moveCopy(app, testCase.branchNode(source), testCase.targetNode(1000), tree);
+
+            testCase.verifyEmpty(reason);
+            testCase.verifyEqual(size(app.Persisted, 1), 3, 'The whole branch is made again.');
+            testCase.verifyEqual(app.Persisted{3, 1}.trail, {'a', 'c'});
+            testCase.verifyFalse(isfile(source.step1), 'The original node is removed.');
+            testCase.verifyFalse(isfolder(fullfile(fileparts(source.step1), 'step1')), ...
+                'And everything computed from it.');
+            testCase.verifyEqual(tree.Removed, {'s1'});
+            testCase.verifyNumElements(app.Closed, 3, 'Each removed dataset''s tab is closed.');
+        end
+
+        function aBranchAGrandAverageDrawsOnIsNotMoved(testCase)
+        %ABRANCHAGRANDAVERAGEDRAWSONISNOTMOVED  The grand average would be left
+        %   pointing at files that are gone, so nothing is made or removed, and
+        %   the reason names it.
+            source = testCase.sourceBranch();
+            ga = fullfile(testCase.Folder, 'ga', 'ga.mat');
+            child = fullfile(fileparts(source.step1), 'step1', 'step2.mat');
+            recorded = child;
+            if ispc
+                recorded = upper(child); % recorded in another case, which Windows ignores
+            end
+            testCase.grandAverageNode(ga, 'GA', {'elsewhere.mat', recorded});
+            [app, tree] = testCase.moveApp({ga});
+
+            reason = moveCopy(app, testCase.branchNode(source), testCase.targetNode(1000), tree);
+
+            testCase.verifySubstring(reason, 'the grand average "node1" draws');
+            testCase.verifyEmpty(app.Persisted, 'Nothing is made.');
+            testCase.verifyTrue(isfile(child), 'Nothing is removed.');
+            testCase.verifyEmpty(tree.Removed);
+        end
+
+        function anOverlayKeepsTheOriginal(testCase)
+            file = fullfile(testCase.Folder, 'avg.mat');
+            saveEegCache(file, testCase.averaged('Average', 7));
+            target = testCase.targetNode(0);
+            target.UserData = fullfile(testCase.Folder, 'avgtarget.mat');
+            saveEegCache(target.UserData, testCase.averaged('Average', 3));
+            [app, tree] = testCase.moveApp({});
+            source = struct('Id', 's1', 'Name', 'Average', 'UserData', file, 'IsRoot', false);
+
+            reason = moveCopy(app, source, target, tree);
+
+            testCase.verifyEqual(app.Overlaid, 1);
+            testCase.verifySubstring(reason, 'overlaid, not moved');
+            testCase.verifyTrue(isfile(file));
+            testCase.verifyEmpty(tree.Removed);
+        end
+
+        function aBranchIsNotMovedIntoItself(testCase)
+            source = testCase.sourceBranch();
+            [app, tree] = testCase.moveApp({});
+            inside = struct('Id', 'c', 'Name', 'step2', 'IsRoot', false, ...
+                'UserData', fullfile(fileparts(source.step1), 'step1', 'step2.mat'));
+
+            reason = moveCopy(app, testCase.branchNode(source), inside, tree);
+
+            testCase.verifySubstring(reason, 'its own branch');
+            testCase.verifyEmpty(app.Persisted);
+            testCase.verifyTrue(isfile(source.step1));
+            testCase.verifyEmpty(tree.Removed);
+        end
     end
 
     methods (Access = private)
@@ -436,6 +525,29 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.garble(file, EEG);
         end
 
+        function [app, tree] = moveApp(testCase, grandAverages)
+        %MOVEAPP  makeApp's fake, with what a move needs as well: the real
+        %   moveDroppedBranch and deleteBranchFiles (as moveCopy and
+        %   deleteCopy), a grand-averages tree holding GRANDAVERAGES, closeTab
+        %   recording each file it closes, and the tree the drop came from.
+            app = testCase.makeApp(false);
+            app.addprop('Workspace');
+            app.Workspace = struct('GrandAveragesTree', FakeTree(grandAverages));
+            app.addprop('Closed');
+            app.Closed = {};
+            app.addprop('closeTab');
+            app.closeTab = @(file) recordClosed(app, file);
+            app.addprop('deleteBranchFiles');
+            testCase.copyMethod('deleteBranchFiles', 'deleteCopy');
+            app.deleteBranchFiles = @(file) deleteCopy(app, file);
+            testCase.copyMethod('moveDroppedBranch', 'moveCopy');
+            tree = FakeTree();
+        end
+
+        function node = branchNode(~, source)
+            node = struct('Id', 's1', 'Name', 'step1', 'UserData', source.step1, 'IsRoot', false);
+        end
+
         function app = makeApp(testCase, deleteAfterSave)
         %APP  A fake Alakazam whose persistResultNode saves like the real one, keeps
         %   what it was given, and (when DELETEAFTERSAVE) removes the file at once.
@@ -481,6 +593,10 @@ end
 
 function setSpec(app, spec)
     app.SavedSpec = spec;
+end
+
+function recordClosed(app, file)
+    app.Closed{end + 1} = file;
 end
 
 function overlayFake(app, source)

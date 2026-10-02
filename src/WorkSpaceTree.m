@@ -7,7 +7,8 @@ classdef WorkSpaceTree < handle
 %   double-click detection and always-revert drop semantics: dropping one
 %   node onto another never
 %   moves it, it always means "apply this branch's transformations to the
-%   dropped-on dataset" (see src/webtree/README.md). uiextras.jTree was
+%   dropped-on dataset" (see src/webtree/README.md); with Shift held the
+%   original branch is removed afterwards, a move. uiextras.jTree was
 %   Java-Swing-based and could
 %   be docked directly into the old Java ToolGroup desktop; the new
 %   AppContainer shell is web/CEF-based, so the data-browser tree needed a
@@ -657,6 +658,9 @@ classdef WorkSpaceTree < handle
         %   onto empty space/root). The JS side (see src/webtree/README.md)
         %   always reverts its own visual move before this fires, so
         %   this.Nodes never needs updating here; just forward the event.
+        %   Move is true when Shift was held at the drop: the branch is to be
+        %   moved rather than copied (see Alakazam.onNodeDropped).
+            move = isfield(d, 'move') && isequal(d.move, true);
             sourceId = d.sourceId;
             targetId = d.targetId;
             if isempty(targetId); targetId = ''; end
@@ -669,7 +673,7 @@ classdef WorkSpaceTree < handle
             else
                 tgt = this.nodeStruct(targetId);
             end
-            this.invoke(this.NodeDroppedFcn, struct('Source', src, 'Target', tgt));
+            this.invoke(this.NodeDroppedFcn, struct('Source', src, 'Target', tgt, 'Move', move));
         end
 
         function invoke(~, fcn, eventData)

@@ -5,7 +5,7 @@
 // Events sent to MATLAB (htmlComponent.sendEventToMATLAB(name, payload)):
 //   nodeClicked        {id}
 //   nodeDoubleClicked  {id}
-//   nodeDropped        {sourceId, targetId, reparented}
+//   nodeDropped        {sourceId, targetId, move} -- move: Shift held at the drop
 //   nodeRenamed        {id, name}
 //   contextMenuAction  {action, id}
 //   renderError        {message, stack} -- see applyData's catch below

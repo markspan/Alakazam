@@ -104,6 +104,17 @@ onto another averaged dataset of the same shape does not transform anything:
 it overlays the first on the second's plot, the same as **Overlay on ERP
 plot** in its right-click menu (@sec-overlay).
 
+A drop copies: the original branch stays where it was. **Hold Shift while
+dropping to move it** instead, and the cursor shows a move while Shift is
+held. The branch is replayed onto the new dataset as before, since its
+results depend on the data under it, and the original is then deleted, its
+files and any open plots with it, as **Delete** would. What counts is Shift
+at the moment of the drop. The original is kept, with a note saying why,
+when a grand average was made from one of its datasets (it would be left
+without them; copy the branch, or define the grand average again first),
+when the drop was an overlay, or when the branch could not be replayed in
+full.
+
 ## The plot area {#sec-plot-area}
 
 Each dataset that is drawn gets a tab in the plot area. The **View** group on

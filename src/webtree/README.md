@@ -19,7 +19,10 @@ drag-and-drop tree, MIT licensed) with:
   it was dropped onto", not "move it here". The visual/data move yy-tree
   performs is always reverted (back to the exact original parent+index)
   and a `nodeDropped` event is sent instead, so MATLAB can build the
-  actual new result node(s) itself.
+  actual new result node(s) itself. With Shift held at the drop the event
+  carries `move: true`, and MATLAB removes the original branch once the
+  copy is made (`Alakazam.moveDroppedBranch`); the cursor shows a move
+  while Shift is held.
 - the MATLAB &lt;-&gt; JS bridge (`src/bridge.js`) on top of `uihtml`'s
   `Data`/`DataChangedFcn`/`HTMLEventReceivedFcn`/`sendEventToMATLAB`
   contract -- see `WorkSpaceTree.m` for the MATLAB side of this contract.

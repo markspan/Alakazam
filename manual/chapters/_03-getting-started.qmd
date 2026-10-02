@@ -121,7 +121,8 @@ analysis forked. One drag can reproduce a whole pipeline. As a special case,
 dropping one averaged dataset onto another overlays the two plots instead of
 transforming anything, as **Overlay on plot** in its right-click menu
 does: the quickest way to compare two conditions or two subjects on the same
-axes (@sec-overlay).
+axes (@sec-overlay). A drop copies the branch; hold Shift while dropping to
+move it, which removes the original once its copy is made.
 
 **Right-click a node and choose Apply to All Raw Files.** The same replay, to
 every recording in the workspace at once. With the Parallel Computing Toolbox

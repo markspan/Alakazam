@@ -4,11 +4,15 @@ function onNodeDropped(this, eventData, sourceTree)
 %   raised the event (see WorkSpace.CreateTreeComponent); recorded
 %   as Workspace.ActiveTree so evaluateDroppedBranch's
 %   persistResultNode call below adds the new node to the same
-%   tree the drop happened in. There is no move/reparent gesture in
+%   tree the drop happened in. There is no reparent gesture in
 %   this tree (WorkSpaceTree/src/webtree always revert the visual
 %   move before this fires); every drop re-applies the dragged
 %   branch onto the target via evaluateDroppedBranch. Root nodes
 %   and drops onto empty space (no target dataset) are ignored.
+%
+%   A SHIFT-DROP MOVES (eventData.Move): moveDroppedBranch re-applies the
+%   branch the same way and then removes the original, or says why it
+%   kept it, which is shown here.
     this.Workspace.ActiveTree = sourceTree;
 
     % Guaranteed to run when this callback returns, by any path
@@ -29,9 +33,18 @@ function onNodeDropped(this, eventData, sourceTree)
         return; % dropped onto empty space/root; no target dataset
     end
 
+    move = isfield(eventData, 'Move') && isequal(eventData.Move, true);
+
     try
         releaseTree = sourceTree.beginBatch(); %#ok<NASGU>  redraw once, not per node
-        this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+        if move
+            kept = this.moveDroppedBranch(eventData.Source, eventData.Target, sourceTree);
+            if ~isempty(kept)
+                uialert(this.MainFigure, kept, 'Not moved', 'Icon', 'info');
+            end
+        else
+            this.evaluateDroppedBranch(eventData.Source.UserData, eventData.Target);
+        end
     catch ME
         % Without this, any failure here (a missing cache file, a
         % transformation whose .m file is gone, or a genuine

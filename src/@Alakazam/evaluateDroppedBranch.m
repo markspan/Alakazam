@@ -1,5 +1,10 @@
-function evaluateDroppedBranch(this, sourceFile, targetNode, targetEEG)
+function nCreated = evaluateDroppedBranch(this, sourceFile, targetNode, targetEEG)
 %EVALUATEDROPPEDBRANCH  Re-apply a dragged branch onto a target dataset.
+%   NCREATED = EVALUATEDROPPEDBRANCH(THIS, SOURCEFILE, TARGETNODE) returns the
+%   number of new nodes it made: one per dataset in the branch, or fewer
+%   where an average was overlaid instead (below). A move (a Shift-drop, see
+%   onNodeDropped) removes the original only when every dataset was remade.
+%
 %   EVALUATEDROPPEDBRANCH(THIS, SOURCEFILE, TARGETNODE) applies SOURCEFILE's
 %   own step onto the dataset at TARGETNODE, then recurses into EVERY child
 %   of SOURCEFILE (not just the first): a branch can genuinely fork, e.g. an
@@ -41,6 +46,7 @@ function evaluateDroppedBranch(this, sourceFile, targetNode, targetEEG)
 %   1.7 GB per target on the RIFT chain. Only an AVERAGED source that might be
 %   overlaid is loaded, since the overlay needs its waveforms.
     targetFile = targetNode.UserData;
+    nCreated = 0;
 
     % A node can outlive its file -- a cache cleared by hand, a workspace
     % copied from another machine, a branch deleted outside the app -- so the
@@ -104,6 +110,7 @@ function evaluateDroppedBranch(this, sourceFile, targetNode, targetEEG)
 
     [result.EEG, newNode] = this.persistResultNode(result.EEG, ...
         targetFile, sourceMeta.id, transformId, targetNode);
+    nCreated = 1;
 
     % Descend into EVERY child of the source (not just the first) --
     % applying each one, in turn, to the SAME result this step just
@@ -117,7 +124,8 @@ function evaluateDroppedBranch(this, sourceFile, targetNode, targetEEG)
     if exist(childDir, "dir")
         childMat = dir(fullfile(childDir, '*.mat'));
         for i = 1:numel(childMat)
-            this.evaluateDroppedBranch(fullfile(childDir, childMat(i).name), newNode, result.EEG);
+            nCreated = nCreated + this.evaluateDroppedBranch( ...
+                fullfile(childDir, childMat(i).name), newNode, result.EEG);
         end
     end
 end

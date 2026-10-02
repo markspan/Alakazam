@@ -7,6 +7,7 @@ classdef FakeTree < handle
     properties
         Nodes = struct('Id', {}, 'Name', {}, 'UserData', {}, 'IsRoot', {})
         Added = {}          % one {label, parentId, icon, file, opts} per addNode
+        Removed = {}        % the id of each removeNode, in order
     end
 
     methods
@@ -24,6 +25,10 @@ classdef FakeTree < handle
             this.Added(end + 1, :) = {label, parentId, icon, file, opts};
             node = struct('Id', sprintf('a%d', size(this.Added, 1)), 'Name', label, ...
                 'UserData', file, 'IsRoot', false);
+        end
+
+        function removeNode(this, id)
+            this.Removed{end + 1} = id;
         end
 
         function nodes = allNodes(this)

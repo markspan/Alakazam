@@ -26,8 +26,8 @@
 .alz-menu-sep { border-top: 1px solid #ddd; margin: 3px 0; }
 
 /* While a branch is being dragged, show a "copy"/apply cursor everywhere,
-   not the native browser "move" cursor -- a drop never moves the node, it
-   always applies its transformations to the dropped-on dataset (see
+   not the native browser "move" cursor -- a plain drop never moves the node,
+   it applies its transformations to the dropped-on dataset (see
    alakazam-tree.js's file header comment). Applied to <html> (not just the
    dragged element) because yy-tree's Input._pickup() reparents the dragged
    row to document.body and positions it under the pointer, so the pointer
@@ -35,6 +35,11 @@
    itself; !important is needed to beat TREE_STYLES' own inline
    cursor:pointer on .yy-tree-name/.yy-tree-content. */
 html.alz-dragging, html.alz-dragging * { cursor: copy !important; }
+
+/* With Shift held the drop is a move: the branch is replayed onto the target
+   and the original removed (see alakazam-tree.js's _setMoveIntent), so the
+   native "move" cursor says so. */
+html.alz-dragging.alz-moving, html.alz-dragging.alz-moving * { cursor: move !important; }
 
 /* While MATLAB is off computing the result of a drop (evaluateDroppedBranch
    can run a real transformation, so this can take a moment), swap to the

@@ -4,6 +4,19 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **Shift-drop moves a branch.** Dropping a node onto another dataset
+  copies its branch there, as before. With Shift held at the drop, the
+  cursor shows a move, and once the branch has been replayed onto the target
+  the original is deleted, files, open plots and tree nodes, as Delete
+  does. The original is kept, with a note saying why, when a grand average
+  was made from one of its datasets (it would be left without its sources),
+  when the drop was an overlay of two averages, or when the branch could not
+  be replayed in full; a failed replay removes nothing.
+
 ## V0.4.4.4 (2026-10-01)
 
 ### Added
