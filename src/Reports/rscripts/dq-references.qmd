@@ -1,0 +1,44 @@
+```{r}
+#| label: references
+#| results: asis
+# The works the report cites, each only when what cites it is in it: SME
+# (Luck et al.) always, and each cleaning method when a step in the
+# provenance table used it, so the list names the methods that cleaned
+# THESE data and no others. APA order, by first author. Non-ASCII letters
+# are written as \u escapes, which R turns into the letter, so this file
+# reads the same whatever encoding opens it.
+steps <- unique(prov$step)
+ica_methods <- if ("method" %in% names(prov)) {
+  unique(na.omit(prov$method[prov$step == "AutoICA"]))
+} else {
+  character()
+}
+refs <- "Luck, S. J., Stewart, A. X., Simmons, A. M., & Kappenman, E. S. (2021). Standardized measurement error: A universal metric of data quality for averaged event-related potentials. *Psychophysiology*, *58*(6), e13793. https://doi.org/10.1111/psyp.13793"
+if ("EyeTracking" %in% steps) {
+  refs <- c(refs, "Dimigen, O., Sommer, W., Hohlfeld, A., Jacobs, A. M., & Kliegl, R. (2011). Coregistration of eye movements and EEG in natural reading: Analyses and review. *Journal of Experimental Psychology: General*, *140*(4), 552\u2013572. https://doi.org/10.1037/a0023885")
+}
+if (any(c("AutoICA", "ICA") %in% steps)) {
+  refs <- c(refs, "Pion-Tonachini, L., Kreutz-Delgado, K., & Makeig, S. (2019). ICLabel: An automated electroencephalographic independent component classifier, dataset, and website. *NeuroImage*, *198*, 181\u2013197. https://doi.org/10.1016/j.neuroimage.2019.05.026")
+}
+if ("fastica" %in% ica_methods) {
+  refs <- c(refs, "Hyv\u00e4rinen, A., & Oja, E. (2000). Independent component analysis: Algorithms and applications. *Neural Networks*, *13*(4\u20135), 411\u2013430. https://doi.org/10.1016/S0893-6080(00)00026-5")
+}
+if ("runica" %in% ica_methods) {
+  refs <- c(refs, "Bell, A. J., & Sejnowski, T. J. (1995). An information-maximization approach to blind separation and blind deconvolution. *Neural Computation*, *7*(6), 1129\u20131159. https://doi.org/10.1162/neco.1995.7.6.1129")
+}
+if ("AutoGEDAI" %in% steps) {
+  refs <- c(refs, "Ros, T., Ferat, V., Huang, Y., Colangelo, C., Kia, S. M., Wolfers, T., Vulliemoz, S., & Michela, A. (2025). Return of the GEDAI: Unsupervised EEG denoising based on leadfield filtering. *bioRxiv* (preprint, not yet peer reviewed). https://doi.org/10.1101/2025.10.04.680449")
+}
+if ("PREP" %in% steps) {
+  refs <- c(refs, "Bigdely-Shamlo, N., Mullen, T., Kothe, C., Su, K.-M., & Robbins, K. A. (2015). The PREP pipeline: Standardized preprocessing for large-scale EEG analysis. *Frontiers in Neuroinformatics*, *9*, 16. https://doi.org/10.3389/fninf.2015.00016")
+}
+if ("ASR" %in% steps) {
+  refs <- c(refs,
+    "Mullen, T. R., Kothe, C. A. E., Chi, Y. M., Ojeda, A., Kerth, T., Makeig, S., Jung, T.-P., & Cauwenberghs, G. (2015). Real-time neuroimaging and cognitive monitoring using wearable dry EEG. *IEEE Transactions on Biomedical Engineering*, *62*(11), 2553\u20132567. https://doi.org/10.1109/TBME.2015.2481482",
+    "Chang, C.-Y., Hsu, S.-H., Pion-Tonachini, L., & Jung, T.-P. (2020). Evaluation of artifact subspace reconstruction for automatic artifact components removal in multi-channel EEG recordings. *IEEE Transactions on Biomedical Engineering*, *67*(4), 1114\u20131121. https://doi.org/10.1109/TBME.2019.2930186")
+}
+if ("AutoReject" %in% steps) {
+  refs <- c(refs, "Jas, M., Engemann, D. A., Bekhti, Y., Raimondo, F., & Gramfort, A. (2017). Autoreject: Automated artifact rejection for MEG and EEG data. *NeuroImage*, *159*, 417\u2013429. https://doi.org/10.1016/j.neuroimage.2017.06.030")
+}
+cat(paste(sort(unique(refs), method = "radix"), collapse = "\n\n"), "\n")
+```

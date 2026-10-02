@@ -530,6 +530,7 @@ function rows = provenanceRows(EEG, nChan, nTrials, averaged)
             row.threshold  = fieldNumOrNaN(e, 'threshold');
             row.components = numberList(fieldOrEmpty(e, 'removed'));
             row.detail     = autoIcaDetail(e);
+            row.method     = icaMethod(e);
             rows(end + 1) = row; %#ok<AGROW>
         end
     end
@@ -775,7 +776,7 @@ function row = blankProvenanceRow(step, item, n, nTotal)
         'enova_epoch_max', NaN, 'enova_epoch_median', NaN, ...
         'enova_channel_max', NaN, 'n_excluded', NaN, ...
         'pct_within_one', NaN, 'mean_offset_ms', NaN, ...
-        'detail', '');
+        'method', '', 'detail', '');
 end
 
 function v = fieldNumOrNaN(s, name)
@@ -810,6 +811,17 @@ function s = alzStruct(EEG)
         return;
     end
     s = EEG.etc.alz;
+end
+
+function m = icaMethod(e)
+%ICAMETHOD  The ICA algorithm AutoICA decomposed with ('fastica' or
+%   'runica'), from the decomposition it keeps in its record, or '' for a
+%   record from before it kept one. The report cites the algorithm by it.
+    m = '';
+    if isfield(e, 'decomposition') && isstruct(e.decomposition) ...
+            && isfield(e.decomposition, 'icatype')
+        m = char(string(e.decomposition.icatype));
+    end
 end
 
 function d = autoIcaDetail(e)

@@ -99,7 +99,7 @@ function rows = emptyProvenance()
         'threshold', {}, 'components', {}, 'n_samples_rejected', {}, 'n_samples', {}, ...
         'sensai', {}, 'enova_epoch_max', {}, 'enova_epoch_median', {}, ...
         'enova_channel_max', {}, 'n_excluded', {}, 'pct_within_one', {}, ...
-        'mean_offset_ms', {}, 'detail', {});
+        'mean_offset_ms', {}, 'method', {}, 'detail', {});
 end
 
 function row = blankRow(template, step, item, n, nTotal)
@@ -109,7 +109,7 @@ function row = blankRow(template, step, item, n, nTotal)
     names = fieldnames(template);
     values = cell(size(names));
     for k = 1:numel(names)
-        if any(strcmp(names{k}, {'step', 'item', 'scope', 'components', 'detail'}))
+        if any(strcmp(names{k}, {'step', 'item', 'scope', 'components', 'method', 'detail'}))
             values{k} = '';
         else
             values{k} = NaN;

@@ -249,7 +249,7 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                  'channel_epochs,channels_tested,scope,threshold,components,' ...
                  'n_samples_rejected,n_samples,sensai,enova_epoch_max,' ...
                  'enova_epoch_median,enova_channel_max,n_excluded,' ...
-                 'pct_within_one,mean_offset_ms,detail']);
+                 'pct_within_one,mean_offset_ms,method,detail']);
             testCase.verifyEqual(numel(lines) - 1, numel(q.provenance));
             testCase.verifyTrue(contains(lines{2}, 'S1'));
         end
@@ -498,9 +498,9 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
         %   GEDAI/SENSAI/ENOVA at length now (see the provenance-gedai-table
         %   chunk), sourced from Ros et al., 2025 -- a claim that has to
         %   trace to a citation a reader can actually go verify, the same
-        %   way the SME section already cites Luck et al., 2021. Present
-        %   regardless of whether this particular export used GEDAI, since
-        %   References is one fixed section, not conditioned on the data.
+        %   way the SME section already cites Luck et al., 2021. The entry
+        %   is printed when GEDAI ran (see theReferencesAreTheMethodsThatRan);
+        %   here, that the report carries it at all, with its DOI.
             qmd = testCase.report('p.csv');
 
             testCase.verifyTrue(contains(qmd, '## References'));
@@ -508,6 +508,106 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
                 'The GEDAI paper should be cited, not only named in passing.');
             testCase.verifyTrue(contains(qmd, '10.1101/2025.10.04.680449'), ...
                 'A DOI, not just an author/year, is what lets a reader actually find it.');
+        end
+
+        function autoIcaRecordsItsAlgorithmForTheCitation(testCase)
+        %AUTOICARECORDSITSALGORITHMFORTHECITATION  The report cites the ICA
+        %   algorithm that decomposed the data, which only AutoICA's record
+        %   says (its kept decomposition); an older record says nothing.
+            EEG = testCase.epochedFixture();
+            EEG.etc.alz.eyeICA = struct('threshold', 0.6, 'removed', 1, 'nRemoved', 1, ...
+                'nComponents', 28, 'eyeProbabilities', 0.9, ...
+                'decomposition', struct('icatype', 'fastica'));
+            rows = dataQualityMetrics(EEG).provenance;
+            testCase.verifyEqual(rows(strcmp({rows.step}, 'AutoICA')).method, 'fastica');
+
+            [~, provCsv] = testCase.exportTo(struct('subject', 'S1', 'group', '', ...
+                'session', '', 'quality', dataQualityMetrics(EEG)));
+            testCase.verifyTrue(ismember('fastica', ReportFixtures.csvColumn(provCsv, 'method')), ...
+                'The algorithm has to reach the CSV the report reads, not only the row.');
+
+            EEG.etc.alz.eyeICA = rmfield(EEG.etc.alz.eyeICA, 'decomposition');
+            rows = dataQualityMetrics(EEG).provenance;
+            testCase.verifyEqual(rows(strcmp({rows.step}, 'AutoICA')).method, '');
+        end
+
+        function everyColumnTheReportReadsIsExported(testCase)
+        %EVERYCOLUMNTHEREPORTREADSISEXPORTED  The other direction of the
+        %   fallback-frame check: a column the report declares, and so may
+        %   read, but the exporter never writes would be NA in every real
+        %   report. The method column was, at first.
+            [~, provCsv] = testCase.exportTo(struct('subject', 'S1', 'group', '', ...
+                'session', '', 'quality', dataQualityMetrics(testCase.epochedFixture())));
+            header = ReportFixtures.csvHeader(provCsv);
+            frame = testCase.lineStartingWith(testCase.report('p.csv'), 'prov <- ');
+            declared = regexp(frame, '(\w+) = (?:character|numeric)\(\)', 'tokens');
+            declared = cellfun(@(t) t{1}, declared, 'UniformOutput', false);
+
+            testCase.assertNotEmpty(declared);
+            testCase.verifyEmpty(setdiff(declared, header), ...
+                'The report declares columns the exporter does not write.');
+        end
+
+        function theIcaSectionCitesItsMethods(testCase)
+            qmd = testCase.report('p.csv');
+
+            testCase.verifyTrue(contains(qmd, 'ICLabel (Pion-Tonachini et al., 2019)'));
+            testCase.verifyTrue(contains(qmd, 'FastICA (Hyv\u00e4rinen & Oja, 2000)'));
+            testCase.verifyTrue(contains(qmd, 'runica (Bell & Sejnowski, 1995)'));
+            testCase.verifyTrue(contains(qmd, 'GEDAI (Ros et al., 2025)'));
+        end
+
+        function theReferencesAreTheMethodsThatRan(testCase)
+        %THEREFERENCESARETHEMETHODSTHATRAN  The references chunk, run under
+        %   R on a provenance table, lists Luck et al. (cited for SME) and
+        %   the works for each cleaning method that ran, in APA order, and
+        %   nothing for a method that did not run.
+            testCase.assumeNotEmpty(ReportFixtures.rscriptExe(), 'Rscript was not found.');
+            chunk = ReportFixtures.chunkFor(testCase.report('p.csv'), 'references');
+            testCase.assertNotEmpty(chunk, 'The report has no references chunk.');
+
+            out = testCase.referencesFor(chunk, ['data.frame(step = c("ArtefactDetect", ' ...
+                '"AutoICA", "PREP", "AutoReject"), method = c(NA, "fastica", NA, NA))']);
+            listed = {'Bigdely-Shamlo, N.', 'Oja, E. (2000)', 'Jas, M.', 'Luck, S. J.', ...
+                'Pion-Tonachini, L.'};
+            testCase.verifyListed(out, listed);
+            at = cellfun(@(s) strfind(out, s), listed, 'UniformOutput', false);
+            testCase.assertTrue(all(~cellfun(@isempty, at)));
+            testCase.verifyTrue(issorted(cellfun(@(p) p(1), at)), 'The list is not in APA order.');
+
+            % A provenance table from before the method column: no algorithm.
+            out = testCase.referencesFor(chunk, 'data.frame(step = c("ASR", "AutoGEDAI", "ICA"))');
+            testCase.verifyListed(out, {'Mullen, T. R.', 'Chang, C.-Y.', 'Ros, T.', ...
+                'Pion-Tonachini, L.', 'Luck, S. J.'});
+
+            out = testCase.referencesFor(chunk, ['data.frame(step = c("EyeTracking", "AutoICA"), ' ...
+                'method = c(NA, "runica"))']);
+            testCase.verifyListed(out, {'Dimigen, O.', 'Bell, A. J.', 'Pion-Tonachini, L.', 'Luck, S. J.'});
+
+            out = testCase.referencesFor(chunk, 'data.frame(step = character())');
+            testCase.verifyListed(out, {'Luck, S. J.'});
+        end
+    end
+
+    methods (Access = private)
+        function verifyListed(testCase, out, expected)
+        %VERIFYLISTED  OUT lists exactly the works in EXPECTED, by the start
+        %   of each: every one there, and no other the chunk knows.
+            every = {'Bell, A. J.', 'Bigdely-Shamlo, N.', 'Chang, C.-Y.', 'Dimigen, O.', ...
+                'Oja, E. (2000)', 'Jas, M.', 'Luck, S. J.', 'Mullen, T. R.', ...
+                'Pion-Tonachini, L.', 'Ros, T.'};
+            for k = 1:numel(every)
+                testCase.verifyEqual(contains(out, every{k}), ismember(every{k}, expected), ...
+                    sprintf('%s: listed should be %d, in: %s', every{k}, ...
+                    ismember(every{k}, expected), out));
+            end
+        end
+
+        function out = referencesFor(testCase, chunk, provFrame)
+        %REFERENCESFOR  What the references chunk prints for the provenance
+        %   table PROVFRAME (R code for a data frame).
+            [status, out] = ReportFixtures.runRscript(['prov <- ' provFrame newline chunk]);
+            testCase.assertEqual(status, 0, sprintf('The references chunk failed in R:\n%s', out));
         end
     end
 

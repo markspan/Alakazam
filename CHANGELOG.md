@@ -16,6 +16,14 @@ bar. Dates are those of the tag.
   was made from one of its datasets (it would be left without its sources),
   when the drop was an overlay of two averages, or when the branch could not
   be replayed in full; a failed replay removes nothing.
+- **The data-quality report cites the cleaning methods that ran.** Its
+  references were fixed (Luck et al. for SME, and GEDAI whether or not it
+  ran), while the text already cited PREP, ASR, AutoReject and EYE-EEG with
+  no entry to look up. The list is now built when the report renders: Luck
+  et al. always, and the works for each cleaning step in the provenance
+  table, ICLabel for ICA, and FastICA or Infomax as AutoICA recorded the
+  algorithm it decomposed with (a new `method` column). The ICA and GEDAI
+  sections cite their methods in the text too.
 
 ## V0.4.4.4 (2026-10-01)
 
