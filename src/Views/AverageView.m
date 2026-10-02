@@ -22,6 +22,13 @@ classdef AverageView < AlakazamView
 %   the first minus the second instead (Swap reverses it): two bins of one
 %   average, or the same bin before and after a step.
 %
+%   UP AND DOWN ONLY. Dragging the plot, and the axes toolbar's pan and
+%   zoom, change the amplitude axis alone (InteractionOptions.
+%   LimitsDimensions), the time axis staying as drawn. What they do is kept
+%   for every channel and every redraw (keepUserZoom), so electrodes are
+%   stepped through at the scale and offset chosen, until Restore view; the
+%   difference keeps its own.
+%
 %   The up / down arrow keys, or the mouse wheel, step the displayed
 %   channel for every line at once.
 %
@@ -74,6 +81,10 @@ classdef AverageView < AlakazamView
             this.Axes.Layout.Row = 2;
             this.Axes.Layout.Column = 1;
             this.Axes.ButtonDownFcn = @(~, ~) this.notifyActivated();
+            % Every interaction moves or scales the amplitude axis only: an
+            % axes property, so other plots in the window are untouched and
+            % it goes with the plot when undocked. See the class header.
+            this.Axes.InteractionOptions.LimitsDimensions = 'y';
             this.CheckboxGrid = uigridlayout(this.Grid, [1 1], "Padding", [0 0 0 0]);
             this.CheckboxGrid.Layout.Row = 2;
             this.CheckboxGrid.Layout.Column = 2;

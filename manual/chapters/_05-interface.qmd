@@ -235,9 +235,13 @@ once. When the dataset carries ERP Measure results, the measurement windows
 are drawn on the waveforms: the window shaded, and the measured value marked
 (a peak, a fractional latency, or the area filled).
 
-A zoom or pan made with the plot's toolbar is kept while you step channels
-or tick lines; the toolbar's **Restore view** returns to automatic scaling.
-The difference (below) keeps its own amplitude zoom.
+Dragging the plot, and the toolbar's pan and zoom, move or scale the
+amplitude axis only; the time axis stays as drawn. Dragging is how to put
+zero where you want it. What a zoom or pan sets is kept for every channel
+while you step through them, and while you tick lines, so all electrodes
+are seen at the scale and offset you chose; the toolbar's **Restore view**
+returns to automatic scaling. The difference (below) keeps its own
+amplitude zoom.
 
 ### Overlaying ERPs {#sec-overlay}
 

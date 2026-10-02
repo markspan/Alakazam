@@ -25,6 +25,14 @@ bar. Dates are those of the tag.
   algorithm it decomposed with (a new `method` column). The ICA and GEDAI
   sections cite their methods in the text too.
 
+- **Averages move up and down only, and keep it for every channel.**
+  Dragging an average's plot, a single subject's or a grand average, and
+  the toolbar's pan and zoom, change its amplitude axis alone
+  (`InteractionOptions.LimitsDimensions`), the time axis staying as drawn;
+  dragging is how zero is put where it is wanted. A zoom or pan was
+  already kept while stepping channels; it now cannot shift the time axis
+  along with it. Restore view returns to automatic scaling.
+
 ### Fixed
 
 - **Renaming a node left its plot under the old name.** The tab kept its

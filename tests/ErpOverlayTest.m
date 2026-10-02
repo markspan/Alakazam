@@ -312,6 +312,41 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
             testCase.verifyEqual([view.Axes.XLim; view.Axes.YLim], automatic, 'AbsTol', 1e-9);
         end
 
+        % ---- up and down only ----------------------------------------------
+        function aVerticalZoomOrPanIsKeptForEveryChannel(testCase)
+        %AVERTICALZOOMORPANISKEPTFOREVERYCHANNEL  The amplitude axis as a zoom
+        %   or pan left it is kept while stepping through the channels, and
+        %   Restore view gives the shown channel its own range again (Cz's
+        %   values are 2 t, Fz's t).
+            testCase.pinAxisSettings();
+            [view, fig] = testCase.view(erp({'Fz', 'Cz', 'Pz'}, 'bins', 2));
+            closeFig = onCleanup(@() delete(fig));
+            automatic = view.Axes.YLim;
+            view.Axes.YLim = [-0.3 0.9];   % as a zoom or pan of the amplitude axis sets it
+
+            for key = {'downarrow', 'downarrow', 'uparrow'}
+                view.onKey(struct('Key', key{1}));
+                testCase.verifyEqual(view.Axes.YLim, [-0.3 0.9], 'AbsTol', 1e-12, ...
+                    sprintf('The amplitude axis was lost at channel %d.', view.Channel));
+            end
+
+            view.resetZoom();
+            testCase.assertEqual(view.Channel, 2);
+            testCase.verifyEqual(view.Axes.YLim, 2 * automatic, 'AbsTol', 1e-9);
+        end
+
+        function theAveragesMoveOnlyUpAndDown(testCase)
+        %THEAVERAGESMOVEONLYUPANDDOWN  Every interaction of this plot, a
+        %   drag, the toolbar's pan or zoom, changes the amplitude axis only;
+        %   another plot in the same window is untouched.
+            [view, fig] = testCase.view(erp({'Fz', 'Cz'}, 'bins', 2));
+            closeFig = onCleanup(@() delete(fig));
+            other = uiaxes(fig);
+
+            testCase.verifyEqual(string(view.Axes.InteractionOptions.LimitsDimensions), "y");
+            testCase.verifyEqual(string(other.InteractionOptions.LimitsDimensions), "xyz");
+        end
+
         function theDifferenceHasItsOwnAmplitudeZoom(testCase)
             [view, fig] = testCase.view(erp({'Fz', 'Cz'}, 'bins', 2));
             closeFig = onCleanup(@() delete(fig));
@@ -368,6 +403,21 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function pinAxisSettings(testCase, positiveUp)
+        %PINAXISSETTINGS  The amplitude-axis settings these cases assume,
+        %   whatever the machine's own: each channel scaled to itself (no
+        %   clampYAxis), and positive up unless POSITIVEUP says otherwise.
+        %   In memory only, and put back afterwards.
+            if nargin < 2
+                positiveUp = true;
+            end
+            for setting = {'clampYAxis', false; 'positiveUp', positiveUp}'
+                was = AlakazamSettings.get('graphics', 'erpPlot', setting{1});
+                testCase.addTeardown(@() AlakazamSettings.set('graphics', 'erpPlot', setting{1}, was));
+                AlakazamSettings.set('graphics', 'erpPlot', setting{1}, setting{2});
+            end
+        end
+
         function [view, fig] = view(testCase, eeg)
             fig = uifigure('Visible', 'off');
             tab = uitab(uitabgroup(fig));
