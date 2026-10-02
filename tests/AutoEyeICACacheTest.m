@@ -10,8 +10,9 @@ classdef AutoEyeICACacheTest < matlab.unittest.TestCase
 %   the node under etc.alz.eyeICA.decomposition) and only the pruning is redone.
 %
 %   Needs EEGLAB with FastICA and ICLabel, as DimigenRiftTemplateTest does, and is
-%   skipped where they are missing (without FastICA AutoEyeICA opens pop_runica's
-%   own dialog, which a test cannot answer).
+%   skipped where they are missing. One case takes FastICA off the path for a
+%   while: without it AutoEyeICA falls back to extended Infomax, and used to do
+%   so through pop_runica's own dialog, which nobody could answer in a batch run.
 %
 %   Run with: runtests('tests/AutoEyeICACacheTest.m').
 %
@@ -133,6 +134,39 @@ classdef AutoEyeICACacheTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        function withoutFastIcaItRunsInfomaxWithoutADialog(testCase)
+        %WITHOUTFASTICAITRUNSINFOMAXWITHOUTADIALOG  FastICA is installed at
+        %   startup, but only when its download works. Without it AutoEyeICA
+        %   called pop_runica with no options, which opens EEGLAB's ICA dialog
+        %   in the middle of the step. It has to run extended Infomax, as the
+        %   manual says, and record runica, which the data-quality report
+        %   cites. A watchdog closes any dialog after a minute, so the old
+        %   behaviour fails here rather than hanging the suite.
+            testCase.addTeardown(@path, path());
+            for found = reshape(cellstr(which('fastica', '-all')), 1, [])
+                rmpath(fileparts(found{1}));
+            end
+            testCase.assertEmpty(which('fastica'), 'FastICA could not be taken off the path.');
+
+            before = findall(groot, 'Type', 'figure');
+            seen = containers.Map({'dialog'}, {false});
+            watchdog = timer('StartDelay', 60, 'TimerFcn', @(~, ~) closeNewFigures(before, seen));
+            testCase.addTeardown(@() delete(watchdog));
+            start(watchdog);
+            [printed, out] = printedBy(@() AutoEyeICA(testCase.recording(), ...
+                struct('EyeThreshold', 0.99, 'Redecompose', true)));
+            stop(watchdog);
+
+            testCase.verifyFalse(seen('dialog'), 'AutoEyeICA opened a dialog.');
+            testCase.verifyEqual(out.etc.alz.eyeICA.decomposition.icatype, 'runica');
+            testCase.verifySubstring(printed, 'FastICA is not installed', ...
+                'The fallback should say so, and how FastICA is had.');
+            testCase.verifySubstring(lower(printed), 'extended', ...
+                'runica should run extended Infomax, as the manual says.');
+        end
+    end
+
     methods (Access = private)
         function EEG = recording(~)
         %RECORDING  Sixteen 10-5 channels of mixed super-Gaussian sources: enough
@@ -159,4 +193,21 @@ classdef AutoEyeICACacheTest < matlab.unittest.TestCase
             EEG.times = (0:nT - 1) / EEG.srate;
         end
     end
+end
+
+% ======================================================================= %
+function closeNewFigures(before, seen)
+%CLOSENEWFIGURES  The watchdog: note and close any figure opened since BEFORE
+%   (a dialog nobody can answer), which ends the wait it holds.
+    opened = setdiff(findall(groot, 'Type', 'figure'), before);
+    if ~isempty(opened)
+        seen('dialog') = true; %#ok<NASGU>  a containers.Map: the case's own record
+        delete(opened);
+    end
+end
+
+function [printed, result] = printedBy(call) %#ok<INUSD>  called inside evalc
+%PRINTEDBY  What CALL prints to the command window, and what it returns.
+    result = [];
+    printed = evalc('result = call();');
 end

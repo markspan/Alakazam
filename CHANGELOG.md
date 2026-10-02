@@ -25,6 +25,16 @@ bar. Dates are those of the tag.
   algorithm it decomposed with (a new `method` column). The ICA and GEDAI
   sections cite their methods in the text too.
 
+### Fixed
+
+- **AutoICA opened EEGLAB's ICA dialog when FastICA was missing.** FastICA
+  is installed when Alakazam starts, but only when its download works;
+  without it AutoICA called `pop_runica` with no options, which opens
+  EEGLAB's own ICA dialog in the middle of the step and blocks a batch run.
+  It now runs extended Infomax (`runica`), as the manual says, without a
+  dialog, and says in the command window that FastICA is missing and how it
+  is installed. ICA by hand already did this.
+
 ## V0.4.4.4 (2026-10-01)
 
 ### Added

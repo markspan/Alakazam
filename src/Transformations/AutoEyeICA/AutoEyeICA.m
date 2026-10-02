@@ -90,9 +90,11 @@ if ~isempty(otherIdx)
 end
 
 %% Decompose just the positioned channels.
-%  Use FastICA automatically when it is installed, so the ICA-algorithm
-%  dialog is skipped; otherwise fall back to pop_runica's own default
-%  (and its dialog), unchanged from before.
+%  Use FastICA when it is installed, as it normally is (EEGLabEnvironment
+%  installs it at startup), and extended Infomax (runica) when its download
+%  failed. Either way pop_runica is given its algorithm, as RemoveComponents
+%  does: called with no options it opens EEGLAB's own ICA dialog in the
+%  middle of the step, and blocks a batch run.
 %
 %  A decomposition already computed for exactly this data is reused (see
 %  TransTools.IcaCache), so changing the threshold below re-prunes rather
@@ -118,7 +120,11 @@ if isempty(decomposition)
         % number generator in legacy mode, where rng() is an error.
         eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
     else
-        eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly));
+        fprintf(['AutoEyeICA: FastICA is not installed, so extended Infomax (runica) ' ...
+            'decomposes instead. Alakazam installs FastICA when it starts with a network ' ...
+            'connection.\n']);
+        eegOnly = TransTools.WithRestoredRng(@() ...
+            pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1));
     end
 
     %% Classify
