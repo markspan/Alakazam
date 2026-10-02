@@ -32,6 +32,12 @@ function onRenameNode(this)
 
     this.Workspace.ActiveTree.renameNode(node.Id, newName);
 
+    % Its plot, if open, takes the new name too: the tab, the tile's title
+    % when tiled, the window when undocked. The tab used to keep the old
+    % one until it was closed.
+    EEG.File = file;
+    retitlePlot(this.PlotsTabGroup, this.TileGrid, file, tabTitleFor(EEG));
+
     % Keep the in-memory active dataset in sync if it is this node.
     if isequal(this.Workspace.EEG.File, file)
         this.Workspace.EEG.id = newName;

@@ -63,18 +63,10 @@ classdef AlakazamPlotter < handle
                 return;
             end
 
-            % EEG.id is just the transform name now (e.g. "Average" for every
-            % averaged dataset in the tree), so it collides across nodes; the
-            % file's own stem is the node's timestamped key (transformId +
-            % timestamp, glued with no separator, e.g. "Average051423") and
-            % is unique by construction (see Alakazam.persistResultNode).
-            % Split it back into "id (timestamp)" for display -- e.g.
-            % "Average (051423)" -- rather than showing the glued form as-is.
-            [~, tabName, ~] = fileparts(eeg.File);
-            idStr = char(string(eeg.id));
-            if startsWith(tabName, idStr) && ~strcmp(tabName, idStr)
-                tabName = sprintf('%s (%s)', idStr, tabName(numel(idStr) + 1:end));
-            end
+            % "Average (051423)" for a step's result, its new name once
+            % renamed in the tree, its file's name otherwise (tabTitleFor).
+            % Renaming retitles an open tab the same way (onRenameNode).
+            tabName = tabTitleFor(eeg);
 
             newTab = uitab(app.PlotsTabGroup, "Title", tabName, "Tag", eeg.File);
 

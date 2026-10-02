@@ -39,7 +39,7 @@ click) offers what can be done with that node:
 | **Recalculate** | Reopen the step's dialog with the options it was run with, and recompute it and everything below it. |
 | **Apply to All Raw Files** | Replay this node's branch on every other recording in the workspace. |
 | **Save Template** / **Apply Template** | Write the branch to a template file; replay a template here. |
-| **Rename**, **Delete** | Rename a node; delete it and its branch, and the files behind them. |
+| **Rename**, **Delete** | Rename a node, its open plot taking the new name too; delete it and its branch, and the files behind them. |
 | **List events** | Count the event codes in a dataset. |
 | **Overlay on plot** | Draw an average on the ERP plot in view, or a continuous recording under the continuous recording in view, to compare the two (@sec-overlay, @sec-overlay-continuous). |
 | **Rejection breakdown** | For an ArtefactDetect node: which detector rejected which trials (@fig-rejection-breakdown). |

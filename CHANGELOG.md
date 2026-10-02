@@ -27,6 +27,10 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **Renaming a node left its plot under the old name.** The tab kept its
+  title, and a renamed node opened afresh showed its file's name. A rename
+  now retitles its tab, its tile when tiled and its window when undocked,
+  and a renamed result's tab is its new name.
 - **A report could draw another analysis's grand average, and a grand
   average could outlive its sources unnoticed.** A grand average is a fixed
   list of datasets; recalculating one of them refreshes it, but deleting
