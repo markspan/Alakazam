@@ -25,6 +25,16 @@ classdef ContinuousOverlayTest < matlab.unittest.TestCase
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
+
+        function centreChannelsByTheirMedians(testCase)
+        %CENTRECHANNELSBYTHEIRMEDIANS  These cases are about which lane a
+        %   channel is drawn in, read against its median-centred position;
+        %   the view-on-screen baseline has a test of its own
+        %   (SignalViewBaselineTest). In memory only, and put back.
+            was = AlakazamSettings.get('graphics', 'signalPlot', 'viewBaseline');
+            testCase.addTeardown(@() AlakazamSettings.set('graphics', 'signalPlot', 'viewBaseline', was));
+            AlakazamSettings.set('graphics', 'signalPlot', 'viewBaseline', false);
+        end
     end
 
     methods (Test)

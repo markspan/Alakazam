@@ -33,8 +33,19 @@ bar. Dates are those of the tag.
   already kept while stepping channels; it now cannot shift the time axis
   along with it. Restore view returns to automatic scaling.
 
+- **Continuous channels start at their labels.** In the continuous view,
+  each channel's value at the left edge of the view is taken off before it
+  is drawn (View-on-screen baseline, a new Graphics setting, on by
+  default), so slow drifts and DC offsets no longer carry the traces
+  across the screen as the view is zoomed and scrolled. The overlaid
+  recording and the difference start at the labels too. Display only.
+
 ### Fixed
 
+- **Magnifying a continuous recording moved channels off their rows.**
+  The mag slider scaled each channel's samples but not the offset that
+  centred it, so a channel with a DC level drifted away from its label as
+  it was magnified. The centre is now taken off first.
 - **Renaming a node left its plot under the old name.** The tab kept its
   title, and a renamed node opened afresh showed its file's name. A rename
   now retitles its tab, its tile when tiled and its window when undocked,

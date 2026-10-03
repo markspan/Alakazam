@@ -32,6 +32,18 @@ classdef SignalView < AlakazamView
 %   zoomed out too far to do that quickly, it asks to be zoomed in. One
 %   recording is overlaid at a time; Remove overlay takes it off.
 %
+%   VIEW-ON-SCREEN BASELINE (graphics > signalPlot > viewBaseline, on by
+%   default). Each stacked channel starts at its label on the left: its
+%   value at the left edge of the view (the median of the raw samples the
+%   first pixel covers, one sample when zoomed in) is taken off before it is
+%   drawn, so slow drifts and DC offsets do not carry the traces across the
+%   screen as the view is zoomed and scrolled. Off, a channel is centred on
+%   its lane by its median over the whole recording. Either way the centre
+%   is taken off before the magnification, which used to scale the signal
+%   but not its offset and so moved a channel with a DC level off its lane.
+%   The overlaid recording and the difference are centred the same way,
+%   each from its own samples.
+%
 %   Style follows the project standard: UpperCamelCase class and properties,
 %   lowerCamelCase methods, double quotes except where a char array is required
 %   by a graphics API (HG property names in some legacy calls, cursor/label).
@@ -69,6 +81,7 @@ classdef SignalView < AlakazamView
         Options         % struct of resolved name-value options
         StackOffset     % 1 x nchan, vertical offset per channel (stacking)
         StackTick       % 1 x nchan, y-tick position per channel
+        RecordingCentre % 1 x nchan, each channel's median over the whole recording (0 unstacked)
         LaneSpacing = 0 % double, per-channel lane height in stacked mode
         ChannelScroll = false % logical, whether the channel scrollbar is active
         FixedYLim       % 1 x 2, y-limits used in "fixed" mode
@@ -312,13 +325,18 @@ classdef SignalView < AlakazamView
                 yVis = double(yEnv);
             end
 
-            % Amplitude gain, then channel stacking offsets.
-            yVis = yVis * scaleValue;
+            % Each channel about its centre, magnified, in its lane. Dynamic
+            % stacking works out its offsets from what is in view already.
             if strcmp(this.Options.YLimMode, "dynamic") && ~isempty(this.Options.AutoStackSignals)
+                yVis = yVis * scaleValue;
                 [this.StackTick, this.StackOffset] = this.autoStack(yVis);
                 this.applyStackTicks();
+                yVis = yVis + this.StackOffset;
+            else
+                centre = this.channelCentres(this.Y, startIndex, endIndex, targetColumns, ...
+                    this.RecordingCentre);
+                yVis = (yVis - centre) * scaleValue + this.StackTick;
             end
-            yVis = yVis + this.StackOffset;
 
             % Push data into the existing line objects (no re-creation).
             set(this.Lines, "XData", xVis);
@@ -697,6 +715,7 @@ classdef SignalView < AlakazamView
             nchan = size(this.Y, 2);
             if ~isempty(this.Options.AutoStackSignals) && strcmp(this.Options.YLimMode, "fixed")
                 [this.StackTick, this.StackOffset, spacing] = this.autoStackNoOverlap(this.Y);
+                this.RecordingCentre = this.StackTick - this.StackOffset;   % each channel's median
                 this.LaneSpacing = spacing;
                 this.applyStackTicks();
                 % Y-limits span the evenly spaced channel lanes (each baseline
@@ -714,6 +733,7 @@ classdef SignalView < AlakazamView
             else
                 this.StackTick   = zeros(1, nchan);
                 this.StackOffset = zeros(1, nchan);
+                this.RecordingCentre = zeros(1, nchan);
                 % Non-stacked (single-channel) view: fixed y-limits from the
                 % whole-signal range, with a small margin. Nothing is clipped.
                 yPos = this.Y + this.StackOffset;
@@ -722,6 +742,38 @@ classdef SignalView < AlakazamView
                 margin = (hi - lo) / 50;
                 this.FixedYLim = [lo - margin, hi + margin];
             end
+        end
+
+        function centre = channelCentres(this, Y, i0, i1, targetColumns, fallback)
+        %CHANNELCENTRES  What to take off each column of Y before it is drawn
+        %   in its lane, for the window of samples I0 to I1.
+        %   With the view-on-screen baseline (stacked channels, graphics >
+        %   signalPlot > viewBaseline), its value at the left edge of the
+        %   view, so the trace starts at its label: the median of the raw
+        %   samples the first pixel column covers, one sample when zoomed in
+        %   far enough to draw them all. Where those are all rejected (NaN),
+        %   its first sample in the window that is not; a channel with none
+        %   in view takes FALLBACK. Otherwise FALLBACK, the whole recording's
+        %   median, so it is centred on its lane as it used to be.
+            centre = reshape(double(fallback), 1, []);
+            if isempty(centre)
+                centre = zeros(1, size(Y, 2));
+            end
+            if isempty(this.Options.AutoStackSignals) ...
+                    || ~AlakazamSettings.get('graphics', 'signalPlot', 'viewBaseline')
+                return;
+            end
+            span = max(1, ceil((i1 - i0 + 1) / max(1, targetColumns)));
+            first = double(Y(i0:min(i1, i0 + span - 1), :));
+            atEdge = median(first, 1, 'omitnan');
+            for c = find(~isfinite(atEdge))
+                k = find(isfinite(Y(i0:i1, c)), 1);
+                if ~isempty(k)
+                    atEdge(c) = double(Y(i0 + k - 1, c));
+                end
+            end
+            known = isfinite(atEdge);
+            centre(known) = atEdge(known);
         end
 
         function applyStackTicks(this)
@@ -857,7 +909,8 @@ classdef SignalView < AlakazamView
                 x = o.time(sampleIdx);
                 y = double(env);
             end
-            y = y * scale + this.StackOffset(o.matched);
+            centre = this.channelCentres(o.Y, i0, i1, targetColumns, this.RecordingCentre(o.matched));
+            y = (y - centre) * scale + this.StackTick(o.matched);
             for j = 1:numel(o.lines)
                 set(o.lines(j), "XData", x, "YData", y(:, j));
             end
@@ -894,7 +947,8 @@ classdef SignalView < AlakazamView
                 x = t(sampleIdx);
                 yd = double(env);
             end
-            yd = yd * scale + this.StackOffset(o.matched);
+            centre = this.channelCentres(d, 1, numel(idx), targetColumns, this.RecordingCentre(o.matched));
+            yd = (yd - centre) * scale + this.StackTick(o.matched);
             set(this.Lines, "XData", xVis, "YData", blank);   % lanes without a partner
             for j = 1:numel(o.matched)
                 set(this.Lines(o.matched(j)), "XData", x, "YData", yd(:, j));

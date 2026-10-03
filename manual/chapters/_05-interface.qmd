@@ -170,6 +170,13 @@ or more to itself, that is with fewer samples in view than half the plot's
 width in pixels, each sample is marked with a small filled circle, which
 shows where the signal was measured and where the line only joins the dots.
 
+Each channel starts at its label on the left: its value at the left edge of
+the view is taken off before it is drawn, so slow drifts and DC offsets do
+not carry the traces across the screen as you zoom and scroll, and **mag**
+magnifies each trace about that point. This is display only; the data are
+not changed. Turn **View-on-screen baseline** off (@sec-settings) to centre
+each channel on its row by its median over the whole recording instead.
+
 #### Overlaying a recording {#sec-overlay-continuous}
 
 To see what a step did to the raw signal, show the recording after the step,
@@ -365,7 +372,7 @@ separate from any workspace.
 
 The three tabs of the settings dialog, as set on the machine that made this
 manual's figures (which differs from the defaults of @tbl-settings in the
-colour map, the band width, and the ERP image's grouping and sort order).
+clamped y-axis, the band width, and the ERP image's grouping and sort order).
 :::
 
 | Tab | Setting | Default | Effect |
@@ -373,6 +380,7 @@ colour map, the band width, and the ERP image's grouping and sort order).
 | Graphics | **Positive up** | on | ERP polarity. Off draws negative up, the convention of much of the older literature. |
 | | **Clamp y-axis to largest** | off | One y range for every channel, taken from the largest, so that amplitudes can be compared across channels by eye. Off rescales per channel. |
 | | **Show confidence interval**, **Confidence band** | on, 3 | The band around each waveform, in standard errors of the mean. |
+| | **View-on-screen baseline** | on | Each channel of a continuous recording starts at its label at the left edge of the view, whatever the zoom and scroll. Off centres it on its row by its median over the whole recording. |
 | | **Plot trials by bin** | off | Group an ERP image's rows by bin; a trial in two bins then appears twice. |
 | | **Reverse the sort** | off | Put the largest sort value at the top of the ERP image, as EEGLAB's `erpimage` does. |
 | | **Colour map** | diverging | The map of every signed, zero-centred plot: ERP image, time-frequency power, scalp maps. **diverging** is a blue-white-red scale centred on zero; the alternatives are MATLAB's **parula**, **jet**, **turbo**, **hot** and **cool**. |

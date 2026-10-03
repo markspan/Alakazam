@@ -5,7 +5,7 @@ function onSettingsChanged(this)
         if ~isgraphics(tab) || ~isvalid(tab)
             continue;
         end
-        for viewName = ["AverageView", "EpochView", "FourierView"]
+        for viewName = ["AverageView", "EpochView", "FourierView", "SignalView"]
             view = getappdata(tab, char(viewName));
             if ~isempty(view) && isvalid(view)
                 try
