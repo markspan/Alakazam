@@ -11,6 +11,13 @@ bar. Dates are those of the tag.
 - **The manual is online,** at https://markspan.github.io/Alakazam/, rebuilt each
   time a version is tagged. The PDF and the in-app Help are unchanged.
 
+### Fixed
+
+- **Area labels piled up in the continuous view.** The label of an event
+  with a duration (a shaded area) was not cleared with its area, so every
+  scroll or zoom step left another copy on the axes. It is now cleared
+  and redrawn with the area.
+
 ## V0.4.4.5 (2026-10-03)
 
 ### Added

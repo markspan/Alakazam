@@ -30,12 +30,19 @@ classdef label
             % 'Interpreter','none' is what keeps it literal text rather
             % than TeX markup (an underscore etc. would otherwise be
             % interpreted rather than shown).
+            %
+            % THE TEXT CARRIES THE PATCH'S TAG, so whoever clears the patch
+            % by its tag clears its label with it. SignalView.drawOverlays
+            % does exactly that before every redraw; when only the patch
+            % was tagged, each scroll or zoom step left one more copy of
+            % every visible area's label on the axes.
             if isempty(mcallback) && isempty(ucallback)
                 obj.VPatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
                     'Parent', hAxes, ...
                     varargin{:} );
                 text(pos, h(2) - (.015 * (max(h)-min(h))), lab, ...
-                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none');
+                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none', ...
+                    'Tag', obj.VPatch.Tag);
             else
                 obj.VPatch = patch([pos pos+dur pos+dur pos],[h(1) h(1) h(2) h(2)], col, ...
                     'ButtonDownFcn', @obj.buttondn, ...
@@ -43,7 +50,8 @@ classdef label
                     varargin{:} );
 
                 text(pos, h(2) + (.015 * (max(h)-min(h))), lab, ...
-                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none');
+                    'Parent', hAxes, 'FontSize', 12, 'Color', col/1.5, 'Interpreter', 'none', ...
+                    'Tag', obj.VPatch.Tag);
             end
         end
 
