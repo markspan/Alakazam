@@ -488,6 +488,13 @@ when it is missing or older than its sources, and copies it, adapted for the
 app's viewer, to `src/AlakazamHelp.html`, which is not committed either. The
 release workflow renders both again and ships them with the package.
 
+The manual is also a web page, https://markspan.github.io/Alakazam/, published by
+`.github/workflows/manual-site.yml` when a version is tagged, so it shows
+the manual of the latest release. To publish a correction between releases,
+run that workflow from the Actions tab on Development. The site is rendered
+without embedded resources: the page, its pictures and Quarto's scripts as
+separate files, which a browser fetches as it goes.
+
 ### The pictures
 
 Every picture in the manual is regenerated from the running application by

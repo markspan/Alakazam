@@ -11,7 +11,7 @@ settings, and in what order. Nothing is a one-off. Every step can be looked
 at, changed, replayed on the next recording, saved as a template, or written
 out as a MATLAB script.
 
-**[Read the manual (PDF)](manual/manual.pdf)** · [Download a release](https://github.com/markspan/Alakazam/releases) · [Example data](DATA.md)
+**[Read the manual](https://markspan.github.io/Alakazam/)** ([PDF](manual/manual.pdf)) · [Download a release](https://github.com/markspan/Alakazam/releases) · [Example data](DATA.md)
 
 ## Made for education and for reuse
 
@@ -134,7 +134,7 @@ through a first analysis, from a raw recording to numbers you can analyse.
 
 | Document | For |
 |---|---|
-| [The manual](manual/manual.pdf) ([source](manual/manual.qmd)) | Researchers and students: every step, report and setting, with its background. Also behind the **Help** button. |
+| [The manual](https://markspan.github.io/Alakazam/) ([PDF](manual/manual.pdf), [source](manual/manual.qmd)) | Researchers and students: every step, report and setting, with its background. Also behind the **Help** button. |
 | [`DATA.md`](DATA.md) | Where to get the example datasets the manual and templates use. |
 | [`library/`](library/README.md) | Ready-made templates, bin scripts and measurement windows. |
 | [`library/templates/luck/`](library/templates/luck/README.md) | The textbook chapters as templates. |

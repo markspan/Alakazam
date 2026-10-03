@@ -1,0 +1,94 @@
+name: Manual site
+
+# Publishes the user manual as a web page on GitHub Pages:
+#
+#     https://markspan.github.io/Alakazam/
+#
+# Runs when a version tag is pushed, as the Release workflow does, so the
+# site shows the manual of the release a user downloads; or on demand from
+# the Actions tab ("Run workflow", choosing Development), to publish a
+# correction to the manual between releases.
+#
+# The site is the HTML manual WITHOUT embedded resources: index.html, the
+# pictures it shows (manual/images) and Quarto's own scripts and styles
+# (manual_files), which a browser fetches as it goes. The manual.html the
+# in-app Help shows embeds all of them, one 15 MB page, which suits a viewer
+# with no network but not a link opened on a phone. manual.qmd asks for
+# embed-resources, and a format option set in a document's front matter is
+# not overridden by `quarto render -M`, so the line is switched off in this
+# job's checkout before rendering; nothing is committed.
+#
+# The repository's Pages source is "GitHub Actions" (Settings > Pages), and
+# the github-pages environment allows deployments from Development, main
+# and the version tags.
+
+on:
+  push:
+    tags:
+      # Both spellings, matched case-sensitively, as in release.yml.
+      - 'v*'
+      - 'V*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write      # to deploy to Pages
+  id-token: write   # to show the deployment comes from this workflow
+
+# One deployment at a time; a run in flight is finished, not cancelled, so
+# the site is never left half replaced.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render the manual as a web page
+        working-directory: manual
+        run: |
+          set -euo pipefail
+          grep -q '^    embed-resources: true' manual.qmd \
+            || { echo "::error::manual.qmd no longer sets embed-resources as this workflow expects; update the sed below."; exit 1; }
+          sed -i 's/^    embed-resources: true/    embed-resources: false/' manual.qmd
+          quarto render manual.qmd --to html --output index.html
+          mkdir -p ../site
+          cp -r index.html manual_files images ../site/
+
+      - name: Check the site is complete
+        working-directory: site
+        # Every picture, script and style the page refers to must be in the
+        # site: a missing one would be a broken page with a green build.
+        run: |
+          set -euo pipefail
+          grep -oE '(src|href)="[^"#:]+"' index.html \
+            | sed -E 's/^(src|href)="//; s/"$//' | sort -u \
+            | while read -r file; do
+                [ -e "$file" ] || { echo "::error::index.html refers to $file, which is not in the site."; exit 1; }
+              done
+          du -sh .
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

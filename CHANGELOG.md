@@ -4,6 +4,13 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **The manual is online,** at https://markspan.github.io/Alakazam/, rebuilt each
+  time a version is tagged. The PDF and the in-app Help are unchanged.
+
 ## V0.4.4.5 (2026-10-03)
 
 ### Added
