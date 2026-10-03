@@ -15,6 +15,14 @@
  *   cleverer method, only the same method without the interpreter between
  *   each scalar operation.
  *
+ *   ORIGIN AND LICENCE. Ported from FieldTrip 20260812, private/tfcestat.m
+ *   (local_etfce), Copyright (C) 2026 Devon Yanitski: FieldTrip's
+ *   implementation of the eTFCE algorithm of Chen, Weeda, Nichols and
+ *   Goeman (2026), arXiv:2603.03004. FieldTrip is free software under the
+ *   GNU General Public License, version 3 or later, and so is this port.
+ *   README.md in this folder says where it is used, what it does and does
+ *   not reproduce, and how its equivalence to FieldTrip is tested.
+ *
  *   TIE-BREAKING IS PART OF THE CONTRACT. MATLAB's sort is stable, so equal
  *   values keep ascending index order, and which of two equal nodes is
  *   visited first decides which becomes a component's root. The comparator

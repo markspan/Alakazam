@@ -391,7 +391,7 @@ scripts. Reports are therefore rendered with every resource inlined.
 | [`ClusterStats.tfceStatfun`](src/+ClusterStats/tfceStatfun.m) | A statfun returning the TFCE score, which lets the compiled kernel run inside FieldTrip's public `'max'` correction without patching FieldTrip. |
 | [`TransTools.BuildSourceForwardModel`](src/Transformations/+TransTools/BuildSourceForwardModel.m) | Template head model, electrodes and cortical sheet, cached per channel set and sheet. |
 | [`TransTools.SourceEstimateKey`](src/Transformations/+TransTools/SourceEstimateKey.m), [`DataFingerprint`](src/Transformations/+TransTools/DataFingerprint.m), [`StoredSourceEstimate`](src/Transformations/+TransTools/StoredSourceEstimate.m) | The two checks a stored source estimate must pass before it is reused, and the one lookup both consumers ask through. |
-| [`alakazam_tfce.c`](src/mex/alakazam_tfce.c) | The compiled TFCE kernel, built on first use; FieldTrip's own implementation is the fallback. |
+| [`alakazam_tfce.c`](src/mex/alakazam_tfce.c) | The compiled TFCE kernel, a port of FieldTrip's exact TFCE, built on first use; FieldTrip's own implementation is the fallback. Its origin, licence and checks: [`src/mex/README.md`](src/mex/README.md). |
 
 `SourceClusterMexTest` requires the accelerated route to give exactly the
 p-values of FieldTrip's own; `SourceEstimateTest` requires a reused estimate
