@@ -1,0 +1,1 @@
+{"Name":"Dipole Fit","Description":"Fit an equivalent current dipole, or a pair mirrored across the midline, to an ERP over a time window, on the template head model","Entry":"DipoleFit.m","Icon":"DipoleFit.png","Section":"4. Frequency and Component Analysis","Category":"Source"}

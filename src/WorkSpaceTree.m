@@ -83,13 +83,13 @@ classdef WorkSpaceTree < handle
         % -- "Recalculate" stays disabled for nodes produced by any of
         % those (see optsFor), since offering an edit it cannot actually
         % perform would be worse than not offering it.
-        RecalculableTransforms = {'ArtefactDetect', 'ASR', 'AutoEyeICA', 'AutoGEDAI', ...
+        RecalculableTransforms = {'ArtefactDetect', 'ASR', 'AutoEyeICA', 'AutoGEDAI', 'Beamformer', ...
             'AutoReject', 'Baseline', 'ChannelEditor', 'CoherenceMap', 'CoherenceTopography', ...
             'CollapseHemispheres', 'Covariance', 'CrossCorrelation', ...
-            'DCDetrend', 'Deconvolve', 'DefineBins', ...
+            'DCDetrend', 'Deconvolve', 'DefineBins', 'DipoleFit', ...
             'DeriveChannels', 'EyeTracking', 'Filter', 'Fourier', 'Interpolate', 'ManualReject', ...
             'Measure', 'PREP', 'Rectify', 'ReRef', 'RESS', 'Resample', 'SelectData', ...
-            'SourceEstimate', 'SpectralMeasure', 'TimeFrequency', 'Welch'}
+            'SourceEstimate', 'SourceRegions', 'SpectralMeasure', 'TimeFrequency', 'Welch'}
         % THE TEST FOR MEMBERSHIP is whether the transformation's dialog can
         % be RE-SEEDED with the node's own stored parameters, because that is
         % all recalculateTransformNode does: it stands in for
@@ -453,7 +453,7 @@ classdef WorkSpaceTree < handle
             isGrandAverage = logical(p.Results.GrandAverage) && isfield(EEG, 'etc') ...
                 && isfield(EEG.etc, 'GrandAverage');
             isEditableTransform = isfield(EEG, 'Call') && ~isempty(EEG.Call) && ...
-                any(strcmp(char(string(EEG.Call)), WorkSpaceTree.RecalculableTransforms));
+                WorkSpaceTree.isRecalculable(EEG.Call);
             % 'Rejection breakdown' is offered when the node actually carries
             % one. ArtefactDetect records it as it runs (etc.alz.
             % artefactDetectors), so the field's presence is the honest test:
@@ -469,12 +469,29 @@ classdef WorkSpaceTree < handle
                 'canRejectionBreakdown', hasBreakdown, ...
                 'canExportErpset', isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'Averaged'));
         end
+
+        function tf = isRecalculable(transformId)
+        %ISRECALCULABLE  Whether a node made by TRANSFORMID can be recalculated:
+        %   a built-in transformation on RecalculableTransforms, or a plugin
+        %   whose manifest says "Recalculable": true. A plugin cannot add
+        %   itself to the list, which is source code, so it declares it; the
+        %   rule for saying so is the list's own (its dialog is seeded from
+        %   TransformSettings, as newTransformation writes it).
+            transformId = char(string(transformId));
+            tf = any(strcmp(transformId, WorkSpaceTree.RecalculableTransforms));
+            if ~tf
+                m = Plugins.manifest(transformId);   % the plugin folder only
+                tf = isstruct(m) && ~isempty(m) && isfield(m, 'Recalculable') && ...
+                    isequal(m.Recalculable, true);
+            end
+        end
     end
 
     methods (Static, Access = private)
         function uri = encodeTransformIcon(transformId, transRoot)
         %ENCODETRANSFORMICON  TRANSFORMID's own icon (Transformations/
-        %   <transformId>/<transformId>.json's Icon field) as a base64 PNG
+        %   <transformId>/<transformId>.json's Icon field, or an installed
+        %   plugin's: see Plugins.transformationFolder) as a base64 PNG
         %   data URI, or '' if TRANSFORMID does not name a real
         %   transformation folder (see iconForResult) -- mirrors
         %   AlakazamRibbon's own getIndividualTransInfos/encodeIcon, kept
@@ -493,7 +510,11 @@ classdef WorkSpaceTree < handle
                 iconCache = containers.Map('KeyType', 'char', 'ValueType', 'char');
             end
             uri = '';
-            jsonFile = fullfile(transRoot, transformId, [transformId '.json']);
+            folder = Plugins.transformationFolder(transformId, transRoot);
+            if isempty(folder)
+                return;
+            end
+            jsonFile = fullfile(folder, [transformId '.json']);
             if isKey(iconCache, jsonFile)
                 uri = iconCache(jsonFile);
                 return;
@@ -503,7 +524,7 @@ classdef WorkSpaceTree < handle
             end
             try
                 info = jsondecode(fileread(jsonFile));
-                iconPath = fullfile(transRoot, transformId, info.Icon);
+                iconPath = fullfile(folder, info.Icon);
                 fid = fopen(iconPath, 'r');
                 if fid < 0
                     return;

@@ -43,4 +43,13 @@ function key = Key(resolvedLabels, opts)
     key.method      = lower(char(string(TransTools.FieldOr(opts, 'Method', 'mne'))));
     key.orientation = lower(char(string(TransTools.FieldOr(opts, 'Orientation', 'normal'))));
     key.regParam    = double(TransTools.FieldOr(opts, 'RegParam', 0.05));
+    % The noise model is part of the answer for dSPM: whitened by the
+    % baseline's covariance, or by the identity. NoiseModel is the RESOLVED
+    % model (see TransTools.ResolveNoiseModel), never 'auto'. The SNR sets
+    % the regularisation of the baseline route only, so it is NaN otherwise.
+    key.noiseModel  = lower(char(string(TransTools.FieldOr(opts, 'NoiseModel', 'identity'))));
+    key.snr         = NaN;
+    if strcmp(key.noiseModel, 'baseline')
+        key.snr = double(TransTools.FieldOr(opts, 'SNR', 3));
+    end
 end

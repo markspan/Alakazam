@@ -1,0 +1,1 @@
+{"Name":"Beamformer","Description":"Where power changes between a baseline and an active window: FieldTrips LCMV in the time domain or DICS at a frequency, on the cortical sheet or a volume grid","Entry":"Beamformer.m","Icon":"Beamformer.png","Section":"4. Frequency and Component Analysis","Category":"Source"}

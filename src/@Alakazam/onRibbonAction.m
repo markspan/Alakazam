@@ -26,6 +26,10 @@ function onRibbonAction(this, id)
             this.onAbout();
         case 'update'
             this.onUpdate();
+        case 'installPlugin'
+            this.onInstallPlugin();
+        case 'managePlugins'
+            this.onManagePlugins();
         case 'grandAveragePerCell'
             this.onGrandAveragePerCell();
         case 'defineGrandAverage'

@@ -27,7 +27,8 @@ The inverse is a **distributed** solution [@hamalainen1994]: one dipole at
 every vertex of the sheet, its orientation fixed to the local cortical
 normal or left free and reduced to a magnitude, and only its amplitude
 estimated. It is not dipole fitting, in which the number, position and
-orientation of a few generators are themselves estimated [@michel2019].
+orientation of a few generators are themselves estimated [@michel2019];
+that is Dipole Fit (@sec-tr-dipolefit), on the same head model.
 
 | Method | What it is | Offered in |
 |-------|-------------------------------------------------------|---------------------------------------------|
@@ -43,12 +44,76 @@ which keeps the dSPM normalisation explicit. An independent implementation
 is kept as a reference, and the two agree to floating-point precision on the
 test data.
 
-The noise covariance behind the regularisation and the dSPM normalisation
-is a **scaled identity**, not a covariance estimated from data: at the stage
-where Alakazam inverts, the data are already averaged, and there is no
-single-trial baseline left to estimate one from. The regularisation is
-reported both as the dimensionless setting and as the absolute value the
-solver used.
+### The noise covariance {#sec-noise-covariance}
+
+dSPM divides each vertex by the noise it would show if the data were noise
+alone, so it needs to know what the noise is. Average records it: the
+covariance of the samples up to the event, pooled over every trial, by
+FieldTrip's own definition (`ft_timelockanalysis` with
+`cfg.covariance = 'yes'`), and divided for each bin by the number of trials
+that bin's average holds, since an average of *N* trials carries a *N*th of
+a single trial's noise. A trial with a rejected sample in the baseline is
+left out of the estimate.
+
+With that covariance, dSPM is FieldTrip's minimum norm as its tutorial sets
+it up for an ERP: the leadfield prewhitened by the noise covariance, the
+source covariance scaled to it, and the regularisation set by a
+signal-to-noise ratio, λ = 1/SNR², with SNR = 3 by default, MNE's
+convention [@dale2000]. A value then reads as standard deviations of the
+baseline noise. Every bin of a dataset is inverted through the same spatial
+filter, so conditions are compared through one operator; a bin averaged
+from fewer trials has more noise, and its dSPM values are lower by the
+square root of the ratio.
+
+Without a baseline covariance (a dataset averaged before Alakazam stored
+one, epochs that start at the event, or a grand average) the noise is taken
+as white: equal and independent on every channel, a scaled identity, with
+the regularisation set as a fraction of the leadfield's power. **Noise
+covariance** in Source Estimate chooses between the two, and the 3D view
+and the source cluster test use the baseline whenever every dataset
+involved has one. The cluster test never mixes the two: one subject without
+a covariance makes it white noise for everyone, and the report says which
+was used. sLORETA and eLORETA are FieldTrip's, which work from the data's
+own covariance, so the noise covariance does not change them.
+
+A step after Average that mixes the channels (Interpolate, Collapse
+Hemispheres) drops the covariance, since the noise of the mixed channels is
+no longer the one it describes; a step that only removes channels keeps the
+rest of it. A filter applied to an average after averaging is not reflected
+in it. The regularisation is reported both as the setting and as the value
+the solver used.
+
+## Beamformers {#sec-beamformers}
+
+A beamformer is a different kind of inverse: instead of one solution for
+every vertex at once, it builds an adaptive spatial filter for each location
+from the data's own covariance, passing activity from there and suppressing
+it from everywhere else [@vanveen1997]. It needs single trials, since the
+filter is made from their variability, and it answers a different question:
+not what the ERP looks like at each vertex, but where power changes between
+two windows. LCMV [@vanveen1997] does so in the time domain; DICS
+[@gross2001] does so at one frequency, from the cross-spectral density,
+which suits an induced oscillation that averages out of an ERP.
+
+Beamformer (@sec-tr-beamformer) follows FieldTrip's recipe for such a
+contrast. The covariance (or the cross-spectra, by multitaper) is estimated
+in both windows by `ft_timelockanalysis` (or `ft_freqanalysis`); one filter
+is made from both windows of every chosen bin together, so that a difference
+between windows or bins is a difference in the data rather than in the
+filters; and each bin's power in each window is passed through it by
+`ft_sourceanalysis`. The windows must be equally long, since a covariance
+from more samples is a different estimate for that reason alone.
+Correlated sources, such as the two auditory cortices responding together,
+are a beamformer's known weakness: the filter suppresses one with the other.
+
+### A volume grid
+
+The other source estimates use the template cortical sheet. A beamformer is
+as often computed on a regular grid of points inside the brain
+(`ft_prepare_sourcemodel`, 10 mm apart by default), which also reaches deep
+structures the sheet does not cover. Its map is drawn by interpolating it
+onto FieldTrip's template MRI (`ft_sourceinterpolate`) and cutting three
+slices through its peak; the left hemisphere is on the left.
 
 ## What the estimate is, and is not
 
@@ -115,7 +180,7 @@ but only after two checks:
 
 | Check | What it catches |
 |----------------|-------------------------------------------------------|
-| Settings | An estimate made with different channels, mesh, method, orientation, regularisation, time window or rate: a different answer, not a different precision. |
+| Settings | An estimate made with different channels, mesh, method, orientation, regularisation, noise covariance, time window or rate: a different answer, not a different precision. |
 | Data fingerprint | The settings match but the data do not. Every step below Source Estimate copies the stored estimate forward, so a Baseline after it would otherwise carry an estimate of its parent's data. |
 
 : The checks before a stored estimate is reused. {#tbl-source-reuse}

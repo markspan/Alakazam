@@ -23,6 +23,7 @@ is disabled rather than hidden, so the layout never shifts.
 | Design | **Grouping** | Assign recordings to groups, persons and sessions (@sec-design). |
 | | **Show Design** | Show the design as the statistics will read it. |
 | Settings | **Global** | The application's preferences (@sec-settings). |
+| Plugins | **Install**, **Installed** | Install a transformation from a zip file or a link; list, update or uninstall the installed ones (@sec-plugins). |
 | View | **Tabs**, **Grid**, **Stack** | How the open plots are arranged (@sec-plot-area). |
 | Help | **Help** | This manual, inside the application. |
 | About | **About**, **Update** | Version and licence; check for a newer release. |
@@ -44,14 +45,16 @@ part of this manual:
 | 1. Preprocessing | Baseline, ChannelEditor, Collapse Hemispheres, DC-Detrend, Derive Channels, EventEditor, Eye tracking, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData | @sec-ref-preprocessing |
 | 2. Artifact Rejection / Reduction | ArtefactDetect, ASR, AutoGEDAI, AutoICA, AutoReject, ICA, ManualReject, PREP | @sec-ref-artefacts |
 | 3. Epoching and Averaging | Average, Deconvolve, DefineBins | @sec-ref-epoching |
-| 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, RESS, Source Estimate, Spectral Measure, Welch PSD | @sec-ref-frequency |
+| 4. Frequency and Component Analysis | Beamformer, Covariance, Cross Correlation, Dipole Fit, ERP Measure, Fourier, RESS, Source Estimate, Source Regions, Spectral Measure, Welch PSD | @sec-ref-frequency |
 | 5. Plots | Brain (3D), CohTopo, Coherence Map, Scalp, TimeFrequency | @sec-ref-plots |
 
 : The groups of the **Tools** tab. {#tbl-ribbon-tools}
 
 The ribbon is built from the transformations it finds at startup, so a
 transformation added to the source tree appears without further
-configuration (see the developer guide).
+configuration (see the developer guide). A transformation written by
+someone else can be installed as a plugin (@sec-plugins); its button
+appears in its own group like any other.
 
 ### Grand Average
 
@@ -395,3 +398,48 @@ A zero-centred diverging map is the safer choice for signed data: zero is
 white, and the sign of an effect is read from the hue rather than from a
 position along a rainbow. Rainbow maps such as **jet** introduce apparent
 boundaries that are not in the data [@borland2007].
+
+## Plugins {#sec-plugins}
+
+A plugin is a transformation packed as a zip file: the same three files as
+every transformation in the source tree (a manifest, an entry function and
+an icon), with whatever else it needs. **Install** on the **Alakazam** tab
+takes the zip file, or a link to one:
+
+- a link to a zip file on the web;
+- a link to a GitHub repository, which takes its latest release (the
+  release's own zip file if it has one, else the source at the release's
+  tag), or its main branch when it has no release;
+- a link to a release (`.../releases/tag/v1.2`), which takes that release;
+- a link to a folder (`.../tree/main/plugins`), which takes the plugins in
+  that folder.
+
+Only `https` links are accepted. Alakazam fetches the zip and checks it
+before anything is installed, then shows what it found: each plugin, its
+version, what it replaces, and anything that needs attention. A plugin is
+refused when its manifest is incomplete, when it has the name of one of
+Alakazam's own transformations or of another function on the MATLAB path,
+or when its zip would write files outside its own folder. A missing icon,
+or a function the plugin needs that is not installed yet (its manifest's
+`Requires`), is reported without stopping the installation. Nothing is
+installed until you choose **Install**, and **Cancel** is the default.
+
+::: {.callout-warning}
+A plugin is MATLAB code, and it runs with your rights, as any MATLAB
+function you download does. Install one only if you trust where it comes
+from. **Installed**, then **Show folder**, opens a plugin's folder so its
+code can be read.
+:::
+
+Plugins are kept in `Documents/MATLAB/AlakazamPlugins`, outside the
+application, so updating Alakazam (**Update**) leaves them in place. Their
+buttons appear at once, in the group their manifest names.
+
+**Installed** lists each plugin with its version, the date it was
+installed and where it came from. **Update** installs it again from there,
+through the same check; **Uninstall** deletes its folder and removes its
+button. Nodes made with an uninstalled plugin stay in the tree, but cannot
+be recalculated, or replayed onto other recordings, until it is installed
+again. A template or exported script that uses a plugin needs it too.
+
+How to write a plugin and pack it is in the developer guide.

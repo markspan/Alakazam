@@ -72,6 +72,12 @@ EEG = input;
 EEG.ntrials = ntrials;
 EEG.trials  = 1;
 EEG.DataFormat = "Averaged";
+% The baseline: every sample up to and including time zero, FieldTrip's
+% 'prestim' window. Its covariance, pooled over every clean trial, is the
+% noise a dSPM estimate is normalised by (see baselineCovariance); a bin's
+% average carries that divided by the number of trials averaged.
+baseline = reshape(input.times, 1, []) <= 0;
+[trialCov, covTrials] = baselineCovariance(input.data(:, baseline, :));
 
 if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     % Bin-aware: one average per bin, over the trials that belong to it.
@@ -79,6 +85,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
     data  = nan(nchan, npnts, nbin);
     stErr = nan(nchan, npnts, nbin);
     aSME  = nan(nchan, nbin);   % analytic standardized measurement error, per channel/bin
+    noiseCov  = nan(nchan, nchan, nbin);
     for b = 1:nbin
         idx = TransTools.BinTrials(input, b);
         EEG.bindesc(b).n = keptTrials(input.data(:, :, idx));
@@ -88,6 +95,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         data(:, :, b)  = mean(input.data(:, :, idx), 3, 'omitnan');
         stErr(:, :, b) = standardError(input.data(:, :, idx));
         aSME(:, b)     = windowedSME(input.data(:, :, idx));
+        noiseCov(:, :, b) = trialCov / max(EEG.bindesc(b).n, 1);
     end
 
     % Second pass: combination (difference) bins defined in DefineBins with
@@ -103,6 +111,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         acc     = zeros(nchan, npnts);
         varAcc  = zeros(nchan, npnts);
         smeAcc  = zeros(nchan, 1);
+        covAcc  = zeros(nchan, nchan);
         nParts = strings(1, numel(s.parts));
         for t = 1:numel(s.parts)
             r      = s.parts(t);
@@ -110,6 +119,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
             acc    = acc    + coeff * data(:, :, r);
             varAcc = varAcc + (coeff * stErr(:, :, r)).^2;
             smeAcc = smeAcc + (coeff * aSME(:, r)).^2;
+            covAcc = covAcc + coeff^2 * noiseCov(:, :, r);   % independent trials
             if coeff < 0;         sign = "-";
             elseif t == 1;        sign = "";
             else;                 sign = "+";
@@ -119,6 +129,7 @@ if isfield(input, 'bindesc') && ~isempty(input.bindesc)
         data(:, :, s.target)  = acc;
         stErr(:, :, s.target) = sqrt(varAcc);
         aSME(:, s.target)     = sqrt(smeAcc);
+        noiseCov(:, :, s.target) = covAcc;
         % A combination bin has no trials of its own; report the
         % constituent bins' (signed) trial counts, e.g. "68-74", or, for
         % a nested combination, another such string, rather than the
@@ -142,7 +153,63 @@ else
     EEG.data  = mean(input.data, 3, 'omitnan');
     EEG.stErr = standardError(input.data);
     EEG.aSME  = windowedSME(input.data);
+    noiseCov = trialCov / max(keptTrials(input.data), 1);
 end
+if covTrials >= 2
+    EEG.noiseCov = noiseCov;
+    times = reshape(input.times, 1, []);
+    EEG.noiseCovInfo = struct('windowMs', [times(find(baseline, 1)), times(find(baseline, 1, 'last'))], ...
+        'nTrials', covTrials, ...
+        'definition', ['FieldTrip''s ft_timelockanalysis covariance of the baseline, ' ...
+            'pooled over every clean trial, divided by the number of trials each ' ...
+            'average holds: the noise of that average']);
+else
+    % No baseline before the event: nothing to estimate the noise from. A
+    % source estimate then falls back to the identity, and says so.
+    EEG.noiseCov = [];
+    EEG.noiseCovInfo = [];
+end
+end
+
+function [C, n] = baselineCovariance(trials)
+%BASELINECOVARIANCE  The covariance of a single trial's noise, from the
+%   baseline of TRIALS (channels x baseline samples x trials), and how many
+%   trials it is from.
+%
+%   FieldTrip's own definition, so that a dSPM estimate here is normalised
+%   as FieldTrip's ft_sourceanalysis would normalise it: ft_timelockanalysis
+%   with cfg.covariance = 'yes' demeans each trial within the window
+%   (removemean, its default), sums x*x' over the trials, and divides by the
+%   summed number of samples less one per trial. FieldTripReferenceTest
+%   holds this to FieldTrip.
+%
+%   POOLED OVER EVERY TRIAL, NOT PER BIN, as FieldTrip's minimum-norm
+%   tutorial and MNE both estimate it: the noise is a property of the
+%   recording, and one estimate from all trials is steadier than one per
+%   condition. The average of N trials carries 1/N of it, which is what
+%   each bin is given. With FieldTrip's prewhitening and source-covariance
+%   scaling that leaves every bin the same spatial filter, so conditions
+%   are compared through one operator, and only the dSPM scale differs,
+%   by the square root of the trials averaged, as it should.
+%
+%   A TRIAL WITH ANY REJECTED (NaN) SAMPLE IN THE WINDOW IS LEFT OUT, every
+%   channel of it: FieldTrip refuses channel-specific NaNs here, and in
+%   FieldTrip rejected trials are removed before the covariance is taken.
+%   With fewer than two clean trials there is no estimate (NaN).
+    nChan = size(trials, 1);
+    nSmp  = size(trials, 2);
+    C = nan(nChan, nChan);
+    clean = reshape(all(all(isfinite(trials), 1), 2), 1, []);
+    n = nnz(clean);
+    if nSmp < 2 || n < 2
+        n = 0;
+        return;
+    end
+    x = double(trials(:, :, clean));
+    x = x - mean(x, 2);                      % each trial demeaned in the window
+    x = reshape(x, nChan, []);
+    C = (x * x') / (n * (nSmp - 1));         % summed samples less one per trial
+    C = (C + C') / 2;
 end
 
 function n = keptTrials(trials)

@@ -22,9 +22,10 @@ function opts = SourceEstimateDialog(EEG, previous)
 
     epoch = epochRange(EEG);
     nBins = binCount(EEG);
+    hasNoise = isfield(EEG, 'noiseCov') && ~isempty(EEG.noiseCov);
 
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Source Estimate', 'Position', fitOnScreen([100 100 560 460]), 'Color', bgColor);
+    fig = uifigure('Name', 'Source Estimate', 'Position', fitOnScreen([100 100 560 530]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Source Estimate', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
@@ -37,7 +38,7 @@ function opts = SourceEstimateDialog(EEG, previous)
         'settings match what it needs, so keep them the same across subjects.'], ...
         'WordWrap', 'on');
 
-    grid = uigridlayout(outer, [6 2], 'ColumnWidth', {170, '1x'}, ...
+    grid = uigridlayout(outer, [8 2], 'ColumnWidth', {170, '1x'}, ...
         'Padding', [8 8 8 0], 'RowSpacing', 4);
 
     uilabel(grid, 'Text', 'Inverse method', ...
@@ -73,10 +74,42 @@ function opts = SourceEstimateDialog(EEG, previous)
     rateField = uieditfield(grid, 'numeric', 'Limits', [10 1000], ...
         'Value', TransTools.FieldOr(previous, 'ResampleHz', 200));
 
+    uilabel(grid, 'Text', 'Noise covariance', ...
+        'Tooltip', ['What dSPM is normalised by. From the baseline: the covariance of ' ...
+            'the samples before the event, which Average stores, as FieldTrip and MNE ' ...
+            'estimate it. White noise assumes every channel equally noisy and independent.']);
+    noiseItems = {'From the baseline (recommended)', 'White noise (identity)'};
+    noiseData  = {'baseline', 'identity'};
+    noiseValue = TransTools.FieldOr(previous, 'NoiseCovariance', 'baseline');
+    if strcmp(noiseValue, 'auto')
+        noiseValue = 'baseline';
+    end
+    if ~hasNoise
+        noiseItems = noiseItems(2);
+        noiseData  = noiseData(2);
+        noiseValue = 'identity';
+    end
+    noiseDrop = uidropdown(grid, 'Items', noiseItems, 'ItemsData', noiseData, ...
+        'Value', noiseValue, 'ValueChangedFcn', @(~, ~) refreshEnable());
+    if ~hasNoise
+        noiseDrop.Tooltip = ['This dataset carries no baseline noise covariance: it was ' ...
+            'averaged before Alakazam stored one, its epochs start at or after the event, ' ...
+            'or it is a grand average. Average it again to have one.'];
+    end
+
+    uilabel(grid, 'Text', 'Signal-to-noise ratio', ...
+        'Tooltip', ['Sets the regularisation with the baseline noise covariance: lambda = ' ...
+            '1/SNR^2, the convention of FieldTrip and MNE. 3 is their default for an ERP.']);
+    snrField = uieditfield(grid, 'numeric', 'Limits', [0.1 100], ...
+        'Value', TransTools.FieldOr(previous, 'SNR', 3));
+
     uilabel(grid, 'Text', 'Regularisation', ...
-        'Tooltip', 'Chooses which of the many solutions fitting the data is returned.');
+        'Tooltip', ['Chooses which of the many solutions fitting the data is returned. ' ...
+            'Used with white noise, and by sLORETA.']);
     regField = uieditfield(grid, 'numeric', 'Limits', [1e-6 10], ...
         'Value', TransTools.FieldOr(previous, 'RegParam', 0.05));
+    methodDrop.ValueChangedFcn = @(~, ~) refreshEnable();
+    refreshEnable();
 
     sizeLabel = uilabel(outer, 'Text', '', 'WordWrap', 'on', ...
         'FontColor', [0.4 0.4 0.4], 'FontSize', 11);
@@ -96,6 +129,13 @@ function opts = SourceEstimateDialog(EEG, previous)
     end
     refreshSize();
     uiwait(fig);
+
+    function refreshEnable()
+        baselineDsp = strcmp(methodDrop.Value, 'mne') && strcmp(noiseDrop.Value, 'baseline');
+        noiseDrop.Enable = strcmp(methodDrop.Value, 'mne') && hasNoise;
+        snrField.Enable = baselineDsp;
+        regField.Enable = ~baselineDsp;
+    end
 
     function refreshSize()
         span = max(0, stopField.Value - startField.Value);
@@ -120,6 +160,8 @@ function opts = SourceEstimateDialog(EEG, previous)
             'TimeWindow',  [startField.Value, stopField.Value], ...
             'ResampleHz',  rateField.Value, ...
             'RegParam',    regField.Value, ...
+            'NoiseCovariance', noiseDrop.Value, ...
+            'SNR',         snrField.Value, ...
             'WindowStart', startField.Value, ...
             'WindowStop',  stopField.Value);
         uiresume(fig);

@@ -323,6 +323,12 @@ function s = regularisationText(summary)
 %   the inverse actually used, and only the latter reproduces the result.
     reg = provenanceField(summary, 'regParam', TransTools.FieldOr(summary.opts, 'RegParam', NaN));
     lambda = provenanceField(summary, 'lambda', NaN);
+    if strcmp(provenanceField(summary, 'noiseModel', 'identity'), 'baseline')
+        snr = provenanceField(summary, 'snr', 3);
+        s = sprintf('SNR %g, giving lambda = 1/SNR^2 = %.4g in the prewhitened problem', ...
+            snr, 1 / snr ^ 2);
+        return;
+    end
     if isfinite(lambda)
         s = sprintf('RegParam %g, giving lambda = %.4g', reg, lambda);
     else

@@ -159,7 +159,19 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
             fileName = sprintf('source_bin%d_%s.png', b, method);
             pngPath = fullfile(imagesDir, fileName);
 
-            wanted = SourceCache.SnapshotKey(resolvedLabels, space, method);
+            % dSPM with the bin's baseline noise covariance when it has one,
+            % as SourceEstimate and the 3-D view would invert it.
+            noiseCov = [];
+            if strcmpi(method, 'mne')
+                noiseCov = TransTools.BinNoiseCovariance(eeg, binIndices(b), resolvedLabels);
+            end
+            noiseModel = 'identity';
+            snapshotOpts = struct();
+            if ~isempty(noiseCov)
+                noiseModel = 'baseline';
+                snapshotOpts = struct('NoiseCov', noiseCov, 'SNR', 3);
+            end
+            wanted = SourceCache.SnapshotKey(resolvedLabels, space, method, noiseModel);
             [storedValues, storedInfo] = SourceCache.Lookup( ...
                 eeg, binLabels{b}, wanted);
             precomputed = [];
@@ -170,7 +182,8 @@ function assets = generateSourceEstimateReportAssets(entries, imagesDir, methods
 
             try
                 [info, power] = TransTools.RenderSourceEstimateSnapshot(values, eeg.times, ...
-                    leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed);
+                    leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed, ...
+                    snapshotOpts);
             catch err
                 warning('Alakazam:generateSourceEstimateReportAssets', ...
                     'Could not render the %s source estimate for bin "%s", skipping it: %s', ...

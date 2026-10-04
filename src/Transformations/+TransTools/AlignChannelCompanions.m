@@ -60,6 +60,9 @@ function EEG = AlignChannelCompanions(EEG, inputChanlocs)
     if isfield(EEG, 'aSME') && ~isempty(EEG.aSME)
         EEG.aSME = align(EEG.aSME, rows, nChan, size(EEG.data, 3), NaN);
     end
+    if isfield(EEG, 'noiseCov') && ~isempty(EEG.noiseCov)
+        EEG.noiseCov = alignSquare(EEG.noiseCov, rows, nChan, size(EEG.data, 3));
+    end
     if isfield(EEG, 'etc') && isstruct(EEG.etc) && isfield(EEG.etc, 'alz') ...
             && isstruct(EEG.etc.alz) && isfield(EEG.etc.alz, 'interpolated') ...
             && islogical(EEG.etc.alz.interpolated) && ~isempty(EEG.etc.alz.interpolated)
@@ -101,6 +104,24 @@ function out = align(companion, rows, nChan, trailing, unknown)
     end
     kept = rows > 0 & rows <= shape(1);
     out(kept, :) = companion(rows(kept), :);
+end
+
+function out = alignSquare(companion, rows, nChan, nBins)
+%ALIGNSQUARE  The noise covariance, channels x channels x bins: its rows AND
+%   columns follow the channels by label. A channel new to the data (a
+%   derived one) has NaN rows and columns, which TransTools.BinNoiseCovariance
+%   reads as "no covariance for this channel set". Bins that changed in
+%   number leave nothing to carry over.
+    if size(companion, 1) == nChan && size(companion, 2) == nChan && size(companion, 3) == nBins
+        out = companion;
+        return;
+    end
+    out = nan(nChan, nChan, nBins, 'like', companion);
+    if size(companion, 3) ~= nBins
+        return;
+    end
+    kept = find(rows > 0 & rows <= size(companion, 1));
+    out(kept, kept, :) = companion(rows(kept), rows(kept), :);
 end
 
 function s = trailingSize(x, n)

@@ -52,6 +52,7 @@ classdef AverageView < AlakazamView
         DifferenceOn = false       % drawing the first ticked line minus the second?
         DifferenceSwapped = false  % ... or the second minus the first
         OverlayOpacity = 0.5       % how strongly overlaid datasets are drawn, 0.1 to 1
+        AmplitudeLabel = "Amplitude (\muV)"   % the y axis: microvolts, or a source estimate's scale
     end
 
     properties (Access = private)
@@ -69,6 +70,14 @@ classdef AverageView < AlakazamView
         function this = AverageView(fig, eeg)
         %AVERAGEVIEW  Build the view for an averaged dataset in FIG.
             this.Figure = fig;
+            % Region time courses (SourceRegions) are a source estimate's
+            % scale, dSPM or sLORETA, not microvolts, and the axis says so.
+            if isstruct(eeg) && isfield(eeg, 'etc') && isstruct(eeg.etc) && isfield(eeg.etc, 'alz') ...
+                    && isstruct(eeg.etc.alz) && isfield(eeg.etc.alz, 'sourceRegions') ...
+                    && isfield(eeg.etc.alz.sourceRegions, 'scaleLabel') ...
+                    && ~isempty(eeg.etc.alz.sourceRegions.scaleLabel)
+                this.AmplitudeLabel = string(eeg.etc.alz.sourceRegions.scaleLabel);
+            end
             this.Grid   = uigridlayout(fig, [2 2], "RowHeight", {22, '1x'}, ...
                 "ColumnWidth", {'9x', '1x'}, "Padding", [4 4 4 4]);
             % Jump straight to an electrode instead of stepping to it one
@@ -226,10 +235,10 @@ classdef AverageView < AlakazamView
             end
             if this.DifferenceOn
                 [handles, legendNames, ymin, ymax, xRange] = this.drawDifference(ax, names, label);
-                title(ax, "Channel: " + label + ", difference");
+                title(ax, "Channel: " + label + ", difference", "Interpreter", "none");
             else
                 [handles, legendNames, ymin, ymax, xRange] = this.drawLines(ax, names, label);
-                title(ax, "Channel: " + label);
+                title(ax, "Channel: " + label, "Interpreter", "none");   % a region name is literal, not TeX
             end
 
             this.ChannelDropdown.Value = this.Channel;
@@ -237,7 +246,7 @@ classdef AverageView < AlakazamView
             % below the bin tickboxes rather than as an axes subtitle -- see
             % buildCheckboxes / asmeText.
             xlabel(ax, "Time (ms)");
-            ylabel(ax, "Amplitude (\muV)");
+            ylabel(ax, this.AmplitudeLabel);
             xline(ax, 0, "Color", "k", "LineStyle", "--");
             yline(ax, 0, "Color", "k", "LineStyle", "--");
             box(ax, "off");

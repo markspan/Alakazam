@@ -112,6 +112,10 @@ function EEG = GrandAverage(sourceFiles, weighted)
     EEG = subjects{1};
     EEG.data  = grandMean;
     EEG.stErr = grandSEM;
+    % Not the first subject's: a noise covariance belongs to one recording's
+    % trials, and a grand average has none of its own.
+    EEG.noiseCov = [];
+    EEG.noiseCovInfo = [];
     % Pool the analytic SME across subjects with the weights the mean used:
     % the grand average is sum(w .* subject means), so its SME is
     % sqrt(sum(w.^2 .* SME.^2)), which with equal weights is the root of the
@@ -194,6 +198,8 @@ function EEG = combineMaps(subjects, sourceFiles, kind)
 
     EEG = subjects{1};
     EEG.(field) = grand;
+    EEG.noiseCov = [];        % one recording's, not the group's
+    EEG.noiseCovInfo = [];
     EEG.ntrials = NaN;
     EEG.event   = struct([]); % stale per-subject trial-level info; a grand
     EEG.epoch   = struct([]); % average has none of its own

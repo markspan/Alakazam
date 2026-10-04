@@ -427,6 +427,12 @@ function [relPath, info] = renderPointSpread(summary, imagesDir, imagesFolderNam
     % relative of it. Matching RegParam also means the spatial filter
     % InverseSolution cached during the analysis is reused as it stands.
     solveOpts = struct('RegParam', TransTools.FieldOr(summary.opts, 'RegParam', 0.05));
+    % The operator the subjects were inverted with: with the baseline noise
+    % model, a representative of their covariances (see SourceClusterStats).
+    if isfield(summary, 'psfNoiseCov') && ~isempty(summary.psfNoiseCov)
+        solveOpts.NoiseCov = summary.psfNoiseCov;
+        solveOpts.SNR = TransTools.FieldOr(summary.opts, 'SNR', 3);
+    end
     if strcmpi(TransTools.FieldOr(summary.opts, 'Orientation', 'magnitude'), 'normal')
         solveOpts.Orientation = 'normal';
     end

@@ -236,6 +236,14 @@ classdef AlakazamPlotter < handle
                 % Passes the data through but carries EEG.xcorr: r against
                 % lag per channel per bin, drawn as a line with an SE band.
                 viewClass = 'CrossCorrelationView';
+            elseif strcmpi(id, 'Beamformer') || hasContent(eeg, 'beamformer')
+                % The average, carrying EEG.beamformer: the map of relative
+                % power change, on the cortex or on slices of the template MRI.
+                viewClass = 'BeamformerView';
+            elseif strcmpi(id, 'DipoleFit') || hasContent(eeg, 'dipoleFit')
+                % Passes the data through but carries EEG.dipoleFit: the
+                % fitted dipoles on a see-through brain, with their numbers.
+                viewClass = 'DipoleView';
             elseif strcmpi(id, 'Covariance') || hasContent(eeg, 'covariance')
                 % Passes the data through but carries EEG.covariance: a
                 % channel x channel matrix per bin, drawn as a heatmap.

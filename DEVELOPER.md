@@ -271,6 +271,43 @@ subject) reads what it returns. So:
   the transformation's id and a sentence saying what to do instead; so is a
   toolbox that fails quietly (see `PREP`'s handling of `prepPipeline`).
 
+### Packaging a transformation as a plugin
+
+A transformation written outside the source tree can be installed by any
+user with **Install** on the Alakazam tab, from a zip file or a link
+(`Plugins`, documented in the manual's interface chapter). Pack it as the
+folder itself:
+
+```
+MyThing.zip
+    MyThing/
+        MyThing.json   the manifest: the six fields, and optionally the three below
+        MyThing.m      the entry function, under the contract
+        MyThing.png    the icon
+        ...            anything else it needs, in subfolders if you like
+```
+
+A zip of the folder's contents without the folder, a GitHub repository
+whose top folder is the plugin, and a repository holding several plugin
+folders all work too: the installer looks for `S.json` beside `S.m` whose
+manifest's `Entry` is `S.m`. On GitHub, attach the zip to a release, and a
+link to the repository installs the latest release.
+
+Three optional manifest fields are read:
+
+| Field | Meaning |
+| --- | --- |
+| `Version` | Shown when installing and in the list of plugins; the installer says which version an update replaces. |
+| `Requires` | Functions the plugin needs, e.g. `["ft_defaults"]`. Each one not on the path is reported at install time, so a missing toolbox is said before the first run rather than during it. |
+| `Recalculable` | `true` when the dialog is seeded from `TransformSettings`, as `newTransformation` writes it. Recalculate then reopens the plugin with a node's own settings (`WorkSpaceTree.isRecalculable`). A plugin cannot add itself to `RecalculableTransforms`, which is source code. |
+
+The installer refuses a plugin whose name is a built-in transformation's
+or any other function's on the path, so choose a distinctive one. Plugins
+are installed into `Documents/MATLAB/AlakazamPlugins` (or the folder in the
+environment variable `ALAKAZAM_PLUGIN_FOLDER`), outside the application,
+because an update replaces the application folder. `PluginsTest` covers the
+installer.
+
 ### Adding a transformation: the checklist
 
 `newTransformation(name, ...)` (src/Support) writes the first steps: the
@@ -391,6 +428,9 @@ scripts. Reports are therefore rendered with every resource inlined.
 | [`ClusterStats.tfceStatfun`](src/+ClusterStats/tfceStatfun.m) | A statfun returning the TFCE score, which lets the compiled kernel run inside FieldTrip's public `'max'` correction without patching FieldTrip. |
 | [`TransTools.BuildSourceForwardModel`](src/Transformations/+TransTools/BuildSourceForwardModel.m) | Template head model, electrodes and cortical sheet, cached per channel set and sheet. |
 | [`TransTools.SourceEstimateKey`](src/Transformations/+TransTools/SourceEstimateKey.m), [`DataFingerprint`](src/Transformations/+TransTools/DataFingerprint.m), [`StoredSourceEstimate`](src/Transformations/+TransTools/StoredSourceEstimate.m) | The two checks a stored source estimate must pass before it is reused, and the one lookup both consumers ask through. |
+| [`TransTools.BinNoiseCovariance`](src/Transformations/+TransTools/BinNoiseCovariance.m), [`ResolveNoiseModel`](src/Transformations/+TransTools/ResolveNoiseModel.m) | The noise covariance Average stores per bin, read by label; and which noise model an inverse uses (baseline or identity), resolved once for a dataset or a study. |
+| [`TransTools.AtlasRegionsAt`](src/Transformations/+TransTools/AtlasRegionsAt.m) | The AAL region at or near arbitrary positions (dipoles, beamformer peaks), by FieldTrip's `ft_volumelookup`. Not `AtlasVertexLabels`, which caches by vertex count and is for the cortical sheet. |
+| [`SourceRegions`](src/Transformations/SourceRegions/SourceRegions.m), [`DipoleFit`](src/Transformations/DipoleFit/DipoleFit.m), [`Beamformer`](src/Transformations/Beamformer/Beamformer.m) | Region time courses (`ft_sourceparcellate`), equivalent dipoles (`ft_dipolefitting`), and LCMV/DICS power maps (`ft_sourceanalysis`) on the sheet or a volume grid; drawn by `AverageView`, `DipoleView` and `BeamformerView`. Each is validated on a source simulated in the template head (`SourceRegionsTest`, `DipoleFitTest`, `BeamformerTest`). |
 | [`alakazam_tfce.c`](src/mex/alakazam_tfce.c) | The compiled TFCE kernel, a port of FieldTrip's exact TFCE, built on first use; FieldTrip's own implementation is the fallback. Its origin, licence and checks: [`src/mex/README.md`](src/mex/README.md). |
 
 `SourceClusterMexTest` requires the accelerated route to give exactly the

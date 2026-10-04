@@ -44,6 +44,25 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 %     Lambda       override the absolute lambda  (default: from RegParam)
 %     Orientation  'magnitude' | 'normal'        (default 'magnitude')
 %     Normals      nVertex x 3, required for 'normal'
+%     NoiseCov     nChan x nChan noise covariance of the data, in VALUES'
+%                  channel order (TransTools.BinNoiseCovariance); used by
+%                  'mne' only, see below
+%     SNR          signal-to-noise ratio setting the regularisation when a
+%                  NoiseCov is given (default 3)
+%
+%   THE NOISE COVARIANCE, FOR dSPM. Without one, 'mne' assumes white noise
+%   of equal variance on every channel (noise covariance lambda*I). With
+%   one, it is FieldTrip's own recipe for an ERP, as its minimum-norm
+%   tutorial sets it up: ft_inverse_mne with the noise covariance,
+%   'prewhiten' (whitening by its eigendecomposition, which drops the
+%   direction the average reference removes), 'scalesourcecov' (source
+%   covariance scaled so trace(L*R*L') = trace(C)) and 'snr', so that lambda
+%   is 1/SNR^2, MNE's convention. The dSPM normalisation then divides by
+%   the noise the baseline actually carries, diag(M*C*M'), so a value reads
+%   as standard deviations of the baseline noise (Dale et al. 2000).
+%   eLORETA and sLORETA are FieldTrip's ft_inverse_eloreta and
+%   ft_inverse_sloreta, which take the data covariance, as now; a NoiseCov
+%   given with them is not used, and INFO.NoiseModel says 'identity'.
 %
 %   ORIENTATION decides how three free-orientation dipole components become
 %   one number per vertex, and it is not a cosmetic choice:
@@ -87,6 +106,8 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
     regParam    = TransTools.FieldOr(opts, 'RegParam', 0.05);
     orientation = lower(char(string(TransTools.FieldOr(opts, 'Orientation', 'magnitude'))));
     normals     = TransTools.FieldOr(opts, 'Normals', []);
+    noiseCov    = TransTools.FieldOr(opts, 'NoiseCov', []);
+    snr         = double(TransTools.FieldOr(opts, 'SNR', 3));
 
     insideIdx    = find(leadfield.inside);
     nVertexTotal = numel(leadfield.inside);
@@ -116,6 +137,26 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
     % from already-average-referenced data changes nothing.
     values = values - mean(values, 1);
     lambda = TransTools.FieldOr(opts, 'Lambda', regParam * trace(L * L') / nChan);
+
+    % The noise covariance is average-referenced with the data, for the same
+    % reason: H*C*H' is the covariance of the noise the inverse is actually
+    % given. It is then rank nChan-1, which FieldTrip's prewhitening handles
+    % by dropping the null direction (the eigenvalues below 1e-12 of the
+    % largest), exactly the common mode the leadfield cannot produce.
+    useNoise = strcmp(method, 'mne') && ~isempty(noiseCov);
+    Cn = [];
+    if useNoise
+        if ~isequal(size(noiseCov), [nChan nChan]) || any(~isfinite(noiseCov(:)))
+            throw(MException('Alakazam:InverseSolution', ...
+                ['Problem in InverseSolution: the noise covariance is %dx%d, or not finite, ' ...
+                 'for %d channels. It has to be one finite value per channel pair, in the ' ...
+                 'same channel order as the data.'], size(noiseCov, 1), size(noiseCov, 2), nChan));
+        end
+        H  = eye(nChan) - 1 / nChan;
+        Cn = H * double(noiseCov) * H;
+        Cn = (Cn + Cn') / 2;
+        lambda = 1 / snr ^ 2;   % FieldTrip's lambda in the whitened, scaled problem
+    end
 
     % The data covariance eLORETA and sLORETA both take as their 5th
     % argument. On an already-averaged ERP (which is what this pipeline
@@ -148,11 +189,26 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
     % leadfield several independent ways and the ceiling is small.
     filterKey = struct('lead', leadfieldDigest(L), 'method', method, ...
         'lambda', lambda, 'regParam', regParam, 'nChan', nChan, ...
-        'nInside', numel(insideIdx));
+        'nInside', numel(insideIdx), 'noise', []);
+    if useNoise
+        % The whitened filter depends on the covariance, so it is part of
+        % the key; one recording's filter is never another's.
+        filterKey.noise = leadfieldDigest(Cn);
+    end
     M = rememberedFilter(filterKey);
 
     switch method
         case 'mne'
+            if useNoise
+                if isempty(M)
+                    est = ft_inverse_mne(leadfield, elec, headmodel, values, ...
+                        'noisecov', Cn, 'prewhiten', 'yes', 'scalesourcecov', 'yes', ...
+                        'snr', snr, 'keepfilter', 'yes');
+                end
+                info.ScaleLabel = 'dSPM (baseline noise)';
+                info.ScaleNote  = ['A noise-normalized statistic, not microvolts: how many ' ...
+                    'standard deviations of the baseline noise.'];
+            else
             % noisecov = lambda*I with FieldTrip's own lambda at 1 gives
             % w = L'*(L*L' + lambda*I)^-1 -- algebraically IDENTICAL to
             % ComputeSourceEstimate's own M, because FieldTrip's operator is
@@ -169,6 +225,7 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
             info.ScaleLabel = 'dSPM (noise-normalized)';
             info.ScaleNote  = ['A noise-normalized statistic, not microvolts: roughly how ' ...
                 'many noise standard deviations above baseline.'];
+            end
 
         case 'eloreta'
             if isempty(M)
@@ -243,12 +300,18 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 
     if strcmp(method, 'mne')
         % dSPM (Dale et al. 2000): divide each dipole-moment row by its own
-        % noise standard deviation under Cnoise = lambda*I, i.e.
-        % noiseVar = diag(M*Cnoise*M') = lambda*sum(M.^2, 2). Only the
-        % minimum norm gets this: eLORETA is an un-normalized amplitude and
-        % sLORETA is already standardized, by its own resolution matrix
-        % rather than by projected noise.
-        J = J ./ sqrt(max(lambda * sum(M .^ 2, 2), eps));
+        % noise standard deviation, noiseVar = diag(M*Cnoise*M'). Cnoise is
+        % the baseline's covariance when there is one, else lambda*I, for
+        % which diag(M*Cnoise*M') = lambda*sum(M.^2, 2). Only the minimum
+        % norm gets this: eLORETA is an un-normalized amplitude and sLORETA
+        % is already standardized, by its own resolution matrix rather than
+        % by projected noise.
+        if useNoise
+            noiseVar = sum((M * Cn) .* M, 2);
+        else
+            noiseVar = lambda * sum(M .^ 2, 2);
+        end
+        J = J ./ sqrt(max(noiseVar, eps));
     end
 
     % Collapse the 3 free-orientation components to one value per vertex per
@@ -294,6 +357,12 @@ function [sourcePower, info] = InverseSolution(values, leadfield, elec, headmode
 
     info.Method = method;
     info.Lambda = lambda;
+    info.NoiseModel = 'identity';
+    info.SNR = NaN;
+    if useNoise
+        info.NoiseModel = 'baseline';
+        info.SNR = snr;
+    end
 end
 
 % ======================================================================= %

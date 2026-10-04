@@ -33,8 +33,9 @@ function defaults = transformDefaults(transformId, transformationsRoot)
             'Transformations');
     end
 
-    file = fullfile(transformationsRoot, transformId, [transformId '.m']);
-    if exist(file, 'file') ~= 2
+    folder = Plugins.transformationFolder(transformId, transformationsRoot);
+    file = fullfile(folder, [transformId '.m']);
+    if isempty(folder) || exist(file, 'file') ~= 2
         return;
     end
     source = fileread(file);

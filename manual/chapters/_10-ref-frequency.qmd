@@ -434,7 +434,9 @@ The inverse methods and their limits are described in
 | **Source space** | 20 484 vertices | The template cortical mesh: 20 484, 8 196 or 5 124 vertices. |
 | **Time window** | the whole epoch | The samples stored. |
 | **Store at** | 200 Hz | The rate the estimate is stored at. |
-| **Regularisation** | 0.05 | The Tikhonov regularisation of the inverse. |
+| **Noise covariance** | From the baseline | What dSPM is normalised by: the baseline covariance Average stored, or **White noise (identity)** (@sec-noise-covariance). Only white noise is offered when the dataset carries no baseline covariance. |
+| **Signal-to-noise ratio** | 3 | With the baseline covariance, sets the regularisation, λ = 1/SNR². |
+| **Regularisation** | 0.05 | The Tikhonov regularisation with white noise, and for sLORETA. |
 
 : Source Estimate's options. {#tbl-sourceestimate}
 
@@ -445,3 +447,114 @@ will take, which for a fine mesh and a long window is much larger than a
 typical node.
 
 ![The N400 difference at 400 ms as a dSPM estimate on the template cortex, drawn as a magnitude (the **Signed** box unticked). The fit line reports how much of the scalp data the estimate reproduces.](images/sourceestimate-result.jpg){#fig-sourceestimate-result}
+
+## Source Regions {#sec-tr-sourceregions}
+
+*Tools > 4. Frequency and Component Analysis > Source Regions · averaged →
+averaged, one channel per brain region · `SourceRegions`*
+
+The time course of every region of an atlas: each bin is inverted onto the
+template cortex exactly as Source Estimate does, with the same settings and
+noise covariance, and the vertices of each region are averaged by
+FieldTrip's `ft_sourceparcellate`. The atlas is one FieldTrip ships, AAL
+[@tzourio2002] or Brainnetome [@fan2016]. The result is an averaged dataset
+whose channels are regions, so the ERP plot, ERP Measure, grand averages,
+the statistics reports and TimeFrequency all read it as they read
+electrodes; its amplitude axis is the estimate's scale, not microvolts.
+
+![**Source Regions**: the atlas, how a region's vertices are combined, and the source estimate's own settings.](images/sourceregions-dialog.png){#fig-sourceregions-dialog}
+
+| Option | Default | Meaning |
+|--------------|------------------------|-------------------------------------------------------|
+| **Atlas** | AAL | The regions: AAL's or Brainnetome's, mapped onto the cortical sheet in MNI space. A vertex in no region takes no part. |
+| **Region value** | Mean magnitude | **Mean magnitude**: the mean of the vertices' magnitudes, always positive. **Signed mean**: the mean along the cortical normal, each vertex first turned to its region's dominant orientation, so the two banks of a sulcus do not cancel and an ERP's polarity survives (MNE's *mean_flip*). |
+| **Inverse method** | dSPM | As in Source Estimate (@sec-tr-sourceestimate). |
+| **Source space** | 20 484 vertices | As in Source Estimate. |
+| **Noise covariance** | auto | **auto** uses the baseline covariance when the dataset has one (@sec-noise-covariance). |
+| **Signal-to-noise ratio**, **Regularisation** | 3, 0.05 | As in Source Estimate. |
+
+: Source Regions' options. {#tbl-sourceregions}
+
+A region is only as distinct as the estimate under it. With a template head
+and a few dozen electrodes, neighbouring regions share much of their signal
+(@sec-source-estimation), so an effect larger in one region than in the next
+is weak evidence that it is located there and not there.
+
+![The N400 bins in the left middle temporal gyrus (AAL's Temporal_Mid_L), as a signed dSPM time course.](images/sourceregions-result.jpg){#fig-sourceregions-result}
+
+## Dipole Fit {#sec-tr-dipolefit}
+
+*Tools > 4. Frequency and Component Analysis > Dipole Fit · averaged →
+averaged, with the fitted dipoles · `DipoleFit`*
+
+An equivalent current dipole, or a pair mirrored across the midline, fitted
+to a bin's scalp distribution over a time window: where one focal generator
+(or one in each hemisphere) would have to be to produce it, and how much of
+the data it then explains. The fit is FieldTrip's `ft_dipolefitting`
+[@oostenveld2011] on the template head model the source estimates use: a
+grid search over the brain for the starting point, then a nonlinear fit.
+The model holds the position fixed over the window and lets the moment
+change within it (FieldTrip's *regional* model). The data are not changed;
+the dipoles are stored with them, and the view draws them on a see-through
+template brain with a table of their positions.
+
+![**Dipole Fit**: the bins, the window, one dipole or a mirrored pair, and the spacing of the grid search.](images/dipolefit-dialog.png){#fig-dipolefit-dialog}
+
+| Option | Default | Meaning |
+|--------------|------------------------|-------------------------------------------------------|
+| **Bins** | the first | The bins to fit, each on its own. |
+| **From**, **To** | 20 ms either side of the largest global field power after the event | The window, in ms. |
+| **Model** | One dipole | **One dipole**, or a **Mirrored pair**, symmetric across the midline, for a response from both hemispheres at once. |
+| **Grid search spacing** | 10 mm | The grid the starting point is searched on. |
+
+: Dipole Fit's options. {#tbl-dipolefit}
+
+A dipole is the right model only when one focal generator is a fair
+assumption, as for an early sensory response; it is not the right model for
+a component with distributed generators, such as the N400 below. The
+**residual variance**, the share of the scalp data in the window the dipoles
+do not reproduce, is the check, and the view puts it in the title. A low
+value says the model can explain the map, not that the generator is where
+the dipole is: with a template head and template electrode positions, a
+position is good to a centimetre or two. Each dipole is named by the AAL
+region at or within 10 mm of it, by FieldTrip's `ft_volumelookup`, since a
+fitted dipole often lies just beneath the cortex.
+
+![A single dipole fitted to the N400 difference from 300 to 500 ms. The residual variance in the title says how much a single dipole leaves unexplained: much, as expected of a component with distributed generators.](images/dipolefit-result.jpg){#fig-dipolefit-result}
+
+## Beamformer {#sec-tr-beamformer}
+
+*Tools > 4. Frequency and Component Analysis > Beamformer · epoched →
+averaged, with a map of power change · `Beamformer`*
+
+Where power changes between a baseline window and an active window of the
+same length, at every location of a source model, by FieldTrip's
+beamformers [@vanveen1997; @gross2001]. **LCMV** compares power in the time
+domain, from the covariance of the trials; **DICS** compares power at one
+frequency, from their cross-spectra, which suits an induced oscillation or a
+frequency-tagged response. The result is the trials' average, as Average
+makes it, with the map stored beside it; the view draws the map
+(@sec-beamformers).
+
+![**Beamformer**: the bins, the method and its frequency, the two windows, the source model and the regularisation.](images/beamformer-dialog.png){#fig-beamformer-dialog}
+
+| Option | Default | Meaning |
+|--------------|------------------------|-------------------------------------------------------|
+| **Bins** | every ordinary bin | The bins mapped; their trials together make the filter. |
+| **Method** | LCMV | **LCMV (time domain)** or **DICS (frequency)**. |
+| **Frequency**, **Smoothing** | 10 Hz, 4 Hz | DICS only: the frequency, and the multitaper smoothing around it. |
+| **Active from/to**, **Baseline from/to** | 300 to 500, -200 to 0 ms | The two windows compared. They must be of the same length. |
+| **Source model** | Cortical sheet | The template **Cortical sheet**, or a regular **Volume grid** inside the template brain. |
+| **Sheet vertices** | 5 124 | The sheet: 5 124, 8 196 or 20 484 vertices. |
+| **Grid spacing** | 10 mm | The grid. |
+| **Regularisation** | 5 % | The diagonal loading of the covariance or cross-spectra, as a percentage of the mean sensor power, FieldTrip's `lambda`. |
+
+: Beamformer's options. {#tbl-beamformer}
+
+The value at each location is the relative change, (active - baseline) /
+baseline, so 1 means the power doubled. A trial rejected anywhere in either
+window takes no part; the view says how many did.
+
+![LCMV power change from -200 to 0 ms to 300 to 500 ms in the N400 data, on the cortical sheet.](images/beamformer-result.jpg){#fig-beamformer-result}
+
+![The same on a 10 mm volume grid, on slices of the template MRI through the peak.](images/beamformer-grid.jpg){#fig-beamformer-grid}

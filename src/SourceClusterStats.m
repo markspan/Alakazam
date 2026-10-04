@@ -140,6 +140,15 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     % no business knowing about inverse solutions.
     diagnostics = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
+    % THE NOISE MODEL, resolved once for the study: the baseline covariance
+    % when every subject carries one for every bin the contrast reads, else
+    % the identity for everyone. One subject whitened and another not would
+    % put their dSPM values on different scales.
+    available = all(cellfun(@(s) hasNoiseCovariances(s, contrastBins(contrast), resolvedLabels), ...
+        subjects));
+    opts.NoiseModel = TransTools.ResolveNoiseModel(opts.NoiseCovariance, opts.Method, ...
+        available, 'Alakazam:SourceClusterStats');
+
     inverse = struct('leadfield', leadfield, 'elec', elec, 'headmodel', headmodel, ...
         'resolvedLabels', {resolvedLabels}, 'normals', normals, ...
         'vertexLabels', {vertexLabels}, 'opts', opts, 'diagnostics', diagnostics);
@@ -217,6 +226,57 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     summary.times        = timelocks{1}.time * 1000;   % s -> ms
     summary.provenance   = buildProvenance(opts, labels, resolvedLabels, ...
         sourcemodel, diagnostics, subjects, sourceFiles);
+    % A representative noise covariance, for the report's point-spread
+    % figure: the subjects' own, each scaled to unit trace and averaged.
+    % The whitened filter does not depend on the covariance's scale, so this
+    % is the operator a typical subject was inverted with.
+    summary.psfNoiseCov = [];
+    if strcmp(opts.NoiseModel, 'baseline')
+        summary.psfNoiseCov = representativeNoiseCov(subjects, contrastBins(contrast), resolvedLabels);
+    end
+end
+
+function bins = contrastBins(contrast)
+%CONTRASTBINS  The bin labels the contrast reads.
+    bins = {};
+    for field = {'bin', 'binA', 'binB'}   % vsZero and independent; paired
+        if isfield(contrast, field{1}) && ~isempty(contrast.(field{1}))
+            bins = [bins, cellstr(string(contrast.(field{1})))]; %#ok<AGROW>
+        end
+    end
+end
+
+function tf = hasNoiseCovariances(EEG, binLabels, resolvedLabels)
+%HASNOISECOVARIANCES  Whether every bin in BINLABELS carries a usable noise
+%   covariance for the shared channel set.
+    tf = true;
+    bins = {EEG.bindesc.label};
+    for k = 1:numel(binLabels)
+        match = find(strcmp(bins, binLabels{k}), 1);
+        if isempty(match) || isempty(TransTools.BinNoiseCovariance(EEG, match, resolvedLabels))
+            tf = false;
+            return;
+        end
+    end
+end
+
+function C = representativeNoiseCov(subjects, binLabels, resolvedLabels)
+    C = 0;
+    n = 0;
+    for s = 1:numel(subjects)
+        bins = {subjects{s}.bindesc.label};
+        match = find(strcmp(bins, binLabels{1}), 1);
+        one = TransTools.BinNoiseCovariance(subjects{s}, match, resolvedLabels);
+        if ~isempty(one)
+            C = C + one / trace(one);
+            n = n + 1;
+        end
+    end
+    if n == 0
+        C = [];
+    else
+        C = C / n;
+    end
 end
 
 % ======================================================================= %
@@ -300,10 +360,13 @@ function tl = sourceTimelock(EEG, binLabel, inverse)
     [values, times] = TransTools.RestrictAndDecimate(values, times, ...
         inverse.opts.TimeWindow, inverse.opts.ResampleHz, 'Alakazam:SourceClusterStats');
 
-    solveOpts = struct('RegParam', inverse.opts.RegParam);
+    solveOpts = struct('RegParam', inverse.opts.RegParam, 'SNR', inverse.opts.SNR);
     if strcmpi(inverse.opts.Orientation, 'normal')
         solveOpts.Orientation = 'normal';
         solveOpts.Normals     = inverse.normals;
+    end
+    if strcmp(inverse.opts.NoiseModel, 'baseline')
+        solveOpts.NoiseCov = TransTools.BinNoiseCovariance(EEG, match, inverse.resolvedLabels);
     end
     [sourcePower, info] = TransTools.InverseSolution(values, inverse.leadfield, ...
         inverse.elec, inverse.headmodel, inverse.opts.Method, solveOpts);
@@ -464,6 +527,7 @@ function opts = withDefaults(opts)
     defaults = struct( ...
         'Method', 'mne', 'Orientation', 'normal', 'TimeWindow', [], ...
         'ResampleHz', 200, 'RegParam', 0.05, ...
+        'NoiseCovariance', 'auto', 'SNR', 3, ...
         'SourceSpace', 20484, 'Accelerate', true, 'Workers', 0, ...
         'correctm', 'tfce', 'clusteralpha', 0.05, 'alpha', 0.05, ...
         'numrandomization', 1000, 'tail', 0, 'minnbchan', 0);
@@ -721,7 +785,15 @@ function provenance = buildProvenance(opts, requestedLabels, resolvedLabels, ...
     provenance.nVertices         = size(sourcemodel.pos, 1);
     provenance.adjacency         = 'mesh triangulation (vertices sharing a triangle)';
     provenance.regParam          = opts.RegParam;
-    provenance.noiseCovariance   = 'identity, scaled by lambda (not estimated from data)';
+    provenance.noiseModel        = opts.NoiseModel;
+    provenance.snr               = opts.SNR;
+    if strcmp(opts.NoiseModel, 'baseline')
+        provenance.noiseCovariance = sprintf(['estimated from each subject''s baseline ' ...
+            '(the samples up to the event, pooled over trials, divided by the trials ' ...
+            'averaged); prewhitened, SNR %g'], opts.SNR);
+    else
+        provenance.noiseCovariance = 'identity, scaled by lambda (not estimated from data)';
+    end
     provenance.tfce              = struct('variant', 'exact', 'E', 0.5, 'H', 2);
     provenance.software          = TransTools.SoftwareVersions();
     provenance.subjects          = subjectRows(diagnostics);

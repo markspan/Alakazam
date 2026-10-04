@@ -19,4 +19,7 @@ function setupDirectories(this)
         addpath(fullfile(this.RootDir, sub{1}), '-end');
     end
     addpath(genpath(fullfile(this.RootDir, 'Transformations')));
+    % Installed plugins, after everything of the application's own (see
+    % Plugins): a plugin cannot take the name of a function already here.
+    Plugins.addToPath();
 end

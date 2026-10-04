@@ -1,4 +1,4 @@
-function [info, sourcePower] = RenderSourceEstimateSnapshot(values, times, leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed)
+function [info, sourcePower] = RenderSourceEstimateSnapshot(values, times, leadfield, elec, headmodel, sourcemodel, method, pngPath, precomputed, solveOpts)
 %RENDERSOURCEESTIMATESNAPSHOT  Solve METHOD's inverse for one bin's full
 %   time course, render it at that bin's global-field-power peak onto an
 %   offscreen figure, and save the result to PNGPATH -- the batch/report
@@ -59,7 +59,13 @@ function [info, sourcePower] = RenderSourceEstimateSnapshot(values, times, leadf
         sourcePower = precomputed.values;
         info = precomputed.info;
     else
-        [sourcePower, info] = TransTools.InverseSolution(values, leadfield, elec, headmodel, method);
+        % SOLVEOPTS carries the bin's noise covariance for dSPM, when it has
+        % one (see generateSourceEstimateReportAssets).
+        if nargin < 10 || isempty(solveOpts)
+            solveOpts = struct();
+        end
+        [sourcePower, info] = TransTools.InverseSolution(values, leadfield, elec, headmodel, ...
+            method, solveOpts);
     end
 
     gfp = sqrt(mean(double(values) .^ 2, 1));

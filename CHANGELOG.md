@@ -8,6 +8,44 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **Plugins.** A transformation packed as a zip file can be installed from
+  the Alakazam tab (**Install**), from the file or from a link: a zip on the
+  web, or a GitHub repository, release or folder. What the zip holds is
+  checked and shown before anything is installed: a plugin with an
+  incomplete manifest, the name of a built-in transformation or another
+  function, or a zip that would write outside its folder is refused.
+  Plugins live in `Documents/MATLAB/AlakazamPlugins`, outside the
+  application, so an update leaves them in place; **Installed** lists them,
+  with Update, Uninstall and Show folder. A manifest may add `Version`,
+  `Requires` and `Recalculable`.
+- **dSPM is normalised by the baseline noise.** Average now stores the noise
+  covariance of each bin's average: the baseline (up to the event) pooled
+  over every clean trial, by FieldTrip's `ft_timelockanalysis` definition,
+  divided by the trials averaged. Source Estimate, the 3D view and the
+  source cluster test use it for dSPM, through FieldTrip's prewhitened
+  minimum norm with λ = 1/SNR² (SNR 3), so a value reads as standard
+  deviations of the baseline noise; white noise is used, and said, when a
+  dataset has none, and the cluster test uses one model for every subject.
+  Averages made before this have no covariance: average again to use it.
+- **Source Regions**: the time course of each region of an atlas (AAL or
+  Brainnetome), from Source Estimate's own estimate, combined by FieldTrip's
+  `ft_sourceparcellate`. The result is an averaged dataset whose channels are
+  regions, read by the ERP plot, ERP Measure, grand averages and the reports
+  as electrodes are; the signed mean turns each vertex to its region's
+  dominant orientation, so a region's polarity survives.
+- **Dipole Fit**: an equivalent current dipole, or a pair mirrored across
+  the midline, fitted to a bin over a time window by FieldTrip's
+  `ft_dipolefitting` on the template head model, with the residual variance
+  and the AAL region of each dipole; the view draws them on a see-through
+  brain. Found within a centimetre of a dipole simulated in the same head.
+- **Beamformer**: FieldTrip's LCMV (time domain) and DICS (at a frequency)
+  on epoched data, comparing power between a baseline and an active window
+  of the same length through one common filter, on the cortical sheet or on
+  a regular volume grid. The view draws the map on the cortex, or on three
+  slices of FieldTrip's template MRI through its peak, interpolated by
+  `ft_sourceinterpolate`. Each finds a source simulated in the template head
+  within 15 mm.
+
 - **The manual is online,** at https://markspan.github.io/Alakazam/, rebuilt each
   time a version is tagged. The PDF and the in-app Help are unchanged.
 

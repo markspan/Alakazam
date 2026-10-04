@@ -10,11 +10,14 @@ classdef AlakazamRibbon < handle
 %   with the npm/esbuild tooling src/webtree/ needed for its third-party tree
 %   library.
 %
-%   The MATLAB-side node model (tabs -> groups -> items) is built once from
-%   Transformations/*.json at construction and pushed to the JS side as a
-%   single Data snapshot (via uihtml's Data property); it does not change
-%   afterwards. Icons are embedded as base64 data URIs so the HTML page
-%   stays fully self-contained (no relative file-path resolution).
+%   The MATLAB-side node model (tabs -> groups -> items) is built from the
+%   manifests (<Name>/<Name>.json) under each transformation root, the
+%   built-in src/Transformations first and the installed plugins' folder
+%   after it (see Plugins), and pushed to the JS side as a single Data
+%   snapshot (via uihtml's Data property). REFRESH rebuilds it when a plugin
+%   is installed or removed. Icons are embedded as base64 data URIs so the
+%   HTML page stays fully self-contained (no relative file-path resolution),
+%   which is also what lets a plugin's icon, outside src, be shown at all.
 %
 %   Data shape (see AlakazamRibbon.html for the JS side):
 %     { tabs: [ { id, title, groups: [ { title, items: [
@@ -110,16 +113,16 @@ classdef AlakazamRibbon < handle
     end
 
     methods
-        function this = AlakazamRibbon(parent, transRoot, varargin)
+        function this = AlakazamRibbon(parent, transRoots, varargin)
         %ALAKAZAMRIBBON  Build the ribbon inside PARENT (a figure or uipanel),
-        %   discovering transformations from TRANSROOT (the Transformations
-        %   directory). Remaining NAME,VALUE pairs set the *Fcn callback
-        %   properties.
+        %   discovering transformations under TRANSROOTS: one folder, or
+        %   several in order of precedence (Plugins.roots). Remaining
+        %   NAME,VALUE pairs set the *Fcn callback properties.
             for k = 1:2:numel(varargin)
                 this.(varargin{k}) = varargin{k + 1};
             end
 
-            this.TabsData = this.buildTabsData(transRoot);
+            this.TabsData = this.buildTabsData(transRoots);
 
             % uihtml has no Units property and does not auto-fill its parent
             % (see WorkSpaceTree for the same note): a 1x1 uigridlayout is
@@ -131,6 +134,17 @@ classdef AlakazamRibbon < handle
             this.Component.HTMLEventReceivedFcn = @(~, evt) this.onEvent(evt);
 
             this.buildPopup(parent);
+        end
+    end
+
+    methods
+        function refresh(this, transRoots)
+        %REFRESH  Scan TRANSROOTS again and redraw, after a plugin was
+        %   installed or removed. The page redraws itself when its Data
+        %   changes (AlakazamRibbon.html's DataChanged listener), so no
+        %   restart is needed for the new button to appear.
+            this.TabsData = this.buildTabsData(transRoots);
+            this.Component.Data = this.buildData();
         end
     end
 
@@ -355,7 +369,7 @@ classdef AlakazamRibbon < handle
             end
         end
 
-        function tabs = buildTabsData(this, transRoot)
+        function tabs = buildTabsData(this, transRoots)
         %BUILDTABSDATA  Assemble the tabs->groups->items data: Home
         %   (WorkSpace + Settings), Tools (one group per Transformations
         %   Section, one item per uniquely-named transformation within it --
@@ -381,6 +395,7 @@ classdef AlakazamRibbon < handle
                 struct('title', 'Workspace', 'items', {this.workspaceItems(iconsDir)}), ...
                 struct('title', 'Design',    'items', {this.designItems(iconsDir)}), ...
                 struct('title', 'Settings',  'items', {this.settingsItems(iconsDir)}), ...
+                struct('title', 'Plugins',   'items', {this.pluginItems(iconsDir)}), ...
                 struct('title', 'View',      'items', {this.viewItems(iconsDir)}), ...
                 struct('title', 'Help',      'items', {this.helpItems(iconsDir)}), ...
                 struct('title', 'About',     'items', {this.aboutItems(iconsDir)})};
@@ -397,7 +412,7 @@ classdef AlakazamRibbon < handle
             tabs = { ...
                 struct('id', 'home', 'title', 'Alakazam', 'groups', {homeGroups}), ...
                 struct('id', 'tools', 'title', 'Tools', ...
-                    'groups', {this.transformationGroups(transRoot)}), ...
+                    'groups', {this.transformationGroups(transRoots)}), ...
                 struct('id', 'grandAverage', 'title', 'Grand Average', ...
                     'groups', {grandAverageGroups}), ...
                 struct('id', 'measurements', 'title', 'Export/Report', ...
@@ -460,6 +475,19 @@ classdef AlakazamRibbon < handle
             icon = this.encodeSvgFile(fullfile(iconsDir, 'Settings.svg'));
             items = {struct('id', 'settings', 'label', 'Global', ...
                 'tooltip', 'Edit the global Alakazam settings', 'icon', icon)};
+        end
+
+        function items = pluginItems(this, iconsDir)
+        %PLUGINITEMS  Install a plugin from a zip file or a link, and list the
+        %   installed ones (see Plugins). Icons: a jigsaw piece, with a plus
+        %   for installing.
+            items = { ...
+                struct('id', 'installPlugin', 'label', 'Install', ...
+                    'tooltip', 'Install a plugin from a zip file or a link (a GitHub repository, release or folder)', ...
+                    'icon', this.encodeSvgFile(fullfile(iconsDir, 'InstallPlugin.svg'))), ...
+                struct('id', 'managePlugins', 'label', 'Installed', ...
+                    'tooltip', 'The installed plugins: update or uninstall them', ...
+                    'icon', this.encodeSvgFile(fullfile(iconsDir, 'Plugins.svg')))};
         end
 
         function items = helpItems(this, iconsDir)
@@ -641,8 +669,13 @@ classdef AlakazamRibbon < handle
                 'icon', this.encodeSvgFile(fullfile(iconsDir, 'AnalysisScript.svg')))};
         end
 
-        function groups = transformationGroups(this, transRoot)
-            transInfo = getTransInfos(transRoot);
+        function groups = transformationGroups(this, transRoots)
+            transInfo = getTransInfos(transRoots);
+            if isempty(transInfo)
+                groups = {};
+                return;
+            end
+            builtInRoot = char(string(transRoots(1)));
             uniqueSections = unique({transInfo.Section});
 
             groups = cell(1, numel(uniqueSections));
@@ -653,12 +686,22 @@ classdef AlakazamRibbon < handle
 
                 items = cell(1, numel(names));
                 for ti = 1:numel(names)
+                    % The first of a name wins, and the built-in folder is
+                    % scanned first: a plugin's button cannot take the place
+                    % of one of Alakazam's own (Plugins refuses to install
+                    % one that would, so this is only the second line).
                     iTransForm = sectionForms(strcmp({sectionForms.Name}, names{ti}));
+                    iTransForm = iTransForm(1);
+                    tooltip = iTransForm.Description;
+                    if ~strcmp(iTransForm.Root, builtInRoot)
+                        tooltip = sprintf('%s (plugin %s)', tooltip, iTransForm.Version);
+                        tooltip = strrep(tooltip, ' )', ')');
+                    end
                     items{ti} = struct( ...
                         'id', ['transform:' iTransForm.Entry], ...
                         'label', iTransForm.Name, ...
-                        'tooltip', iTransForm.Description, ...
-                        'icon', this.encodeIcon(fullfile(transRoot, iTransForm.Folder, iTransForm.Icon)));
+                        'tooltip', tooltip, ...
+                        'icon', this.encodeIcon(fullfile(iTransForm.Root, iTransForm.Folder, iTransForm.Icon)));
                 end
                 groups{si} = struct('title', tS, 'items', {items});
             end
@@ -707,8 +750,9 @@ classdef AlakazamRibbon < handle
     end
 
     methods (Static)
-        function transInfo = ScanTransformations(transRoot)
-        %SCANTRANSFORMATIONS  The manifests found under TRANSROOT.
+        function transInfo = ScanTransformations(transRoots)
+        %SCANTRANSFORMATIONS  The manifests found under TRANSROOTS (one folder,
+        %   or several in order of precedence), each with .Folder and .Root.
         %
         %   A TEST SEAM, and the reason it exists is worth stating. Deciding
         %   which folders are transformations is a pure function of a
@@ -717,7 +761,7 @@ classdef AlakazamRibbon < handle
         %   when it broke it broke at startup: the exception was thrown
         %   before the main window existed, so the app did not open at all.
         %   Anything that runs that early should be testable without a UI.
-            transInfo = getTransInfos(transRoot);
+            transInfo = getTransInfos(transRoots);
         end
     end
 end
@@ -729,7 +773,14 @@ function info = getIndividualTransInfos(transformName, transRoot)
 %   its manifest's file stem, <transformName>.json). Returns INFO, the
 %   decoded manifest struct, with INFO.Folder set to TRANSFORMNAME (== the
 %   transform id / EEG.Call), so the manifest's own display Name can differ
-%   from the folder without breaking the icon lookup or the dispatch id.
+%   from the folder without breaking the icon lookup or the dispatch id, and
+%   INFO.Root to TRANSROOT, so the icon is read from the right folder.
+%
+%   NORMALISED TO THE SIX FIELDS, plus Version, Folder and Root. A plugin's
+%   manifest may carry fields the built-in ones do not (Version, Requires,
+%   Recalculable), and struct arrays with different fields cannot be
+%   concatenated: one plugin with an extra field would otherwise stop the
+%   ribbon, and the app, from being built.
     transformName = char(transformName);
 
     manifestFile = dir(fullfile(transRoot, transformName, [transformName '.json']));
@@ -739,8 +790,8 @@ function info = getIndividualTransInfos(transformName, transRoot)
     % and the warning says which folder to look at.
     if isempty(manifestFile)
         warning('Alakazam:AlakazamRibbon', ...
-            ['"%s" is under Transformations but has no %s.json manifest, so it is ' ...
-             'not offered in the ribbon.'], transformName, transformName);
+            ['"%s" in %s has no %s.json manifest, so it is not offered in the ' ...
+             'ribbon.'], transformName, transRoot, transformName);
         info = struct([]);
         return;
     end
@@ -749,14 +800,52 @@ function info = getIndividualTransInfos(transformName, transRoot)
     raw = fread(fid, inf);
     fclose(fid);
 
-    info = jsondecode(char(raw'));
+    try
+        decoded = jsondecode(char(raw'));
+    catch err
+        warning('Alakazam:AlakazamRibbon', ...
+            '%s could not be read (%s), so "%s" is not offered in the ribbon.', ...
+            manifestFile, err.message, transformName);
+        info = struct([]);
+        return;
+    end
+    info = struct();
+    for field = {'Name', 'Description', 'Entry', 'Icon', 'Section', 'Category', 'Version'}
+        info.(field{1}) = '';
+        if isstruct(decoded) && isfield(decoded, field{1}) && ~isempty(decoded.(field{1}))
+            value = decoded.(field{1});
+            if isnumeric(value)
+                value = num2str(value);   % "Version": 1.2, written without quotes
+            end
+            info.(field{1}) = char(string(value));
+        end
+    end
     info.Folder = transformName;
+    info.Root = char(transRoot);
 end
 
-function transInfo = getTransInfos(transRoot)
-%GETTRANSINFOS  Every transformation's manifest under TRANSROOT, as a
+function transInfo = getTransInfos(transRoots)
+%GETTRANSINFOS  Every transformation's manifest under TRANSROOTS, as a
 %   struct array (one entry per subfolder; +package and @class folders are
-%   not transformations and are skipped).
+%   not transformations and are skipped). With several roots, the first to
+%   offer a folder name keeps it: the built-in root comes first, so a plugin
+%   folder of the same name is passed over, with a warning.
+    transInfo = {};
+    seen = {};
+    for root = cellstr(transRoots)
+        [infos, seen] = getRootTransInfos(root{1}, seen);
+        transInfo = [transInfo, infos]; %#ok<AGROW>
+    end
+    transInfo = [transInfo{:}];
+end
+
+function [transInfo, seen] = getRootTransInfos(transRoot, seen)
+%GETROOTTRANSINFOS  The manifests under one root, as a cell row, passing over
+%   folder names in SEEN and adding its own.
+    transInfo = {};
+    if ~isfolder(transRoot)
+        return;
+    end
     entries = dir(fullfile(transRoot, '.'));
     folderNames = {entries([entries.isdir]).name};
     % EXCLUDED BY SHAPE, NOT BY NAME. A folder beginning with + or @ is a
@@ -769,13 +858,18 @@ function transInfo = getTransInfos(transRoot)
     isReserved = startsWith(folderNames, '+') | startsWith(folderNames, '@');
     folderNames = folderNames(~isReserved & ~ismember(folderNames, {'.', '..'}));
 
-    transInfo = {};
     for folderName = folderNames
+        if ismember(folderName{1}, seen)
+            warning('Alakazam:AlakazamRibbon', ...
+                ['"%s" in %s is not offered in the ribbon: a transformation of that ' ...
+                 'name is already offered.'], folderName{1}, transRoot);
+            continue;
+        end
         info = getIndividualTransInfos(folderName{1}, transRoot);
         if isempty(info)
             continue;   % no manifest: warned about above, not offered
         end
         transInfo{end+1} = info; %#ok<AGROW>
+        seen{end+1} = folderName{1}; %#ok<AGROW>
     end
-    transInfo = [transInfo{:}];
 end

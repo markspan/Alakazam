@@ -114,16 +114,30 @@ function estimate = computeEstimates(EEG, opts)
         solveOpts.Normals     = normals;
     end
 
+    % THE NOISE MODEL, one for every bin: the baseline covariance when every
+    % bin carries one (and dSPM is asked for), else the identity. Mixing the
+    % two within one estimate would make its bins incomparable.
+    noiseCovs = arrayfun(@(b) TransTools.BinNoiseCovariance(EEG, b, resolvedLabels), ...
+        1:numel(bins), 'UniformOutput', false);
+    opts.NoiseModel = TransTools.ResolveNoiseModel( ...
+        TransTools.FieldOr(opts, 'NoiseCovariance', 'auto'), opts.Method, ...
+        all(~cellfun(@isempty, noiseCovs)), 'Alakazam:SourceEstimate');
+    opts.SNR = TransTools.FieldOr(opts, 'SNR', 3);
+    solveOpts.SNR = opts.SNR;
+
     % Every bin shares one time base -- the same window and rate applied to
     % the same EEG.times -- so it is settled once, before the loop, and the
     % output can be allocated whole rather than on the first pass.
     [~, times] = prepareBin(EEG, reorder, 1, opts);
     values  = zeros(numel(vertexLabels), numel(times), numel(bins));
     binInfo = repmat(struct('residualVariance', NaN, 'scaleLabel', '', ...
-        'scaleNote', '', 'lambda', NaN), 1, numel(bins));
+        'scaleNote', '', 'lambda', NaN, 'noiseModel', ''), 1, numel(bins));
 
     for b = 1:numel(bins)
         binValues = prepareBin(EEG, reorder, b, opts);
+        if strcmp(opts.NoiseModel, 'baseline')
+            solveOpts.NoiseCov = noiseCovs{b};
+        end
         [source, info] = TransTools.InverseSolution(binValues, leadfield, elec, headmodel, ...
             opts.Method, solveOpts);
         values(:, :, b) = source;
@@ -133,7 +147,7 @@ function estimate = computeEstimates(EEG, opts)
         % number would defeat the point of having stored the estimate.
         binInfo(b) = struct('residualVariance', info.ResidualVariance, ...
             'scaleLabel', info.ScaleLabel, 'scaleNote', info.ScaleNote, ...
-            'lambda', info.Lambda);
+            'lambda', info.Lambda, 'noiseModel', info.NoiseModel);
     end
 
     estimate = struct();

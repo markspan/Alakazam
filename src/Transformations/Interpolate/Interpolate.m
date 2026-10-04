@@ -55,6 +55,12 @@ if isfield(options, 'method') && ~isempty(options.method)
 end
 
 EEG = pop_interp(input, badIdx, method);
+% An interpolated channel is a mixture of the others, so its noise is no
+% longer the noise the average's covariance describes.
+if isfield(EEG, 'noiseCov') && ~isempty(EEG.noiseCov)
+    EEG.noiseCov = [];
+    EEG.noiseCovInfo = [];
+end
 % pop_interp rebuilds the struct through eeg_checkset, which does not carry
 % Alakazam's own two fields across, so restore them. TransTools.FieldOr, not
 % a bare input.DataType: interpolating does not change what kind of data this

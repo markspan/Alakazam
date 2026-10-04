@@ -278,7 +278,7 @@ classdef Brain3DView < AlakazamView
             end
         end
 
-        function key = storedEstimateKey(this, method, signed)
+        function key = storedEstimateKey(this, method, signed, noiseModel)
         %STOREDESTIMATEKEY  What this view would need a stored estimate to be.
         %
         %   The window and rate are deliberately EMPTY. This view scrubs the
@@ -307,6 +307,8 @@ classdef Brain3DView < AlakazamView
                 'Method',      method, ...
                 'Orientation', orientation, ...
                 'RegParam',    0.05, ...
+                'NoiseModel',  noiseModel, ...
+                'SNR',         3, ...
                 'TimeWindow',  [], ...
                 'ResampleHz',  []));
         end
@@ -535,8 +537,19 @@ classdef Brain3DView < AlakazamView
             % Asked BEFORE the data is reordered and the surface normals are
             % built: both are pure setup for an inverse that may not need to
             % happen, and the normals in particular are not free.
+            % dSPM is normalised by the bin's baseline noise covariance when
+            % the dataset carries one, as SourceEstimate does by default.
+            noiseCov = [];
+            if strcmp(method, 'mne')
+                noiseCov = TransTools.BinNoiseCovariance(eeg, this.BinIndices(this.SelectedBin), ...
+                    this.SourceResolvedLabels);
+            end
+            noiseModel = 'identity';
+            if ~isempty(noiseCov)
+                noiseModel = 'baseline';
+            end
             [stored, storedInfo] = SourceCache.Lookup(eeg, ...
-                this.binLabelFor(this.SelectedBin), this.storedEstimateKey(method, signed));
+                this.binLabelFor(this.SelectedBin), this.storedEstimateKey(method, signed, noiseModel));
 
             if ~isempty(stored)
                 this.SourcePower = stored;
@@ -568,6 +581,10 @@ classdef Brain3DView < AlakazamView
                     solveOpts.Normals     = this.SourceNormals;
                 end
 
+                if ~isempty(noiseCov)
+                    solveOpts.NoiseCov = noiseCov;
+                    solveOpts.SNR = 3;
+                end
                 [this.SourcePower, info] = TransTools.InverseSolution(values, this.SourceLeadfield, ...
                     this.SourceElec, this.SourceHeadmodel, method, solveOpts);
             end
