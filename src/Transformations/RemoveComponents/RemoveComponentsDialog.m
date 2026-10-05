@@ -146,10 +146,13 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
         try
             snippet = act(:, 1);
             nShow   = min(numel(snippet), round(10 * srate));
-            snippet = snippet(1:nShow);
-            t = (0:nShow - 1) / srate;
+            % plot the whole time course. This enables the user to navigate
+            % through the data.
+            % snippet = snippet(1:nShow);
+            % t = (0:nShow - 1) / srate;
+            t = (0:numel(snippet) - 1) / srate;
             plot(axTime, t, snippet, 'Color', accentColor, 'LineWidth', 1);
-            xlim(axTime, [0, max(t(end), eps)]);
+            xlim(axTime, [0, max(t(10*srate), eps)]);
             title(axTime, 'Activation (first 10 s)');
         catch err
             cla(axTime);
