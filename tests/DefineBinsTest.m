@@ -353,6 +353,21 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyEqual(opts.epoch.lo, -40);
         end
 
+        function eachTrialRecordsTheSampleItStartsAt(testCase)
+        %EACHTRIALRECORDSTHESAMPLEITSTARTSAT  The recording's samples hold
+        %   their own numbers, so the first point of every trial must be the
+        %   sample its epochStart names.
+            EEG = epochFixture();
+            EEG.data = repmat(1:500, 2, 1);
+
+            result = DefineBins(EEG, struct('script', ...
+                ['epoch [-40,40] ms' newline 'bin 1 "Targets" 112']));
+
+            testCase.verifyEqual(result.etc.alz.epochStart, [90 290], ...
+                'The events at 100 and 300, less 40 ms at 250 Hz.');
+            testCase.verifyEqual(squeeze(result.data(1, 1, :))', result.etc.alz.epochStart);
+        end
+
         function anEpochCanBeGivenInSamples(testCase)
             EEG = epochFixture();
 

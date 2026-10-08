@@ -119,9 +119,10 @@ epoch [-200,800] ms
 bin 1 "Targets" 112
 ```
 
-Its unit is `ms` (the default) or `samples`, never `events`, and an epoch
-keeps both of its ends, so round and square brackets mean the same here. It
-may stand anywhere in the script, once. When the script has an `epoch` line,
+Its unit is `ms` (the default) or `samples`, never `events`. An epoch starts
+at its first bound and stops one sample before its second, as EEGLAB cuts it:
+`[-200,800] ms` at 500 Hz is 500 samples, from -200 to 798 ms. Round and
+square brackets mean the same here. It may stand anywhere in the script, once. When the script has an `epoch` line,
 it wins over the **Epoch start** and **Epoch stop** fields, and the summary
 after the run says so if the fields held something else; this is what lets a
 script, a `.binscript` file or a template carry its own epoch.

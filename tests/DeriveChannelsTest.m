@@ -128,6 +128,52 @@ classdef DeriveChannelsTest < matlab.unittest.TestCase
                 'Alakazam:Derivations');
         end
 
+        function aQuotedNameIsTheChannelOfThatName(testCase)
+        %AQUOTEDNAMEISTHECHANNELOFTHATNAME  BrainVision caps name their
+        %   channels by number, as FieldTrip's ERP tutorial recording does:
+        %   its vertical EOG is LEOG minus channel 53. A hyphenated label is
+        %   reached the same way.
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'53', 'LEOG', 'EOG-R'});
+
+            out = DeriveChannels(EEG, struct('derivations', ...
+                sprintf('let eogv = LEOG - "53"\nlet eogh = "EOG-R" - LEOG')));
+
+            testCase.verifyEqual(out.data(4, :, :), EEG.data(2, :, :) - EEG.data(1, :, :), 'AbsTol', 1e-12);
+            testCase.verifyEqual(out.data(5, :, :), EEG.data(3, :, :) - EEG.data(2, :, :), 'AbsTol', 1e-12);
+        end
+
+        function aBareNumberThatNamesAChannelIsRefused(testCase)
+        %ABARENUMBERTHATNAMESACHANNELISREFUSED  Read as the number, "LEOG -
+        %   53" gives a channel that looks like an EOG and is not; read as the
+        %   channel, "/ 2" would halve nothing. Neither is guessed.
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'2', '53', 'LEOG'});
+
+            for text = {'let eogv = LEOG - 53', 'let half = LEOG / 2'}
+                testCase.verifyError(@() DeriveChannels(EEG, struct('derivations', text{1})), ...
+                    'Alakazam:Derivations', text{1});
+            end
+            out = DeriveChannels(EEG, struct('derivations', 'let half = LEOG / 2.0'));
+            testCase.verifyEqual(out.data(4, :, :), EEG.data(3, :, :) / 2, 'AbsTol', 1e-12, ...
+                'Written as 2.0 it is the number.');
+        end
+
+        function aNumberNamingNoChannelIsANumber(testCase)
+            EEG = makeTestEEG('nbchan', 2, 'labels', {'C3', 'C4'});
+
+            out = DeriveChannels(EEG, struct('derivations', 'let mean34 = (C3 + C4) / 2'));
+
+            testCase.verifyEqual(out.data(3, :, :), (EEG.data(1, :, :) + EEG.data(2, :, :)) / 2, ...
+                'AbsTol', 1e-12);
+        end
+
+        function anUnclosedQuoteIsRefused(testCase)
+            EEG = makeTestEEG('nbchan', 2, 'labels', {'53', 'LEOG'});
+
+            testCase.verifyError( ...
+                @() DeriveChannels(EEG, struct('derivations', 'let eogv = LEOG - "53')), ...
+                'Alakazam:Derivations');
+        end
+
         function aDatasetWithNoChannelListIsRefused(testCase)
             testCase.verifyError( ...
                 @() DeriveChannels(struct('data', zeros(2, 10)), ...

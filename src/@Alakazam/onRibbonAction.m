@@ -46,6 +46,8 @@ function onRibbonAction(this, id)
             this.onExportSpectral();
         case 'analysisScript'
             this.onExportAnalysisScript();
+        case 'fieldtripScript'
+            this.onExportFieldTripScript();
         case 'dataQuality'
             this.onExportDataQuality();
         case 'viewTabs'

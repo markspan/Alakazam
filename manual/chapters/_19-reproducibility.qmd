@@ -103,6 +103,37 @@ The exported script reads each recording from the workspace cache, as it
 stood just after import; comments in its setup section give the lines that
 read the raw files instead, for EEGLAB, BrainVision and ERPLAB formats.
 
+## Export as FieldTrip {#sec-export-fieldtrip}
+
+**Export/Report > Reproducibility > Export as FieldTrip** writes the same
+analysis in FieldTrip's own functions [@oostenveld2011]. The script reads
+each raw recording with `ft_preprocessing` and needs only FieldTrip to run:
+a record of the method in a toolbox many readers know, and a place to go on
+from in it.
+
+Not every step has a FieldTrip counterpart, so each one says how faithful it
+is, in the script's header and again where it is written:
+
+| Status | Meaning | Steps |
+|---------------|-------------------------------------|---------------------------|
+| exact | FieldTrip computes what Alakazam computed | ReRef, Filter, Derive Channels (a weighted sum), SelectData (channels), Baseline, Average with its combination bins |
+| decision | FieldTrip cannot make this choice, so the script reads back the one Alakazam made | DefineBins (which samples became trials, in which bins), ManualReject, ArtefactDetect, AutoReject (which trials were rejected) |
+| approximate | close, with the difference said | a rejection that also changed channels within trials |
+| not translated | no counterpart: a marked block, a warning when it runs, and the script carries on without the step | everything else, ICA and GEDAI among them |
+
+: How the FieldTrip export carries each step. {#tbl-export-fieldtrip}
+
+The decisions are written beside the script, one table of trials per
+recording (`<name>_trials.tsv`): each trial's first and last sample, its
+bins, and a column per rejecting step. Filter is exact because its
+windowed sinc is built by the same functions in both toolboxes: the script
+asks FieldTrip's `firws` for the order, cutoff and Kaiser deviation
+Alakazam used, which gives the identical kernel. Every exact step is checked
+by a test that runs both on the same recording. A script made only of exact
+steps and decisions gives Alakazam's numbers: on FieldTrip's own ERP
+tutorial (@sec-example-fieldtrip-erp) it reproduces the averages to
+0.000003 µV, which is the single precision EEGLAB reads the file in.
+
 ## Scripting {#sec-scripting}
 
 Every transformation is an ordinary MATLAB function with the same contract:

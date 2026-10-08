@@ -124,7 +124,8 @@ all of which replay the stored options rather than reopening the dialogs:
 - **Templates**: a branch written to a `.alztemplate` file and applied later,
   in any workspace.
 - **Export as Code**: the whole workspace written as a MATLAB script
-  (@sec-export-code).
+  (@sec-export-code), or, with **Export as FieldTrip**, as a FieldTrip one
+  (@sec-export-fieldtrip).
 
 Options are stored by channel and bin **label**, not by position, so a
 pipeline replays correctly on a recording whose channels are in a different

@@ -18,7 +18,9 @@ a file of its kind was last loaded from.
    replays each template on the recording it was written for and compares
    with the result recorded when it was checked, or, for the two with no
    recorded result (`dimigen-rift-simplified`, `ReadingDeconvolution`),
-   checks that it runs end to end.
+   checks that it runs end to end. `fieldtrip/preprocessing-erp` is checked
+   against FieldTrip itself instead, run beside it on the same recording
+   (`tests/FieldTripTutorialErpTest.m`).
 2. **A measurement window says where it comes from.** A window taken from
    a library is an a priori choice only if its source is known; one chosen
    after looking at the data makes the statistics optimistic in a way no
@@ -49,6 +51,7 @@ a file of its kind was last loaded from.
 | `luck/ch08-N2pc.alztemplate` | Luck chapter 8: N2pc, with a derived PO8 - PO7 channel | ERP CORE N2pc |
 | `luck/ch09-MMN-with-ICA.alztemplate` | Luck chapter 9: MMN after ICA correction | ERP CORE MMN |
 | `luck/ch10-LRP.alztemplate` | Luck chapter 10: response-locked LRP, with a derived C4 - C3 channel | ERP CORE flankers |
+| `fieldtrip/preprocessing-erp.alztemplate` | FieldTrip's ERP tutorial: linked mastoids, bipolar EOG, 100 Hz low-pass, the tutorial's eight rejected trials, both tasks and their difference | FieldTrip's `s04` recording ([`Docs/fieldtrip.md`](../Docs/fieldtrip.md)) |
 
 The Luck templates were each replayed end to end on their chapter's data
 before they were shipped; see [`luck/README.md`](templates/luck/README.md)

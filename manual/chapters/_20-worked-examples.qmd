@@ -1,9 +1,10 @@
 # Worked examples {#sec-worked-examples}
 
-This chapter gives four complete pipelines: recipes for a P300, an LRP and
-an MMN design, and a full run on published data, the ERP CORE N400
-experiment, ending in a rendered report. The overlap-correction example is in
-@sec-deconvolution.
+This chapter gives five complete pipelines: recipes for a P300, an LRP and
+an MMN design, and two runs on published data: the ERP CORE N400
+experiment, ending in a rendered report, and FieldTrip's own ERP tutorial,
+compared with FieldTrip run on the same recording. The overlap-correction
+example is in @sec-deconvolution.
 
 Each recipe is an ordinary chain of transformations, so once built on one
 recording it replays across a study with **Apply to All Raw Files** or a
@@ -212,3 +213,99 @@ textbook N400 pattern [@kutas1980; @kappenman2021], while the two prime
 conditions, which carry no relation yet, sit near zero. The difference bin's
 test is the single-number version of the same finding. The wide interval on
 $\eta^2$ reflects the ten subjects, not a weak effect.
+
+## FieldTrip's ERP tutorial, compared with FieldTrip {#sec-example-fieldtrip-erp}
+
+FieldTrip [@oostenveld2011] teaches ERP preprocessing on one recording, in
+its tutorial `preprocessing_erp`. The repository's
+`fieldtrip/preprocessing-erp.alztemplate` does the same analysis, and the
+two were compared on that recording: with the same filter they give the same
+averages to the sixth decimal of a microvolt.
+
+**The data.** One participant reads nouns and judges each in one of two
+tasks, affective (positive or negative) or ontological (animal or human),
+recorded at 500 Hz with a 64-channel BrainVision cap against the left
+mastoid. The channels are named by number, 1 to 64, except the right
+mastoid (`RM`) and an eye channel (`LEOG`). The files, `s04.vhdr`, `s04.vmrk`
+and `s04.eeg` (143 MB), are at download.fieldtriptoolbox.org, under
+`tutorial/preprocessing_erp`.
+
+**The template.** The tutorial's steps, in eight transformations:
+
+1. **ReRef** to the linked mastoids, `LM` and `RM`, with `LM`, the
+   recording's own reference, reconstructed as the implicit reference, and
+   both kept as channels (@sec-tr-reref).
+2. **Derive Channels**: the two bipolar EOG channels (@sec-tr-derivechannels).
+   A channel named by a number goes in double quotes, since a bare `53` is a
+   number (@fig-fterp-derive-dialog).
+
+   ```
+   let eogv = LEOG - "53"
+   let eogh = "25" - "57"
+   ```
+
+3. **SelectData** removes the channels the EOG was made from (25, 53, 57 and
+   `LEOG`), the unused 62 to 64, and `LM`, leaving the tutorial's 59
+   (@sec-tr-selectdata).
+4. **Filter**: a low-pass at 100 Hz (@sec-tr-filter).
+5. **DefineBins**, an epoch from -200 to 1000 ms around each word (`S141`),
+   binned by the task code that follows it, as the tutorial's trial function
+   reads it (@sec-tr-definebins):
+
+   ```
+   epoch [-200,1000] ms
+   bin 1 "Affective"   : "S141" and adjacent("S131")
+   bin 2 "Ontological" : "S141" and adjacent("S132")
+   bin 3 "Affective - Ontological" = bin 1 - bin 2
+   ```
+
+6. **Baseline**, -200 to 0 ms (@sec-tr-baseline).
+7. **ManualReject**, whole epoch: trials 22, 42, 89, 90, 92, 126, 136 and 150,
+   the ones the tutorial's summary view picks out by their variance
+   (@sec-tr-manualreject). They are stored for this recording; on another,
+   flag the trials by hand.
+8. **Average**: 92 trials in each task (@sec-tr-average).
+
+![The Derive Channels step of the template: the bipolar EOG channels, with the numbered channels in double quotes.](images/fterp-derive-dialog.png){#fig-fterp-derive-dialog}
+
+**Running it.** Put the three files in a workspace's raw folder, select the
+recording, and **Apply Template** with the file.
+
+![The template applied to the tutorial's recording: the eight steps in the tree, and the average at channel 28, on the midline. The ontological task (red) runs about 2 µV more positive than the affective one (blue) through most of the epoch after the word, which the difference (teal) shows.](images/fterp-main.jpg){#fig-fterp-main}
+
+**How close it comes.** The averages were compared with FieldTrip's, run
+step by step as the tutorial writes them, on every channel, both tasks and
+their difference. The averages themselves have an RMS of about 5 µV.
+
+| Comparison | Largest difference | RMS difference |
+|--------------------------------------------|----------------|----------------|
+| No low-pass on either side | 0.000003 µV | 0.0000002 µV |
+| FieldTrip's Butterworth on both, on the whole recording | 0.000003 µV | 0.0000001 µV |
+| As shipped: Alakazam's FIR against the tutorial | 1.09 µV | 0.026 µV |
+
+: The template against FieldTrip's tutorial, on its recording. {#tbl-fieldtrip-erp}
+
+Every step but the filter gives the same result: re-referencing, deriving,
+selecting and baseline correction are linear, so it does not matter that
+Alakazam applies them to the continuous recording and FieldTrip within each
+trial [@luckOrder]. What remains with the same filter is EEGLAB reading the
+file in single precision and FieldTrip in double.
+
+The filter accounts for the rest, in two ways. The tutorial's low-pass is
+FieldTrip's default, a sixth-order Butterworth run forward and backward, and
+the template's is Filter's Kaiser windowed-sinc FIR; their designs differ by
+about 0.02 µV RMS here. And the tutorial filters each 1.2 s trial on its
+own, so at a trial's first and last samples the filter has nothing beyond
+the edge to work with: that is the 1 µV, at the first sample. Filtering the
+continuous recording before cutting the trials, as Alakazam does, avoids it.
+
+One convention differs as well. FieldTrip's trial keeps both ends, 601
+samples to 1000 ms; DefineBins cuts as EEGLAB does, stopping one sample
+before the end, 600 samples to 998 ms. The comparison is on the 600 both
+have.
+
+`FieldTripTutorialErpTest` replays the template and runs FieldTrip's
+tutorial beside it, and repeats the comparison, so a change that moves the
+template's result away from FieldTrip's fails a test. `Docs/fieldtrip.md` in
+the repository has the details, with the same check for Dipole Fit and
+Beamformer against FieldTrip's source tutorials.

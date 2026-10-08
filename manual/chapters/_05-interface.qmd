@@ -77,6 +77,7 @@ to a CSV. @sec-grand-averages describes all three.
 | | **Source Cluster** | The same test over the cortical surface (@sec-source-cluster). |
 | Data Quality | **Data Quality Report** | Trial loss, noise and measurement error per subject and condition (@sec-data-quality). |
 | Reproducibility | **Export as Code** | The whole workspace as a MATLAB script (@sec-export-code). |
+| | **Export as FieldTrip** | The same analysis as a FieldTrip script, each step marked exact, read back or not translated (@sec-export-fieldtrip). |
 
 : The **Export/Report** tab. {#tbl-ribbon-export}
 

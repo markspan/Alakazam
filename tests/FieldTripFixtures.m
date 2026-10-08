@@ -33,6 +33,26 @@ classdef FieldTripFixtures
                 'FieldTrip is not installed, so the source-modelling path cannot be exercised.');
         end
 
+        function folder = dataFolder(relative, files)
+        %DATAFOLDER  Where a downloaded dataset is, or '' when it is nowhere.
+        %   RELATIVE is its folder under the data folder (for example
+        %   'FieldTrip/natmeg2014/dipolefitting'), FILES the files that must
+        %   all be there. The data folder is the ALAKAZAM_DATA environment
+        %   variable, the repository's Data folder, or D:\data, in that
+        %   order. Like require, this never downloads: a test assumes on a
+        %   non-empty result and says where the data are to be had.
+            root = fileparts(fileparts(mfilename('fullpath')));
+            candidates = {getenv('ALAKAZAM_DATA'), fullfile(root, 'Data'), 'D:\data'};
+            folder = '';
+            for c = candidates(~cellfun(@isempty, candidates))
+                where = fullfile(c{1}, relative);
+                if all(cellfun(@(f) isfile(fullfile(where, f)), cellstr(files)))
+                    folder = where;
+                    return;
+                end
+            end
+        end
+
         function varargout = quietly(fn)
         %QUIETLY  Run FN with its console output swallowed.
         %   FieldTrip narrates every inverse call ("using precomputed

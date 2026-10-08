@@ -42,6 +42,8 @@ The focus of Alakazam is on **education** and on **reusability in research**.
 - **From clicking to programming.** **Export as Code** turns a pipeline
   built in the interface into a readable MATLAB script, written as the
   EEGLAB calls it corresponds to wherever that is a faithful translation.
+  **Export as FieldTrip** writes the same analysis in FieldTrip's own
+  functions, every step marked as exact, read back, or not translated.
 
 ### For reusable research
 
@@ -58,9 +60,10 @@ The focus of Alakazam is on **education** and on **reusability in research**.
   states what each cleaning step did to each participant.
 - **Checked against published results.** The ERP pipeline was compared
   step by step with ERPLAB on the textbook's data, and the frequency-tagging
-  analysis with a published RIFT study; how close each comparison comes is
-  written down in [`Docs/luck.md`](Docs/luck.md) and
-  [`Docs/dimigen.md`](Docs/dimigen.md).
+  analysis with a published RIFT study, and the dipole fit and beamformer
+  with FieldTrip's tutorials; how close each comparison comes is written
+  down in [`Docs/luck.md`](Docs/luck.md), [`Docs/dimigen.md`](Docs/dimigen.md)
+  and [`Docs/fieldtrip.md`](Docs/fieldtrip.md).
 
 ## What it does
 

@@ -139,9 +139,11 @@ bin 1 "Targets" 112
 
 An `epoch` line sets the window cut around every matched event, shared by
 all bins, in the same interval notation as a relation's window: `ms` (the
-default) or `samples`, never `events`. An epoch keeps both of its ends, so
-round and square brackets mean the same here. It can stand anywhere in the
-script, once.
+default) or `samples`, never `events`. An epoch starts at its first bound and
+stops one sample before its second, as EEGLAB's `epoch.m` cuts it: `[-200,800]
+ms` at 500 Hz is 500 samples, from -200 to 798 ms. (FieldTrip's trial
+definitions usually keep the last sample too.) Round and square brackets mean
+the same here. It can stand anywhere in the script, once.
 
 The two **Epoch start (ms)** / **Epoch stop (ms)** fields above the editor
 do the same job; when the script has an `epoch` line, the line wins, and the

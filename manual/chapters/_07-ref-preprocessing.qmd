@@ -528,7 +528,11 @@ let RMSfront = sqrt((Fz*Fz + Cz*Cz) / 2)
 
 The grammar is small and is parsed, never evaluated as MATLAB: `+ - * /` on
 channels and numbers, unary minus, parentheses, `abs()` and `sqrt()`, and `%`
-for a comment. The arithmetic is elementwise, so the step runs on continuous,
+for a comment. A channel whose name is not a plain word goes in double
+quotes: a number, as BrainVision caps name their channels (`let eogv = LEOG -
+"53"`), or a name with a hyphen or a space. A bare number that is also the
+name of a channel is refused rather than read as one or the other; write
+`"53"` for the channel or `53.0` for the number. The arithmetic is elementwise, so the step runs on continuous,
 epoched and averaged data alike. The block is checked when OK is pressed,
 against this dataset's own channels and by the same parser the step runs, so
 a typo, an unknown channel or a name used twice is reported in the dialog

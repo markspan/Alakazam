@@ -11,7 +11,8 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
 %   .node), so the pictures show the settings the templates use. The
 %   recordings are the ones DATA.md lists: ERP CORE (Kappenman et al.,
 %   2021) via Luck's textbook, the RIFT study (Dimigen et al., 2025),
-%   Ehinger & Dimigen's (2019) face data and EYE-EEG's reading data.
+%   Ehinger & Dimigen's (2019) face data, EYE-EEG's reading data and
+%   FieldTrip's ERP tutorial recording.
 %
 %   A SHOT is one picture: a transformation's dialog, a result view, the
 %   main window in some state, or a dialog the app itself opens. Its name is
@@ -35,6 +36,7 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
     rift = 'library/templates/dimigen-rift-simplified.alztemplate';
     face = 'library/templates/FaceSaccadesDeconvolution.alztemplate';
     reading = 'library/templates/ReadingDeconvolution.alztemplate';
+    fterp = 'library/templates/fieldtrip/preprocessing-erp.alztemplate';
     init = struct('Param', 'Init');
 
     % ---- options the templates do not carry -------------------------------
@@ -186,6 +188,12 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
     datasets.reading = dataset('reading', {'Data/reading/reading_eeg.set', ...
         'Data/reading/reading_eeg.fdt', 'Data/reading/reading_eeg.asc'}, { ...
         stg('joined', 'raw', 'EyeTracking', tpl(reading, 1))});
+    % FieldTrip's ERP tutorial recording, with its template applied for the
+    % main window's picture (chapter 20).
+    erpFiles = strcat('Data/FieldTrip/preprocessing_erp/s04', {'.vhdr', '.vmrk', '.eeg'});
+    datasets.fterp = dataset('fterp', erpFiles, { ...
+        stg('reref', 'raw', 'ReRef', tpl(fterp, 1))});
+    datasets.fterp.template = fterp;
     datasets.ui = dataset('ui', 'Data/Luck/ch2/6_N400_preprocessed.set', {});
     datasets.ui.template = ch02;          % a real branch in the tree
     datasets.group = struct('key', 'group', 'kind', 'workspace', 'workspace', 'Chapter3.wksp', ...
@@ -212,6 +220,9 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
         shot('ga-design', 'group', 'appdialog', 'action', 'showDesign', 'settle', 6), ...
         shot('ga-grouping', 'group', 'appdialog', 'action', 'editSubjects', 'settle', 6), ...
         shot('ga-report', 'group', 'window', 'select', 'Data Quality (2 subjects) - 25-Sep-2026 20:16', 'tree', 'ReportsTree', 'crop', 'plot'), ...
+        ... % Worked examples: FieldTrip's ERP tutorial (chapter 20).
+        shot('fterp-main', 'fterp', 'window', 'select', 'Average', 'channel', '28', 'crop', 'window'), ...
+        shot('fterp-derive-dialog', 'fterp', 'dialog', 'transform', 'DeriveChannels', 'input', 'reref', 'seed', tpl(fterp, 2)), ...
         ... % Preprocessing.
         shot('filter-dialog', 'n400', 'dialog', 'transform', 'Filter', 'input', 'raw', 'seed', filterOpts), ...
         shot('reref-dialog', 'n400unref', 'dialog', 'transform', 'ReRef', 'input', 'raw', 'seed', rerefOpts), ...

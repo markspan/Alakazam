@@ -395,7 +395,12 @@ enforces them:
 missing) replays each template on its own data through `TransTools.invoke`,
 as Apply Template does, and compares with the numbers recorded in
 `Docs/luck.md`, `Docs/dimigen.md` and chapters 17 and 20 of the manual. A
-new template with a recorded result gets a case there.
+new template with a recorded result gets a case there. A template that
+reproduces another toolbox's tutorial is compared with that toolbox run
+beside it instead, which no recorded number can go stale against:
+`FieldTripTutorialErpTest` for `fieldtrip/preprocessing-erp`. Such tests
+find their data through `FieldTripFixtures.dataFolder` (`ALAKAZAM_DATA`,
+the repository's `Data`, or `D:\data`) and never download it.
 
 A measurement window from the library is an a priori choice only when its
 source is known, so a window with no source says so rather than borrowing a

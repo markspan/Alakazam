@@ -331,7 +331,10 @@ channels (and earlier-derived ones), which you can then name in any window's
 formula language is deliberately small and is parsed, never run as code (a
 saved `.alm` is shared and loaded from disk): channel names, `+ - * /`,
 parentheses, unary `-`, the elementwise functions `abs` and `sqrt`, and numeric
-literals. Blank lines and text after `%` are ignored.
+literals. A channel whose name is not a plain word (a number, or one with a
+hyphen or a space) goes in double quotes, `"53"`; a bare number that is also a
+channel's name is refused rather than guessed. Blank lines and text after `%`
+are ignored.
 
 Unlike pooling, a derived channel is **appended to the dataset**, so it also
 appears on the ERP line plot and flows into grand averages, not just the

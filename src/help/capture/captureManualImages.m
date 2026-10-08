@@ -27,7 +27,8 @@ function captureManualImages(varargin)
 %     'Output'    folder to write to (default: manual/images)
 %     'Scratch'   folder for the scratch workspaces (default: tempdir)
 %
-%   Run it from the repository root, with the datasets in DATA.md in place:
+%   Run it from the repository root, with the datasets in DATA.md in place
+%   (under Data/, or in ALAKAZAM_DATA or D:\data, see dataFile):
 %       addpath('src/help/capture'); captureManualImages();
 %
 %   See also MANUALSHOTS, TRANSTOOLS.INVOKE, EXPORTAPP.
@@ -100,7 +101,7 @@ function ctx = openDataset(repo, ds, folder)
             mkdir(fullfile(folder, d{1}));
         end
         for f = reshape(cellstr(ds.files), 1, [])
-            copyfile(fullfile(repo, f{1}), fullfile(folder, 'raw'));
+            copyfile(dataFile(repo, f{1}), fullfile(folder, 'raw'));
         end
         slash = @(p) [strrep(p, '\', '/') '/'];
         spec = struct('RawDirectory', slash(fullfile(folder, 'raw')), ...
@@ -129,6 +130,23 @@ function ctx = openDataset(repo, ds, folder)
         delete(findall(groot, 'Type', 'figure', 'Name', 'Template applied'));
         closeTabs(app);
         settle(5);
+    end
+end
+
+function file = dataFile(repo, relative)
+%DATAFILE  A dataset's file: under the repository, where DATA.md puts it,
+%   or, for a path under Data/, in a data folder kept elsewhere: the
+%   ALAKAZAM_DATA environment variable, or D:\data.
+    file = fullfile(repo, relative);
+    if isfile(file)
+        return;
+    end
+    rest = regexprep(relative, '^Data[\\/]', '');
+    for root = {getenv('ALAKAZAM_DATA'), 'D:\data'}
+        if ~isempty(root{1}) && isfile(fullfile(root{1}, rest))
+            file = fullfile(root{1}, rest);
+            return;
+        end
     end
 end
 

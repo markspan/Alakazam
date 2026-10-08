@@ -17,6 +17,11 @@ function [EEG, added] = ApplyDerivations(EEG, text)
 %       unary -        negation
 %       abs( ) sqrt( ) elementwise functions
 %       numbers        scalar literals, broadcast over the waveform
+%       "name"         a channel named in double quotes: any label, such as
+%                      a number (BrainVision caps name channels 1 to 64) or
+%                      one with a hyphen or a space; a bare number that is
+%                      also a channel's name is refused rather than guessed
+%                      (refuseNumbersNamingChannels)
 %   It is parsed and evaluated directly (a small recursive-descent parser,
 %   see below), never eval-ed: a saved .alm / template is shared between
 %   users and loaded from disk, so running its text as MATLAB would be a
@@ -61,6 +66,7 @@ function [EEG, added] = ApplyDerivations(EEG, text)
                 'already exists in this dataset -- would you choose a different name?'], name));
         end
         ast = parseExpression(derivs(i).expr, name);
+        refuseNumbersNamingChannels(ast, EEG, name);
         value = evalNode(ast, @(nm) lookupChannel(EEG, nm, name));
         sources{i} = channelRows(EEG, channelNames(ast));
         EEG = appendChannel(EEG, name, value);
@@ -107,7 +113,7 @@ end
 %   expr   := term   (('+' | '-') term)*
 %   term   := factor (('*' | '/') factor)*
 %   factor := ('+' | '-')? factor  |  primary
-%   primary:= number | channel | func '(' expr ')' | '(' expr ')'
+%   primary:= number | channel | '"' label '"' | func '(' expr ')' | '(' expr ')'
 function ast = parseExpression(expr, ctx)
 %PARSEEXPRESSION  EXPR (the text right of '=') to an AST, CTX is the
 %   derivation name for error messages.
@@ -161,7 +167,10 @@ function [node, k] = parsePrimary(toks, k, ctx)
     t = toks(k);
     switch t.kind
         case 'num'
-            node = struct('type', 'num', 'val', t.val);
+            node = struct('type', 'num', 'val', t.val, 'text', t.text);
+            k = k + 1;
+        case 'quoted'
+            node = struct('type', 'chan', 'name', t.val);
             k = k + 1;
         case 'id'
             if k < numel(toks) && strcmp(toks(k + 1).kind, 'lpar')
@@ -219,6 +228,20 @@ function toks = lexExpression(s, ctx)
             name = s(i:j - 1);
             toks(end + 1) = token('id', name, name); %#ok<AGROW>
             i = j;
+        elseif c == '"'
+            % A channel named in double quotes: any label, a number or one
+            % with a hyphen or a space included, and never a function.
+            closing = find(s(i + 1:end) == '"', 1);
+            if isempty(closing)
+                throw(MException('Alakazam:Derivations', ['Derived channel "%s": a channel name ' ...
+                    'opened with " is missing its closing ".'], ctx));
+            end
+            name = s(i + 1:i + closing - 1);
+            if isempty(strtrim(name))
+                throw(MException('Alakazam:Derivations', 'Derived channel "%s": "" names no channel.', ctx));
+            end
+            toks(end + 1) = token('quoted', name, ['"' name '"']); %#ok<AGROW>
+            i = i + closing + 1;
         elseif any(c == '0123456789.')
             j = i;
             while j <= n && any(s(j) == '0123456789.')
@@ -284,6 +307,37 @@ function names = channelNames(node)
             names = [channelNames(node.left), channelNames(node.right)];
         otherwise
             names = {};
+    end
+end
+
+function texts = numberTexts(node)
+%NUMBERTEXTS  Every number literal in an AST, as it was written.
+    switch node.type
+        case 'num'
+            texts = {node.text};
+        case {'neg', 'func'}
+            texts = numberTexts(node.child);
+        case 'op'
+            texts = [numberTexts(node.left), numberTexts(node.right)];
+        otherwise
+            texts = {};
+    end
+end
+
+function refuseNumbersNamingChannels(ast, EEG, ctx)
+%REFUSENUMBERSNAMINGCHANNELS  A bare number that is also a channel's name.
+%   Some caps name their channels by number (BrainVision's 1 to 64, for
+%   one), and there "LEOG - 53" could mean channel 53 or the number 53; read
+%   as the number, it gives a channel that looks right and is not. Neither
+%   reading is guessed: the statement is refused, with both ways of saying
+%   it unambiguously.
+    for text = numberTexts(ast)
+        if any(strcmpi({EEG.chanlocs.labels}, text{1}))
+            throw(MException('Alakazam:Derivations', ['Derived channel "%s": %s is a number ' ...
+                'here, but this dataset also has a channel called "%s". Would you write "%s", ' ...
+                'in double quotes, for the channel, or %s.0 for the number?'], ...
+                ctx, text{1}, text{1}, text{1}, text{1}));
+        end
     end
 end
 

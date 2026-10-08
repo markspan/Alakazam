@@ -85,6 +85,12 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
     end
     EEG.etc.alz.epochNeighbours = TransTools.EpochNeighbours(EEG.event, lat(allEvents), ...
         srate, times([1 end]));
+    % Where each trial began in the recording it was cut from: the sample
+    % (1-based, of DefineBins' input) holding its first point, below 1 where
+    % the epoch ran off the start and was padded. The events are rewritten
+    % onto the epoched timeline below, so this is the record of it, which a
+    % FieldTrip script exported from the analysis cuts its trials by.
+    EEG.etc.alz.epochStart = reshape(lat(allEvents), 1, []) + loS;
 
     % Per-trial epoch table and bin -> trial index mapping.
     trialOf = zeros(1, max(allEvents));

@@ -109,7 +109,8 @@ function [EEG, options] = DefineBins(input, varargin)
 %                    (ERPLAB-style; an event may be in several bins).
 % With an .epoch window (see above) it also segments EEG.data into
 % channels x time x trials, sets DataFormat = 'EPOCHED', fills EEG.times and
-% EEG.epoch (one entry per trial, tagged with its bins).
+% EEG.epoch (one entry per trial, tagged with its bins), and records in
+% EEG.etc.alz.epochStart the sample of the input each trial starts at.
 %
 %% WHICH SAMPLE IS t = 0
 %

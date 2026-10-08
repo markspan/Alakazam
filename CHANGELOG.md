@@ -48,6 +48,34 @@ bar. Dates are those of the tag.
 
 - **The manual is online,** at https://markspan.github.io/Alakazam/, rebuilt each
   time a version is tagged. The PDF and the in-app Help are unchanged.
+- **FieldTrip's ERP tutorial as a template**
+  (`library/templates/fieldtrip/preprocessing-erp.alztemplate`): its
+  recording, its steps and its eight rejected trials, both tasks and their
+  difference. With the same filter it gives FieldTrip's averages to within
+  3e-6 µV; as shipped, Alakazam's FIR low-pass on the whole recording
+  against the tutorial's Butterworth on each trial, within 0.026 µV RMS
+  (`Docs/fieldtrip.md`, `FieldTripTutorialErpTest`). Chapter 20 of the
+  manual walks through it.
+
+- **Export as FieldTrip** (Export/Report tab): the workspace's analysis as a
+  FieldTrip script, reading each raw recording with `ft_preprocessing`.
+  ReRef, Filter, linear Derive Channels, channel selection, Baseline and
+  Average are translated exactly (Filter as `firws` with Alakazam's order,
+  cutoff and Kaiser deviation, the identical kernel); the trials DefineBins
+  cut and the trials rejected are read back from a table written beside
+  the script; anything else is marked not translated. On FieldTrip's ERP
+  tutorial the script gives Alakazam's averages to 0.000003 µV.
+  DefineBins now records where each trial starts in the recording
+  (`etc.alz.epochStart`), which the export needs: recalculate a DefineBins
+  step made before this to export it.
+
+### Changed
+
+- **A channel named by number is written in double quotes** in Derive
+  Channels and in ERP Measure's `let` field: `let eogv = LEOG - "53"`. The
+  quotes also reach a name with a hyphen or a space. A bare number that is
+  also the name of a channel is now refused rather than read as the number,
+  so `/ 2` on a dataset with a channel called 2 asks for `2.0`.
 
 ### Fixed
 
@@ -55,6 +83,23 @@ bar. Dates are those of the tag.
   with a duration (a shaded area) was not cleared with its area, so every
   scroll or zoom step left another copy on the axes. It is now cleared
   and redrawn with the area.
+- **`LEOG - 53` subtracted the number 53** where the dataset had a channel
+  called 53 (FieldTrip's tutorial cap names its channels 1 to 64), giving a
+  channel that looked like an EOG and was not. See Changed.
+
+### Documentation
+
+- **Dipole Fit and Beamformer checked against FieldTrip's tutorials**, on
+  the tutorials' own EEG data (`Docs/fieldtrip.md`). The dipole fit finds
+  the tutorial's pair to the last digit, and `FieldTripTutorialDipoleTest`
+  keeps it so where the data are present; the beamformer puts the beta
+  rebound where the tutorial's does. Along the way: FieldTrip's dipole
+  tutorial, as published, scans a 1 mm grid instead of 1 cm, since
+  `ft_dipolefitting` no longer passes `cfg.unit` on.
+- **An epoch stops one sample before its end**, as EEGLAB's `epoch.m` cuts
+  one: `epoch [-200,800] ms` at 500 Hz is 500 samples. The bin language
+  reference and chapter 9 said it kept both ends; the epochs were always
+  cut this way.
 
 ## V0.4.4.5 (2026-10-03)
 

@@ -4,8 +4,10 @@ function win = parseEpochStatement(stmt)
 %
 %   The same interval notation as a relation's window, so a script reads the
 %   same way throughout: epoch [-200,800] ms, or [-50,200] samples. An epoch
-%   always keeps both of its ends, so round and square brackets mean the
-%   same here; they are accepted for symmetry rather than meaning.
+%   starts at its first bound and stops one sample before its second, as
+%   EEGLAB's epoch.m cuts it (cutEpochs), whatever the brackets, so round and
+%   square brackets mean the same here; they are accepted for symmetry
+%   rather than meaning.
 %
 %   'events' is refused: it counts positions in the event stream, which is
 %   no length of data to cut.
