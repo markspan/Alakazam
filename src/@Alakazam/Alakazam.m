@@ -136,7 +136,7 @@ classdef Alakazam < handle
         onExportDataQuality(this)
         onExportAnalysisScript(this)
         onExportFieldTripScript(this)
-        subjects = collectFieldTripSubjects(this, report)
+        [subjects, grandAverages] = collectFieldTripSubjects(this, report)
         onShowDesign(this)
         onGrandAveragePerCell(this)
         recordings = collectDesignRecordings(this)

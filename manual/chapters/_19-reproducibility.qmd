@@ -111,28 +111,58 @@ each raw recording with `ft_preprocessing` and needs only FieldTrip to run:
 a record of the method in a toolbox many readers know, and a place to go on
 from in it.
 
+It asks first which of two scripts to write:
+
+- **Reproduce Alakazam's results.** Every choice FieldTrip cannot make is
+  read back as Alakazam made it, so the script gives Alakazam's numbers: for
+  checking an analysis and for sharing it.
+- **Re-run in FieldTrip.** FieldTrip makes the choices it has a method for
+  itself, with the settings closest to Alakazam's, so its results come close
+  to Alakazam's without being them: whether a result survives another
+  toolbox's run of the same method.
+
 Not every step has a FieldTrip counterpart, so each one says how faithful it
 is, in the script's header and again where it is written:
 
 | Status | Meaning | Steps |
 |---------------|-------------------------------------|---------------------------|
-| exact | FieldTrip computes what Alakazam computed | ReRef, Filter, Derive Channels (a weighted sum), SelectData (channels), Baseline, Average with its combination bins |
-| decision | FieldTrip cannot make this choice, so the script reads back the one Alakazam made | DefineBins (which samples became trials, in which bins), ManualReject, ArtefactDetect, AutoReject (which trials were rejected) |
-| approximate | close, with the difference said | a rejection that also changed channels within trials |
-| not translated | no counterpart: a marked block, a warning when it runs, and the script carries on without the step | everything else, ICA and GEDAI among them |
+| exact | FieldTrip computes what Alakazam computed | ReRef, Filter, Derive Channels (a weighted sum), SelectData (channels), Baseline, Average with its combination bins, grand averages |
+| decision | FieldTrip cannot make this choice, so the script reads back the one Alakazam made | DefineBins (which samples became trials, in which bins), ManualReject, ArtefactDetect, AutoReject (which trials were rejected), and, when reproducing, AutoEyeICA and Remove Components (the decomposition and the components removed) |
+| approximate | close, with the difference said | AutoEyeICA and Remove Components when re-running (below); a rejection that also changed channels within trials |
+| not translated | no counterpart: a marked block, a warning when it runs, and the script carries on without the step | everything else, GEDAI and the measurements among them |
 
 : How the FieldTrip export carries each step. {#tbl-export-fieldtrip}
 
-The decisions are written beside the script, one table of trials per
-recording (`<name>_trials.tsv`): each trial's first and last sample, its
-bins, and a column per rejecting step. Filter is exact because its
-windowed sinc is built by the same functions in both toolboxes: the script
-asks FieldTrip's `firws` for the order, cutoff and Kaiser deviation
-Alakazam used, which gives the identical kernel. Every exact step is checked
-by a test that runs both on the same recording. A script made only of exact
-steps and decisions gives Alakazam's numbers: on FieldTrip's own ERP
-tutorial (@sec-example-fieldtrip-erp) it reproduces the averages to
-0.000003 µV, which is the single precision EEGLAB reads the file in.
+The decisions are written beside the script: one table of trials per
+recording (`<name>_trials.tsv`), each trial's first and last sample, its
+bins and a column per rejecting step, and one file per ICA step
+(`<name>_ica_<step>.mat`). Recordings processed the same way are written
+once, as a loop, each keeping its own numbers in the header. Grand averages
+follow, by `ft_timelockgrandaverage`: a plain mean for an equal grand
+average, weighted by each recording's trials for a weighted one, and a
+combination bin equally in both, as Alakazam averages it.
+
+Filter is exact because its windowed sinc is built by the same functions in
+both toolboxes: the script asks FieldTrip's `firws` for the order, cutoff
+and Kaiser deviation Alakazam used, which gives the identical kernel. An ICA
+step, reproduced, applies Alakazam's decomposition with
+`ft_componentanalysis` and removes its components with
+`ft_rejectcomponent`; the export checks on the data that this gives
+Alakazam's result, and says approximate where it does not. Re-run, the
+script lets FieldTrip decompose the data itself, with the same algorithm
+(FastICA, or extended Infomax with EEGLAB's learning rate), the same
+channels and as many components. FieldTrip has no ICLabel, so it removes the
+components whose topographies correlate with the ones Alakazam removed at
+|r| ≥ 0.9, and says which it matched.
+
+Every exact step is checked by a test that runs both on the same recording.
+A script of exact steps and decisions gives Alakazam's numbers: on
+FieldTrip's own ERP tutorial (@sec-example-fieldtrip-erp) it reproduces the
+averages to 0.000003 µV, the single precision EEGLAB reads the file in, and
+on Luck's mismatch negativity recording with ICA (chapter 9 of
+@luckApplied) to 0.0000016 µV. Re-run on that recording, FieldTrip's own
+FastICA found components matching the two Alakazam removed at |r| = 1.000,
+and the averages came out the same to 0.0000015 µV.
 
 ## Scripting {#sec-scripting}
 

@@ -13,13 +13,23 @@ function step = fieldtripTransformCall(transformId, params, ctx, names, why)
 %                 'approximate'  close, with the difference said;
 %                 'none'         no FieldTrip counterpart: a marked block,
 %                                and the script carries on without the step
-%     .summary  a few words for the script's header
+%     .summary  a few words for the script's header and the step's comment,
+%               the same for every recording run the same way
+%     .detail   this recording's own numbers (how many trials, how many
+%               components), for the header only, so that recordings run
+%               the same way can share one loop in the script
+%     .sidecar  what the lines read from the file NAMES.icaFile names, as a
+%               struct for writeExportSidecars, or [] when they read none
 %   PARAMS are the step's stored options and CTX what fieldtripStepContext
 %   read from its input and result. NAMES carries the variable names:
 %   .in, .out (FieldTrip data), .trials (the table of trials read from the
 %   sidecar), .step (this step's number, naming its column there) and
 %   .binColumns (the bin numbers whose membership the trials' trialinfo
-%   holds, in column order; set by the DefineBins step).
+%   holds, in column order; set by the DefineBins step), .icaFile (the
+%   file an ICA step's decomposition is written to beside the script) and,
+%   optionally, .icaCode, the MATLAB expression the script names it by
+%   (built from the recording's stem, so that a loop can share it), and
+%   .mode: 'reproduce' (the default) or 'rerun' (see EXPORTFIELDTRIPSCRIPT).
 %
 %   STEP = fieldtripTransformCall(..., WHY) marks the step not translated,
 %   for the reason WHY: the assembler's way of refusing a step it cannot
@@ -62,14 +72,23 @@ function step = fieldtripTransformCall(transformId, params, ctx, names, why)
             step = rejection(transformId, ctx, names);
         case 'Average'
             step = average(ctx, names);
+        case {'AutoEyeICA', 'RemoveComponents'}
+            step = icaStep(transformId, ctx, names);
         otherwise
             step = untranslated(transformId, params, names, '');
     end
 end
 
 % ======================================================================= %
-function step = result(status, summary, lines)
-    step = struct('lines', {lines}, 'status', status, 'summary', summary);
+function step = result(status, summary, lines, detail, sidecar)
+    if nargin < 4
+        detail = '';
+    end
+    if nargin < 5
+        sidecar = [];
+    end
+    step = struct('lines', {lines}, 'status', status, 'summary', summary, 'detail', detail, ...
+        'sidecar', sidecar);
 end
 
 function lines = preprocessing(cfgLines, names)
@@ -257,13 +276,13 @@ function step = defineBins(params, ctx, names)
             names.trials, names.trials, names.trials, names.trials, matlabLiteral(columns), names.trials), ...
         sprintf('%s = ft_redefinetrial(cfg, %s);', names.out, names.in)}];
     status = 'decision';
-    summary = sprintf('%d trials in %d bins, read from the trial table', size(d.membership, 1), ...
-        numel(d.bins));
+    summary = 'trials and their bins, read from the trial table';
+    detail = sprintf('%d trials in %d bins', size(d.membership, 1), numel(d.bins));
     if any(d.epochStart < 1)
         status = 'approximate';
         summary = [summary, '; some trials began before the recording and are padded in Alakazam'];
     end
-    step = result(status, summary, lines);
+    step = result(status, summary, lines, detail);
 end
 
 % ======================================================================= %
@@ -288,12 +307,13 @@ function step = rejection(transformId, ctx, names)
         sprintf('cfg.trials = find(~ismember(%s.trialinfo(:, end), rejected));', names.in), ...
         sprintf('%s = ft_selectdata(cfg, %s);', names.out, names.in)};
     status = 'decision';
-    summary = sprintf('%d trials rejected, read from the trial table', numel(d.rejected));
+    summary = 'the rejected trials, read from the trial table';
+    detail = sprintf('%d trials rejected', numel(d.rejected));
     if d.partial
         status = 'approximate';
         summary = [summary, '; it also changed channels within trials, which is not carried'];
     end
-    step = result(status, summary, lines);
+    step = result(status, summary, lines, detail);
 end
 
 % ======================================================================= %
@@ -347,6 +367,90 @@ function text = operation(coeff)
         end
         text = [text, sign, term]; %#ok<AGROW>
     end
+end
+
+% ======================================================================= %
+function step = icaStep(transformId, ctx, names)
+%ICASTEP  The decomposition the step used and the components it removed, as
+%   FieldTrip's ft_componentanalysis with that unmixing matrix and
+%   ft_rejectcomponent. ICLabel's classification is not redone: which
+%   components went is the decision read back. In a re-run, FieldTrip
+%   decomposes the data itself instead (icaRerun).
+    d = ctx.decision;
+    if strcmp(TransTools.FieldOr(names, 'mode', 'reproduce'), 'rerun')
+        step = icaRerun(transformId, d, names);
+        return;
+    end
+    summary = sprintf('the decomposition and the components removed (%s), read back', d.why);
+    detail = sprintf('%d of %d components removed', numel(d.removed), size(d.unmixing, 1));
+    code = TransTools.FieldOr(names, 'icaCode', '');
+    if isempty(code)
+        code = matlabLiteral(names.icaFile);
+    end
+    lines = {sprintf('%% The ICA decomposition %s used and the components it removed (%s).', ...
+        transformId, d.why), ...
+        sprintf('ica = load(fullfile(here, %s));', code)};
+    if isempty(d.removed)
+        lines{end + 1} = sprintf('%s = %s;   %% nothing was removed', names.out, names.in);
+    else
+        lines = [lines, {sprintf('channelOrder = %s.label;', names.in), ...
+            'cfg = [];', 'cfg.unmixing = ica.unmixing;', 'cfg.topolabel = ica.topolabel;', ...
+            'cfg.demean = ''no'';', sprintf('comp = ft_componentanalysis(cfg, %s);', names.in), ...
+            'cfg = [];', 'cfg.component = ica.removed;', ...
+            '% ft_rejectcomponent demeans each trial unless told not to; pop_subcomp does not.', ...
+            'cfg.demean = ''no'';', ...
+            sprintf('%s = ft_rejectcomponent(cfg, comp, %s);', names.out, names.in), ...
+            '% ft_rejectcomponent puts the channels it did not decompose last; back in order.', ...
+            sprintf('%s = restoreChannelOrder(%s, channelOrder);', names.out, names.out)}];
+    end
+    status = 'decision';
+    if ~d.exact
+        status = 'approximate';
+        summary = [summary, '; subtracting them does not give Alakazam''s data here, since the ' ...
+            'decomposition does not span the data and EEGLAB rebuilt it from the components it kept'];
+    end
+    step = result(status, summary, lines, detail, struct('unmixing', d.unmixing, ...
+        'topolabel', {d.topolabel}, 'removed', d.removed));
+end
+
+function step = icaRerun(transformId, d, names)
+%ICARERUN  FieldTrip's own ICA, set as Alakazam's was: the same algorithm
+%   (FastICA is the same package in both; for extended Infomax, EEGLAB's
+%   learning rate, 0.00065/log(channels), where FieldTrip would use 0.001),
+%   the same channels and as many components. ICLabel has no counterpart in
+%   FieldTrip, so the components removed are those whose topographies match
+%   the ones Alakazam removed (matchComponents, carried in the script). ICA
+%   is not seeded, so the decomposition is FieldTrip's, not Alakazam's.
+    n = size(d.unmixing, 1);
+    code = TransTools.FieldOr(names, 'icaCode', '');
+    if isempty(code)
+        code = matlabLiteral(names.icaFile);
+    end
+    lines = {sprintf(['%% FieldTrip''s own ICA, with %s''s settings, then the components whose ' ...
+        'topographies match'], transformId), ...
+        sprintf('%% those Alakazam removed (%s).', d.why), ...
+        sprintf('ica = load(fullfile(here, %s));', code), ...
+        sprintf('channelOrder = %s.label;', names.in), ...
+        'cfg = [];', sprintf('cfg.method = ''%s'';', d.method), 'cfg.channel = ica.topolabel;', ...
+        sprintf('cfg.numcomponent = %d;', n)};
+    if strcmp(d.method, 'fastica')
+        lines = [lines, {sprintf('cfg.fastica.lastEig = %d;', n)}];
+        algorithm = 'FastICA';
+    else
+        lines = [lines, {'cfg.runica.extended = 1;', ...
+            'cfg.runica.lrate = 0.00065 / log(numel(ica.topolabel));   % EEGLAB''s own default'}];
+        algorithm = 'extended Infomax';
+    end
+    lines = [lines, {sprintf('comp = ft_componentanalysis(cfg, %s);', names.in), ...
+        'remove = matchComponents(comp, ica.templates, ica.topolabel, 0.9);', ...
+        'cfg = [];', 'cfg.component = remove;', 'cfg.demean = ''no'';', ...
+        sprintf('%s = ft_rejectcomponent(cfg, comp, %s);', names.out, names.in), ...
+        sprintf('%s = restoreChannelOrder(%s, channelOrder);', names.out, names.out)}];
+    summary = sprintf(['FieldTrip''s own %s (%d components), removing those that match the ' ...
+        'removed ones by topography, |r| >= 0.9'], algorithm, n);
+    detail = sprintf('Alakazam removed %d (%s)', numel(d.removed), d.why);
+    step = result('approximate', summary, lines, detail, struct('topolabel', {d.topolabel}, ...
+        'templates', d.templates, 'removed', d.removed));
 end
 
 % ======================================================================= %

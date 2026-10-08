@@ -72,16 +72,32 @@ end
 % ArtefactDetect records its detectors. pop_subcomp below rewrites
 % etc.ic_classification to describe the components that SURVIVE, so after it
 % runs there is nothing left saying which ones went.
+% The decomposition itself is kept too, as AutoEyeICA keeps its own: the node
+% holds only the pruned one, and a FieldTrip script exported from the
+% analysis applies this one and removes these components
+% (fieldtripStepContext). Here icachansind indexes the whole dataset.
 nComponents = size(EEG.icaweights, 1);
 EEG.etc.alz.manualICA = struct( ...
     'removed',     opts.components(:)', ...
     'nRemoved',    numel(opts.components), ...
-    'nComponents', nComponents);
+    'nComponents', nComponents, ...
+    'decomposition', struct('icaweights', EEG.icaweights, 'icasphere', EEG.icasphere, ...
+        'icawinv', EEG.icawinv, 'icachansind', EEG.icachansind, 'icatype', icaTypeOf(EEG)));
 
 EEG = pop_subcomp(EEG, opts.components(:)', 0);
 end
 
 % ======================================================================= %
+function type = icaTypeOf(EEG)
+%ICATYPEOF  The algorithm the decomposition came from, when it is known: run
+%   here, or by an AutoEyeICA before this step; '' otherwise.
+    alz = TransTools.FieldOr(TransTools.FieldOr(EEG, 'etc', struct()), 'alz', struct());
+    type = char(string(TransTools.FieldOr(alz, 'icaType', '')));
+    if isempty(type) && isfield(alz, 'eyeICA') && isfield(alz.eyeICA, 'decomposition')
+        type = char(string(TransTools.FieldOr(alz.eyeICA.decomposition, 'icatype', '')));
+    end
+end
+
 function EEG = ensureDecomposition(input)
 %ENSUREDECOMPOSITION  Return INPUT with a usable ICA decomposition and ICLabel
 %   classification. An existing decomposition is reused (and classified if it
@@ -139,12 +155,15 @@ function EEG = ensureDecomposition(input)
     % syntax, which leaves the whole session unable to call rng(). See
     % TransTools.WithRestoredRng.
     if ~isempty(which('fastica'))
+        icaType = 'fastica';
         eegOnly = TransTools.WithRestoredRng(@() pop_runica(eegOnly, 'icatype', 'fastica'));
     else
+        icaType = 'runica';
         eegOnly = TransTools.WithRestoredRng(@() ...
             pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1));
     end
     eegOnly = iclabel(eegOnly, 'beta');
+    EEG.etc.alz.icaType = icaType;   % which algorithm, for the record below
 
     EEG.icaweights  = eegOnly.icaweights;
     EEG.icasphere   = eegOnly.icasphere;

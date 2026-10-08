@@ -26,6 +26,20 @@ function ctx = fieldtripStepContext(transformId, input, result)
 %                   cannot carry)
 %     Average       .bins: every bin's index, label and, for a combination
 %                   bin, its coefficients and the bins it combines
+%     AutoEyeICA, RemoveComponents
+%                   .unmixing (weights times sphere), .topolabel (the
+%                   channels decomposed), .removed (the components taken
+%                   out), .why (how they were chosen), and .exact: whether
+%                   subtracting those components from INPUT, as FieldTrip's
+%                   ft_rejectcomponent does, gives RESULT. EEGLAB's
+%                   pop_subcomp rebuilds the data from the components it
+%                   keeps instead, which is the same thing whenever the
+%                   decomposition spans the data, so this is checked on the
+%                   data rather than assumed. For a re-run (see
+%                   EXPORTFIELDTRIPSCRIPT) also .method, the algorithm
+%                   ('fastica' or 'runica'; 'runica', EEGLAB's own, when it
+%                   is not recorded), and .templates, the topographies of the
+%                   removed components (channels x components)
 %   A DefineBins result made before epochStart was recorded is refused with
 %   a message: recompute the step to export it.
 %
@@ -44,6 +58,8 @@ function ctx = fieldtripStepContext(transformId, input, result)
             ctx.decision = rejectedTrials(input, result);
         case 'Average'
             ctx.decision = struct('bins', {binList(result)});
+        case {'AutoEyeICA', 'RemoveComponents'}
+            ctx.decision = icaDecision(transformId, input, result);
     end
 end
 
@@ -92,6 +108,47 @@ function d = rejectedTrials(input, result)
     after = double(result.data(:, :, ~isGone));
     changed = isnan(after) ~= isnan(before) | (abs(after - before) > 0 & ~isnan(after) & ~isnan(before));
     d = struct('rejected', rejected, 'partial', any(changed(:)));
+end
+
+function d = icaDecision(transformId, input, result)
+    alz = TransTools.FieldOr(TransTools.FieldOr(result, 'etc', struct()), 'alz', struct());
+    if strcmp(transformId, 'AutoEyeICA')
+        record = TransTools.FieldOr(alz, 'eyeICA', struct());
+        % AutoEyeICA's own record indexes the channels it decomposed; the
+        % result's icachansind maps them onto the whole dataset.
+        chans = TransTools.FieldOr(result, 'icachansind', []);
+        why = sprintf('ICLabel''s eye class above %g', TransTools.FieldOr(record, 'threshold', NaN));
+    else
+        record = TransTools.FieldOr(alz, 'manualICA', struct());
+        chans = [];
+        if isfield(record, 'decomposition')
+            chans = record.decomposition.icachansind;
+        end
+        why = 'chosen by hand';
+    end
+    if ~isfield(record, 'decomposition') || isempty(record.decomposition) || isempty(chans)
+        throw(MException('Alakazam:exportFieldTripScript', ['I''m afraid this %s result was ' ...
+            'made before Alakazam kept the ICA decomposition beside it, which a FieldTrip ' ...
+            'script needs to remove the same components. Would you recalculate the %s step ' ...
+            'and export again?'], transformId, transformId));
+    end
+    dec = record.decomposition;
+    unmixing = double(dec.icaweights) * double(dec.icasphere);
+    mixing = double(dec.icawinv);
+    removed = reshape(double(record.removed), 1, []);
+    labels = channelLabels(input);
+    x = reshape(double(input.data(chans, :, :)), numel(chans), []);
+    y = reshape(double(result.data(chans, :, :)), numel(chans), []);
+    predicted = x - mixing(:, removed) * (unmixing(removed, :) * x);
+    scale = max(1, max(abs(y), [], 'all', 'omitnan'));
+    exact = max(abs(predicted - y), [], 'all', 'omitnan') <= 1e-6 * scale;
+    method = char(string(TransTools.FieldOr(dec, 'icatype', '')));
+    if ~ismember(method, {'fastica', 'runica'})
+        method = 'runica';
+    end
+    d = struct('unmixing', unmixing, 'topolabel', {reshape(labels(chans), [], 1)}, ...
+        'removed', removed, 'why', why, 'exact', exact, 'method', method, ...
+        'templates', mixing(:, removed));
 end
 
 function bins = binList(result)

@@ -1,4 +1,4 @@
-function subjects = collectFieldTripSubjects(this, report)
+function [subjects, grandAverages] = collectFieldTripSubjects(this, report)
 %COLLECTFIELDTRIPSUBJECTS  Every processed recording in the Data & Analyses
 %   tree, as exportFieldTripScript takes them: its name and raw file, its
 %   steps, and what each step's input and result tell a FieldTrip script
@@ -11,6 +11,12 @@ function subjects = collectFieldTripSubjects(this, report)
 %   given, is called with a line of progress per recording. A recording
 %   nothing has been run on is left out.
 %
+%   GRANDAVERAGES lists the Grand Averages tree's grand averages as
+%   exportFieldTripScript takes them: .name, .weighted, and .members, one
+%   row per source average, [recording, step] into SUBJECTS (NaN for a
+%   source that is not one of their steps, which the script then cannot
+%   carry). Each source is matched by its cache file, exactly.
+%
 %   Its own method, apart from onExportFieldTripScript and its save dialog,
 %   so that the collecting can be tested on a workspace on disk
 %   (ExportFieldTripScriptTest).
@@ -19,7 +25,8 @@ function subjects = collectFieldTripSubjects(this, report)
     if nargin < 2 || isempty(report)
         report = @(~) [];
     end
-    subjects = struct('name', {}, 'rawFile', {}, 'steps', {}, 'contexts', {});
+    subjects = struct('name', {}, 'rawFile', {}, 'steps', {}, 'contexts', {}, 'files', {});
+    grandAverages = struct('name', {}, 'weighted', {}, 'members', {});
     nodes = this.Workspace.Tree.allNodes();
     if isempty(nodes)
         return;
@@ -31,6 +38,38 @@ function subjects = collectFieldTripSubjects(this, report)
         if ~isempty(subject)
             subjects(end + 1) = subject; %#ok<AGROW>
         end
+    end
+    grandAverages = collectGrandAverages(this, subjects);
+end
+
+function gas = collectGrandAverages(this, subjects)
+%COLLECTGRANDAVERAGES  Each grand average, its weighting, and the steps of
+%   SUBJECTS its sources are, read from the node's etc.GrandAverage record.
+    gas = struct('name', {}, 'weighted', {}, 'members', {});
+    if ~isprop(this.Workspace, 'GrandAveragesTree') && ~isfield(this.Workspace, 'GrandAveragesTree')
+        return;
+    end
+    nodes = this.Workspace.GrandAveragesTree.allNodes();
+    for i = 1:numel(nodes)
+        file = nodes(i).UserData;
+        if isempty(file) || exist(file, 'file') ~= 2
+            continue;
+        end
+        proxy = eegProxyFromCacheMeta(readEegCacheMeta(file));
+        record = TransTools.FieldOr(TransTools.FieldOr(proxy, 'etc', struct()), 'GrandAverage', struct());
+        sources = cellstr(string(TransTools.FieldOr(record, 'sources', {})));
+        members = nan(numel(sources), 2);
+        for m = 1:numel(sources)
+            for s = 1:numel(subjects)
+                k = find(strcmpi(subjects(s).files, sources{m}), 1);
+                if ~isempty(k)
+                    members(m, :) = [s k];
+                    break;
+                end
+            end
+        end
+        gas(end + 1) = struct('name', nodes(i).Name, ...
+            'weighted', logical(TransTools.FieldOr(record, 'weighted', false)), 'members', members); %#ok<AGROW>
     end
 end
 
@@ -100,5 +139,5 @@ function subject = collectSubject(this, rootNode)
         end
     end
     subject = struct('name', rootNode.Name, 'rawFile', char(rawFile), 'steps', steps, ...
-        'contexts', contexts);
+        'contexts', contexts, 'files', {files});
 end

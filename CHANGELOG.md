@@ -64,7 +64,13 @@ bar. Dates are those of the tag.
   cutoff and Kaiser deviation, the identical kernel); the trials DefineBins
   cut and the trials rejected are read back from a table written beside
   the script; anything else is marked not translated. On FieldTrip's ERP
-  tutorial the script gives Alakazam's averages to 0.000003 µV.
+  tutorial the script gives Alakazam's averages to 0.000003 µV. It asks
+  whether to reproduce Alakazam's results (every choice read back) or to
+  re-run in FieldTrip, which makes the choices it has a method for itself:
+  an ICA step becomes FieldTrip's own decomposition with Alakazam's
+  settings, its components matched to the ones Alakazam removed by
+  topography. Reproduced, AutoEyeICA and Remove Components are exact, and
+  so are grand averages; recordings run the same way share one loop.
   DefineBins now records where each trial starts in the recording
   (`etc.alz.epochStart`), which the export needs: recalculate a DefineBins
   step made before this to export it.

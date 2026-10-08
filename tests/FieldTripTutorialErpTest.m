@@ -154,27 +154,37 @@ classdef (TestTags = {'Slow'}) FieldTripTutorialErpTest < matlab.unittest.TestCa
             subject = struct('name', 's04', 'rawFile', fullfile(testCase.Folder, 's04.vhdr'), ...
                 'steps', rmfield(nodes, setdiff(fieldnames(nodes), {'transformId', 'params', 'parent'})), ...
                 'contexts', contexts);
-            [code, sidecars] = exportFieldTripScript(subject);
+            % The same recording twice, under two names, and a weighted grand
+            % average of the two: the script then runs a loop over them, reads
+            % each one's own table of trials, and averages them in FieldTrip.
+            again = subject;
+            again.name = 's04 again';
+            last = numel(nodes);
+            [code, sidecars] = exportFieldTripScript([subject, again], struct('grandAverages', ...
+                struct('name', 'both', 'weighted', true, 'members', [1 last; 2 last])));
             testCase.verifyEmpty(regexp(code, '%\s+\d+\s+\S+\s+(NOT TRANSLATED|APPROXIMATE)', 'once'), ...
                 'Every step of this template should be exact or a decision.');
+            testCase.verifySubstring(code, 'for r = 1:size(recordings, 1)', 'The two share one loop.');
+            testCase.verifySubstring(code, 'Grand average both: EXACT');
 
             folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
             script = fullfile(folder, 'erp_fieldtrip.m');
-            writeText(script, code);
-            for k = 1:numel(sidecars)
-                writeText(fullfile(folder, sidecars(k).name), sidecars(k).content);
-            end
-            exported = runScript(script);
-            erp = exported.s04;
-            for b = 1:3
-                [~, a, f] = intersect({alakazam.chanlocs.labels}, erp{b}.label, 'stable');
-                testCase.assertNumElements(a, 59);
-                testCase.assertEqual(round(erp{b}.time * 1000), round(alakazam.times), ...
-                    'The trials the script cut are Alakazam''s, sample for sample.');
-                d = double(alakazam.data(a, :, b)) - erp{b}.avg(f, :);
-                testCase.verifyLessThan(max(abs(d(:))), 1e-4, sprintf(['Bin %d (%s): the exported ' ...
-                    'script''s average differs from Alakazam''s by up to %.3g uV.'], b, ...
-                    alakazam.bindesc(b).label, max(abs(d(:)))));
+            writeExportSidecars(folder, [struct('name', 'erp_fieldtrip.m', 'content', code), sidecars]);
+            [exported, grand] = runScript(script);
+            outputs = {exported.s04, exported.(matlab.lang.makeValidName('s04 again')), grand.both};
+            what = {'s04', 's04 again', 'their grand average'};
+            for o = 1:numel(outputs)
+                erp = outputs{o};
+                for b = 1:3
+                    [~, a, f] = intersect({alakazam.chanlocs.labels}, erp{b}.label, 'stable');
+                    testCase.assertNumElements(a, 59);
+                    testCase.assertEqual(round(erp{b}.time * 1000), round(alakazam.times), ...
+                        'The trials the script cut are Alakazam''s, sample for sample.');
+                    d = double(alakazam.data(a, :, b)) - erp{b}.avg(f, :);
+                    testCase.verifyLessThan(max(abs(d(:))), 1e-4, sprintf(['%s, bin %d (%s): the ' ...
+                        'exported script''s average differs from Alakazam''s by up to %.3g uV.'], ...
+                        what{o}, b, alakazam.bindesc(b).label, max(abs(d(:)))));
+                end
             end
         end
     end
@@ -286,16 +296,12 @@ function [worst, overall] = compareAverages(EEG, fieldtrip)
     overall = rms(d(:));
 end
 
-function results = runScript(file)
-%RUNSCRIPT  Run an exported script, quietly, and return its RESULTS.
+function [results, grand] = runScript(file)
+%RUNSCRIPT  Run an exported script, quietly, and return its RESULTS and its
+%   GRAND averages.
     results = struct(); %#ok<NASGU> assigned by the script
+    grand = struct(); %#ok<NASGU> assigned by the script
     evalc('run(file)');
-end
-
-function writeText(file, text)
-    fid = fopen(file, 'w');
-    fwrite(fid, text, 'char');
-    fclose(fid);
 end
 
 function nodes = templateNodes(file)

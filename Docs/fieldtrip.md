@@ -117,10 +117,44 @@ have Alakazam's 600 samples. The low-pass is exact, unlike the tutorial's
 own: FieldTrip's `firws` builds its kernel with the same `firws`, `windows`
 and `kaiserbeta` that EEGLAB's firfilt uses, and both pad the edges with the
 first and last sample, so given Alakazam's design it computes Alakazam's
-filter. `FieldTripTutorialErpTest` exports and runs the script;
-`FieldTripExportEquivalenceTest` checks each exact translation on its own,
-with five filter designs; `ExportFieldTripScriptTest` the header, the table
-of trials and the refusals.
+filter. `FieldTripTutorialErpTest` exports and runs the script, for this recording
+twice over under two names, so that it also runs the loop the export writes
+for recordings processed alike and a weighted grand average of the two.
+
+### Two modes, and ICA
+
+The export asks whether to **reproduce** Alakazam's results, every choice
+FieldTrip cannot make read back, or to **re-run** in FieldTrip, which makes
+the choices it has a method for itself with the settings closest to
+Alakazam's. The difference is in ICA:
+
+- *Reproduced*, AutoEyeICA's (or Remove Components') decomposition is applied
+  with `ft_componentanalysis` and its components removed with
+  `ft_rejectcomponent`, with that function's own demeaning switched off and
+  the channels it leaves out put back in place, two things EEGLAB's
+  `pop_subcomp` does not do. The export checks on the data that subtracting
+  the components gives Alakazam's result; where the decomposition does not
+  span the data, `pop_subcomp`'s rebuilding from the kept components
+  differs from it, and the step is marked approximate.
+- *Re-run*, FieldTrip decomposes the data itself with the same algorithm
+  (FastICA, the same package; or extended Infomax with EEGLAB's learning
+  rate, 0.00065/log(channels), where FieldTrip would use 0.001), the same
+  channels and as many components, and removes the components whose
+  topographies correlate with the ones Alakazam removed at |r| ≥ 0.9.
+
+On Luck's chapter 9 recording 1 (MMN, AutoEyeICA at 0.6, 2 of 28 components
+removed, then DefineBins, Baseline, ArtefactDetect and Average), the
+reproducing script gives Alakazam's averages to 1.6e-6 µV. The re-running
+one found FieldTrip components matching both of Alakazam's at |r| = 1.000,
+and gave the averages to 1.5e-6 µV: removing the same two topographies
+removes the same subspace, whatever the other components are. Measure and
+the scalp map are marked not translated in both.
+
+`FieldTripExportEquivalenceTest` checks each exact translation on its own
+(five filter designs, three ICA decompositions, equal and weighted grand
+averages) and the re-run on synthetic data with a known blink source;
+`ExportFieldTripScriptTest` the header, both modes, the table of trials,
+the loop, the refusals and the app's collector.
 
 ## The NatMEG recordings
 

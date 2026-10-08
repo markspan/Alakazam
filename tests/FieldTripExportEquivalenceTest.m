@@ -48,20 +48,31 @@ classdef FieldTripExportEquivalenceTest < matlab.unittest.TestCase
             FieldTripFixtures.require(testCase);
         end
 
-        function writeTheScriptsHelper(testCase)
-        %WRITETHESCRIPTSHELPER  addChannel, as a generated script carries it.
+        function writeTheScriptsHelpers(testCase)
+        %WRITETHESCRIPTSHELPERS  addChannel and restoreChannelOrder, each in a
+        %   file of its own, taken from a generated script that calls both.
+            labels = testCase.Labels;
+            ica = struct('unmixing', eye(4), 'topolabel', {labels(:)}, 'removed', 1, ...
+                'why', 'chosen by hand', 'exact', true, 'method', 'fastica', 'templates', ones(4, 1));
             subject = struct('name', 'probe', 'rawFile', 'probe.vhdr', 'steps', ...
-                struct('transformId', 'DeriveChannels', 'params', ...
-                    struct('derivations', 'let d = Fz - Cz'), 'parent', -1), ...
-                'contexts', struct('srate', 250, 'labels', {testCase.Labels}, ...
-                    'format', 'CONTINUOUS', 'decision', []));
-            code = exportFieldTripScript(subject);
-            at = strfind(code, 'function data = addChannel(');
-            testCase.assertNotEmpty(at, 'The generated script carries no addChannel.');
+                struct('transformId', {'DeriveChannels', 'RemoveComponents'}, 'params', ...
+                    {struct('derivations', 'let d = Fz - Cz'), struct('components', 1)}, ...
+                    'parent', {-1, 1}), ...
+                'contexts', struct('srate', 250, 'labels', {labels, labels}, ...
+                    'format', 'CONTINUOUS', 'decision', {[], ica}));
+            code = [exportFieldTripScript(subject), newline, ...
+                exportFieldTripScript(subject, struct('mode', 'rerun'))];
             folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
-            fid = fopen(fullfile(folder, 'addChannel.m'), 'w');
-            fwrite(fid, code(at:end), 'char');
-            fclose(fid);
+            for name = {'addChannel', 'restoreChannelOrder', 'matchComponents'}
+                at = regexp(code, ['function (\w+ = )?' name{1} '\('], 'once');
+                testCase.assertNotEmpty(at, sprintf('The generated script carries no %s.', name{1}));
+                rest = code(at:end);
+                stop = regexp(rest, '\nend(\r?\n|$)', 'end', 'once');   % a helper ends at column 0
+                rest = rest(1:stop);
+                fid = fopen(fullfile(folder, [name{1} '.m']), 'w');
+                fwrite(fid, rest, 'char');
+                fclose(fid);
+            end
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
             testCase.HelperFolder = folder;
         end
@@ -151,6 +162,157 @@ classdef FieldTripExportEquivalenceTest < matlab.unittest.TestCase
             testCase.verifyStep('Baseline', struct('Start', -200, 'Stop', 0), EEG, data);
         end
 
+        function componentsRemovedByHand(testCase)
+        %COMPONENTSREMOVEDBYHAND  RemoveComponents on a full decomposition:
+        %   the components it took out, taken out by ft_rejectcomponent.
+            EEG = testCase.decomposed(testCase.recording(), 4);
+            testCase.verifyIca(EEG, [1 3], 'decision');
+        end
+
+        function componentsFromADecompositionOfReducedRank(testCase)
+        %COMPONENTSFROMADECOMPOSITIONOFREDUCEDRANK  Average-referenced data
+        %   have one dimension fewer than channels, and a decomposition of that
+        %   rank spans them: subtracting is what pop_subcomp's rebuilding gives.
+            EEG = testCase.recording();
+            EEG.data = EEG.data - mean(EEG.data, 1);
+            testCase.verifyIca(testCase.decomposed(EEG, 3), 2, 'decision');
+        end
+
+        function aChannelLeftOutOfTheDecompositionKeepsItsPlace(testCase)
+        %ACHANNELLEFTOUTOFTHEDECOMPOSITIONKEEPSITSPLACE  As an EOG channel
+        %   with no scalp position is left out of AutoEyeICA's: Cz here.
+        %   ft_rejectcomponent puts such channels last; the script puts them
+        %   back.
+            EEG = testCase.recording();
+            kept = [1 3 4];
+            part = EEG;
+            part.data = EEG.data(kept, :);
+            part = testCase.decomposed(part, 3);
+            EEG.icaweights = part.icaweights;
+            EEG.icasphere = part.icasphere;
+            EEG.icawinv = part.icawinv;
+            EEG.icachansind = kept;
+            EEG.etc = part.etc;
+            testCase.verifyIca(EEG, 2, 'decision');
+        end
+
+        function aRerunFindsTheBlinkAlakazamRemoved(testCase)
+        %ARERUNFINDSTHEBLINKALAKAZAMREMOVED  Four sources mixed into four
+        %   channels, one of them blinks. Alakazam's decomposition (FastICA,
+        %   as AutoEyeICA runs it) and the blink component removed; then the
+        %   re-run: FieldTrip's own FastICA, the component matching the blink
+        %   by topography removed. Not the same numbers, ICA being unseeded,
+        %   but the same cleaned data to within a few percent, and no blink.
+            testCase.assumeNotEmpty(which('fastica'), 'FastICA is not installed.');
+            [EEG, blink] = testCase.blinking();
+            [~, A, W] = TransTools.WithRestoredRng(@() fastica(double(EEG.data), 'displayMode', 'off', ...
+                'verbose', 'off'));
+            EEG.icaweights = W;
+            EEG.icasphere = eye(size(W, 2));
+            EEG.icawinv = A;
+            EEG.icachansind = 1:size(EEG.data, 1);
+            EEG.etc.alz.icaType = 'fastica';
+            EEG.etc.ic_classification.ICLabel.classifications = repmat([0.9 0 0.1 0 0 0 0], size(W, 1), 1);
+            [~, blinkComponent] = max(abs(correlation((W * double(EEG.data))', blink')));
+            params = struct('components', blinkComponent);
+            result = RemoveComponents(EEG, params);
+            ctx = fieldtripStepContext('RemoveComponents', EEG, result);
+            testCase.verifyEqual(ctx.decision.method, 'fastica');
+            names = struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', 1, ...
+                'binColumns', [], 'icaFile', 'probe_ica_1.mat', 'mode', 'rerun');
+            step = fieldtripTransformCall('RemoveComponents', params, ctx, names);
+            testCase.verifyEqual(step.status, 'approximate');
+            here = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            writeExportSidecars(here, struct('name', names.icaFile, 'content', step.sidecar));
+            fieldtrip = TransTools.WithRestoredRng(@() runEmitted(step.lines, asFieldTrip(EEG), 'data', [], here));
+            cleaned = fieldtrip.trial{1};
+            expected = double(result.data);
+            testCase.verifyLessThan(rms(cleaned(:) - expected(:)) / rms(expected(:)), 0.05, ...
+                'FieldTrip''s re-run cleans the data as Alakazam did, to within 5%.');
+            leftover = max(abs(correlation(cleaned', blink')));
+            testCase.verifyLessThan(leftover, 0.1, 'No channel still carries the blinks.');
+        end
+
+        function aDecompositionThatDoesNotSpanTheDataIsApproximate(testCase)
+        %ADECOMPOSITIONTHATDOESNOTSPANTHEDATAISAPPROXIMATE  Three components
+        %   for four independent channels: pop_subcomp also drops what lies
+        %   outside them, which subtracting does not, and the export says so.
+            EEG = testCase.decomposed(testCase.recording(), 3);
+            result = RemoveComponents(EEG, struct('components', 2));
+            ctx = fieldtripStepContext('RemoveComponents', EEG, result);
+            testCase.verifyFalse(ctx.decision.exact);
+            names = struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', 1, ...
+                'binColumns', [], 'icaFile', 'probe_ica_1.mat');
+            step = fieldtripTransformCall('RemoveComponents', struct('components', 2), ctx, names);
+            testCase.verifyEqual(step.status, 'approximate');
+        end
+
+        function grandAveragesEqualAndWeighted(testCase)
+        %GRANDAVERAGESEQUALANDWEIGHTED  Three recordings, each with its own
+        %   data and its own trials rejected, through the emitted DefineBins,
+        %   rejection and Average lines; then the emitted grand averages
+        %   against Alakazam's GrandAverage, equal and weighted.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            params = struct('script', sprintf(['epoch [-200,600] ms\nbin 1 "A" : "11"\n' ...
+                'bin 2 "B" : "22"\nbin 3 "A - B" = bin 1 - bin 2']));
+            dropped = {[], [1 2 3], 4};
+            files = cell(1, 3);
+            results = struct();
+            subjects = struct('name', {}, 'rawFile', {}, 'steps', {}, 'contexts', {});
+            for s = 1:3
+                continuous = testCase.recording();
+                continuous.data = continuous.data * s + 3 * s;
+                EEG = DefineBins(continuous, params);
+                flags = false(size(EEG.data, 1), size(EEG.data, 3));
+                flags(:, dropped{s}) = true;
+                rejected = ManualReject(EEG, struct('flags', flags, 'scope', 'Whole epoch', ...
+                    'channelMode', 'Leave NaN'));
+                averaged = Average(rejected, struct('Param', 'Init'));
+                contexts = [fieldtripStepContext('DefineBins', continuous, EEG), ...
+                    fieldtripStepContext('ManualReject', EEG, rejected), ...
+                    fieldtripStepContext('Average', rejected, averaged)];
+                files{s} = fullfile(folder, sprintf('s%d.mat', s));
+                averaged.File = files{s};
+                saveEegCache(files{s}, averaged);
+
+                d = contexts(1).decision;
+                n = numel(d.epochStart);
+                trials = table((1:n)', d.epochStart, d.epochStart + d.pnts - 1, repmat(d.offset, n, 1), ...
+                    double(d.membership(:, 1)), double(d.membership(:, 2)), ...
+                    double(ismember((1:n)', contexts(2).decision.rejected)), 'VariableNames', ...
+                    {'trial', 'begsample', 'endsample', 'offset', 'bin_1', 'bin_2', 'rejected_2'});
+                names = @(k) struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', k, ...
+                    'binColumns', [1 2], 'icaFile', '');
+                data = runEmitted(fieldtripTransformCall('DefineBins', params, contexts(1), names(1)).lines, ...
+                    asFieldTrip(continuous), 'data', trials);
+                data = runEmitted(fieldtripTransformCall('ManualReject', struct(), contexts(2), names(2)).lines, ...
+                    data, 'data', trials);
+                averageNames = names(3);
+                averageNames.out = 'erp';
+                results.(sprintf('s%d', s)) = runEmitted(fieldtripTransformCall('Average', ...
+                    struct('Param', 'Init'), contexts(3), averageNames).lines, data, 'erp', trials);
+                subjects(s) = struct('name', sprintf('s%d', s), 'rawFile', 'none', 'steps', ...
+                    struct('transformId', {'DefineBins', 'ManualReject', 'Average'}, ...
+                        'params', {params, struct(), struct('Param', 'Init')}, 'parent', {-1, 1, 2}), ...
+                    'contexts', contexts);
+            end
+            for weighted = [false true]
+                code = exportFieldTripScript(subjects, struct('grandAverages', ...
+                    struct('name', 'all', 'weighted', weighted, 'members', [1 3; 2 3; 3 3])));
+                section = code(strfind(code, '%% Grand average: all'):end);
+                helpers = regexp(section, '\n% =+ %', 'once');
+                if ~isempty(helpers)
+                    section = section(1:helpers);
+                end
+                grand = runGrand(section, results);
+                alakazam = GrandAverage(files, weighted);
+                for b = 1:3
+                    testCase.verifyEqual(grand.all{b}.avg, double(alakazam.data(:, :, b)), 'AbsTol', 1e-10, ...
+                        sprintf('Weighted %d, bin %d (%s).', weighted, b, alakazam.bindesc(b).label));
+                end
+            end
+        end
+
         function anAverageWithADifferenceBin(testCase)
             [EEG, data, defined] = testCase.trials();
             averaged = Average(EEG, struct('Param', 'Init'));
@@ -169,6 +331,65 @@ classdef FieldTripExportEquivalenceTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function verifyIca(testCase, EEG, components, status)
+        %VERIFYICA  RemoveComponents and the emitted FieldTrip lines, with the
+        %   decomposition written beside them as the export writes it.
+            params = struct('components', components);
+            result = RemoveComponents(EEG, params);
+            ctx = fieldtripStepContext('RemoveComponents', EEG, result);
+            names = struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', 1, ...
+                'binColumns', [], 'icaFile', 'probe_ica_1.mat');
+            step = fieldtripTransformCall('RemoveComponents', params, ctx, names);
+            testCase.assertEqual(step.status, status, step.summary);
+            here = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            d = ctx.decision;
+            writeExportSidecars(here, struct('name', names.icaFile, 'content', ...
+                struct('unmixing', d.unmixing, 'topolabel', {d.topolabel}, 'removed', d.removed)));
+            fieldtrip = runEmitted(step.lines, asFieldTrip(EEG), 'data', [], here);
+            testCase.assertEqual(fieldtrip.label(:)', {result.chanlocs.labels}, 'The channels, in order.');
+            expected = double(result.data);
+            testCase.verifyEqual(fieldtrip.trial{1}, expected, 'AbsTol', 1e-9 * max(abs(expected(:))));
+        end
+
+        function [EEG, blink] = blinking(testCase)
+        %BLINKING  The recording's channels replaced by four sources mixed:
+        %   blinks (a large bump every few seconds) and three non-Gaussian
+        %   noises, through a fixed mixing matrix.
+            EEG = testCase.recording();
+            stream = RandStream('mt19937ar', 'Seed', 3);
+            n = size(EEG.data, 2);
+            t = (0:n - 1) / EEG.srate;
+            blink = zeros(1, n);
+            for at = 1.3:2.7:t(end) - 1
+                blink = blink + 80 * exp(-((t - at) / 0.08) .^ 2);
+            end
+            noise = [sign(randn(stream, 1, n)) .* -log(rand(stream, 1, n)); ...
+                rand(stream, 1, n) - 0.5; sin(2 * pi * 10 * t) .* (1 + 0.3 * randn(stream, 1, n))] * 10;
+            mixing = [1 0.3 0.2 0.1; 0.5 1 0.2 0.3; 0.2 0.4 1 0.2; 0.05 0.2 0.3 1];
+            EEG.data = mixing * [blink; noise];
+        end
+
+        function EEG = decomposed(~, EEG, nComponents)
+        %DECOMPOSED  EEG with a known decomposition of NCOMPONENTS: a fixed
+        %   random rotation of its leading principal components, as ICA after
+        %   PCA would leave it, and an ICLabel classification so that
+        %   RemoveComponents classifies nothing itself.
+            stream = RandStream('mt19937ar', 'Seed', 11);
+            nChannels = size(EEG.data, 1);
+            [u, ~, ~] = svd(double(EEG.data) * double(EEG.data)');
+            rotation = orth(randn(stream, nComponents));
+            unmixing = rotation * u(:, 1:nComponents)';
+            % A sphere as ICA leaves one, not the identity, so that weights and
+            % sphere must both be used: the unmixing matrix is their product.
+            EEG.icasphere = diag(1:nChannels) * orth(randn(stream, nChannels));
+            EEG.icaweights = unmixing / EEG.icasphere;
+            EEG.icawinv = pinv(unmixing);
+            EEG.icachansind = 1:size(EEG.data, 1);
+            EEG.etc.ic_classification.ICLabel.classifications = repmat([0.9 0 0 0 0.1 0 0], nComponents, 1);
+            EEG.etc.ic_classification.ICLabel.classes = {'Brain', 'Muscle', 'Eye', 'Heart', ...
+                'Line Noise', 'Channel Noise', 'Other'};
+        end
+
         function [alakazam, fieldtrip] = verifyStep(testCase, transformId, params, EEG, data)
         %VERIFYSTEP  The transformation and its emitted FieldTrip lines on the
         %   same recording (the continuous one unless EEG and DATA are given):
@@ -251,9 +472,23 @@ function data = asFieldTrip(EEG)
         'sampleinfo', [1 EEG.pnts]);
 end
 
-function out = runEmitted(lines, data, variable, trials) %#ok<INUSD> data and trials are read by the lines
+function out = runEmitted(lines, data, variable, trials, here) %#ok<INUSD> read by the lines
 %RUNEMITTED  Evaluate an emitted step on DATA (and TRIALS, the table of
-%   trials), quietly, and return the variable it assigns.
+%   trials, and HERE, the folder its sidecar files are in), quietly, and
+%   return the variable it assigns, with the script's helpers on the path.
     evalc(strjoin(lines, newline));
     out = eval(variable);
+end
+
+function grand = runGrand(section, results) %#ok<INUSD> read by the section
+%RUNGRAND  Evaluate an emitted grand-average section on RESULTS, quietly.
+    grand = struct();
+    evalc(section);
+end
+
+function r = correlation(a, b)
+%CORRELATION  Pearson correlation of each column of A with column vector B.
+    a = a - mean(a, 1);
+    b = b - mean(b, 1);
+    r = (a' * b)' ./ (vecnorm(a) * norm(b));
 end
