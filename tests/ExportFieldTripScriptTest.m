@@ -84,6 +84,21 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
             testCase.verifyEqual({sidecars.name}, {'sub_01_trials.tsv', 'sub_02_trials.tsv', 'sub_03_trials.tsv'});
         end
 
+        function theScriptFindsFieldTripItself(testCase)
+        %THESCRIPTFINDSFIELDTRIPITSELF  Run on its own, in a session that has
+        %   not got FieldTrip on the path, the script adds the folder FieldTrip
+        %   was in when it was written, and says where to get it if that is
+        %   gone; ft_defaults only after that.
+            code = exportFieldTripScript(testCase.subject(), struct('fieldtripFolder', 'C:\tools\fieldtrip'));
+            setup = extractBetween(code, 'here = fileparts', 'results = struct();');
+            testCase.assertNotEmpty(setup);
+            for expected = {'fieldtripFolder = ''C:\tools\fieldtrip'';', 'if isempty(which(''ft_defaults''))', ...
+                    'addpath(fieldtripFolder);', 'https://www.fieldtriptoolbox.org/download/', 'ft_defaults;'}
+                testCase.verifySubstring(setup{1}, expected{1});
+            end
+            testCase.verifyLessThan(strfind(code, 'addpath(fieldtripFolder);'), strfind(code, 'ft_defaults;'));
+        end
+
         function theModeIsSaidInTheHeader(testCase)
             testCase.verifySubstring(exportFieldTripScript(testCase.subject()), '% Mode: REPRODUCE.');
             testCase.verifySubstring(exportFieldTripScript(testCase.subject(), struct('mode', 'rerun')), ...

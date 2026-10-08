@@ -15,7 +15,9 @@ function [code, sidecars] = exportFieldTripScript(subjects, options)
 %     .steps     (transformId, params, parent), as collectBranchTree gives
 %     .contexts  one per step, from fieldtripStepContext
 %   OPTIONS may carry .mode, 'reproduce' (the default) or 'rerun' (below),
-%   .title, used in the script's first line, and
+%   .title, used in the script's first line, .fieldtripFolder, the folder
+%   the script adds to the path when FieldTrip is not on it (by default
+%   where this session finds FieldTrip), and
 %   .grandAverages (.name, .weighted, .members: one [recording, step] row
 %   per source average, as collectFieldTripSubjects gives), written after
 %   the recordings with ft_timelockgrandaverage: 'across', a plain mean,
@@ -109,10 +111,26 @@ function [code, sidecars] = exportFieldTripScript(subjects, options)
         '%   approximate     close; the step says how it differs', ...
         '%   NOT TRANSLATED  no FieldTrip counterpart: the script carries on without it', ...
         '%'}, modeLines(mode), {'%'}, table, ...
-        {'%', '% Needs FieldTrip on the MATLAB path; the files it reads (tables of trials,', ...
-        '% ICA decompositions) must stay beside this file. Each recording''s result is', ...
-        '% kept in RESULTS, under its name.', ''}];
-    setup = {'here = fileparts(mfilename(''fullpath''));', 'ft_defaults;', 'results = struct();'};
+        {'%', '% Needs FieldTrip: on the MATLAB path, or in the folder named below. The files', ...
+        '% it reads (tables of trials, ICA decompositions) must stay beside this file.', ...
+        '% Each recording''s result is kept in RESULTS, under its name.', ''}];
+    % FieldTrip as the script finds it: on the path already, or in the
+    % folder it was in when the script was written (Alakazam puts it on the
+    % path itself, a script run on its own does not), or a message saying
+    % where to get it.
+    folder = char(string(TransTools.FieldOr(options, 'fieldtripFolder', fieldtripFolder())));
+    setup = {'here = fileparts(mfilename(''fullpath''));', ...
+        '% FieldTrip: on the path already, or in the folder it was in when this was written.', ...
+        sprintf('fieldtripFolder = %s;', matlabLiteral(folder)), ...
+        'if isempty(which(''ft_defaults''))', ...
+        '    if isfolder(fieldtripFolder)', ...
+        '        addpath(fieldtripFolder);', ...
+        '    else', ...
+        ['        error(''This script needs FieldTrip: add its folder to the MATLAB path, or set ' ...
+            'fieldtripFolder above. It is at https://www.fieldtriptoolbox.org/download/'');'], ...
+        '    end', ...
+        'end', ...
+        'ft_defaults;', 'results = struct();'};
     if ~isempty(gas)
         setup{end + 1} = 'grand = struct();';
     end
@@ -348,6 +366,20 @@ end
 
 function stem = fileStem(name)
     stem = regexprep(char(name), '[^A-Za-z0-9_-]+', '_');
+end
+
+function folder = fieldtripFolder()
+%FIELDTRIPFOLDER  Where FieldTrip is in this session, or '' when it is
+%   nowhere: on the path, or installed where Alakazam keeps it
+%   (TransTools.isFieldTripAvailable looks, and never downloads).
+    folder = '';
+    try
+        if TransTools.isFieldTripAvailable()
+            folder = fileparts(which('ft_defaults'));
+        end
+    catch
+        % No FieldTrip to name: the script says where to get it.
+    end
 end
 
 function text = versionText()
