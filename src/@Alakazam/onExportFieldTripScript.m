@@ -17,9 +17,7 @@ function onExportFieldTripScript(this)
 %   See also COLLECTFIELDTRIPSUBJECTS, EXPORTFIELDTRIPSCRIPT, ONEXPORTANALYSISSCRIPT.
     choice = uiconfirm(this.MainFigure, sprintf(['Reproduce Alakazam''s results: every choice ' ...
         'FieldTrip cannot make (the trials, the rejections, the ICA components) is read back as ' ...
-        'Alakazam made it, so the script gives Alakazam''s numbers.
-
-Re-run in FieldTrip: ' ...
+        'Alakazam made it, so the script gives Alakazam''s numbers.\n\nRe-run in FieldTrip: ' ...
         'FieldTrip makes the choices it has a method for itself, with the settings closest to ' ...
         'Alakazam''s (an ICA step is its own decomposition, its components matched to Alakazam''s ' ...
         'by topography), so its results come close to Alakazam''s without being them.']), ...
@@ -78,9 +76,22 @@ Re-run in FieldTrip: ' ...
 
     target = fullfile(pathName, fileName);
     try
-        writeExportSidecars(pathName, [struct('name', fileName, 'content', code), sidecars]);
+        written = writeExportSidecars(pathName, [struct('name', fileName, 'content', code), sidecars]);
     catch ME
         warndlg(ME.message, 'Could not save');
+        return;
+    end
+    % MATLAB will not run a script that assigns a variable, or holds a
+    % function, of its own name: saved as erp.m or data.m, it would fail at
+    % its first line. Its own parser says so, so it is asked, and such a
+    % file is not left behind.
+    problems = checkcode(target, '-m2', '-struct');
+    if ~isempty(problems)
+        cellfun(@delete, written);
+        % LEGACY-JAVA-GUI: warndlg, see the note near onListEvents.
+        warndlg(sprintf(['I didn''t keep "%s": MATLAB could not run it under that name (%s). ' ...
+            'Would you export it again under another name, such as the one offered?'], ...
+            fileName, problems(1).message), 'Choose another name');
         return;
     end
 

@@ -176,44 +176,7 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
         %   app writes one (a recording, then DefineBins, ManualReject and
         %   Average, each in its parent's folder), read by the real
         %   collectFieldTripSubjects, collectBranchTree and loadNodeEEG.
-            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
-            raw = testCase.recording();
-            raw.etc = struct('alz', struct('rawFile', 'C:\data\rec01.vhdr'));
-            rootFile = fullfile(folder, 'rec01.mat');
-            saveEegCache(rootFile, raw);
-            binParams = struct('script', sprintf(['epoch [-40,40] ms\nbin 1 "A" : "11"\n' ...
-                'bin 2 "B" : "22"\nbin 3 "A - B" = bin 1 - bin 2']));
-            defined = testCase.saveStep(rootFile, 'DefineBins', DefineBins(raw, binParams), binParams);
-            flags = false(2, 6);
-            flags(:, [2 5]) = true;
-            rejectParams = struct('flags', flags, 'scope', 'Whole epoch', 'channelMode', 'Leave NaN');
-            rejected = testCase.saveStep(defined.File, 'ManualReject', ...
-                ManualReject(defined, rejectParams), rejectParams);
-            averaged = testCase.saveStep(rejected.File, 'Average', Average(rejected, struct('Param', 'Init')), ...
-                struct('Param', 'Init'));
-            % Two grand averages as the Grand Averages tree keeps them, each with
-            % its record of what it combined: this average twice, weighted;
-            % and this average with one from outside the workspace.
-            grandFiles = {fullfile(folder, 'grandA.mat'), fullfile(folder, 'grandB.mat')};
-            sources = {{averaged.File, averaged.File}, {averaged.File, fullfile(folder, 'elsewhere.mat')}};
-            for g = 1:2
-                grand = averaged;
-                grand.etc.GrandAverage = struct('sources', {sources{g}}, 'weighted', g == 1, 'nSubjects', 2);
-                saveEegCache(grandFiles{g}, grand);
-            end
-
-            copies = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
-            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(copies));
-            MethodCopy.make(copies, '@Alakazam', 'collectFieldTripSubjects', 'collectCopy');
-            MethodCopy.make(copies, '@Alakazam', 'collectBranchTree', 'branchCopy');
-            MethodCopy.make(copies, '@Alakazam', 'loadNodeEEG', 'loadCopy');
-            rehash;
-            app = FakeApp(struct('Workspace', struct('Tree', FakeTree({rootFile}), ...
-                'GrandAveragesTree', FakeTree(grandFiles)), 'MainFigure', []));
-            app.addprop('collectBranchTree');
-            app.addprop('loadNodeEEG');
-            app.collectBranchTree = @(file) branchCopy(app, file);
-            app.loadNodeEEG = @(file, action) loadCopy(app, file, action);
+            [app, defined] = testCase.workspaceApp();
 
             [subjects, grandAverages] = collectCopy(app);
 
@@ -269,6 +232,48 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
                 'Alakazam:exportFieldTripScript');
         end
 
+        function theButtonWritesTheScriptAndItsFilesInEitherMode(testCase)
+        %THEBUTTONWRITESTHESCRIPTANDITSFILESINEITHERMODE  The ribbon action
+        %   itself, run on the workspace with its dialogs answered: the mode
+        %   asked, the analysis collected, the script and its table of trials
+        %   written where the save dialog said, and the message saying so.
+            for mode = {'Reproduce Alakazam''s results', 'Re-run in FieldTrip'}
+                [app, ~] = testCase.workspaceApp();
+                out = testCase.standInDialogs(mode{1}, 'erp_analysis.m');
+                copies = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+                testCase.applyFixture(matlab.unittest.fixtures.PathFixture(copies));
+                MethodCopy.make(copies, '@Alakazam', 'onExportFieldTripScript', 'exportCopy');
+                rehash;
+
+                exportCopy(app);
+
+                code = fileread(fullfile(out, 'erp_analysis.m'));
+                if startsWith(mode{1}, 'Re-run')
+                    testCase.verifySubstring(code, '% Mode: RE-RUN.');
+                else
+                    testCase.verifySubstring(code, '% Mode: REPRODUCE.');
+                end
+                testCase.verifyTrue(isfile(fullfile(out, 'node1_trials.tsv')), 'Its table of trials, beside it.');
+                testCase.verifySubstring(fileread(fullfile(out, 'message.txt')), 'Wrote the analysis of 1 recording(s)');
+                testCase.verifyEmpty(checkcode(fullfile(out, 'erp_analysis.m'), '-m2'), 'The script is valid MATLAB.');
+            end
+        end
+
+        function aNameTheScriptCannotRunUnderIsRefused(testCase)
+        %ANAMETHESCRIPTCANNOTRUNUNDERISREFUSED  Saved as erp.m, the script
+        %   would assign a variable of its own name, which MATLAB will not run:
+        %   the export says so and leaves nothing behind.
+            [app, ~] = testCase.workspaceApp();
+            out = testCase.standInDialogs('Reproduce Alakazam''s results', 'erp.m');
+            copies = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(copies));
+            MethodCopy.make(copies, '@Alakazam', 'onExportFieldTripScript', 'exportCopy');
+            rehash;
+            testCase.verifyError(@() exportCopy(app), 'standIn:warndlg');
+            testCase.verifyEmpty(dir(fullfile(out, '*.m')), 'No script left behind.');
+            testCase.verifyEmpty(dir(fullfile(out, '*.tsv')), 'Nor its table of trials.');
+        end
+
         function aDefineBinsMadeBeforeItRecordedItsTrialsIsRefused(testCase)
             result = struct('srate', 250, 'DataFormat', 'EPOCHED', 'data', zeros(2, 10, 3), ...
                 'times', -40:4:-4, 'etc', struct('alz', struct()), ...
@@ -279,6 +284,77 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
     end
 
     methods (Access = private)
+        function [app, defined] = workspaceApp(testCase)
+        %WORKSPACEAPP  A workspace on disk, as the app writes one (a recording,
+        %   then DefineBins, ManualReject and Average, each in its parent's
+        %   folder, and two grand averages), and a FakeApp over it whose
+        %   collectFieldTripSubjects, collectBranchTree and loadNodeEEG are the
+        %   real methods (MethodCopy).
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            raw = testCase.recording();
+            raw.etc = struct('alz', struct('rawFile', 'C:\data\rec01.vhdr'));
+            rootFile = fullfile(folder, 'rec01.mat');
+            saveEegCache(rootFile, raw);
+            binParams = struct('script', sprintf(['epoch [-40,40] ms\nbin 1 "A" : "11"\n' ...
+                'bin 2 "B" : "22"\nbin 3 "A - B" = bin 1 - bin 2']));
+            defined = testCase.saveStep(rootFile, 'DefineBins', DefineBins(raw, binParams), binParams);
+            flags = false(2, 6);
+            flags(:, [2 5]) = true;
+            rejectParams = struct('flags', flags, 'scope', 'Whole epoch', 'channelMode', 'Leave NaN');
+            rejected = testCase.saveStep(defined.File, 'ManualReject', ...
+                ManualReject(defined, rejectParams), rejectParams);
+            averaged = testCase.saveStep(rejected.File, 'Average', Average(rejected, struct('Param', 'Init')), ...
+                struct('Param', 'Init'));
+            % Two grand averages as the Grand Averages tree keeps them, each with
+            % its record of what it combined: this average twice, weighted;
+            % and this average with one from outside the workspace.
+            grandFiles = {fullfile(folder, 'grandA.mat'), fullfile(folder, 'grandB.mat')};
+            sources = {{averaged.File, averaged.File}, {averaged.File, fullfile(folder, 'elsewhere.mat')}};
+            for g = 1:2
+                grand = averaged;
+                grand.etc.GrandAverage = struct('sources', {sources{g}}, 'weighted', g == 1, 'nSubjects', 2);
+                saveEegCache(grandFiles{g}, grand);
+            end
+
+            copies = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(copies));
+            MethodCopy.make(copies, '@Alakazam', 'collectFieldTripSubjects', 'collectCopy');
+            MethodCopy.make(copies, '@Alakazam', 'collectBranchTree', 'branchCopy');
+            MethodCopy.make(copies, '@Alakazam', 'loadNodeEEG', 'loadCopy');
+            rehash;
+            app = FakeApp(struct('Workspace', struct('Tree', FakeTree({rootFile}), ...
+                'GrandAveragesTree', FakeTree(grandFiles), 'ExportsDirectory', folder), 'MainFigure', []));
+            app.addprop('collectBranchTree');
+            app.addprop('loadNodeEEG');
+            app.addprop('collectFieldTripSubjects');
+            app.collectBranchTree = @(file) branchCopy(app, file);
+            app.loadNodeEEG = @(file, action) loadCopy(app, file, action);
+            app.collectFieldTripSubjects = @(varargin) collectCopy(app, varargin{:});
+        end
+
+        function out = standInDialogs(testCase, choice, fileName)
+        %STANDINDIALOGS  The dialogs the export opens, answered without a
+        %   screen: uiconfirm picks CHOICE, uiputfile names FILENAME in OUT,
+        %   msgbox keeps what it was told in OUT/message.txt, warndlg raises it
+        %   as an error (so a failure in the handler fails the test), and the
+        %   busy indicator does nothing.
+            out = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            stands = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            write = @(name, text) writeText(fullfile(stands, [name '.m']), text);
+            write('uiconfirm', sprintf('function choice = uiconfirm(varargin)\nchoice = ''%s'';\nend\n', ...
+                strrep(choice, '''', '''''')));
+            write('uiputfile', sprintf(['function [name, folder] = uiputfile(varargin)\n' ...
+                'name = ''%s'';\nfolder = ''%s'';\nend\n'], fileName, [out filesep]));
+            write('msgbox', sprintf(['function msgbox(text, varargin)\nfid = fopen(''%s'', ''w'');\n' ...
+                'fwrite(fid, text, ''char'');\nfclose(fid);\nend\n'], fullfile(out, 'message.txt')));
+            write('warndlg', sprintf('function warndlg(text, varargin)\nerror(''standIn:warndlg'', ''%%s'', text);\nend\n'));
+            write('beginBusy', sprintf(['function [restore, set] = beginBusy(varargin)\n' ...
+                'restore = onCleanup(@() []);\nset = @(varargin) [];\nend\n']));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(stands));
+            warning('off', 'MATLAB:dispatcher:nameConflict');
+            rehash;
+        end
+
         function EEG = recording(~)
         %RECORDING  Two channels, 500 samples at 250 Hz, with events 11 and 22
         %   alternating every 70 samples: six trials, three per bin.
@@ -342,4 +418,11 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
                 ctx('EPOCHED', struct('bins', bins))];
         end
     end
+end
+
+% ======================================================================= %
+function writeText(file, text)
+    fid = fopen(file, 'w');
+    fwrite(fid, text, 'char');
+    fclose(fid);
 end
