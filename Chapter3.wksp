@@ -1,7 +1,7 @@
 {
-  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/Luck/ch3/",
-  "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
-  "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
+  "RawDirectory": "D:\\Data\\Luck\\ch3\\",
+  "CacheDirectory": "D:\\Data\\Cache\\",
+  "ExportsDirectory": "D:\\Data\\Exports\\",
   "TransformSettings": {
     "DefineBins": {
       "epochStart": "-200",
@@ -34,5 +34,6 @@
       "BaselineStart": -100,
       "BaselineStop": 0
     }
-  }
+  },
+  "Groups": []
 }

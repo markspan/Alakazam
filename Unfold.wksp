@@ -1,0 +1,13 @@
+{
+  "RawDirectory": "D:\\Data\\opendata\\",
+  "CacheDirectory": "d:\\Data\\Cache\\",
+  "ExportsDirectory": "d:\\Data\\Exports\\",
+  "TransformSettings": {
+    "Deconvolve": [],
+    "Baseline": {
+      "Start": -100,
+      "Stop": 0
+    }
+  },
+  "Groups": []
+}
