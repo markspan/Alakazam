@@ -4,7 +4,7 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
-## Unreleased
+## V0.4.5 (2026-10-09)
 
 ### Added
 
