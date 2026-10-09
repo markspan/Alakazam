@@ -31,11 +31,14 @@ function [EEG, opts] = DipoleFit(input, varargin)
 %     [EEG, opts] = DipoleFit(input)        % settings dialog
 %     [EEG, opts] = DipoleFit(input, opts)  % replay stored settings
 %   OPTS: Bins (labels), WindowStart and WindowStop (ms), Model ('One dipole'
-%   | 'Mirrored pair'), GridResolution (mm).
+%   | 'Mirrored pair'), GridResolution (mm), Optimiser ("FieldTrip's choice",
+%   the default, as a FieldTrip script has it, or 'fminsearch'; see
+%   DIPOLEFITWINDOW).
 %
 %   See also DIPOLEFITWINDOW, FT_DIPOLEFITTING, SOURCEESTIMATE,
 %   TRANSTOOLS.BUILDSOURCEFORWARDMODEL.
 MODELS = {'One dipole', 'Mirrored pair'};
+OPTIMISERS = {'FieldTrip''s choice', 'fminsearch'};
 
 [opts, interactive] = TransTools.InitGuard(nargin, 'Alakazam:DipoleFit', varargin{:});
 if ~isfield(input, 'bindesc') || isempty(input.bindesc) || ~isfield(input, 'data') || isempty(input.data)
@@ -60,7 +63,9 @@ if interactive
         {'From (ms)'; 'WindowStart'}, TransTools.FieldOr(stored, 'WindowStart', peak - 20), ...
         {'To (ms)'; 'WindowStop'}, TransTools.FieldOr(stored, 'WindowStop', peak + 20), ...
         {'Model'; 'Model'}, TransTools.PutFirst(MODELS, TransTools.FieldOr(stored, 'Model', MODELS{1})), ...
-        {'Grid search spacing (mm)'; 'GridResolution'}, TransTools.FieldOr(stored, 'GridResolution', 10));
+        {'Grid search spacing (mm)'; 'GridResolution'}, TransTools.FieldOr(stored, 'GridResolution', 10), ...
+        {'Optimiser'; 'Optimiser'}, TransTools.PutFirst(OPTIMISERS, ...
+            TransTools.FieldOr(stored, 'Optimiser', OPTIMISERS{1})));
     if isempty(opts)
         EEG = [];       % cancelled: no node, no compute
         opts = [];      % the contract is two outputs; both must be assigned
@@ -107,7 +112,8 @@ function opts = withDefaults(opts, input)
     end
     peak = gfpPeak(input);
     defaults = struct('Bins', {{input.bindesc(1).label}}, 'WindowStart', peak - 20, ...
-        'WindowStop', peak + 20, 'Model', 'One dipole', 'GridResolution', 10);
+        'WindowStop', peak + 20, 'Model', 'One dipole', 'GridResolution', 10, ...
+        'Optimiser', 'FieldTrip''s choice');
     for field = fieldnames(defaults)'
         if ~isfield(opts, field{1}) || isempty(opts.(field{1}))
             opts.(field{1}) = defaults.(field{1});

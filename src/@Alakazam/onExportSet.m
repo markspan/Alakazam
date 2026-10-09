@@ -33,15 +33,9 @@ function onExportSet(this)
 
     restoreBusy = beginBusy(this.MainFigure, 'Exporting .set...');
     try
-        % Order matters: bin conversion first (reads EEG.event(i).bini as
-        % Alakazam left it), then the epoched-data event-latency rewrite
-        % (an anchor's .latency must already be EEGLAB-correct before
-        % ensureEventEpochField's own eeg_checkset call, which otherwise
-        % prunes it as "out of bounds" -- see rewriteEpochedEventLatencies'
-        % own header comment).
-        EEG = alakazamBinsToEventList(EEG);
-        EEG = rewriteEpochedEventLatencies(EEG);
-        EEG = ensureEventEpochField(EEG);
+        % The dataset as EEGLAB expects it: EVENTLIST, epoch latencies, the
+        % .epoch field and the time axis, in that order (prepareSetExport).
+        EEG = prepareSetExport(EEG);
         pop_saveset(EEG, 'filename', fileName, 'filepath', pathName);
     catch err
         uialert(this.MainFigure, err.message, 'Could not export .set');

@@ -4,14 +4,16 @@ function [vertexLabel, labels] = AtlasVertexLabels(sourcemodel, atlasName)
 %   returns an nVertex x 1 index into LABELS, with 0 for vertices the atlas
 %   does not label.
 %
-%   THE MAPPING IS A VOLUMETRIC LOOKUP, because FieldTrip ships no surface
-%   parcellation: every template atlas is a labelled MRI volume, while the
-%   source model is a cortical sheet. Each vertex's position is therefore
-%   transformed into the atlas's own voxel grid and read off. Both are in
-%   MNI space, which is what makes this legitimate rather than a
-%   coincidence -- and it was checked rather than assumed: against
+%   THE MAPPING IS FIELDTRIP'S OWN: ft_sourceinterpolate with interpmethod
+%   'nearest' and parameter 'tissue', as its parcellation tutorials put an
+%   atlas on a source model. Every template atlas is a labelled MRI volume
+%   and the source model a cortical sheet, so each vertex takes the label of
+%   the voxel it lies in. Both are in MNI space, which is what makes this
+%   legitimate rather than a coincidence, and it was checked: against
 %   cortex_20484 and AAL, 100% of vertices land inside the atlas volume and
-%   87.8% carry a non-zero label.
+%   87.8% carry a non-zero label. Alakazam once read the voxels itself, and
+%   gave the same label at every vertex (checked 2026-10-09 for AAL and
+%   Brainnetome on the 5124- and 20484-vertex sheets).
 %
 %   UNLABELLED VERTICES STAY UNLABELLED (0). The ~12% that miss are mostly
 %   midline and boundary vertices falling in unlabelled voxels. Assigning
@@ -25,11 +27,10 @@ function [vertexLabel, labels] = AtlasVertexLabels(sourcemodel, atlasName)
 %   reused -- reading and transforming a whole MRI volume for every cluster
 %   being named would be absurd for a result that cannot change.
 %
-%   USED ONLY TO NAME LOCATIONS, never to compute anything. A cluster test
-%   runs on vertices; the atlas exists so its result can be reported as
-%   "peak in Temporal_Mid_L" rather than as a vertex index, which is a
-%   readability question and not a statistical one. Nothing downstream of
-%   the statistics depends on the parcellation being correct.
+%   WHAT IT IS USED FOR. Source cluster statistics use it only to name
+%   locations ("peak in Temporal_Mid_L" rather than a vertex index). Source
+%   Regions uses it to compute: it is the parcellation ft_sourceparcellate
+%   averages each region over.
 %
 %   See also SOURCECLUSTERSTATS, TRANSTOOLS.DESCRIBEVERTEX,
 %   TRANSTOOLS.BUILDSOURCEFORWARDMODEL.
@@ -55,22 +56,21 @@ function [vertexLabel, labels] = AtlasVertexLabels(sourcemodel, atlasName)
 
     atlas = ft_convert_units(ft_read_atlas(atlasFile(atlasName)), 'mm');
     sm    = ft_convert_units(sourcemodel, 'mm');
-
     labels = atlas.tissuelabel(:);
-    nVertex = size(sm.pos, 1);
 
-    % Vertex position (mm) -> atlas voxel index. round(), not floor(): a
-    % voxel's coordinate names its CENTRE, so the nearest voxel is the one
-    % the vertex is actually in.
-    vox = round(atlas.transform \ [sm.pos, ones(nVertex, 1)]');
-    vox = vox(1:3, :)';
-
-    inside = all(vox >= 1, 2) & vox(:, 1) <= atlas.dim(1) & ...
-             vox(:, 2) <= atlas.dim(2) & vox(:, 3) <= atlas.dim(3);
-
-    vertexLabel = zeros(nVertex, 1);
-    vertexLabel(inside) = atlas.tissue(sub2ind(atlas.dim, ...
-        vox(inside, 1), vox(inside, 2), vox(inside, 3)));
+    % Only the sheet's geometry goes in: a source model can carry a
+    % leadfield or filters, which have nothing to do with the lookup.
+    sheet = struct('pos', sm.pos, 'unit', 'mm');
+    if isfield(sm, 'tri')
+        sheet.tri = sm.tri; %#ok<STRNU> used in evalc
+    end
+    cfg = struct('interpmethod', 'nearest', 'parameter', 'tissue'); %#ok<NASGU> used in evalc
+    onSheet = [];
+    evalc('onSheet = ft_sourceinterpolate(cfg, atlas, sheet);');   % quiet: it prints
+    % A vertex outside the atlas volume comes back NaN: unlabelled, as a
+    % vertex in an unlabelled voxel (0) is.
+    vertexLabel = double(onSheet.tissue(:));
+    vertexLabel(~isfinite(vertexLabel)) = 0;
 
     cache(end + 1) = struct('key', key, 'vertexLabel', vertexLabel, 'labels', {labels});
 end

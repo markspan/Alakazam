@@ -466,7 +466,7 @@ electrodes; its amplitude axis is the estimate's scale, not microvolts.
 
 | Option | Default | Meaning |
 |--------------|------------------------|-------------------------------------------------------|
-| **Atlas** | AAL | The regions: AAL's or Brainnetome's, mapped onto the cortical sheet in MNI space. A vertex in no region takes no part. |
+| **Atlas** | AAL | The regions: AAL's or Brainnetome's, mapped onto the cortical sheet in MNI space by FieldTrip's `ft_sourceinterpolate` (nearest neighbour). A vertex in no region takes no part. |
 | **Region value** | Mean magnitude | **Mean magnitude**: the mean of the vertices' magnitudes, always positive. **Signed mean**: the mean along the cortical normal, each vertex first turned to its region's dominant orientation, so the two banks of a sulcus do not cancel and an ERP's polarity survives (MNE's *mean_flip*). |
 | **Inverse method** | dSPM | As in Source Estimate (@sec-tr-sourceestimate). |
 | **Source space** | 20 484 vertices | As in Source Estimate. |
@@ -506,8 +506,15 @@ template brain with a table of their positions.
 | **From**, **To** | 20 ms either side of the largest global field power after the event | The window, in ms. |
 | **Model** | One dipole | **One dipole**, or a **Mirrored pair**, symmetric across the midline, for a response from both hemispheres at once. |
 | **Grid search spacing** | 10 mm | The grid the starting point is searched on. |
+| **Optimiser** | FieldTrip's choice | The nonlinear fit's optimiser: FieldTrip's own choice, as in a FieldTrip script (`fminunc` where MATLAB reports the Optimization Toolbox, `fminsearch` otherwise), or **fminsearch**. |
 
 : Dipole Fit's options. {#tbl-dipolefit}
+
+The fit runs with FieldTrip's own defaults, as a FieldTrip script would. On
+a MATLAB that reports the Optimization Toolbox without having all of it
+installed, FieldTrip's choice, `fminunc`, stops with an error, and FieldTrip
+returns only the grid search's starting point; Dipole Fit then refuses the
+fit and says so. Choose **fminsearch** there.
 
 A dipole is the right model only when one focal generator is a fair
 assumption, as for an early sensory response; it is not the right model for

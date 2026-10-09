@@ -249,7 +249,8 @@ the ocular signal from every channel while keeping the trials.
 
 **The algorithm.** FastICA [@hyvarinen2000] is used when it is installed
 (it is offered on first use); otherwise EEGLAB's ICA dialog opens, whose
-default is `runica`, extended Infomax [@bell1995]. Classification uses ICLabel's `beta` classifier.
+default is `runica`, extended Infomax [@bell1995]. Classification uses ICLabel's
+default network, the one ICLabel recommends.
 Only channels with a scalp position on the 10-5 template, and not typed as
 peripheral, are decomposed; EOG, ECG and other channels are set aside and
 put back unchanged.

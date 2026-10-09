@@ -162,7 +162,7 @@ function EEG = ensureDecomposition(input)
         eegOnly = TransTools.WithRestoredRng(@() ...
             pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1));
     end
-    eegOnly = iclabel(eegOnly, 'beta');
+    eegOnly = iclabel(eegOnly, TransTools.IclabelNetwork());
     EEG.etc.alz.icaType = icaType;   % which algorithm, for the record below
 
     EEG.icaweights  = eegOnly.icaweights;
@@ -192,6 +192,6 @@ function EEG = classifyOnSubset(EEG)
     eegOnly.icachansind = 1:numel(EEG.icachansind);
     eegOnly.icaact      = [];
     eegOnly = eeg_checkset(eegOnly);
-    eegOnly = iclabel(eegOnly, 'beta');
+    eegOnly = iclabel(eegOnly, TransTools.IclabelNetwork());
     EEG.etc.ic_classification = eegOnly.etc.ic_classification;
 end

@@ -224,10 +224,16 @@ behaviours, both of which DipoleFit already avoids:
   lattice.) The tutorial's 1 cm grid is `resolution = 10` with this head
   model; DipoleFit gives its spacing in the head model's unit for this
   reason. `ft_prepare_sourcemodel` called directly does honour `cfg.unit`.
-- **The default optimiser can fail silently.** `fminunc` (the Optimization
-  Toolbox) fails on this machine, and FieldTrip then returns the grid
+- **The default optimiser can fail silently.** FieldTrip chooses `fminunc`
+  wherever `ft_hastoolbox('optim')` says yes. On this machine a shared copy
+  of `fminunc` is present and the licence check passes without the
+  Optimization Toolbox installed, so `fminunc` stops on "Unable to load a
+  message catalog 'optim:fminusub'", and FieldTrip then returns the grid
   search's starting point, [±35 -15 55] mm, with no residual variance and no
-  error. DipoleFit uses `fminsearch`, and refuses a fit without one.
+  error. DipoleFit leaves the choice to FieldTrip by default, as a script
+  does, offers `fminsearch` (FieldTrip's `cfg.dipfit.optimfun`) as its
+  Optimiser setting, and refuses a fit without a residual variance, naming
+  that setting.
 
 ### Beamformer: the same code path, the expected source
 

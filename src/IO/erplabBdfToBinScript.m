@@ -22,8 +22,13 @@ function [script, warnings] = erplabBdfToBinScript(bdf)
 %
 %   Mapping to DefineBins:
 %       .{111;112}            -> anchor            111|112
-%       {5}.{home}            -> prev(5)           (preceding context)
-%       .{home}{t<200-1500>201} -> next(201) within [200,1500] ms
+%       {5}.{home}            -> prev(5) within [-1,-1] events  (the event just before)
+%       .{home}{t<200-1500>201} -> next(201) within [200,1500] ms  (others may intervene)
+%   which is how BINLISTER reads them: a bracket without a time condition is
+%   the adjacent event, one with a time condition any event in the window.
+%   Checked against ERPLAB 13.10's own pop_binlister on Luck's five bin
+%   files (identical bins, event for event) and on a synthetic list with an
+%   event between target and response (2026-10-09).
 %   Other ERPLAB flags (w write-back, f/a/d flag tests, ...) have no
 %   DefineBins equivalent and are reported in WARNINGS, not translated.
 %

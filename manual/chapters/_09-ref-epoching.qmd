@@ -191,10 +191,13 @@ to 1000 codes.
 
 ### Importing ERPLAB bin descriptors
 
-**Import BDF** reads a BINLISTER bin descriptor file and translates it: the
-time-locking event `.{a;b}` becomes the code set `a|b`, a preceding bracket
-`{c}.{...}` becomes `prev(c)`, and a following bracket with a time condition
-`.{...}{r:200<t<=800}` becomes `next(r) within (200,800] ms`. What has no
+**Import BDF** reads a BINLISTER bin descriptor file and translates it as
+BINLISTER reads it: the time-locking event `.{a;b}` becomes the code set
+`a|b`, a preceding bracket `{c}.{...}` becomes `prev(c) within [-1,-1]
+events` (the event just before), and a following bracket with a time
+condition `.{...}{t<200-800>r}` becomes `next(r) within [200,800] ms`, which,
+as in BINLISTER, other events may come before. On Luck's five bin files the
+bins match ERPLAB's own BINLISTER event for event. What has no
 equivalent (write-back flags, flag conditions, open-ended times) is imported
 as far as it goes and marked with a `% WARNING:` line to finish by hand.
 
@@ -302,6 +305,7 @@ explained by two events is shared between them [@smith2015; @ehinger2019;
 | **Formula** per bin | `y ~ 1` | What explains the bin's response, in Unfold's notation (below). |
 | **Events in no bin, modelled and dropped** | all | Event codes outside the bins to model as nuisance, so that their overlap is removed too. |
 | **Artefact threshold**, **Measured in a window of**, **Stepped by** | 150 µV, 2000 ms, 100 ms | Stretches whose peak-to-peak amplitude in the moving window exceeds the threshold are left out of the model; 0 turns this off. |
+| **Solver iterations** | 400 | The most iterations the solver takes per channel, the toolbox's own limit. A fit that reaches it says so. |
 
 : Deconvolve's options. {#tbl-deconvolve}
 
@@ -319,15 +323,24 @@ columns the toolbox builds for each formula before anything is fitted.
 | `y ~ 1 + circspl(angle, 5, 0, 360)` | a circular spline, for an angle |
 | `y ~ 1 + cat(side)` | a factor, coded against its first level |
 | `y ~ 1 + cat(side) * rt` | a factor, a linear term and their interaction |
+| `y ~ 1 + 2dspl(x, y, 5)` | a smooth surface over two fields, such as a fixation's position |
 
 : Formulas in Unfold's notation. {#tbl-deconvolve-formulas}
 
 **A term is a control.** Every bin's waveform is the model's prediction with
 each continuous and spline term held at the same value for every bin (for a
 spline, over the range the bins share), and each factor at the bin's own mix.
-So a reaction time or saccade size that differs between bins does not appear
-as a difference between them, which is the point of including it
+An interaction with a continuous term is held at the same value too. So a
+reaction time or saccade size that differs between bins does not appear as a
+difference between them, which is the point of including it
 [@dimigen2021].
+
+**Bins may share events**, as they may for Average: an event counts in every
+bin it belongs to. A bin nested in another ("Rare" inside "All stimuli") is
+then the response of its own events, and the outer bin the average over all
+of its events. Internally each set of bins that some events share is fitted
+as one event type, with the terms of all those bins' formulas, and the model
+list says which bins share events.
 
 ### What to model
 
@@ -369,8 +382,45 @@ and model the saccades and blinks instead.
   window touches a stretch left out of the model had nothing subtracted there
   and is dropped, and counted.
 - **The model's terms**: every factor level, and every continuous or spline
-  term at chosen values, each as a whole waveform with the other terms at
-  their means (Unfold's `uf_predictContinuous` and `uf_addmarginal`).
+  term at chosen values, each as a whole waveform with the other terms as
+  their average marginal effects, a spline averaged over its events' own
+  values (Unfold's `uf_predictContinuous` and `uf_addmarginal` with `AME`).
+  The toolbox's default would evaluate a spline at its mean value instead,
+  which for an angle is a direction no event need have had. A 2D spline is
+  named by both fields in **Terms evaluated at** (`x = 1 2; y = 0.5`).
 
 Deconvolve needs continuous data without a DC offset, since the regression
 has no intercept for the recording as a whole: high-pass filter first.
+
+### How the Unfold toolbox is called
+
+Deconvolve calls the Unfold toolbox as an Unfold script does, with the same
+inputs, and keeps its results as they are, so a result is the one Unfold
+itself gives. The artefact scan, for example, is handed the dataset's own
+events, cuts included, and looks at each stretch between cuts on its own.
+Four details of the toolbox are worth knowing (Unfold 1.3.1, unchanged in its
+current version):
+
+- **Joining marked stretches.** `uf_combineWinrej` joins overlapping marked
+  stretches by ending the joined one where the later-starting one ends.
+  Where one stretch lies wholly inside another, the joined stretch ends with
+  the inner one, and the rest of the outer one is fitted. It arises only
+  where two sets of marks are joined and one lies inside the other. In
+  Deconvolve those are the scan's marks and the zones around cuts, and it
+  needs an artefact window shorter than the longer side of the response
+  window, which the defaults are not.
+- **One-letter factor levels.** `uf_designmat` gives an empty event field the
+  value NaN, so that a numeric field stays numeric, and MATLAB's
+  `struct2table` then reads levels that are all single letters, together
+  with NaN, as characters rather than text. The design cannot then be built.
+  It needs levels that are all single letters and an event without the
+  field; name the levels with two letters or more (@sec-troubleshooting).
+- **The scan's edges.** ERPLAB's moving window, which the toolbox uses,
+  starts one sample in and stops when the next step would run off the end,
+  so the first sample and less than one step at the end of each stretch are
+  not looked at.
+- **Zeros in a covariate.** The mean and quantiles of a continuous term leave
+  out values that are exactly zero, as the toolbox's own message says, since
+  zero is what the rows of the other event types hold. A covariate whose own
+  values include zero (a rating of 0) is summarised without them; name the
+  values in **Terms evaluated at** where that matters.

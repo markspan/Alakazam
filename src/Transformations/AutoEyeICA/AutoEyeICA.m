@@ -127,8 +127,8 @@ if isempty(decomposition)
             pop_runica(eegOnly, 'icatype', 'runica', 'extended', 1));
     end
 
-    %% Classify
-    eegOnly = iclabel(eegOnly, 'beta');
+    %% Classify, with ICLabel's recommended network (TransTools.IclabelNetwork)
+    eegOnly = iclabel(eegOnly, TransTools.IclabelNetwork());
 
     decomposition = struct('key', key, 'icatype', icaType, ...
         'icaweights', eegOnly.icaweights, 'icasphere', eegOnly.icasphere, ...
@@ -138,6 +138,17 @@ if isempty(decomposition)
 else
     fprintf('AutoEyeICA: reusing the decomposition already computed for this data.\n');
     eegOnly = restoreDecomposition(eegOnly, decomposition);
+    if ~TransTools.ClassifiedBy(eegOnly.etc, TransTools.IclabelNetwork())
+        % Classified by another ICLabel network: a node made when Alakazam
+        % still called 'beta'. The decomposition is kept, since ICA is not
+        % seeded and a new one would give other components; only the
+        % classification is made again, as a fresh run would make it.
+        fprintf('AutoEyeICA: classifying the reused decomposition with ICLabel''s %s network.\n', ...
+            TransTools.IclabelNetwork());
+        eegOnly = iclabel(eeg_checkset(eegOnly), TransTools.IclabelNetwork());
+        decomposition.etc = pickIcaEtc(eegOnly.etc);
+        TransTools.IcaCache('put', key, decomposition);
+    end
 end
 
 %% Prune every component ICLabel calls 'Eye' above the threshold

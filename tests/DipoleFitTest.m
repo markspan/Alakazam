@@ -36,8 +36,12 @@ classdef DipoleFitTest < matlab.unittest.TestCase
         function findsTheDipoleThatWasPutThere(testCase)
             truth = [-48 -22 4];
             avg = testCase.simulate(truth, [0.3 0.2 0.93]);
+            % fminsearch, FieldTrip's documented option, so the fit runs on a
+            % MATLAB where FieldTrip's own choice, fminunc, cannot (see
+            % theFitIsLeftToFieldTripsOwnDefaults for the default).
             result = FieldTripFixtures.quietly(@() DipoleFit(avg, struct('Bins', {{'A'}}, ...
-                'WindowStart', 80, 'WindowStop', 120, 'Model', 'One dipole', 'GridResolution', 10)));
+                'WindowStart', 80, 'WindowStop', 120, 'Model', 'One dipole', 'GridResolution', 10, ...
+                'Optimiser', 'fminsearch')));
             fit = result.dipoleFit;
             testCase.verifyEqual(fit.bin, 'A');
             testCase.verifySize(fit.pos, [1 3]);
@@ -53,11 +57,62 @@ classdef DipoleFitTest < matlab.unittest.TestCase
             testCase.verifyEqual(result.data, avg.data, 'The data are not changed.');
         end
 
+        function theFitIsLeftToFieldTripsOwnDefaults(testCase)
+        %THEFITISLEFTTOFIELDTRIPSOWNDEFAULTS  The optimiser and the inside
+        %   check are FieldTrip's to choose, as in a script: fminunc where it
+        %   finds the Optimization Toolbox and fminsearch otherwise, and
+        %   checkinside false. They used to be fixed at fminsearch and true.
+            testCase.standInForFieldTrip(true);
+            avg = testCase.simulate([-48 -22 4], [0.3 0.2 0.93]);
+
+            FieldTripFixtures.quietly(@() DipoleFit(avg, struct('Bins', {{'A'}}, ...
+                'WindowStart', 80, 'WindowStop', 120, 'Model', 'One dipole', 'GridResolution', 10)));
+
+            dipfit = DipoleFitTest.dipfitHandedOver(testCase);
+            testCase.verifyFalse(isfield(dipfit, 'optimfun'), 'The optimiser is FieldTrip''s choice.');
+            testCase.verifyFalse(isfield(dipfit, 'checkinside'), 'So is the inside check.');
+        end
+
+        function fminsearchIsFieldTripsOwnOptionWhenChosen(testCase)
+        %FMINSEARCHISFIELDTRIPSOWNOPTIONWHENCHOSEN  For a MATLAB where
+        %   FieldTrip's choice cannot run, the Optimiser sets its documented
+        %   cfg.dipfit.optimfun.
+            testCase.standInForFieldTrip(true);
+            avg = testCase.simulate([-48 -22 4], [0.3 0.2 0.93]);
+
+            FieldTripFixtures.quietly(@() DipoleFit(avg, struct('Bins', {{'A'}}, ...
+                'WindowStart', 80, 'WindowStop', 120, 'Model', 'One dipole', 'GridResolution', 10, ...
+                'Optimiser', 'fminsearch')));
+
+            dipfit = DipoleFitTest.dipfitHandedOver(testCase);
+            testCase.verifyEqual(dipfit.optimfun, 'fminsearch');
+            testCase.verifyFalse(isfield(dipfit, 'checkinside'));
+        end
+
+        function aFitThatStopsSaysWhichSettingToChange(testCase)
+        %AFITTHATSTOPSSAYSWHICHSETTINGTOCHANGE  FieldTrip hands back the grid
+        %   search's starting point, with no residual variance, when its
+        %   optimiser stops with an error; the refusal names the Optimiser.
+            testCase.standInForFieldTrip(false);
+            avg = testCase.simulate([-48 -22 4], [0.3 0.2 0.93]);
+
+            try
+                FieldTripFixtures.quietly(@() DipoleFit(avg, struct('Bins', {{'A'}}, ...
+                    'WindowStart', 80, 'WindowStop', 120, 'Model', 'One dipole', 'GridResolution', 10)));
+                err = MException('none:none', 'no error');
+            catch err
+            end
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:DipoleFit');
+            testCase.verifySubstring(err.message, 'set the Optimiser to fminsearch');
+        end
+
         function findsAMirroredPair(testCase)
             truth = [-46 -24 6; 46 -24 6];
             avg = testCase.simulate(truth, [0.2 0.1 0.97; -0.2 0.1 0.97]);
             result = FieldTripFixtures.quietly(@() DipoleFit(avg, struct('Bins', {{'A'}}, ...
-                'WindowStart', 80, 'WindowStop', 120, 'Model', 'Mirrored pair', 'GridResolution', 10)));
+                'WindowStart', 80, 'WindowStop', 120, 'Model', 'Mirrored pair', 'GridResolution', 10, ...
+                'Optimiser', 'fminsearch')));
             fit = result.dipoleFit;
             testCase.verifySize(fit.pos, [2 3]);
             testCase.verifyEqual(fit.pos(1, 2:3), fit.pos(2, 2:3), 'AbsTol', 1e-6, 'Mirrored across x.');
@@ -101,7 +156,42 @@ classdef DipoleFitTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Static, Access = private)
+        function dipfit = dipfitHandedOver(testCase)
+        %DIPFITHANDEDOVER  The cfg.dipfit the stand-in was given.
+            cfg = getappdata(groot, 'DipoleFitTestCfg');
+            testCase.assertNotEmpty(cfg, 'The stand-in was not the one called.');
+            dipfit = struct();
+            if isfield(cfg, 'dipfit')
+                dipfit = cfg.dipfit;
+            end
+        end
+    end
+
     methods (Access = private)
+        function standInForFieldTrip(testCase, withRv)
+        %STANDINFORFIELDTRIP  A stand-in ft_dipolefitting first on the path
+        %   for this test: it records the cfg it is handed and returns a fit,
+        %   with a residual variance or (WITHRV false) without one, as
+        %   FieldTrip returns when its optimiser stops.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            dip = '''pos'', [-48 -22 4], ''mom'', [1; 0; 0]';
+            if withRv
+                dip = [dip ', ''rv'', 0.1'];
+            end
+            fid = fopen(fullfile(folder, 'ft_dipolefitting.m'), 'w');
+            fprintf(fid, '%s\n', ...
+                'function source = ft_dipolefitting(cfg, data)', ...
+                'setappdata(groot, ''DipoleFitTestCfg'', cfg);', ...
+                ['source = struct(''dip'', struct(' dip '), ...'], ...
+                '    ''Vdata'', data.avg, ''Vmodel'', 0.9 * data.avg, ''time'', data.time);', ...
+                'end');
+            fclose(fid);
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            setappdata(groot, 'DipoleFitTestCfg', []);
+            testCase.addTeardown(@() rmappdata(groot, 'DipoleFitTestCfg'));
+        end
+
         function avg = simulate(testCase, positions, moments)
         %SIMULATE  An averaged dataset holding the field of the dipoles, a
         %   Gaussian in time peaking at 100 ms, with noise at a fortieth of it.

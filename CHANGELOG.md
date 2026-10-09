@@ -74,8 +74,54 @@ bar. Dates are those of the tag.
   DefineBins now records where each trial starts in the recording
   (`etc.alz.epochStart`), which the export needs: recalculate a DefineBins
   step made before this to export it.
+- **Deconvolve: 2D splines and the solver's limit.** A formula may use
+  Unfold's `2dspl(x, y, n)`, a smooth surface over two fields; the terms name
+  both (`x = 1 2; y = 0.5`). **Solver iterations** sets the solver's limit,
+  400 by default as in the toolbox, and a fit that reaches it says which
+  setting to raise.
 
 ### Changed
+
+- **Deconvolve: bins that share events mean what they mean in Average.** An
+  event in two bins counts fully in each, so a bin nested in another ("Rare"
+  inside "All stimuli") is its own events' response. It used to be fitted as
+  the sum of two responses, which made the nested bin its difference from the
+  outer one, without a word. Bins over exactly the same events, refused
+  before, now come out the same. Recalculate a Deconvolve node whose bins
+  share events.
+- **Deconvolve's terms carry the other terms as average marginal effects**
+  (`uf_addmarginal` with `AME`), a spline averaged over its events' values
+  rather than evaluated at their mean, which for a saccade angle near 0 and
+  360 degrees was 199 degrees, a direction no saccade had. Only the
+  intercept of a model with a spline changes.
+- **Deconvolve holds an interaction with a continuous term at the pooled
+  value**, as it holds the term itself, so `cat(side) * rt` is a control for
+  rt across bins too.
+- **ICA components are classified by ICLabel's default network**, the one
+  ICLabel recommends, in AutoEyeICA and Remove Components; Alakazam called
+  its `beta` network, which ICLabel keeps for replicating old results. A
+  decomposition stored on an older AutoEyeICA node is kept when the node is
+  recalculated (ICA is not seeded, so a new one would give other
+  components) and classified again with the default network, so the
+  components it prunes can change. Recalculate AutoEyeICA nodes.
+- **Dipole Fit runs with FieldTrip's own defaults**, as a FieldTrip script
+  does: FieldTrip chooses the optimiser (`fminunc` where MATLAB reports the
+  Optimization Toolbox, `fminsearch` otherwise) and does not confine the
+  dipole to the brain while optimising. Alakazam fixed both, at
+  `fminsearch` and confined. A new **Optimiser** setting chooses
+  `fminsearch` for a MATLAB where FieldTrip's choice cannot run, and a fit
+  that stops says so. Recalculate Dipole Fit nodes; older ones replay with
+  FieldTrip's choice.
+- **Source Regions maps its atlas through FieldTrip's own
+  `ft_sourceinterpolate`** (nearest neighbour), as FieldTrip's parcellation
+  tutorials do, instead of reading the atlas voxels itself. The labels are
+  the same at every vertex (checked for AAL and Brainnetome on both
+  sheets), so no result changes.
+- **Deconvolve's artefact scan looks between cuts, as in an Unfold script.**
+  It is now handed the dataset's own events, boundaries included, so it
+  scans each stretch between cuts on its own; it used to run across them,
+  and a voltage step at a cut could mark the windows around it. Recalculate
+  a Deconvolve node with an artefact threshold on a recording with cuts.
 
 - **A channel named by number is written in double quotes** in Derive
   Channels and in ERP Measure's `let` field: `let eogv = LEOG - "53"`. The
@@ -85,6 +131,11 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **A continuous recording exported as .set had its time axis in
+  seconds.** Alakazam keeps a continuous recording's times in seconds, and
+  EEGLAB in milliseconds; the export now writes EEGLAB's, so the file reads
+  in EEGLAB with the right times. Export again any continuous .set made
+  before this.
 - **Area labels piled up in the continuous view.** The label of an event
   with a duration (a shaded area) was not cleared with its area, so every
   scroll or zoom step left another copy on the axes. It is now cleared
@@ -95,6 +146,15 @@ bar. Dates are those of the tag.
 
 ### Documentation
 
+- **How Deconvolve calls the Unfold toolbox** is described in chapter 9 and
+  in `Unfold.fitBins`: as an Unfold script does, with its results kept as
+  they are. Four details of the toolbox are listed there, each checked
+  against Unfold 1.3.1 and its current version: how `uf_combineWinrej` joins
+  a marked stretch lying inside another, that a factor whose levels are all
+  single letters cannot be built beside an event without the field (MATLAB's
+  `struct2table` reads them as characters; the message now says so and
+  names the factor), the edges of the artefact scan, and that a covariate's
+  mean and quantiles leave out its zeros.
 - **Dipole Fit and Beamformer checked against FieldTrip's tutorials**, on
   the tutorials' own EEG data (`Docs/fieldtrip.md`). The dipole fit finds
   the tutorial's pair to the last digit, and `FieldTripTutorialDipoleTest`

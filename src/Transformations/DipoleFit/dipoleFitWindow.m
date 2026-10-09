@@ -32,16 +32,29 @@ cfg.headmodel   = headmodel;
 cfg.elec        = elec;
 cfg.resolution  = opts.GridResolution;   % mm, the head model's unit
 cfg.feedback    = 'no';
-% fminsearch, MATLAB's own, rather than FieldTrip's default fminunc,
-% which needs the Optimization Toolbox: where that is missing or broken
-% FieldTrip catches the failure and returns the grid point, unfitted.
-cfg.dipfit      = struct('display', 'off', 'checkinside', true, ...
-    'optimfun', 'fminsearch'); %#ok<STRNU> used in evalc
+% The fit itself is FieldTrip's, with its own defaults, as in a script: it
+% does not confine the dipole to the source compartment while optimising
+% (checkinside false), and by default it chooses the optimiser itself,
+% fminunc where it finds the Optimization Toolbox and fminsearch otherwise.
+% OPTS.Optimiser 'fminsearch' sets FieldTrip's documented
+% cfg.dipfit.optimfun instead, for a MATLAB where fminunc is found but
+% cannot run (a shared copy without the Optimization Toolbox's message
+% catalog, for one). Only the progress display is switched off, which
+% changes nothing but the output.
+cfg.dipfit      = struct('display', 'off');
+if strcmpi(char(string(TransTools.FieldOr(opts, 'Optimiser', ''))), 'fminsearch')
+    cfg.dipfit.optimfun = 'fminsearch'; %#ok<STRNU> used in evalc
+end
 [~, source] = evalc('ft_dipolefitting(cfg, timelock);');
 if ~isfield(source.dip, 'rv')
-    throw(MException('Alakazam:DipoleFit', ['I am afraid the dipole fit for bin "%s" ' ...
-        'did not converge, so there is only the grid search''s starting point. A ' ...
-        'wider window, or a finer grid, may help.'], binLabel));
+    % FieldTrip returns the grid search's starting point, without a
+    % residual variance, when its optimiser stops with an error.
+    throw(MException('Alakazam:DipoleFit', '%s', sprintf(['I am afraid the dipole fit ' ...
+        'for bin "%s" did not finish, so there is only the grid search''s starting point. ' ...
+        'FieldTrip''s optimiser stopped: with "FieldTrip''s choice" that is fminunc ' ...
+        'wherever MATLAB reports the Optimization Toolbox, and it cannot run where only ' ...
+        'part of that toolbox is installed. Would you set the Optimiser to fminsearch? ' ...
+        'Otherwise a wider window, or a finer grid, may help.'], binLabel)));
 end
 
 % ONE RESIDUAL VARIANCE FOR THE WINDOW: FieldTrip's dip.rv is one per

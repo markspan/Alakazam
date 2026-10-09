@@ -23,11 +23,13 @@ classdef (TestTags = {'Slow'}) FieldTripTutorialDipoleTest < matlab.unittest.Tes
 %       of about 1.7 million pairs, hours of scanning. The 1 cm grid the
 %       tutorial means is resolution 10 here, which is also how Alakazam
 %       gives it (in the head model's unit).
-%     The optimiser. FieldTrip's default, fminunc, needs the Optimization
-%       Toolbox, and where that is missing or broken FieldTrip returns the
-%       grid search's starting point without a word (on the machine this
-%       was written on, [+-35 -15 55] mm with no residual variance). The
-%       recipe is therefore run with fminsearch, as DipoleFit is.
+%     The optimiser. FieldTrip's own choice, fminunc wherever MATLAB
+%       reports the Optimization Toolbox, cannot run on the machine this was
+%       written on (a shared fminunc without that toolbox's message
+%       catalog), and FieldTrip then returns the grid search's starting
+%       point, [+-35 -15 55] mm, with no residual variance. Both sides are
+%       therefore run with fminsearch, FieldTrip's documented
+%       cfg.dipfit.optimfun, which is DipoleFit's Optimiser setting.
 %   With both, the two find the pair at [+-32.57 -11.86 51.58] mm (the
 %   subject's head coordinates) with a residual variance of 0.313, to the
 %   last digit (8 October 2026).
@@ -101,7 +103,7 @@ classdef (TestTags = {'Slow'}) FieldTripTutorialDipoleTest < matlab.unittest.Tes
             % Alakazam's, on the same average, electrodes and head model, with
             % the electrodes in the head model's millimetres as the template's are.
             opts = struct('WindowStart', 80, 'WindowStop', 110, 'Model', 'Mirrored pair', ...
-                'GridResolution', 10);
+                'GridResolution', 10, 'Optimiser', 'fminsearch');
             fit = FieldTripFixtures.quietly(@() dipoleFitWindow(tl.avg, tl.time * 1000, tl.label, ...
                 ft_convert_units(tl.elec, 'mm'), testCase.HeadModel, opts, 'all'));
 

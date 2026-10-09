@@ -122,6 +122,57 @@ classdef AutoEyeICACacheTest < matlab.unittest.TestCase
                 'A decomposition must not be reused for data it was not computed from.');
         end
 
+        function theComponentsAreClassifiedByICLabelsDefaultNetwork(testCase)
+        %THECOMPONENTSARECLASSIFIEDBYICLABELSDEFAULTNETWORK  ICLabel's own
+        %   recommendation: its 'beta' network is only for replicating old
+        %   results.
+            EEG = testCase.recording();
+
+            result = AutoEyeICA(EEG, struct('EyeThreshold', 0.99));
+
+            testCase.verifyEqual(result.etc.alz.eyeICA.decomposition.etc.ic_classification.ICLabel.version, ...
+                'default');
+            testCase.verifyEqual(result.etc.ic_classification.ICLabel.version, 'default');
+        end
+
+        function removeComponentsClassifiesWithTheDefaultNetworkToo(testCase)
+        %REMOVECOMPONENTSCLASSIFIESWITHTHEDEFAULTNETWORKTOO  Its own
+        %   decomposition, and an existing one without a classification.
+            EEG = testCase.recording();
+
+            decomposed = RemoveComponents(EEG, struct('components', []));
+            testCase.verifyEqual(decomposed.etc.ic_classification.ICLabel.version, 'default');
+
+            unclassified = decomposed;
+            unclassified.etc = rmfield(unclassified.etc, 'ic_classification');
+            classified = RemoveComponents(unclassified, struct('components', []));
+            testCase.verifyEqual(classified.etc.ic_classification.ICLabel.version, 'default');
+        end
+
+        function aStoredBetaClassificationIsRedoneOnTheSameDecomposition(testCase)
+        %ASTOREDBETACLASSIFICATIONISREDONEONTHESAMEDECOMPOSITION  A node made
+        %   before the switch carries a decomposition classified by ICLabel's
+        %   beta network. Recalculating it keeps the decomposition (ICA is not
+        %   seeded, so a new one would differ) and classifies it again with
+        %   the default network.
+            EEG = testCase.recording();
+            first = AutoEyeICA(EEG, struct('EyeThreshold', 0.99));
+            stored = first.etc.alz.eyeICA.decomposition;
+            stored.etc.ic_classification.ICLabel.version = 'beta';
+            stored.etc.ic_classification.ICLabel.classifications(:) = 0;   % visibly not ICLabel's
+
+            TransTools.IcaCache('clear');
+            TransTools.IcaCache('put', stored.key, stored);
+            again = AutoEyeICA(EEG, struct('EyeThreshold', 0.99));
+
+            redone = again.etc.alz.eyeICA.decomposition;
+            testCase.verifyEqual(redone.icaweights, stored.icaweights, 'The decomposition is kept.');
+            testCase.verifyEqual(redone.etc.ic_classification.ICLabel.version, 'default');
+            testCase.verifyEqual(redone.etc.ic_classification.ICLabel.classifications, ...
+                first.etc.alz.eyeICA.decomposition.etc.ic_classification.ICLabel.classifications, ...
+                'AbsTol', 1e-6, 'Classified again, as a fresh run classifies it.');
+        end
+
         function redecomposeForcesAFreshDecomposition(testCase)
             EEG = testCase.recording();
             first = AutoEyeICA(EEG, struct('EyeThreshold', 0.99));
