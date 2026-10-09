@@ -137,6 +137,23 @@ classdef OverlapCorrectedTrialsTest < matlab.unittest.TestCase
                 'Average of the overlap-corrected trials is the deconvolved waveform.');
         end
 
+        function theTrialsOfBinsSharingEventsAverageBackToo(testCase)
+        %THETRIALSOFBINSSHARINGEVENTSAVERAGEBACKTOO  An event in two bins is
+        %   one trial tagged with both, and Average counts it in each, so the
+        %   identity holds bin by bin with "Rare" nested inside "All stimuli".
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+            script = ['bin 1 "All stimuli" {"S1" "S2"}' newline 'bin 2 "Rare" "S2"'];
+
+            waveforms = Deconvolve(EEG, DeconvolveTest.options('binScript', script));
+            trials = Deconvolve(EEG, DeconvolveTest.options('binScript', script, 'output', 'trials'));
+            averaged = Average(trials);
+
+            testCase.verifyEqual(size(trials.data, 3), 120, 'One trial per event, however many bins hold it.');
+            testCase.verifyEqual([averaged.bindesc.n], [120 30]);
+            testCase.verifyEqual(averaged.data, waveforms.data, 'AbsTol', 1e-4);
+        end
+
         function everySingleTrialHasLostTheOverlap(testCase)
         %EVERYSINGLETRIALHASLOSTTHEOVERLAP  Not only their mean: every
         %   stimulus is followed 300 to 700 ms later by a response whose own

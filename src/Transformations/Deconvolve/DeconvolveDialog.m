@@ -16,7 +16,7 @@ function options = DeconvolveDialog(EEG, stored)
 %
 %   EACH BIN HAS A FORMULA, typed in Unfold's own notation in the table, one
 %   row per bin: 'y ~ 1' by default, or with linear terms, factors (cat),
-%   splines (spl, circspl) and interactions. The bins say which events are
+%   splines (spl, circspl, 2dspl) and interactions. The bins say which events are
 %   fitted together; the formula says what explains their response. Beside
 %   it is what a formula can use: this recording's event fields, by kind and
 %   unit, and the notation itself. Options stored before formulas existed
@@ -126,8 +126,8 @@ function options = DeconvolveDialog(EEG, stored)
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [6 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 6), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [7 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 7), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     % The window decides which events overlap, so the model is shown again.
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1), ...
@@ -192,6 +192,18 @@ function options = DeconvolveDialog(EEG, stored)
     evaluateField.Layout.Row = 6;
     evaluateField.Layout.Column = [2 4];
     onOutputChanged();
+
+    % The solver's limit: the toolbox's own 400 unless a fit said it ran out.
+    iterationsLabel = uilabel(settings, 'Text', 'Solver iterations:');
+    iterationsLabel.Layout.Row = 7;
+    iterationsLabel.Layout.Column = 1;
+    iterationsField = uieditfield(settings, 'numeric', 'Tag', 'solverIterations', ...
+        'Value', seed.solverIterations, 'Limits', [1 Inf], 'RoundFractionalValues', 'on', ...
+        'Tooltip', ['The most iterations the solver takes per channel (the toolbox''s own ' ...
+         'default is 400). A fit that runs out says so; raise this when it does and the ' ...
+         'design is otherwise sound.']);
+    iterationsField.Layout.Row = 7;
+    iterationsField.Layout.Column = 2;
 
     % The formulas, the model they make, and what a formula can use share
     % the stretchy row: a formula is only readable next to the columns it
@@ -561,6 +573,7 @@ function options = DeconvolveDialog(EEG, stored)
             'artifactThresholdUv', thresholdField.Value, ...
             'artifactWindowMs', artWindowField.Value, ...
             'artifactStepMs', artStepField.Value, ...
+            'solverIterations', iterationsField.Value, ...
             'output', outputDropdown.Value);
         if candidate.windowMs(1) >= candidate.windowMs(2)
             uialert(fig, 'Would the window start come before its stop?', 'Check the window');
@@ -650,7 +663,14 @@ function lines = designLines(tagged, plan)
                 case 'intercept'
                     parts{end + 1} = 'intercept'; %#ok<AGROW>
                 case 'spline'
-                    parts{end + 1} = sprintf('%s as a spline (%d columns)', name, numel(at)); %#ok<AGROW>
+                    surface = plan.pooled(strcmp({plan.pooled.name}, name) ...
+                        & ~cellfun(@isempty, {plan.pooled.pair}));
+                    if isempty(surface)
+                        parts{end + 1} = sprintf('%s as a spline (%d columns)', name, numel(at)); %#ok<AGROW>
+                    else
+                        parts{end + 1} = sprintf('%s and %s as a 2D spline (%d columns)', ...
+                            surface(1).pair{1}, surface(1).pair{2}, numel(at)); %#ok<AGROW>
+                    end
                 case 'categorical'
                     parts{end + 1} = sprintf('%s as a factor (%s)', name, ...
                         strjoin(regexprep(unfold.colnames(at), '^\d+_', ''), ', ')); %#ok<AGROW>
@@ -745,7 +765,10 @@ function lines = fieldReference(EEG)
         '   y ~ 1 + cat(side)   a factor, its first level the reference', ...
         '   y ~ 1 + cat(side) * rt   a factor, rt, and their interaction', ...
         '   circspl(angle, 5, 0, 360)   a curve round a circle', ...
-        '', 'A bin''s events must all carry every field its formula names.'}];
+        '   2dspl(x, y, 5)   a smooth surface over two fields', ...
+        '', 'A bin''s events must all carry every field its formula names.', ...
+        'Give a factor''s levels names longer than one letter: the toolbox cannot build', ...
+        '"L" and "R" when another event type lacks the field.'}];
 end
 
 function text = fieldItem(candidate)
@@ -822,7 +845,8 @@ function seed = defaults()
     seed = struct('binScript', '', 'covariates', {{}}, ...
         'formulas', {struct('bin', {}, 'formula', {})}, 'evaluateAt', '', ...
         'windowMs', [-200 800], 'artifactThresholdUv', 150, ...
-        'artifactWindowMs', 2000, 'artifactStepMs', 100, 'output', 'average');
+        'artifactWindowMs', 2000, 'artifactStepMs', 100, 'solverIterations', 400, ...
+        'output', 'average');
 end
 
 function value = outputSeed(stored)

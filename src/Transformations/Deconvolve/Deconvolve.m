@@ -50,7 +50,12 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   EACH BIN HAS A FORMULA, in Unfold's own notation, edited in the dialog:
 %   'y ~ 1' (the default: one waveform per bin, nothing else), or anything
 %   uf_designmat accepts, factors (cat(x)), interactions, linear terms,
-%   splines (spl(x, 5)) and circular splines (circspl(angle, 5, 0, 360)).
+%   splines (spl(x, 5)), circular splines (circspl(angle, 5, 0, 360)) and 2D
+%   splines (2dspl(x, y, 5)).
+%
+%   BINS MAY SHARE EVENTS, as Average allows: an event counts in every bin
+%   it is in, so a bin nested in another is its own events' response (see
+%   Unfold.binModel).
 %   The bins still decide which events each event type holds; the formula
 %   decides what explains their response (see Unfold.binModel, which checks
 %   every field a formula names against the bin's own events first).
@@ -60,9 +65,10 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   (so a term is a control: see Unfold.fitBins) and every factor at the
 %   bin's own mix; overlap-corrected trials; or one waveform per model term
 %   ('terms'): every factor level, every spline or continuous term at chosen
-%   values (evaluateAt), each as a whole waveform with the other terms at
-%   their means (uf_predictContinuous and uf_addmarginal). A waveform has no
-%   standard error of its own: see Unfold.fitBins.
+%   values (evaluateAt), each as a whole waveform with the other terms as
+%   their average marginal effects (uf_predictContinuous, and uf_addmarginal
+%   with 'AME'). A waveform has no standard error of its own: see
+%   Unfold.fitBins, which also lists the toolbox behaviours kept as they are.
 %
 %   Options (all set in DeconvolveDialog, stored per user by
 %   TransformSettings):
@@ -88,6 +94,8 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          default 150 uV (0 skips detection)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100
+%     solverIterations     the solver's iteration limit, default 400 (the
+%                          toolbox's own); a fit that reaches it says so
 %     output               'average' (default): one waveform per bin;
 %                          'trials': overlap-corrected trials, epoched;
 %                          'terms': one waveform per model term
@@ -131,6 +139,7 @@ tagged = applyBins(input, options);
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
     'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100), ...
+    'SolverIterations', TransTools.FieldOr(options, 'solverIterations', 400), ...
     'Output', char(string(TransTools.FieldOr(options, 'output', 'average'))));
 
 report(info);

@@ -60,7 +60,16 @@ collinear: often two event types at a nearly constant lag are both modelled
 (a fixation and the saccade just before it, a trial marker and the stimulus
 a fixed time later), or a formula has more terms than its events support.
 Model one of each such pair (@sec-tr-deconvolve). The Deconvolve dialog warns
-about such pairs before the fit, and the warning after it names them.
+about such pairs before the fit, and the warning after it names them. Where
+the design is sound and the fit is merely slow to settle, raise **Solver
+iterations** (400 by default, the toolbox's own limit).
+
+**Deconvolve says Unfold cannot build the design: "expected to be a cell
+array, was char".** The Unfold toolbox (1.3.1) cannot build a factor whose
+levels are all single letters (`L`, `R`) once another event type in the model
+lacks that field: MATLAB's `struct2table` then reads the levels as characters
+rather than as text. Give the levels longer names (`left`, `right`); the
+message names the factor (@sec-tr-deconvolve).
 
 **TimeFrequency or the Coherence Map is empty after artefact rejection.**
 An earlier version let one rejected trial blank the whole map; recalculate

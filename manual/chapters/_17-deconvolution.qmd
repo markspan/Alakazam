@@ -119,9 +119,10 @@ subtracted there, and is dropped. Averaging the kept trials comes within
 
 The last node returns the model's own view of the saccade term: the saccade
 response at each amplitude asked for, each a whole waveform with the other
-terms at their means (Unfold's `uf_predictContinuous` and `uf_addmarginal`).
+terms as their average marginal effects (Unfold's `uf_predictContinuous` and
+`uf_addmarginal`).
 
-![The saccade response at Oz for saccades of 0.3, 0.6, 1.5 and 3 degrees, and at the intercept, from the model's terms.](images/deconvolve-terms.jpg){#fig-deconvolve-terms}
+![The saccade response at Oz for saccades of 0.3, 0.6, 1.5 and 3 degrees, and the intercept (red): the response averaged over this participant's saccades, from the model's terms.](images/deconvolve-terms.jpg){#fig-deconvolve-terms}
 
 At Oz, the lambda response, 50 to 150 ms after saccade onset, peaks at
 -0.3, 3.1, 13.3 and 13.2 µV for saccades of 0.3, 0.6, 1.5 and 3 degrees. It

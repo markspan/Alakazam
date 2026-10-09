@@ -20,7 +20,8 @@ function catalogue = eyeEegMeasures()
 %   SAC_ANGLE IS CIRCULAR, which is why there is a kind at all: it runs over
 %   the full turn, so 359 degrees sits next to 1, and a slope fitted on it is
 %   meaningless. Dimigen and Ehinger (2021) model saccade direction with
-%   circular splines for that reason; Deconvolve does not offer it.
+%   circular splines for that reason, which a Deconvolve formula writes as
+%   circspl(sac_angle, 5, 0, 360).
 %
 %   FIXATIONS CAN CARRY THEIR INCOMING SACCADE: since EYE-EEG's September
 %   2021 change, a fixation detected by detecteyemovements also holds the

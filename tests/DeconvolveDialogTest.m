@@ -180,6 +180,17 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
                 'OK on an unchanged dialog keeps the stored choice.');
         end
 
+        function theSolverIterationsAreASetting(testCase)
+            untouched = testCase.runDialog(@(f) []);
+            raised = testCase.runDialog(@(f) setNumber(f, 'solverIterations', 1500));
+            replayed = testCase.runDialog(@(f) [], struct('solverIterations', 900));
+
+            testCase.assertNotEmpty(untouched);
+            testCase.verifyEqual(untouched.solverIterations, 400, 'The toolbox''s own default.');
+            testCase.verifyEqual(raised.solverIterations, 1500);
+            testCase.verifyEqual(replayed.solverIterations, 900);
+        end
+
         function theValuesToEvaluateAtOpenOnlyForTheTerms(testCase)
             enabled = {};
             testCase.runDialog(@(f) record(f));
@@ -332,6 +343,15 @@ function choose(f, tag, value)
     if ~isempty(dropdown(1).ValueChangedFcn)
         dropdown(1).ValueChangedFcn(dropdown(1), []);
     end
+end
+
+function setNumber(f, tag, value)
+%SETNUMBER  Type VALUE into the numeric field tagged TAG.
+    field = findall(f, 'Type', 'uinumericeditfield', 'Tag', tag);
+    if isempty(field)
+        field = findall(f, 'Tag', tag);
+    end
+    field(1).Value = value;
 end
 
 function setFormula(f, bin, formula)

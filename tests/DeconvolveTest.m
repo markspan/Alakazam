@@ -159,6 +159,42 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             testCase.verifyEqual(fitted.etc.alz.unfold.binCounts, [90 30]);
         end
 
+        function theScanLooksBetweenCutsAsAnUnfoldScriptDoes(testCase)
+        %THESCANLOOKSBETWEENCUTSASANUNFOLDSCRIPTDOES  In a script the scan
+        %   is handed the dataset with its boundary events, and ERPLAB's scan
+        %   looks at each stretch between cuts on its own. Here a step of
+        %   160 uV at a cut, with clean data either side: scanned as one
+        %   stretch, the windows across the cut were marked; scanned as the
+        %   toolbox does, only the zone around the cut is left out.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+            cut = 10000;
+            EEG.event(end + 1) = struct('type', 'boundary', 'latency', cut + 0.5);
+            [~, order] = sort([EEG.event.latency]);
+            EEG.event = EEG.event(order);
+            EEG.data(:, 1:cut) = EEG.data(:, 1:cut) - 80;
+            EEG.data(:, cut + 1:end) = EEG.data(:, cut + 1:end) + 80;
+
+            fitted = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 150));
+
+            reach = 800 * EEG.srate / 1000;          % the window's longer side, in samples
+            centre = round(cut + 0.5);               % as Unfold.fitBins places the zone
+            intervals = fitted.etc.alz.unfold.excludedIntervals;
+            around = intervals(intervals(:, 1) <= cut & intervals(:, 2) >= cut, :);
+            testCase.verifyEqual(around, [centre - reach, centre + reach], ...
+                'Only the zone around the cut, not the scan''s windows across it.');
+        end
+
+        function theSolverIterationsReachTheFit(testCase)
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+
+            fitted = Deconvolve(EEG, DeconvolveTest.options('solverIterations', 2));
+
+            testCase.verifyEqual(fitted.etc.alz.unfold.solverIterations, 2);
+            testCase.verifySubstring(strjoin(fitted.etc.alz.unfold.notes, ' '), 'ran out of iterations');
+        end
+
         function replayingStoredOptionsNeedsNoDialog(testCase)
             testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
             EEG = UnfoldBinsTest.recording();

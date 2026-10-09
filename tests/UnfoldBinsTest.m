@@ -155,20 +155,45 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
             testCase.verifyFalse(any(contains(plan.eventTypes, 'Rare_minus')));
         end
 
-        function twoBinsOverTheSameEventsAreRefused(testCase)
+        function twoBinsOverTheSameEventsAreOneEventType(testCase)
+        %TWOBINSOVERTHESAMEEVENTSAREONEEVENTTYPE  Two bins holding exactly
+        %   the same events used to be refused as perfectly collinear, since
+        %   each was an event type of its own. Fitted the way Average counts
+        %   them, they are one set of events, so one event type, and both
+        %   bins are its waveform.
             EEG = UnfoldBinsTest.recording();
-            for k = 1:numel(EEG.event)                    % every Rare event also Frequent
-                if any(EEG.event(k).bini == 2)
-                    EEG.event(k).bini = [1 2];
-                end
-            end
             for k = 1:numel(EEG.event)
-                if isequal(EEG.event(k).bini, 1)
+                if ~isempty(EEG.event(k).bini)
                     EEG.event(k).bini = [1 2];
                 end
             end
 
-            testCase.verifyError(@() Unfold.binModel(EEG), 'Alakazam:Unfold:CollinearBins');
+            plan = Unfold.binModel(EEG);
+
+            testCase.verifyEqual(plan.cellLabels, {'Frequent & Rare'});
+            testCase.verifyEqual(plan.binCells, {1, 1});
+            testCase.verifyEqual(plan.binCounts, [120 120]);
+        end
+
+        function binsSharingEventsAreFittedAsTheirCombinations(testCase)
+        %BINSSHARINGEVENTSAREFITTEDASTHEIRCOMBINATIONS  An event in two bins
+        %   ("All stimuli" and "Rare") is one event, not two sticks: each set
+        %   of bins an event can be in is an event type of its own, and a bin
+        %   is made of the sets that include it. Fitting one type per bin
+        %   instead explains such an event as the SUM of two responses, so
+        %   the inner bin came out as its difference from the outer one,
+        %   with nothing said.
+            EEG = UnfoldBinsTest.nestedRecording();
+
+            plan = Unfold.binModel(EEG);
+
+            testCase.verifyEqual(plan.cellLabels, {'All stimuli', 'All stimuli & Rare'});
+            testCase.verifyEqual(plan.cellCounts, [90 30]);
+            testCase.verifyEqual(plan.binCells, {[1 2], 2});
+            testCase.verifyEqual(plan.binCounts, [120 30]);
+            binned = ~startsWith({plan.events.type}, 'evt_');
+            testCase.verifyEqual(nnz(binned), 120, 'One row per event, however many bins hold it.');
+            testCase.verifySubstring(strjoin(plan.notes, ' '), 'share 30 event(s)');
         end
 
         function aPairWithNoJitterIsFlagged(testCase)
@@ -265,6 +290,48 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
                 'The provenance has to say the error band is not one.');
         end
 
+        function aBinSharingEventsIsTheAverageOfItsOwnEvents(testCase)
+        %ABINSHARINGEVENTSISTHEAVERAGEOFITSOWNEVENTS  As Average counts an
+        %   event in every bin it belongs to: "Rare" is the rare events'
+        %   response, and "All stimuli" the mean over all its events of each
+        %   one's response.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            [EEG, truth] = UnfoldBinsTest.nestedRecording();
+
+            fitted = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0);
+
+            keep = fitted.times >= 0 & fitted.times <= 400;
+            frequent = numel(truth.frequent);
+            rare = numel(truth.rare);
+            targets = [(frequent * truth.waveform(1, :) + rare * truth.waveform(2, :)) / (frequent + rare); ...
+                       truth.waveform(2, :)];
+            for b = 1:2
+                estimate = reshape(fitted.data(1, keep, b), 1, []);
+                testCase.verifyLessThan(max(abs(estimate - targets(b, :))), 0.5, ...
+                    sprintf('"%s" is the average response of its own events.', fitted.bindesc(b).label));
+            end
+        end
+
+        function aFitThatRunsOutOfIterationsSaysWhichSettingToRaise(testCase)
+        %AFITTHATRUNSOUTOFITERATIONSSAYSWHICHSETTINGTORAISE  The solver's
+        %   limit is a setting (the toolbox's lsmriterations, 400 by default),
+        %   and the note that it was reached names it.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldBinsTest.recording();
+
+            [~, stopped] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'SolverIterations', 2);
+            [~, finished] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0);
+
+            testCase.verifySubstring(strjoin(stopped.notes, ' '), 'ran out of iterations');
+            testCase.verifySubstring(strjoin(stopped.notes, ' '), 'Solver iterations');
+            testCase.verifyEqual(stopped.solverIterations, 2);
+            testCase.verifyEqual(finished.solverIterations, 400, 'The toolbox''s own default.');
+            testCase.verifyFalse(contains(strjoin(finished.notes, ' '), 'ran out of iterations'));
+        end
+
         function aDifferenceBinIsTheDifferenceOfTheFittedWaveforms(testCase)
             testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
             EEG = UnfoldBinsTest.recording('WithComboBin', true);
@@ -291,6 +358,19 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
             base = UnfoldBinsTest.frequentLatencies();
             base = base(1:3:end);
             latencies = base + round(20 + 25 * rand(1, numel(base)));
+        end
+
+        function [EEG, truth] = nestedRecording()
+        %NESTEDRECORDING  The recording with bin 1 holding every stimulus
+        %   and bin 2 the rare ones only, the way a bin file often nests a
+        %   condition inside "all targets".
+            [EEG, truth] = UnfoldBinsTest.recording();
+            for k = 1:numel(EEG.event)
+                if isequal(EEG.event(k).bini, 2)
+                    EEG.event(k).bini = [1 2];
+                end
+            end
+            EEG.bindesc(1).label = 'All stimuli';
         end
 
         function [EEG, truth] = recording(varargin)

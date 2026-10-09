@@ -251,6 +251,37 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             testCase.verifyError(@() Unfold.binModel(EEG, 'Formulas', ...
                 struct('bin', 'Rare', 'formula', 'y ~ 1 + cat(hand)')), 'Alakazam:Unfold:OneLevel');
         end
+
+        function aTwoDimensionalSplineIsAFormulaToo(testCase)
+        %ATWODIMENSIONALSPLINEISAFORMULATOO  Unfold's 2dspl(x, z, n), a
+        %   smooth surface over two fields, was read as a field called
+        %   "dspl". Its two fields travel with their events, and are pooled
+        %   as pairs, since the surface is evaluated at both at once.
+            EEG = UnfoldCovariatesTest.withPositions(UnfoldCovariatesTest.recording());
+
+            plan = Unfold.binModel(EEG, 'Formulas', struct('bin', 'Rare', 'formula', 'y ~ 1 + 2dspl(x, z, 4)'));
+
+            rare = strcmp({plan.events.type}, 'bin_Rare');
+            testCase.verifyEqual([plan.events(rare).x], [EEG.event(plan.eventSource(rare)).x]);
+            testCase.verifyEqual([plan.events(rare).z], [EEG.event(plan.eventSource(rare)).z]);
+            surface = plan.pooled(strcmp({plan.pooled.name}, 'xz'));
+            testCase.assertNumElements(surface, 1, 'The surface is pooled under the toolbox''s own name.');
+            testCase.verifyEqual(surface.pair, {'x', 'z'});
+            testCase.verifyEqual(surface.values, [[plan.events(rare).x]; [plan.events(rare).z]]);
+        end
+
+        function aTwoDimensionalSplineNamesTheFieldItLacks(testCase)
+            EEG = UnfoldCovariatesTest.withPositions(UnfoldCovariatesTest.recording());
+
+            try
+                Unfold.binModel(EEG, 'Formulas', struct('bin', 'Rare', 'formula', 'y ~ 1 + 2dspl(x, depth, 4)'));
+                err = MException('none:none', 'no error');
+            catch err
+            end
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:NoSuchField');
+            testCase.verifySubstring(err.message, '"depth"');
+        end
     end
 
     methods (Test, TestTags = {'External'})
@@ -381,6 +412,96 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(peak(3), peak(2), 'A larger gain, a larger response.');
             testCase.verifyEqual(peak(3) / peak(2), 1.2 / 0.8, 'RelTol', 0.1);
         end
+
+        function theTermsInterceptAveragesOverACircularSpline(testCase)
+        %THETERMSINTERCEPTAVERAGESOVERACIRCULARSPLINE  The terms' intercept
+        %   carries every other term as its average marginal effect, the
+        %   spline averaged over the events' own values, as the waveform per
+        %   bin does. uf_addmarginal's default instead evaluates the spline
+        %   at the mean value, which for angles near 0 and 360 degrees is an
+        %   angle no event had.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldBinsTest.recording();
+            rng(5);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).ang = mod(10 * sign(randn()) + 4 * randn(), 360);   % near 0 or 360
+            end
+            formulas = struct('bin', 'Frequent', 'formula', 'y ~ 1 + circspl(ang, 5, 0, 360)');
+
+            waveforms = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'BaselineMs', [], 'Formulas', formulas);
+            terms = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'BaselineMs', [], 'Formulas', formulas, 'Output', 'terms');
+
+            intercept = strcmp({terms.bindesc.label}, 'Frequent: (Intercept)');
+            testCase.assertEqual(nnz(intercept), 1);
+            testCase.verifyEqual(terms.data(:, :, intercept), waveforms.data(:, :, 1), 'AbsTol', 1e-6, ...
+                'The intercept with the spline averaged over the events is the bin''s waveform.');
+        end
+
+        function aTwoDimensionalSplineIsFittedAndEvaluated(testCase)
+        %ATWODIMENSIONALSPLINEISFITTEDANDEVALUATED  A response that scales
+        %   with the product of two fields, g * h: the bin's waveform is its
+        %   events' average response, mean(g .* h), which only comes out if
+        %   the surface is evaluated at each event's own pair; and the terms
+        %   are the surface at pairs of values, named by both fields.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            [EEG, truth] = UnfoldCovariatesTest.surfaceRecording();
+            formulas = struct('bin', 'A', 'formula', 'y ~ 1 + 2dspl(g, h, 4)');
+
+            fitted = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'BaselineMs', [], 'Formulas', formulas);
+            terms = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'BaselineMs', [], 'Formulas', formulas, 'Output', 'terms', 'EvaluateAt', 'g = 1 2; h = 1.5');
+
+            testCase.verifyEqual(max(fitted.data(1, :, 1)), truth.peakA, 'RelTol', 0.03, ...
+                'A''s waveform is the mean of g * h over its events, times the response.');
+            labels = {terms.bindesc.label};
+            testCase.verifyEqual(labels(startsWith(labels, 'A: g')), ...
+                {'A: g = 1, h = 1.5', 'A: g = 2, h = 1.5'});
+            peak = @(label) max(terms.data(1, :, strcmp(labels, label)));
+            testCase.verifyEqual(peak('A: g = 1, h = 1.5'), 1.5 * truth.waveformPeak, 'RelTol', 0.05);
+            testCase.verifyEqual(peak('A: g = 2, h = 1.5'), 3 * truth.waveformPeak, 'RelTol', 0.05);
+        end
+
+        function anInteractionIsHeldAtThePooledValuesToo(testCase)
+        %ANINTERACTIONISHELDATTHEPOOLEDVALUESTOO  cat(side) * g: the main
+        %   effect of g was held at the pooled mean, but the interaction
+        %   column kept the bin's own mean, so a bin whose "R" events had
+        %   larger g than the pool still showed that as a bin difference.
+        %   Every column with g in it is now at the pooled mean.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            [EEG, truth] = UnfoldCovariatesTest.interactionRecording();
+            formulas = struct('bin', {'A', 'B'}, 'formula', {'y ~ 1 + cat(side) * g', 'y ~ 1 + g'});
+
+            fitted = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'BaselineMs', [], 'Formulas', formulas);
+
+            testCase.verifyEqual(max(fitted.data(1, :, 1)), truth.peakA, 'RelTol', 0.03, ...
+                'A at the pooled g: half its events at g, half (side R) at twice g.');
+            testCase.verifyEqual(max(fitted.data(1, :, 2)), truth.peakB, 'RelTol', 0.03);
+        end
+
+        function aOneLetterFactorIsExplainedAsTheToolboxBuildsIt(testCase)
+        %AONELETTERFACTORISEXPLAINEDASTHETOOLBOXBUILDSIT  Unfold 1.3.1 cannot
+        %   build a factor with one-letter levels once another event type
+        %   lacks the field (see Unfold.designMatrix). The toolbox is called
+        %   as it is, and the message says why: it names the factor and what
+        %   to rename.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.interactionRecording({'L', 'R'});
+            formulas = struct('bin', {'A', 'B'}, 'formula', {'y ~ 1 + cat(side)', 'y ~ 1'});
+
+            try
+                Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, 'Formulas', formulas);
+                err = MException('none:none', 'no error');
+            catch err
+            end
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:Formula');
+            testCase.verifySubstring(err.message, 'reads the levels as characters rather than as text');
+            testCase.verifySubstring(err.message, '"side"');
+        end
     end
 
     methods (Static)
@@ -441,7 +562,112 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
                 'times', (0:npnts - 1) / srate * 1000, 'DataFormat', 'CONTINUOUS', ...
                 'chanlocs', struct('labels', {'Cz'}), 'event', event, ...
                 'bindesc', struct('index', {1, 2}, 'label', {'A', 'B'}, 'combo', {[], []}));
-            truth = struct('peak', max(waveform) * mean(gain));
+            truth = struct('peak', max(waveform) * mean(gain), 'waveformPeak', max(waveform));
+        end
+
+        function EEG = withPositions(EEG)
+        %WITHPOSITIONS  Two numeric fields, x and z, on every event, unrelated
+        %   to the data: the two coordinates a 2D spline is made of.
+            rng(9);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).x = rand();
+                EEG.event(k).z = rand();
+            end
+        end
+
+        function [EEG, truth] = surfaceRecording()
+        %SURFACERECORDING  Bin A's events scale with g * h, two independent
+        %   fields from 0.5 to 2.5; bin B's events are a plain response. The
+        %   mean of g * h (about 2.25) differs from the mean of g * g (about
+        %   2.58), so a surface evaluated at the wrong pairs shows.
+            srate = 100;
+            npnts = 60000;
+            t = (0:round(0.3 * srate)) / srate;
+            waveform = 6 * sin(pi * t / 0.3) .* exp(-t / 0.2);
+
+            rng(41);
+            n = 150;
+            first = round(linspace(300, 59000, n) + 30 * randn(1, n));
+            second = round(first + 90 + 30 * rand(1, n));
+            g = 0.5 + 2 * rand(1, n);
+            h = 0.5 + 2 * rand(1, n);
+
+            data = 0.05 * randn(1, npnts);
+            for k = 1:n
+                data = UnfoldBinsTest.addResponse(data, first(k), g(k) * h(k) * waveform);
+                data = UnfoldBinsTest.addResponse(data, second(k), waveform);
+            end
+
+            event = struct('type', {}, 'latency', {}, 'bini', {}, 'g', {}, 'h', {});
+            for k = 1:n
+                event(end + 1) = struct('type', 'A', 'latency', first(k), 'bini', 1, ...
+                    'g', g(k), 'h', h(k)); %#ok<AGROW>
+                event(end + 1) = struct('type', 'B', 'latency', second(k), 'bini', 2, ...
+                    'g', 0, 'h', 0); %#ok<AGROW>
+            end
+            [~, order] = sort([event.latency]);
+            event = event(order);
+
+            EEG = struct('data', data, 'srate', srate, 'pnts', npnts, 'trials', 1, ...
+                'nbchan', 1, 'xmin', 0, 'xmax', (npnts - 1) / srate, ...
+                'times', (0:npnts - 1) / srate * 1000, 'DataFormat', 'CONTINUOUS', ...
+                'chanlocs', struct('labels', {'Cz'}), 'event', event, ...
+                'bindesc', struct('index', {1, 2}, 'label', {'A', 'B'}, 'combo', {[], []}));
+            truth = struct('peakA', max(waveform) * mean(g .* h), 'waveformPeak', max(waveform));
+        end
+
+        function [EEG, truth] = interactionRecording(sides)
+        %INTERACTIONRECORDING  Bin A's events scale with g on side left and
+        %   with twice g on side right; bin B's scale with g. A's right
+        %   events have the largest g (2.5 to 3.5, against 0.5 to 1.5 on the
+        %   left and 1.5 to 2.5 in B), so A held at its own g would look
+        %   larger than A held at the pooled g, which is the one a control
+        %   compares at. INTERACTIONRECORDING({'L', 'R'}) names the sides
+        %   with one letter each, which Unfold 1.3.1 cannot build (see
+        %   Unfold.designMatrix).
+            if nargin < 1
+                sides = {'left', 'right'};
+            end
+            srate = 100;
+            npnts = 40000;
+            t = (0:round(0.3 * srate)) / srate;
+            waveform = 6 * sin(pi * t / 0.3) .* exp(-t / 0.2);
+
+            rng(31);
+            n = 80;
+            first = round(linspace(300, 39000, n) + 30 * randn(1, n));
+            second = round(first + 90 + 30 * rand(1, n));
+            right = mod(1:n, 2) == 0;
+            g = [0.5 + rand(1, n), 1.5 + rand(1, n)];      % A on side L, then B
+            g(right) = g(right) + 2;                        % A on side R: 2.5 to 3.5
+            amplitude = g;
+            amplitude(right) = 2 * g(right);
+
+            data = 0.05 * randn(1, npnts);
+            latencies = [first second];
+            for k = 1:numel(latencies)
+                data = UnfoldBinsTest.addResponse(data, latencies(k), amplitude(k) * waveform);
+            end
+
+            event = struct('type', {}, 'latency', {}, 'bini', {}, 'g', {}, 'side', {});
+            for k = 1:n
+                event(end + 1) = struct('type', 'A', 'latency', first(k), 'bini', 1, ...
+                    'g', g(k), 'side', sides{1 + right(k)}); %#ok<AGROW>
+            end
+            for k = 1:n
+                event(end + 1) = struct('type', 'B', 'latency', second(k), 'bini', 2, ...
+                    'g', g(n + k), 'side', sides{1}); %#ok<AGROW>
+            end
+            [~, order] = sort([event.latency]);
+            event = event(order);
+
+            EEG = struct('data', data, 'srate', srate, 'pnts', npnts, 'trials', 1, ...
+                'nbchan', 1, 'xmin', 0, 'xmax', (npnts - 1) / srate, ...
+                'times', (0:npnts - 1) / srate * 1000, 'DataFormat', 'CONTINUOUS', ...
+                'chanlocs', struct('labels', {'Cz'}), 'event', event, ...
+                'bindesc', struct('index', {1, 2}, 'label', {'A', 'B'}, 'combo', {[], []}));
+            pooled = mean(g);
+            truth = struct('peakA', max(waveform) * 1.5 * pooled, 'peakB', max(waveform) * pooled);
         end
     end
 end

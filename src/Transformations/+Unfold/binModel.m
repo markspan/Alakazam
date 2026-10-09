@@ -15,6 +15,21 @@ function plan = binModel(EEG, varargin)
 %   packages into the same shape; the difference is that averaging assumes
 %   the epochs do not overlap and this does not.
 %
+%   BINS THAT SHARE EVENTS are fitted the way Average counts them: an event
+%   counts fully in every bin it belongs to. Strictly the event types are the
+%   sets of bins an event can be in (PLAN.cellTypes, one per set that has
+%   events), so with bins that share nothing that is one type per bin, as
+%   above, and with "All stimuli" and "Rare" nested it is two: the stimuli in
+%   "All stimuli" only, and those in both. Unfold.fitBins then makes each
+%   bin's waveform the average, over the bin's own events, of those types'
+%   responses (PLAN.binCells, PLAN.cellCounts). One type per BIN would have
+%   put two sticks on such an event and explained its data as the SUM of two
+%   responses, so a nested bin came out as its difference from the outer
+%   one, and nothing said so. Bins holding exactly the same events are one
+%   type, and come out the same, as they would from Average. The events of a
+%   shared type are fitted with the terms of every formula of the bins it
+%   belongs to (sharedFormula), and the notes say which bins share events.
+%
 %   EVENTS IN NO BIN CAN BE MODELLED TOO, one type per event code, each with
 %   its own full response that is fitted and then dropped from the output.
 %   'OtherEvents' says which codes: 'all' (the default) models every code
@@ -42,25 +57,28 @@ function plan = binModel(EEG, varargin)
 %   bins it references, and so does this. Listing it as an event type would
 %   be asking the model to estimate a response to nothing.
 %
-%   WHAT IT REFUSES, and why it is worth refusing rather than fitting: two
-%   bins holding exactly the same events are perfectly collinear. No amount
-%   of deconvolution separates them, the solver will still return something,
-%   and that something is arbitrary. Deconvolution can only separate two
-%   event types where their timing varies relative to each other, so a pair
-%   at a fixed lag in every trial (a stimulus and a response exactly 500 ms
-%   later, say) is reported as a note: the fit will run, but the two
-%   waveforms are not identified apart and the reader has to know.
+%   WHAT IT WARNS ABOUT: deconvolution can only separate two event types
+%   where their timing varies relative to each other, so a pair at a fixed
+%   lag in every trial (a stimulus and a response exactly 500 ms later, say)
+%   is reported as a note: the fit will run, but the two waveforms are not
+%   identified apart and the reader has to know.
 %
-%   PLAN fields: .binLabels, .binTypes, .binIndex, .binCounts (per ordinary
-%   bin, in bindesc order), .membership (per ordinary bin, the rows of
-%   EEG.event it holds), .comboBins (indices of combination bins, computed
-%   after the fit), .eventTypes and .formulas (what uf_designmat is given),
-%   .typeLabels (the bin label or event code each type stands for),
-%   .pooled (each continuous or spline field's values over every event
-%   whose formula uses it, which the bin waveforms are evaluated on),
-%   .nuisanceTypes, .events (the rewritten event list), .eventSource (for
-%   each row of .events, the row of EEG.event it was made from, which is how
-%   an event in two bins is still known to be one trial) and .notes.
+%   PLAN fields: .binLabels, .binTypes (each bin's own type name, which is
+%   the type of its events in no other bin), .binIndex, .binCounts (per
+%   ordinary bin, in bindesc order), .membership (per ordinary bin, the rows
+%   of EEG.event it holds), .binCells (per ordinary bin, which of the
+%   .cellTypes it is made of), .cellTypes, .cellLabels ("A & B" for a shared
+%   set), .cellBins (the ordinary bins of each) and .cellCounts (its events),
+%   .comboBins (indices of combination bins, computed after the fit),
+%   .eventTypes and .formulas (what uf_designmat is given: the cell types,
+%   then the nuisance types), .typeLabels (the label or event code each type
+%   stands for), .variables (per type, the fields its formula names, each
+%   with .categorical and .spline), .pooled (each continuous or spline
+%   field's values over every event whose formula uses it, which the bin
+%   waveforms are evaluated on; a 2D spline's pair of fields as one entry
+%   with .pair), .nuisanceTypes, .events (the rewritten event list, one row
+%   per modelled event), .eventSource (for each row of .events, the row of
+%   EEG.event it was made from) and .notes.
 %
 %   EACH BIN HAS A FORMULA, in Unfold's own Wilkinson notation ('Formulas',
 %   a struct array of .bin (the label) and .formula): 'y ~ 1' when none is
@@ -68,6 +86,7 @@ function plan = binModel(EEG, varargin)
 %   uf_designmat accepts, such as
 %       y ~ 1 + cat(emotion)
 %       y ~ 1 + spl(sac_amplitude, 5) + circspl(sac_angle, 5, 0, 360)
+%       y ~ 1 + 2dspl(fix_avgpos_x, fix_avgpos_y, 5)
 %   A formula may be written without its 'y ~'. The bins decide WHICH events
 %   an event type holds (DefineBins' language, which Unfold's own
 %   eventtypes cannot express); the formula decides what explains their
@@ -112,8 +131,16 @@ function plan = binModel(EEG, varargin)
     plan.membership = membership;
     plan.binCounts = cellfun(@numel, membership);
 
+    [plan.cellBins, eventCell] = binCombinations(membership, numel(EEG.event));
+    plan.cellCounts = arrayfun(@(c) nnz(eventCell == c), 1:numel(plan.cellBins));
+    plan.cellTypes = cellTypeNames(plan.cellBins, plan.binTypes);
+    plan.cellLabels = cellfun(@(bins) strjoin(plan.binLabels(bins), ' & '), plan.cellBins, ...
+        'UniformOutput', false);
+    plan.binCells = arrayfun(@(k) find(cellfun(@(bins) any(bins == k), plan.cellBins)), ...
+        1:numel(membership), 'UniformOutput', false);
+
     [plan.events, plan.nuisanceTypes, plan.unbinnedCodes, otherNotes, plan.eventSource] = ...
-        rewriteEvents(EEG, membership, plan.binTypes, otherCodes);
+        rewriteEvents(EEG, eventCell, plan.cellTypes, otherCodes);
     plan.notes = [plan.notes, otherNotes];
 
     empty = plan.binCounts == 0;
@@ -125,25 +152,148 @@ function plan = binModel(EEG, varargin)
             'model and will be empty in the result.'], listOf(plan.binLabels(empty)), ...
             plural(nnz(empty), 'has', 'have'), plural(nnz(empty), 'it is', 'they are'));
     end
+    plan.notes = [plan.notes, sharedEventsNotes(plan)];
 
-    refuseIdenticalBins(membership, plan.binLabels, ~empty);
-    latencies = cellfun(@(rows) double([EEG.event(rows).latency]), membership, 'UniformOutput', false);
-    plan.notes = [plan.notes, fixedLagNotes(latencies, plan.binLabels, find(~empty))];
+    latencies = arrayfun(@(c) double([EEG.event(eventCell == c).latency]), ...
+        1:numel(plan.cellBins), 'UniformOutput', false);
+    plan.notes = [plan.notes, fixedLagNotes(latencies, plan.cellLabels, 1:numel(plan.cellBins))];
 
-    plan.eventTypes = [plan.binTypes(~empty), plan.nuisanceTypes];
-    plan.typeLabels = [plan.binLabels(~empty), cellstr(string({plan.unbinnedCodes([plan.unbinnedCodes.modelled]).code}))];
+    plan.eventTypes = [plan.cellTypes, plan.nuisanceTypes];
+    plan.typeLabels = [plan.cellLabels, cellstr(string({plan.unbinnedCodes([plan.unbinnedCodes.modelled]).code}))];
     plan.formulas = repmat({'y ~ 1'}, 1, numel(plan.eventTypes));
-    fitted = find(~empty);
     explicit = false(1, numel(plan.eventTypes));
-    for k = 1:numel(fitted)
-        [plan.formulas{k}, explicit(k)] = formulaFor(parsed.Results.Formulas, plan.binLabels{fitted(k)});
+    for c = 1:numel(plan.cellTypes)
+        [plan.formulas{c}, explicit(c), note] = sharedFormula(parsed.Results.Formulas, ...
+            plan.binLabels(plan.cellBins{c}));
+        plan.notes = [plan.notes, note];
     end
     [plan.formulas, legacyNotes] = legacyTerms(plan.formulas, ~explicit, ...
         plan.events, plan.eventSource, plan.eventTypes, EEG, wanted);
     plan.notes = [plan.notes, legacyNotes];
     plan.events = checkVariables(plan.events, plan.eventSource, plan.eventTypes, plan.typeLabels, ...
         plan.formulas, EEG);
+    plan.variables = cellfun(@formulaVariables, plan.formulas, 'UniformOutput', false);
     plan.pooled = pooledValues(plan.events, plan.eventTypes, plan.formulas);
+end
+
+% ======================================================================= %
+function [sets, eventCell] = binCombinations(membership, nevents)
+%BINCOMBINATIONS  The distinct sets of ordinary bins the events belong to,
+%   in order (a set of one bin sorts where that bin is, so bins that share
+%   nothing keep their own order), and for each row of EEG.event the set it
+%   is in, 0 for an event in no bin.
+    inBin = false(nevents, numel(membership));
+    for k = 1:numel(membership)
+        inBin(membership{k}, k) = true;
+    end
+    binned = find(any(inBin, 2));
+    eventCell = zeros(1, nevents);
+    sets = {};
+    if isempty(binned)
+        return;
+    end
+    [patterns, ~, patternOf] = unique(inBin(binned, :), 'rows');
+    sets = arrayfun(@(r) find(patterns(r, :)), 1:size(patterns, 1), 'UniformOutput', false);
+    keys = cellfun(@(s) [s, zeros(1, numel(membership) - numel(s))], sets, 'UniformOutput', false);
+    [~, order] = sortrows(cat(1, keys{:}));
+    sets = sets(order);
+    position = zeros(1, numel(order));
+    position(order) = 1:numel(order);
+    eventCell(binned) = position(patternOf);
+end
+
+function types = cellTypeNames(sets, binTypes)
+%CELLTYPENAMES  The event type of each set of bins: the bin's own type for a
+%   set of one, so a model whose bins share nothing names its types exactly
+%   as before, and the bins' names joined for a shared set, numbered if that
+%   happens to be taken.
+    types = cell(1, numel(sets));
+    for c = 1:numel(sets)
+        if isscalar(sets{c})
+            types{c} = binTypes{sets{c}};
+        else
+            types{c} = ['bin_' strjoin(regexprep(binTypes(sets{c}), '^bin_', ''), '_and_')];
+        end
+    end
+    for c = 1:numel(types)
+        if ~isscalar(sets{c}) && nnz(strcmp(types, types{c})) > 1
+            types{c} = sprintf('%s_%d', types{c}, c);
+        end
+    end
+end
+
+function notes = sharedEventsNotes(plan)
+%SHAREDEVENTSNOTES  Which bins share events, and what was done about it.
+    notes = {};
+    shared = find(cellfun(@numel, plan.cellBins) > 1);
+    if isempty(shared)
+        return;
+    end
+    parts = arrayfun(@(c) sprintf('%s share %d event(s)', listOf(plan.binLabels(plan.cellBins{c})), ...
+        plan.cellCounts(c)), shared, 'UniformOutput', false);
+    notes = {sprintf(['%s. As Average does, each event counts fully in every bin it belongs ' ...
+        'to: the events of each set of bins are fitted as one event type (%s), and a bin''s ' ...
+        'waveform is the average over its own events of those types'' responses.'], ...
+        strjoin(parts, '; '), listOf(plan.cellLabels(shared)))};
+end
+
+function [formula, given, notes] = sharedFormula(formulas, labels)
+%SHAREDFORMULA  The formula of the events in the bins LABELS: the bin's own
+%   for one bin; for events several bins share, the one formula they all
+%   have, or else every term any of them has, since those events are in each
+%   of the bins and each formula says what explains them.
+    notes = {};
+    [each, written] = cellfun(@(label) formulaFor(formulas, label), labels, 'UniformOutput', false);
+    given = any([written{:}]);
+    formula = each{1};
+    if isscalar(each) || isscalar(unique(regexprep(each, '\s', '')))
+        return;
+    end
+    terms = {};
+    keys = {};
+    for k = 1:numel(each)
+        rhs = strtrim(regexprep(each{k}, '^[^~]*~', ''));
+        if numel(topLevelSplit(rhs, '-')) > 1
+            throw(MException('Alakazam:Unfold:SharedFormula', '%s', sprintf([ ...
+                '%s share events, which are fitted as one event type with every term of their ' ...
+                'formulas, and a formula that takes a term out with "-" (%s) cannot be merged ' ...
+                'with the others. Would you give these bins the same formula?'], ...
+                listOf(labels), each{k})));
+        end
+        for part = topLevelSplit(rhs, '+')
+            key = regexprep(part{1}, '\s', '');
+            if ~isempty(key) && ~ismember(key, keys)
+                keys{end + 1} = key; %#ok<AGROW>
+                terms{end + 1} = strtrim(part{1}); %#ok<AGROW>
+            end
+        end
+    end
+    formula = ['y ~ ' strjoin(terms, ' + ')];
+    notes = {sprintf('The events %s share are fitted with the terms of all their formulas: %s.', ...
+        listOf(labels), formula)};
+end
+
+function parts = topLevelSplit(text, separator)
+%TOPLEVELSPLIT  TEXT split at SEPARATOR wherever it is outside parentheses,
+%   so "1 + spl(x, 5) + cat(a)" is three terms and the commas and numbers
+%   inside a term stay with it.
+    parts = {};
+    depth = 0;
+    start = 1;
+    for k = 1:numel(text)
+        switch text(k)
+            case '('
+                depth = depth + 1;
+            case ')'
+                depth = depth - 1;
+            case separator
+                if depth == 0
+                    parts{end + 1} = text(start:k - 1); %#ok<AGROW>
+                    start = k + 1;
+                end
+        end
+    end
+    parts{end + 1} = text(start:end);
 end
 
 % ======================================================================= %
@@ -157,31 +307,48 @@ function pooled = pooledValues(events, eventTypes, formulas)
 %   of values every type using the field shares, [] when they share none:
 %   a spline is only evaluated there, since outside a bin's own values it
 %   would be extrapolating.
-    pooled = struct('name', {}, 'values', {}, 'common', {});
+%
+%   A 2D SPLINE (2dspl(x, z, n)) is evaluated at both fields at once, so it
+%   gets an entry of its own: named as the toolbox names it, the two field
+%   names run together ("xz"), with .pair {x, z}, .values the pairs of every
+%   event that uses it (2 x n, from the same events), and .common a 2 x 2
+%   box, each row the range of one field every type using it shares.
+    pooled = struct('name', {}, 'values', {}, 'common', {}, 'pair', {});
     for t = 1:numel(eventTypes)
         rows = strcmp({events.type}, eventTypes{t});
-        for v = formulaVariables(formulas{t})
+        [vars, pairs] = formulaVariables(formulas{t});
+        for v = vars
             if v.categorical
                 continue;
             end
-            values = [events(rows).(v.name)];
-            at = find(strcmp({pooled.name}, v.name), 1);
-            if isempty(at)
-                pooled(end + 1) = struct('name', v.name, 'values', values, ...
-                    'common', [min(values) max(values)]); %#ok<AGROW>
-            else
-                pooled(at).values = [pooled(at).values, values];
-                common = pooled(at).common;
-                if ~isempty(common)
-                    common = [max(common(1), min(values)), min(common(2), max(values))];
-                    if common(1) > common(2)
-                        common = [];
-                    end
-                end
-                pooled(at).common = common;
-            end
+            pooled = addPooled(pooled, v.name, [events(rows).(v.name)], {});
+        end
+        for p = pairs
+            pooled = addPooled(pooled, [p{1}{:}], ...
+                [[events(rows).(p{1}{1})]; [events(rows).(p{1}{2})]], p{1});
         end
     end
+end
+
+function pooled = addPooled(pooled, name, values, pair)
+%ADDPOOLED  VALUES (one row per field) added to the entry NAME of the same
+%   kind (a field, or a 2D spline's PAIR), and the range every type using it
+%   shares narrowed to the values of this one.
+    span = [min(values, [], 2), max(values, [], 2)];
+    at = find(strcmp({pooled.name}, name) & cellfun(@isempty, {pooled.pair}) == isempty(pair), 1);
+    if isempty(at)
+        pooled(end + 1) = struct('name', name, 'values', values, 'common', span, 'pair', {pair});
+        return;
+    end
+    pooled(at).values = [pooled(at).values, values];
+    common = pooled(at).common;
+    if ~isempty(common)
+        common = [max(common(:, 1), span(:, 1)), min(common(:, 2), span(:, 2))];
+        if any(common(:, 1) > common(:, 2))
+            common = [];
+        end
+    end
+    pooled(at).common = common;
 end
 
 % ======================================================================= %
@@ -332,18 +499,26 @@ function events = fillPlaceholders(events)
     end
 end
 
-function vars = formulaVariables(formula)
-%FORMULAVARIABLES  The event fields a formula names, and whether each is a
-%   factor (inside cat()). Everything that is a name and not one of Unfold's
-%   term functions, or the response y, is a field.
+function [vars, pairs] = formulaVariables(formula)
+%FORMULAVARIABLES  The event fields a formula names, whether each is a
+%   factor (inside cat()) and whether it is a spline's (inside spl(),
+%   circspl() or 2dspl()). Everything that is a name and not one of Unfold's
+%   term functions, or the response y, is a field. A name has to start the
+%   word: Unfold spells its 2D spline 2dspl, which once read as a field
+%   called "dspl". PAIRS lists each 2dspl's two fields, {x, z}, in order.
     rhs = regexprep(formula, '^[^~]*~', '');
-    names = unique(regexp(rhs, '[A-Za-z_]\w*', 'match'), 'stable');
+    names = unique(regexp(rhs, '(?<![\w.])[A-Za-z_]\w*', 'match'), 'stable');
     % A row, even when empty: a 0x1 list would still take one turn of a for
     % loop over its columns.
     names = reshape(setdiff(names, {'y', 'cat', 'spl', 'circspl'}, 'stable'), 1, []);
-    factors = cellfun(@(t) t{1}, regexp(rhs, 'cat\s*\(\s*([A-Za-z_]\w*)', 'tokens'), ...
+    factors = cellfun(@(t) t{1}, regexp(rhs, '(?<!\w)cat\s*\(\s*([A-Za-z_]\w*)', 'tokens'), ...
         'UniformOutput', false);
-    vars = struct('name', names, 'categorical', num2cell(ismember(names, factors)));
+    splines = cellfun(@(t) t{1}, regexp(rhs, '(?<!\w)(?:spl|circspl)\s*\(\s*([A-Za-z_]\w*)', 'tokens'), ...
+        'UniformOutput', false);
+    pairs = regexp(rhs, '(?<!\w)2dspl\s*\(\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)', 'tokens');
+    surfaces = [pairs{:}];
+    vars = struct('name', names, 'categorical', num2cell(ismember(names, factors)), ...
+        'spline', num2cell(ismember(names, [splines, surfaces])));
 end
 
 function level = levelOf(value)
@@ -408,20 +583,18 @@ function membership = binMembership(EEG, binIndex)
     end
 end
 
-function [events, nuisanceTypes, unbinned, notes, source] = rewriteEvents(EEG, membership, binTypes, otherCodes)
+function [events, nuisanceTypes, unbinned, notes, source] = rewriteEvents(EEG, eventCell, cellTypes, otherCodes)
 %REWRITEEVENTS  The event list in the model's own terms.
-%   One row per (event, bin) pair, plus one row per unbinned event whose code
-%   was chosen for modelling. Only .latency and .type are kept: they are what
-%   uf_designmat reads, and carrying the rest would invite a field name to
-%   collide with a predictor.
+%   One row per binned event, typed by the set of bins it is in (EVENTCELL,
+%   CELLTYPES: see binCombinations), plus one row per unbinned event whose
+%   code was chosen for modelling. Only .latency and .type are kept: they are
+%   what uf_designmat reads, and carrying the rest would invite a field name
+%   to collide with a predictor.
 %
-%   AN EVENT IN TWO BINS IS MODELLED ADDITIVELY, which is not what Average
-%   does. It gets one row per bin, so two sticks at the same latency, and the
-%   model explains its data as the SUM of the two bins' responses. Average
-%   instead counts that epoch fully in both averages. With mutually exclusive
-%   bins the two agree; with overlapping ones ("all targets" and "related
-%   targets") the second bin comes out as a difference from the first. This
-%   is stated here rather than hidden, and is a known open point.
+%   AN EVENT IN TWO BINS IS ONE ROW, one stick, of the type of the pair of
+%   bins. It used to be one row per bin, two sticks at the same latency,
+%   which explained its data as the SUM of two responses, unlike Average
+%   (see this file's header).
 %
 %   UNBINNED lists every code that occurs outside the bins (boundaries
 %   excepted), with its count and whether it was modelled, in order of first
@@ -432,16 +605,13 @@ function [events, nuisanceTypes, unbinned, notes, source] = rewriteEvents(EEG, m
 %   above.
     events = struct('latency', {}, 'type', {});
     source = zeros(1, 0);
-    for b = 1:numel(membership)
-        for k = reshape(membership{b}, 1, [])
-            events(end + 1) = struct('latency', EEG.event(k).latency, ...
-                'type', binTypes{b}); %#ok<AGROW>
-            source(end + 1) = k; %#ok<AGROW>
-        end
+    for k = find(eventCell > 0)
+        events(end + 1) = struct('latency', EEG.event(k).latency, ...
+            'type', cellTypes{eventCell(k)}); %#ok<AGROW>
+        source(end + 1) = k; %#ok<AGROW>
     end
 
-    binned = unique([membership{:}]);
-    others = setdiff(1:numel(EEG.event), binned);
+    others = find(eventCell == 0);
     % A boundary is EEGLAB's marker for a cut in the recording, not a thing
     % the brain responded to, and modelling it would fit a response to the
     % editing. It is not even offered.
@@ -522,24 +692,6 @@ function types = uniqueTypes(prefix, labels)
         same = find(strcmp(types, types{k}));
         if numel(same) > 1 && same(1) ~= k
             types{k} = sprintf('%s_%d', types{k}, find(same == k));
-        end
-    end
-end
-
-function refuseIdenticalBins(membership, labels, usable)
-%REFUSEIDENTICALBINS  Two bins over the same events cannot be separated.
-    idx = find(usable);
-    for a = 1:numel(idx)
-        for b = a + 1:numel(idx)
-            if isequal(membership{idx(a)}, membership{idx(b)})
-                throw(MException('Alakazam:Unfold:CollinearBins', sprintf( ...
-                    ['The bins "%s" and "%s" hold exactly the same events, so the model ' ...
-                     'cannot tell their responses apart: any amount of one can be traded ' ...
-                     'for the same amount of the other and fit the data equally well. The ' ...
-                     'solver would still return an answer, and it would be arbitrary. ' ...
-                     'Please give them different events or drop one of them.'], ...
-                    labels{idx(a)}, labels{idx(b)})));
-            end
         end
     end
 end
