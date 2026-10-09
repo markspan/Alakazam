@@ -6,6 +6,37 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Changed
+
+- **Deconvolve starts from the Unfold toolbox's defaults.** On first use the
+  artefact scan covers every channel, as `uf_continuousArtifactDetect` does;
+  the model's terms carry the other terms at their mean value, as
+  `uf_addmarginal` does ('MEM'); and the fitted waveforms are left as the
+  betas Unfold returns, without a baseline. Each is now a choice in the
+  dialog, beside Alakazam's former default: **Artefact scan on** (the scalp
+  EEG only), **Other terms added at** (their average marginal effect, 'AME')
+  and **Baseline-correct the result**. A baseline window is taken as Unfold's
+  `uf_plotParam` takes one, from its start up to but not including its stop,
+  so the default -200 to 0 ms no longer includes the sample at 0 ms; and a
+  term not named under **Terms evaluated at** is drawn at ten quantiles, the
+  toolbox's default, not five. Templates saved before replay as they ran:
+  without the new settings, they scan the scalp EEG only, use 'AME' and
+  refuse missing numbers. The Figure 11 template states its choices and
+  gives the chapter's numbers as before.
+- **An event without a number its formula uses is no longer refused.**
+  Under the new **Missing values**, the Unfold toolbox's own
+  `uf_imputeMissing` fills it in with the median of the bin's other events
+  (its default), the mean or a random draw, or leaves the event out of the
+  model; refusing is still a choice. A factor some event has no level of is
+  refused as before, now saying why: the toolbox cannot build it.
+
+### Added
+
+- **A technical note on Deconvolve and Unfold**
+  (`Docs/unfold-technical-note.md`, linked from chapters 9 and 17): the
+  toolbox's own workflow step by step, which function Deconvolve calls with
+  which settings, and every place it departs from a toolbox default.
+
 ### Fixed
 
 - **An average could not be exported as .set.** EEGLAB refused the file:

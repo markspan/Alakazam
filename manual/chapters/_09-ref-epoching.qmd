@@ -299,12 +299,15 @@ explained by two events is shared between them [@smith2015; @ehinger2019;
 |-------------------------------------------------------|--------------------------|-------------------------------------------------------|
 | **Define bins** | the dataset's own bin tags | The bins, in DefineBins' language and editor. An `epoch` line is ignored: the fit uses the continuous recording, and **Window** sets the response window. |
 | **Window** start, stop | -200, 800 ms | The response window fitted around every event. |
-| **Baseline** start, stop, **Baseline-correct the result** | the pre-event window, on | The interval the fitted waveforms are baseline-corrected over. |
+| **Baseline** start, stop, **Baseline-correct the result** | off; the pre-event window offered | Off, the waveforms are the betas as fitted, as Unfold returns them. On, they are baseline-corrected over the window, taken as Unfold's `uf_plotParam` takes a baseline: from its start up to, but not including, its stop. |
 | **Result** | One waveform per bin | **One waveform per bin** (shaped like Average), **overlap-corrected trials** (shaped like DefineBins' epochs), or **the model's terms**. |
-| **Terms evaluated at** | five quantiles | For the terms: where continuous and spline terms are evaluated, as `sac_amplitude = 0.5 1 2; rt = 300 500`. |
+| **Terms evaluated at** | ten quantiles | For the terms: where continuous and spline terms are evaluated, as `sac_amplitude = 0.5 1 2; rt = 300 500`. A term not named is evaluated at ten quantiles of its own values, the toolbox's default. |
+| **Other terms added at** | their mean value (MEM) | For the terms: how each term's waveform carries the model's other terms, at their mean value (MEM, the toolbox's default) or as their average marginal effect (AME). |
 | **Formula** per bin | `y ~ 1` | What explains the bin's response, in Unfold's notation (below). |
 | **Events in no bin, modelled and dropped** | all | Event codes outside the bins to model as nuisance, so that their overlap is removed too. |
 | **Artefact threshold**, **Measured in a window of**, **Stepped by** | 150 µV, 2000 ms, 100 ms | Stretches whose peak-to-peak amplitude in the moving window exceeds the threshold are left out of the model; 0 turns this off. |
+| **Artefact scan on** | every channel | The channels the scan looks at: every channel, as the toolbox scans, or the scalp EEG only. |
+| **Missing values** | filled in with the median | An event without a number its formula uses: filled in with the median, the mean or a random one of its bin's other values, or the event left out of the model, by Unfold's `uf_imputeMissing`; or refused. |
 | **Solver iterations** | 400 | The most iterations the solver takes per channel, the toolbox's own limit. A fit that reaches it says so. |
 
 : Deconvolve's options. {#tbl-deconvolve}
@@ -342,6 +345,18 @@ of its events. Internally each set of bins that some events share is fitted
 as one event type, with the terms of all those bins' formulas, and the model
 list says which bins share events.
 
+**An event without a number** its formula uses is handled as **Missing
+values** says, by Unfold's own `uf_imputeMissing`, between building the
+design and fitting it, as the toolbox's workflow places it. The median, the
+mean or a random draw is taken from the bin's other events, and the filled-in
+value is fitted; a waveform per bin is still held at the values the events
+have. Leaving the events out (drop) leaves them out of the overlap
+correction too: their responses stay in the recording, unmodelled, and the
+bins count, average and cut trials without them. The model list says how
+many events lack which field. A factor needs a level on every event of the
+bin, whatever is chosen: the toolbox cannot build a factor with an event
+that has none, and `uf_imputeMissing` fills in numbers.
+
 ### What to model
 
 Overlap is removed only where it is modelled. A response to an event outside
@@ -364,9 +379,12 @@ naming the pair as the likely cause if the solver then does not converge.
 
 **Artefacts** are handled by leaving stretches out of the model rather than
 by dropping epochs, so an event next to a bad stretch keeps the rest of its
-data. The defaults are the toolbox's. In reading and free viewing, where the
-eye movements are the task, it is usually better to set the threshold to 0
-and model the saccades and blinks instead.
+data. The defaults are the toolbox's, every channel scanned. An eye
+channel's range is several times the EEG's, so where the eye channels are in
+the recording, scanning **the scalp EEG only** leaves out far less of it; the
+eye channels are still fitted. In reading and free viewing, where the eye
+movements are the task, it is usually better to set the threshold to 0 and
+model the saccades and blinks instead.
 
 ### The three results
 
@@ -382,23 +400,38 @@ and model the saccades and blinks instead.
   window touches a stretch left out of the model had nothing subtracted there
   and is dropped, and counted.
 - **The model's terms**: every factor level, and every continuous or spline
-  term at chosen values, each as a whole waveform with the other terms as
-  their average marginal effects, a spline averaged over its events' own
-  values (Unfold's `uf_predictContinuous` and `uf_addmarginal` with `AME`).
-  The toolbox's default would evaluate a spline at its mean value instead,
-  which for an angle is a direction no event need have had. A 2D spline is
+  term at chosen values, each as a whole waveform with the model's other
+  terms added in (Unfold's `uf_predictContinuous` and `uf_addmarginal`).
+  **Other terms added at** decides how: at their mean value (MEM, the
+  toolbox's default), or as their average marginal effect (AME), a spline
+  averaged over its events' own values, as **One waveform per bin** has it.
+  The two differ only for a spline, and most for a circular one: the mean of
+  angles near 0 and 360 degrees is a direction no event had. A 2D spline is
   named by both fields in **Terms evaluated at** (`x = 1 2; y = 0.5`).
 
 Deconvolve needs continuous data without a DC offset, since the regression
 has no intercept for the recording as a whole: high-pass filter first.
 
+**Settings stored before these choices existed.** A template saved before
+**Artefact scan on**, **Other terms added at** and **Missing values** were
+settings (with V0.4.5 or earlier) was run with the scalp EEG only, AME and
+missing numbers refused, and replays and reopens with them, so it gives the
+result it always gave.
+
 ### How the Unfold toolbox is called
 
+The technical note [*Deconvolve and the Unfold
+workflow*](https://github.com/markspan/Alakazam/blob/Development/Docs/unfold-technical-note.md)
+goes through the toolbox's own account of its workflow step by step: which
+function Deconvolve calls, with which settings, what it adds before and
+after, and every place it departs from a toolbox default.
+
 Deconvolve calls the Unfold toolbox as an Unfold script does, with the same
-inputs, and keeps its results as they are, so a result is the one Unfold
-itself gives. The artefact scan, for example, is handed the dataset's own
-events, cuts included, and looks at each stretch between cuts on its own.
-Four details of the toolbox are worth knowing (Unfold 1.3.1, unchanged in its
+inputs, starts from its defaults, and keeps its results as they are, so a
+result is the one Unfold itself gives. The artefact scan, for example, is
+handed the dataset's own events, cuts included, and looks at each stretch
+between cuts on its own.
+Five details of the toolbox are worth knowing (Unfold 1.3.1, unchanged in its
 current version):
 
 - **Joining marked stretches.** `uf_combineWinrej` joins overlapping marked
@@ -424,3 +457,10 @@ current version):
   zero is what the rows of the other event types hold. A covariate whose own
   values include zero (a rating of 0) is summarised without them; name the
   values in **Terms evaluated at** where that matters.
+- **Filling in missing values.** `uf_imputeMissing` fills in a spline's
+  columns one by one, so a filled-in event's row is not the spline at any one
+  value; its warning that more than 5% of a predictor is missing counts
+  against every event in the model, not the bin's own; and its random draw
+  (marginal) stops when two predictors miss different numbers of values,
+  since it reuses one list of drawn values from predictor to predictor.
+  Deconvolve then says so; choose the median, the mean or drop instead.

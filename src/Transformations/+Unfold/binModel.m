@@ -78,7 +78,16 @@ function plan = binModel(EEG, varargin)
 %   waveforms are evaluated on; a 2D spline's pair of fields as one entry
 %   with .pair), .nuisanceTypes, .events (the rewritten event list, one row
 %   per modelled event), .eventSource (for each row of .events, the row of
-%   EEG.event it was made from) and .notes.
+%   EEG.event it was made from), .missingValues and .missing (the choice
+%   for events without a number, and which fields lack how many; see
+%   checkVariables), .kept (which rows of .events the fit uses: all of
+%   them, until uf_imputeMissing's 'drop' leaves some out, see
+%   Unfold.fitBins) and .notes.
+%
+%   'MissingValues' says what is to happen to an event whose formula names
+%   a field it has no number for: 'refuse' (the default here, where nothing
+%   is fitted), or one of uf_imputeMissing's methods, 'median', 'mean',
+%   'marginal' or 'drop', which Unfold.fitBins applies.
 %
 %   EACH BIN HAS A FORMULA, in Unfold's own Wilkinson notation ('Formulas',
 %   a struct array of .bin (the label) and .formula): 'y ~ 1' when none is
@@ -106,7 +115,10 @@ function plan = binModel(EEG, varargin)
     parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Formulas', [], @(v) isempty(v) || isstruct(v));
+    parsed.addParameter('MissingValues', 'refuse', @(v) (ischar(v) || isstring(v)) && ...
+        any(strcmpi(char(string(v)), {'refuse', 'median', 'mean', 'marginal', 'drop'})));
     parsed.parse(varargin{:});
+    missingValues = lower(char(string(parsed.Results.MissingValues)));
     choice.otherEvents = parsed.Results.OtherEvents;
     otherCodes = Unfold.otherEventsChoice(choice);
     wanted = cellstr(string(parsed.Results.Covariates));
@@ -170,10 +182,48 @@ function plan = binModel(EEG, varargin)
     [plan.formulas, legacyNotes] = legacyTerms(plan.formulas, ~explicit, ...
         plan.events, plan.eventSource, plan.eventTypes, EEG, wanted);
     plan.notes = [plan.notes, legacyNotes];
-    plan.events = checkVariables(plan.events, plan.eventSource, plan.eventTypes, plan.typeLabels, ...
-        plan.formulas, EEG);
+    [plan.events, plan.missing, absentRows] = checkVariables(plan.events, plan.eventSource, ...
+        plan.eventTypes, plan.typeLabels, plan.formulas, EEG, missingValues);
+    plan.missingValues = missingValues;
+    plan.notes = [plan.notes, missingNotes(plan.missing, missingValues)];
+    plan.kept = true(1, numel(plan.events));
+    if strcmp(missingValues, 'drop')
+        plan = withoutDropped(plan, absentRows);
+    end
     plan.variables = cellfun(@formulaVariables, plan.formulas, 'UniformOutput', false);
-    plan.pooled = pooledValues(plan.events, plan.eventTypes, plan.formulas);
+    plan.pooled = pooledValues(plan.events(plan.kept), plan.eventTypes, plan.formulas);
+end
+
+function plan = withoutDropped(plan, dropped)
+%WITHOUTDROPPED  The plan without the events uf_imputeMissing's 'drop' will
+%   leave out: those missing a number their formula uses, whose rows of the
+%   design it zeroes (Unfold.fitBins checks it zeroed exactly these). They
+%   stay in .events, as the toolbox keeps them in EEG.event, but are not
+%   .kept: not in a bin's count, its events or its trials, nor among the
+%   values its waveform is held at.
+    plan.kept = ~dropped;
+    gone = plan.eventSource(dropped);
+    for k = 1:numel(plan.membership)
+        plan.membership{k} = setdiff(plan.membership{k}, gone, 'stable');
+    end
+    plan.binCounts = cellfun(@numel, plan.membership);
+    plan.cellCounts = cellfun(@(type) nnz(strcmp({plan.events.type}, type) & plan.kept), plan.cellTypes);
+end
+
+function notes = missingNotes(missing, method)
+%MISSINGNOTES  What will happen to the events without a value, per field.
+    notes = {};
+    if isempty(missing)
+        return;
+    end
+    what = sprintf('filled in by the Unfold toolbox''s uf_imputeMissing (''%s'')', method);
+    if strcmp(method, 'drop')
+        what = ['left out of the model by the Unfold toolbox''s uf_imputeMissing (''drop''), ' ...
+            'so they are not overlap-corrected either'];
+    end
+    parts = arrayfun(@(m) sprintf('%d of the %d events of "%s" have no value for "%s"', ...
+        m.n, m.of, m.label, m.field), missing, 'UniformOutput', false);
+    notes = {sprintf('%s: %s.', strjoin(parts, '; '), what)};
 end
 
 % ======================================================================= %
@@ -333,7 +383,10 @@ end
 function pooled = addPooled(pooled, name, values, pair)
 %ADDPOOLED  VALUES (one row per field) added to the entry NAME of the same
 %   kind (a field, or a 2D spline's PAIR), and the range every type using it
-%   shares narrowed to the values of this one.
+%   shares narrowed to the values of this one. A missing value (NaN, before
+%   uf_imputeMissing fills it in) is not a value of the field, so it is
+%   left out, and a pair with one missing is left out whole.
+    values = values(:, all(isfinite(values), 1));
     span = [min(values, [], 2), max(values, [], 2)];
     at = find(strcmp({pooled.name}, name) & cellfun(@isempty, {pooled.pair}) == isempty(pair), 1);
     if isempty(at)
@@ -416,7 +469,7 @@ function [formulas, notes] = legacyTerms(formulas, open, events, source, eventTy
     end
 end
 
-function events = checkVariables(events, source, eventTypes, typeLabels, formulas, EEG)
+function [events, missing, absentRows] = checkVariables(events, source, eventTypes, typeLabels, formulas, EEG, missingValues)
 %CHECKVARIABLES  Every field a formula names, checked against the events it
 %   will be read from, and copied onto them.
 %
@@ -428,13 +481,24 @@ function events = checkVariables(events, source, eventTypes, typeLabels, formula
 %   a sample. A row of a type whose formula does not use the field gets a
 %   placeholder (0, or '' for a categorical one) that Unfold never reads.
 %
+%   A MISSING NUMBER is passed on as NaN, as uf_designmat itself passes it,
+%   for the toolbox's uf_imputeMissing to fill in or drop (MISSINGVALUES, see
+%   Unfold.fitBins); with MISSINGVALUES 'refuse' it is refused instead.
+%   MISSING lists each field with missing numbers: .label (the bin or code),
+%   .field, .n missing, .of events. ABSENTROWS marks the rows of EVENTS that
+%   miss at least one number their formula uses.
+%
 %   REFUSED, each with the bin named: a field the recording does not have; a
-%   continuous field some event lacks a number for; and a field that has
-%   only one value across the bin (one level of a factor, or one number).
-%   The last is the one that bites in practice: EYE-EEG fills every field
-%   that does not apply with 0 (each fixation carries sac_amplitude = 0), and
-%   a term that never varies is a copy of the bin's own intercept, which the
-%   solver then splits arbitrarily.
+%   factor some event has no level of, which uf_designmat cannot build and
+%   uf_imputeMissing cannot fill (it fills numbers); a field no event has a
+%   number for; and a field that has only one value across the bin (one
+%   level of a factor, or one number). The last is the one that bites in
+%   practice: EYE-EEG fills every field that does not apply with 0 (each
+%   fixation carries sac_amplitude = 0), and a term that never varies is a
+%   copy of the bin's own intercept, which the solver then splits
+%   arbitrarily.
+    missing = struct('label', {}, 'field', {}, 'n', {}, 'of', {});
+    absentRows = false(1, numel(events));
     for t = 1:numel(eventTypes)
         rows = find(strcmp({events.type}, eventTypes{t}));
         for v = formulaVariables(formulas{t})
@@ -448,8 +512,12 @@ function events = checkVariables(events, source, eventTypes, typeLabels, formula
                 values = arrayfun(@(s) levelOf(EEG.event(s).(v.name)), source(rows), 'UniformOutput', false);
                 if any(cellfun(@isempty, values))
                     throw(MException('Alakazam:Unfold:MissingValue', '%s', sprintf([ ...
-                        'Some events of "%s" have no value for "%s", which its formula treats as ' ...
-                        'a factor (cat(%s)).'], typeLabels{t}, v.name, v.name)));
+                        '%d of the %d events of "%s" have no value for "%s", which its formula ' ...
+                        'treats as a factor (cat(%s)). The Unfold toolbox cannot build a factor ' ...
+                        'with an event that has no level of it (uf_designmat), and its ' ...
+                        'uf_imputeMissing fills in numbers, not levels. Would you give those ' ...
+                        'events a level, or leave the factor out of this bin''s formula?'], ...
+                        nnz(cellfun(@isempty, values)), numel(values), typeLabels{t}, v.name, v.name)));
                 end
                 if numel(unique(values)) < 2
                     throw(MException('Alakazam:Unfold:OneLevel', '%s', sprintf([ ...
@@ -462,21 +530,34 @@ function events = checkVariables(events, source, eventTypes, typeLabels, formula
                 end
             else
                 values = numericValues(EEG.event(source(rows)), v.name);
-                if ~all(isfinite(values))
+                absent = ~isfinite(values);
+                if all(absent)
+                    throw(MException('Alakazam:Unfold:MissingValue', '%s', sprintf([ ...
+                        'None of the %d events of "%s" has a number for "%s", which its formula ' ...
+                        'uses, so there is nothing to fit it from.'], numel(values), typeLabels{t}, v.name)));
+                end
+                if any(absent) && strcmp(missingValues, 'refuse')
                     throw(MException('Alakazam:Unfold:MissingValue', '%s', sprintf([ ...
                         '%d of the %d events of "%s" have no number for "%s", which its formula ' ...
-                        'uses. Unfold needs a value on every event of a type whose formula ' ...
-                        'names a field.'], nnz(~isfinite(values)), numel(values), typeLabels{t}, v.name)));
+                        'uses. The Unfold toolbox can fill them in or leave those events out ' ...
+                        '(uf_imputeMissing): would you choose how under Missing values, or give ' ...
+                        'those events a value?'], nnz(absent), numel(values), typeLabels{t}, v.name)));
                 end
-                if all(values == values(1))
+                known = values(~absent);
+                if all(known == known(1))
                     throw(MException('Alakazam:Unfold:NeverVaries', '%s', sprintf([ ...
                         'Every event of "%s" has "%s" = %g, so the term cannot be told apart from ' ...
                         'the bin''s own waveform. (EYE-EEG fills each field that does not apply ' ...
                         'with 0: a fixation''s sac_amplitude, a saccade''s fix_avgpos_x.)'], ...
-                        typeLabels{t}, v.name, values(1))));
+                        typeLabels{t}, v.name, known(1))));
+                end
+                if any(absent)
+                    missing(end + 1) = struct('label', typeLabels{t}, 'field', v.name, ...
+                        'n', nnz(absent), 'of', numel(values)); %#ok<AGROW>
+                    absentRows(rows(absent)) = true;
                 end
                 for k = 1:numel(rows)
-                    events(rows(k)).(v.name) = values(k);
+                    events(rows(k)).(v.name) = values(k);   % NaN where it is missing
                 end
             end
         end

@@ -414,29 +414,174 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
         end
 
         function theTermsInterceptAveragesOverACircularSpline(testCase)
-        %THETERMSINTERCEPTAVERAGESOVERACIRCULARSPLINE  The terms' intercept
-        %   carries every other term as its average marginal effect, the
-        %   spline averaged over the events' own values, as the waveform per
-        %   bin does. uf_addmarginal's default instead evaluates the spline
-        %   at the mean value, which for angles near 0 and 360 degrees is an
-        %   angle no event had.
+        %THETERMSINTERCEPTAVERAGESOVERACIRCULARSPLINE  With Marginal 'AME' the
+        %   terms' intercept carries every other term as its average marginal
+        %   effect, the spline averaged over the events' own values, as the
+        %   waveform per bin does.
             testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
-            EEG = UnfoldBinsTest.recording();
-            rng(5);
-            for k = 1:numel(EEG.event)
-                EEG.event(k).ang = mod(10 * sign(randn()) + 4 * randn(), 360);   % near 0 or 360
-            end
-            formulas = struct('bin', 'Frequent', 'formula', 'y ~ 1 + circspl(ang, 5, 0, 360)');
+            [EEG, formulas] = UnfoldCovariatesTest.anglesNearNorth();
 
             waveforms = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
                 'ArtifactThresholdUv', 0, 'BaselineMs', [], 'Formulas', formulas);
-            terms = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
-                'ArtifactThresholdUv', 0, 'BaselineMs', [], 'Formulas', formulas, 'Output', 'terms');
+            [terms, info] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'BaselineMs', [], 'Formulas', formulas, 'Output', 'terms', ...
+                'Marginal', 'AME');
 
             intercept = strcmp({terms.bindesc.label}, 'Frequent: (Intercept)');
             testCase.assertEqual(nnz(intercept), 1);
             testCase.verifyEqual(terms.data(:, :, intercept), waveforms.data(:, :, 1), 'AbsTol', 1e-6, ...
                 'The intercept with the spline averaged over the events is the bin''s waveform.');
+            testCase.verifyEqual(info.marginal, 'AME');
+        end
+
+        function theTermsTakeTheMeanValueByDefaultAsTheToolboxDoes(testCase)
+        %THETERMSTAKETHEMEANVALUEBYDEFAULTASTHETOOLBOXDOES  uf_addmarginal's
+        %   own default, 'MEM': the intercept carries the spline at its mean
+        %   value, which for angles near 0 and 360 degrees is one no event
+        %   had, so it is not the bin's waveform. That is the toolbox's
+        %   choice, and the default here.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            [EEG, formulas] = UnfoldCovariatesTest.anglesNearNorth();
+
+            [byDefault, info] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'Formulas', formulas, 'Output', 'terms');
+            averaged = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'Formulas', formulas, 'Output', 'terms', 'Marginal', 'AME');
+
+            testCase.verifyEqual(info.marginal, 'MEM');
+            intercept = strcmp({byDefault.bindesc.label}, 'Frequent: (Intercept)');
+            testCase.assertEqual(nnz(intercept), 1);
+            difference = byDefault.data(:, :, intercept) - averaged.data(:, :, intercept);
+            testCase.verifyGreaterThan(max(abs(difference(:))), 1e-6, ...
+                'At the mean angle, not averaged over the events'' own angles.');
+        end
+
+        % ---- missing numbers: the toolbox's uf_imputeMissing ------------- %
+        function aMissingNumberIsFilledInByTheToolboxsMedian(testCase)
+        %AMISSINGNUMBERISFILLEDINBYTHETOOLBOXSMEDIAN  By default an event
+        %   without a number is given the median of its bin's others, by
+        %   uf_imputeMissing: the same model as filling it in by hand. Fifteen
+        %   of the 120 events is over the toolbox's 5%, which it warns about.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            [holed, gaps, known] = UnfoldCovariatesTest.withGaps(EEG, 'gain', 15);
+            filled = EEG;
+            [filled.event(gaps).gain] = deal(median(known));
+            args = {'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, 'Output', 'terms', ...
+                'EvaluateAt', 'gain = 1 2', 'Formulas', struct('bin', 'A', 'formula', 'y ~ 1 + gain')};
+
+            [imputed, info] = Unfold.fitBins(holed, args{:});
+            byHand = Unfold.fitBins(filled, args{:}, 'MissingValues', 'refuse');
+
+            testCase.verifyEqual(imputed.data, byHand.data, 'AbsTol', 1e-9);
+            testCase.verifyEqual(info.missingValues, 'median');
+            testCase.verifyEqual([info.missing.n], 15);
+            testCase.verifyTrue(any(contains(info.notes, 'uf_imputeMissing')), 'The notes say so.');
+            testCase.verifyTrue(any(contains(info.notes, 'The Unfold toolbox warns')), ...
+                'Its own warning about more than 5% missing is kept.');
+        end
+
+        function eventsMissingANumberCanBeLeftOut(testCase)
+        %EVENTSMISSINGANUMBERCANBELEFTOUT  'drop': uf_imputeMissing zeroes
+        %   their rows of the design, which is the model without those events,
+        %   and the bins count, average and cut trials without them too. They
+        %   have a second field, extra, which is not pooled either.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            rng(6);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).extra = 3 * randn();
+            end
+            [holed, gaps] = UnfoldCovariatesTest.withGaps(EEG, 'gain', 5);
+            [holed.event(gaps).extra] = deal(40);   % far from the others, if it were pooled
+            removed = EEG;
+            removed.event(gaps) = [];
+            args = {'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'Formulas', struct('bin', {'A', 'B'}, 'formula', 'y ~ 1 + gain + extra')};
+
+            [dropped, info] = Unfold.fitBins(holed, args{:}, 'MissingValues', 'drop');
+            byHand = Unfold.fitBins(removed, args{:}, 'MissingValues', 'refuse');
+            [~, trials] = Unfold.fitBins(holed, args{:}, 'MissingValues', 'drop', 'Output', 'trials');
+            [~, handTrials] = Unfold.fitBins(removed, args{:}, 'Output', 'trials');
+
+            testCase.verifyEqual(dropped.data, byHand.data, 'AbsTol', 1e-6, ...
+                'Held at the values of the events kept, from the events kept.');
+            testCase.verifyEqual([dropped.bindesc.n], [byHand.bindesc.n]);
+            testCase.verifyEqual(info.dropped, 5);
+            testCase.verifyEqual(trials.trialCandidates, handTrials.trialCandidates, ...
+                'A dropped event is not a trial: nothing of its own was fitted.');
+        end
+
+        function aMissingNumberIsRefusedWhenAskedNamingTheBin(testCase)
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            holed = UnfoldCovariatesTest.withGaps(EEG, 'gain', 2);
+            formulas = struct('bin', 'A', 'formula', 'y ~ 1 + gain');
+
+            err = UnfoldCovariatesTest.refusal(@() Unfold.binModel(holed, 'Formulas', formulas, ...
+                'MissingValues', 'refuse'));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:MissingValue');
+            testCase.verifySubstring(err.message, '2 of the 60 events of "A"');
+            testCase.verifySubstring(err.message, 'Missing values');
+        end
+
+        function aFactorWithoutALevelIsRefusedWhateverTheChoice(testCase)
+        %AFACTORWITHOUTALEVELISREFUSEDWHATEVERTHECHOICE  uf_designmat cannot
+        %   build a factor with an event that has no level, and
+        %   uf_imputeMissing fills in numbers, so there is nothing to choose.
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            sides = {'left', 'right'};
+            for k = 1:numel(EEG.event)
+                EEG.event(k).side = sides{mod(k, 2) + 1};
+            end
+            A = find(arrayfun(@(e) isequal(e.bini, 1), EEG.event));
+            EEG.event(A(4)).side = '';
+            formulas = struct('bin', 'A', 'formula', 'y ~ 1 + cat(side)');
+
+            err = UnfoldCovariatesTest.refusal(@() Unfold.binModel(EEG, 'Formulas', formulas, ...
+                'MissingValues', 'median'));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:MissingValue');
+            testCase.verifySubstring(err.message, 'cannot build a factor');
+        end
+
+        function marginalDrawsForOneFieldButNotForTwoMissingDifferently(testCase)
+        %MARGINALDRAWSFORONEFIELDBUTNOTFORTWOMISSINGDIFFERENTLY  A toolbox
+        %   behaviour kept as it is: uf_imputeMissing's 'marginal' reuses
+        %   one list of drawn values from predictor to predictor, so two
+        %   predictors missing different numbers of values stop it. That is
+        %   refused, saying so; one field is drawn for as the toolbox does.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            rng(4);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).extra = randn();
+            end
+            oneField = UnfoldCovariatesTest.withGaps(EEG, 'gain', 3);
+            twoFields = UnfoldCovariatesTest.withGaps(oneField, 'extra', 1);
+            args = {'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, 'MissingValues', 'marginal'};
+
+            [~, info] = Unfold.fitBins(oneField, args{:}, ...
+                'Formulas', struct('bin', 'A', 'formula', 'y ~ 1 + gain'));
+            err = UnfoldCovariatesTest.refusal(@() Unfold.fitBins(twoFields, args{:}, ...
+                'Formulas', struct('bin', 'A', 'formula', 'y ~ 1 + gain + extra')));
+
+            testCase.verifyEqual(info.missingValues, 'marginal');
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:Marginal');
+            testCase.verifySubstring(err.message, 'draws into the same list');
+        end
+
+        function aTermNotNamedIsDrawnAtTheToolboxsTenQuantiles(testCase)
+        %ATERMNOTNAMEDISDRAWNATTHETOOLBOXSTENQUANTILES  Without values in
+        %   EvaluateAt, uf_predictContinuous's own default: ten quantiles.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+            formulas = struct('bin', {'A'}, 'formula', {'y ~ 1 + gain'});
+
+            terms = Unfold.fitBins(EEG, 'WindowMs', [-100 400], 'ArtifactThresholdUv', 0, ...
+                'Formulas', formulas, 'Output', 'terms');
+
+            testCase.verifyEqual(nnz(startsWith({terms.bindesc.label}, 'A: gain = ')), 10);
         end
 
         function aTwoDimensionalSplineIsFittedAndEvaluated(testCase)
@@ -516,6 +661,38 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
                 EEG.event(k).note = 'text';
             end
             EEG = DefineBins(EEG, struct('script', DeconvolveTest.BinScript));
+        end
+
+        function [EEG, gaps, known] = withGaps(EEG, field, count)
+        %WITHGAPS  EEG with COUNT events of bin A, spread over the
+        %   recording, given no number for FIELD (NaN). GAPS are their rows
+        %   of EEG.event, KNOWN the values bin A's other events keep.
+            A = find(arrayfun(@(e) isequal(e.bini, 1), EEG.event));
+            gaps = A(round(linspace(2, numel(A) - 1, count)));
+            known = [EEG.event(setdiff(A, gaps)).(field)];
+            [EEG.event(gaps).(field)] = deal(NaN);
+        end
+
+        function err = refusal(call)
+        %REFUSAL  The error CALL throws, or a failure if it throws none.
+            err = MException('Test:NoError', 'No error was thrown.');
+            try
+                call();
+            catch err
+            end
+        end
+
+        function [EEG, formulas] = anglesNearNorth()
+        %ANGLESNEARNORTH  UnfoldBinsTest's recording with an angle on every
+        %   event, near 0 or near 360 degrees, so the mean angle (about 180)
+        %   is one no event has; Frequent is fitted with a circular spline of
+        %   it.
+            EEG = UnfoldBinsTest.recording();
+            rng(5);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).ang = mod(10 * sign(randn()) + 4 * randn(), 360);
+            end
+            formulas = struct('bin', 'Frequent', 'formula', 'y ~ 1 + circspl(ang, 5, 0, 360)');
         end
 
         function [EEG, truth] = confoundedRecording(overlap)

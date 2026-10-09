@@ -15,8 +15,9 @@ takes the epoch's own first or last sample, as FieldTrip selects a latency
 range; a window lying wholly outside the epoch is refused rather than
 replaced by the whole epoch. The exceptions follow the toolbox that does the
 same job: a time-frequency baseline takes the samples inside its window, as
-`ft_freqbaseline` and `newtimef` do, and so does Deconvolve's baseline, as
-Unfold's does. Rejected samples are left out of every mean and fit. Each
+`ft_freqbaseline` and `newtimef` do, and Deconvolve's baseline takes the
+samples from its start up to, but not including, its stop, as Unfold's
+`uf_plotParam` does. Rejected samples are left out of every mean and fit. Each
 section ends with **Toolbox or own code**: the toolbox that does the same
 job, and how Alakazam's result is held to it.
 

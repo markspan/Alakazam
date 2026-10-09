@@ -34,6 +34,9 @@
         "artifactThresholdUv": 250,
         "artifactWindowMs": 2000,
         "artifactStepMs": 100,
+        "artifactChannels": "scalp",
+        "marginal": "AME",
+        "missingValues": "median",
         "output": "average"
       },
       "parent": -1
@@ -69,6 +72,9 @@
         "artifactThresholdUv": 250,
         "artifactWindowMs": 2000,
         "artifactStepMs": 100,
+        "artifactChannels": "scalp",
+        "marginal": "AME",
+        "missingValues": "median",
         "output": "trials"
       },
       "parent": -1
@@ -145,6 +151,9 @@
         "artifactThresholdUv": 250,
         "artifactWindowMs": 2000,
         "artifactStepMs": 100,
+        "artifactChannels": "scalp",
+        "marginal": "AME",
+        "missingValues": "median",
         "output": "terms"
       },
       "parent": -1

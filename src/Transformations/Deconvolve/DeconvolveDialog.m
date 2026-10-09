@@ -43,6 +43,14 @@ function options = DeconvolveDialog(EEG, stored)
 %   usual remedy and is made right here (manual issue M10). The alert does not
 %   stop OK: a lock can be what the user means to model.
 %
+%   IT STARTS FROM THE TOOLBOX'S DEFAULTS where Unfold has one: the artefact
+%   scan on every channel, the terms with the other terms at their mean
+%   value ('MEM'), the betas as fitted, without a baseline, and a missing
+%   number filled in with the median (uf_imputeMissing). Each is a choice
+%   here: the scalp EEG only, the average marginal effect ('AME'), a
+%   baseline window, and the mean, a random draw, leaving the event out or
+%   refusing.
+%
 %   OK checks the settings the way Deconvolve will apply them, so a design
 %   the fit would refuse is reported here rather than after the dialog closes.
 %
@@ -59,6 +67,20 @@ function options = DeconvolveDialog(EEG, stored)
         end
     end
 
+    % An option set stored before the scan's channels, the marginal effect and
+    % missing values were choices was run with the scalp EEG, 'AME' and a
+    % refusal, and a replay still runs it so (see Deconvolve), so the dialog
+    % shows it so too. Only a first use starts from the toolbox's defaults.
+    if isstruct(stored) && ~isfield(stored, 'artifactChannels')
+        seed.artifactChannels = 'scalp';
+    end
+    if isstruct(stored) && ~isfield(stored, 'marginal')
+        seed.marginal = 'AME';
+    end
+    if isstruct(stored) && ~isfield(stored, 'missingValues')
+        seed.missingValues = 'refuse';
+    end
+
     % Which unbinned codes to model, kept out of the generic seeding loop for
     % the same reason as the baseline: an empty list is an answer ("none"),
     % and the loop would read it as absent and restore the default. 'all' is
@@ -68,13 +90,15 @@ function options = DeconvolveDialog(EEG, stored)
 
     % The baseline is stored as the window itself, with [] meaning "leave the
     % betas as the solver returned them", so the checkbox and the two fields
-    % are read back out of that one value.
-    baselineOn = true;
+    % are read back out of that one value. Off on first use, as Unfold
+    % returns its betas; the fields then offer the pre-event window.
+    baselineOn = false;
     baseline = [seed.windowMs(1) 0];
-    if isstruct(stored) && isfield(stored, 'baselineMs')
-        if isempty(stored.baselineMs)
-            baselineOn = false;
-        else
+    if isstruct(stored) && ~isfield(stored, 'baselineMs')
+        baselineOn = true;      % absent, Deconvolve corrects over the pre-event window
+    elseif isstruct(stored)
+        if ~isempty(stored.baselineMs)
+            baselineOn = true;
             baseline = reshape(double(stored.baselineMs), 1, 2);
         end
     end
@@ -126,8 +150,8 @@ function options = DeconvolveDialog(EEG, stored)
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [7 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 7), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [10 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 10), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     % The window decides which events overlap, so the model is shown again.
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1), ...
@@ -151,8 +175,8 @@ function options = DeconvolveDialog(EEG, stored)
 
     % A beta's zero is wherever the model put it, so a fitted waveform has to
     % be baseline-corrected before it can be read beside an average that
-    % Baseline has already corrected. On by default, and the pre-event part of
-    % the response window is the default window, as Baseline's own is.
+    % Baseline has already corrected. Off until ticked, as Unfold leaves its
+    % betas, with the pre-event part of the response window offered.
     baselineBox = uicheckbox(settings, 'Text', 'Baseline-correct the result', ...
         'Value', baselineOn, 'ValueChangedFcn', @(~, ~) onBaselineToggled());
     baselineBox.Layout.Row = 4;
@@ -177,7 +201,7 @@ function options = DeconvolveDialog(EEG, stored)
          'response subtracted: run Average on them for the waveforms, and EpochView shows ' ...
          'them as an ERP image without the overlap. Model terms are every factor level and ' ...
          'every continuous or spline term at chosen values, each a whole waveform with the ' ...
-         'other terms at their means.']);
+         'other terms added as set below.']);
     outputDropdown.Layout.Row = 5;
     outputDropdown.Layout.Column = [2 4];
     evaluateLabel = uilabel(settings, 'Text', 'Terms evaluated at:');
@@ -187,22 +211,73 @@ function options = DeconvolveDialog(EEG, stored)
         'Value', char(string(seed.evaluateAt)), ...
         'Placeholder', 'e.g. sac_amplitude = 0.5 1 2 4; rt = 300 500', ...
         'Tooltip', ['Where each continuous or spline term is drawn, as "name = values", ' ...
-         'separated by semicolons. A term not named here is drawn at five quantiles ' ...
-         'of its own values.']);
+         'separated by semicolons. A term not named here is drawn at ten quantiles ' ...
+         'of its own values, the toolbox''s default.']);
     evaluateField.Layout.Row = 6;
     evaluateField.Layout.Column = [2 4];
+
+    % How each term's waveform carries the rest of the model: uf_addmarginal's
+    % own default, or the average over the events' values. They differ only
+    % for a spline, and most for a circular one.
+    marginalLabel = uilabel(settings, 'Text', 'Other terms added at:');
+    marginalLabel.Layout.Row = 7;
+    marginalLabel.Layout.Column = 1;
+    marginalDropdown = uidropdown(settings, 'Tag', 'marginal', ...
+        'Items', {'Their mean value (MEM, the toolbox''s default)', ...
+                  'Their average over the events (AME)'}, ...
+        'ItemsData', {'MEM', 'AME'}, 'Value', choiceSeed(seed.marginal, {'MEM', 'AME'}), ...
+        'Tooltip', ['Each term''s waveform has the model''s other terms added in. MEM takes ' ...
+         'a spline at its mean value; AME averages it over the events'' own values. For an ' ...
+         'angle (circspl) the mean can be a direction no event had.']);
+    marginalDropdown.Layout.Row = 7;
+    marginalDropdown.Layout.Column = [2 4];
     onOutputChanged();
+
+    % Which channels the artefact scan looks at: the toolbox scans them all.
+    channelsLabel = uilabel(settings, 'Text', 'Artefact scan on:');
+    channelsLabel.Layout.Row = 8;
+    channelsLabel.Layout.Column = 1;
+    channelsDropdown = uidropdown(settings, 'Tag', 'artifactChannels', ...
+        'Items', {'Every channel (the toolbox''s default)', 'The scalp EEG only'}, ...
+        'ItemsData', {'all', 'scalp'}, 'Value', choiceSeed(seed.artifactChannels, {'all', 'scalp'}), ...
+        'Tooltip', ['An eye channel swings several times as far as the EEG, so scanning it ' ...
+         'can leave out much of the recording. The scalp EEG only leaves the eye and other ' ...
+         'peripheral channels out of the scan; they are still fitted.']);
+    channelsDropdown.Layout.Row = 8;
+    channelsDropdown.Layout.Column = [2 4];
+
+    % An event without a number its formula uses: the toolbox's own
+    % uf_imputeMissing, whose default is the median. The model is shown again,
+    % since a refusal, or the events 'drop' leaves out, depend on it.
+    missingLabel = uilabel(settings, 'Text', 'Missing values:');
+    missingLabel.Layout.Row = 9;
+    missingLabel.Layout.Column = 1;
+    missingDropdown = uidropdown(settings, 'Tag', 'missingValues', ...
+        'Items', {'Filled in with the median (the toolbox''s default)', ...
+                  'Filled in with the mean', ...
+                  'Filled in with a random one of the others (marginal)', ...
+                  'Those events left out (drop)', ...
+                  'Refused, naming the bin'}, ...
+        'ItemsData', {'median', 'mean', 'marginal', 'drop', 'refuse'}, ...
+        'Value', choiceSeed(seed.missingValues, {'median', 'mean', 'marginal', 'drop', 'refuse'}), ...
+        'ValueChangedFcn', @(~, ~) showModel(), ...
+        'Tooltip', ['An event whose formula names a field it has no number for. The toolbox ' ...
+         'fills the number in from the bin''s other events, or leaves the event out of the ' ...
+         'model, which then does not overlap-correct it either. A factor without a level ' ...
+         'is refused whatever is chosen: the toolbox cannot fill in a level.']);
+    missingDropdown.Layout.Row = 9;
+    missingDropdown.Layout.Column = [2 4];
 
     % The solver's limit: the toolbox's own 400 unless a fit said it ran out.
     iterationsLabel = uilabel(settings, 'Text', 'Solver iterations:');
-    iterationsLabel.Layout.Row = 7;
+    iterationsLabel.Layout.Row = 10;
     iterationsLabel.Layout.Column = 1;
     iterationsField = uieditfield(settings, 'numeric', 'Tag', 'solverIterations', ...
         'Value', seed.solverIterations, 'Limits', [1 Inf], 'RoundFractionalValues', 'on', ...
         'Tooltip', ['The most iterations the solver takes per channel (the toolbox''s own ' ...
          'default is 400). A fit that runs out says so; raise this when it does and the ' ...
          'design is otherwise sound.']);
-    iterationsField.Layout.Row = 7;
+    iterationsField.Layout.Row = 10;
     iterationsField.Layout.Column = 2;
 
     % The formulas, the model they make, and what a formula can use share
@@ -246,9 +321,10 @@ function options = DeconvolveDialog(EEG, stored)
         'The window should cover the whole response, including anything that precedes the event ' ...
         'itself. Bad stretches are left out by ignoring them in the model rather than by dropping ' ...
         'epochs, so an event beside one keeps the rest of its data; the defaults (150 uV in a ' ...
-        '2000 ms window, stepped 100 ms) are the toolbox''s own. Events in no bin are worth ' ...
-        'modelling: overlap is only removed where it is accounted for, so a response or a ' ...
-        'following stimulus left out still overlaps, it just stops being separated out. ' ...
+        '2000 ms window, stepped 100 ms, on every channel) are the toolbox''s own. Events in ' ...
+        'no bin are worth modelling: overlap is only removed where it is accounted for, so a ' ...
+        'response or a following stimulus left out still overlaps, it just stops being ' ...
+        'separated out. ' ...
         'The threshold is peak-to-peak within the moving window, and a window that exceeds it ' ...
         'is left out whole, so in reading or free viewing, where eye movements are the task, ' ...
         'it is usually better off (0) with the saccades and blinks modelled instead. A term in ' ...
@@ -267,9 +343,12 @@ function options = DeconvolveDialog(EEG, stored)
     uiwait(fig);
 
     function onOutputChanged()
-    %ONOUTPUTCHANGED  The values to evaluate at only mean something for the
-    %   terms, so the field is only open for them.
-        evaluateField.Enable = matlab.lang.OnOffSwitchState(strcmp(outputDropdown.Value, 'terms'));
+    %ONOUTPUTCHANGED  The values to evaluate at, and how the other terms are
+    %   added, only mean something for the terms, so they are only open for
+    %   them.
+        forTerms = matlab.lang.OnOffSwitchState(strcmp(outputDropdown.Value, 'terms'));
+        evaluateField.Enable = forTerms;
+        marginalDropdown.Enable = forTerms;
     end
 
     % ---- the formulas ------------------------------------------------- %
@@ -483,7 +562,7 @@ function options = DeconvolveDialog(EEG, stored)
         seedFormulaTable(tagged);
         try
             plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Formulas', tableFormulas());
+                'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value);
             % A code chosen earlier can stop being "in no bin" when the bins
             % change, and would then only produce a note saying it is absent.
             % The list is the user's view of the choice, so the choice follows
@@ -493,7 +572,7 @@ function options = DeconvolveDialog(EEG, stored)
                 if ~all(ismember(otherSelection, available))
                     otherSelection = intersect(otherSelection, available, 'stable');
                     plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                        'Formulas', tableFormulas());
+                        'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value);
                 end
             end
             refreshOtherTree(plan.unbinnedCodes);
@@ -573,6 +652,9 @@ function options = DeconvolveDialog(EEG, stored)
             'artifactThresholdUv', thresholdField.Value, ...
             'artifactWindowMs', artWindowField.Value, ...
             'artifactStepMs', artStepField.Value, ...
+            'artifactChannels', channelsDropdown.Value, ...
+            'missingValues', missingDropdown.Value, ...
+            'marginal', marginalDropdown.Value, ...
             'solverIterations', iterationsField.Value, ...
             'output', outputDropdown.Value);
         if candidate.windowMs(1) >= candidate.windowMs(2)
@@ -601,7 +683,7 @@ function options = DeconvolveDialog(EEG, stored)
         end
         try
             plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Formulas', candidate.formulas);
+                'Formulas', candidate.formulas, 'MissingValues', candidate.missingValues);
             designLines(tagged, plan);
         catch err
             uialert(fig, err.message, 'Check the design');
@@ -766,7 +848,8 @@ function lines = fieldReference(EEG)
         '   y ~ 1 + cat(side) * rt   a factor, rt, and their interaction', ...
         '   circspl(angle, 5, 0, 360)   a curve round a circle', ...
         '   2dspl(x, y, 5)   a smooth surface over two fields', ...
-        '', 'A bin''s events must all carry every field its formula names.', ...
+        '', 'An event without a number its formula names is filled in or left out', ...
+        'as Missing values says; a factor needs a level on every event.', ...
         'Give a factor''s levels names longer than one letter: the toolbox cannot build', ...
         '"L" and "R" when another event type lacks the field.'}];
 end
@@ -839,14 +922,27 @@ end
 
 function seed = defaults()
 %DEFAULTS  First-run settings: the paper's window and the toolbox's own
-%   artefact parameters, with nuisance events modelled because leaving them
-%   out quietly weakens the correction the transformation exists for.
-%   covariates is only read, from options stored before formulas existed.
+%   artefact parameters, channels and marginal effects, with nuisance events
+%   modelled because leaving them out quietly weakens the correction the
+%   transformation exists for. covariates is only read, from options stored
+%   before formulas existed.
     seed = struct('binScript', '', 'covariates', {{}}, ...
         'formulas', {struct('bin', {}, 'formula', {})}, 'evaluateAt', '', ...
         'windowMs', [-200 800], 'artifactThresholdUv', 150, ...
-        'artifactWindowMs', 2000, 'artifactStepMs', 100, 'solverIterations', 400, ...
+        'artifactWindowMs', 2000, 'artifactStepMs', 100, 'artifactChannels', 'all', ...
+        'marginal', 'MEM', 'missingValues', 'median', 'solverIterations', 400, ...
         'output', 'average');
+end
+
+function value = choiceSeed(stored, offered)
+%CHOICESEED  A stored choice the dropdown offers, compared without regard to
+%   case; anything else (a hand-edited template, say) is the first offered,
+%   the toolbox's default.
+    value = offered{1};
+    hit = strcmpi(offered, char(string(stored)));
+    if any(hit)
+        value = offered{find(hit, 1)};
+    end
 end
 
 function value = outputSeed(stored)

@@ -233,7 +233,9 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             corrected = Deconvolve(EEG, DeconvolveTest.options('baselineMs', [-200 0]));
             asFitted = Deconvolve(EEG, DeconvolveTest.options('baselineMs', []));
 
-            pre = corrected.times >= -200 & corrected.times <= 0;
+            % The samples from the start up to, not including, the stop, as
+            % Unfold's uf_plotParam takes its baseline.
+            pre = corrected.times >= -200 & corrected.times < 0;
             for b = 1:size(corrected.data, 3)
                 testCase.verifyEqual(mean(corrected.data(:, pre, b), 2), ...
                     zeros(size(corrected.data, 1), 1), 'AbsTol', 1e-9, ...
@@ -244,6 +246,105 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             shift = corrected.data - asFitted.data;
             testCase.verifyEqual(shift, repmat(mean(shift, 2), 1, size(shift, 2), 1), ...
                 'AbsTol', 1e-9, 'The correction is a shift per waveform and nothing else.');
+            testCase.verifyEqual(shift(:, 1, :), -mean(asFitted.data(:, pre, :), 2), 'AbsTol', 1e-9, ...
+                'The sample at the stop, 0 ms, is not part of the mean.');
+        end
+
+        function theFitLeavesTheBetasAsTheToolboxDoes(testCase)
+        %THEFITLEAVESTHEBETASASTHETOOLBOXDOES  Unfold.fitBins' defaults are
+        %   the toolbox's: no baseline (uf_condense returns the betas as
+        %   fitted), every channel scanned, and the terms' other terms at
+        %   their mean value.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldBinsTest.recording();
+
+            [byDefault, info] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0);
+            asFitted = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0, 'BaselineMs', []);
+
+            testCase.verifyEmpty(info.baseline);
+            testCase.verifyEqual(byDefault.data, asFitted.data);
+            testCase.verifyEmpty(info.artifact.channels, 'Every channel, the toolbox''s default.');
+        end
+
+        function theScanCoversEveryChannelAsTheToolboxDoes(testCase)
+        %THESCANCOVERSEVERYCHANNELASTHETOOLBOXDOES  uf_continuousArtifactDetect
+        %   scans every channel by default, an eye channel too, and so does
+        %   the fit; 'scalp' leaves the eye channel out of the scan.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.withEyeChannel(UnfoldBinsTest.recording());
+            scan = {'WindowMs', UnfoldBinsTest.WindowMs, 'ArtifactThresholdUv', 150};
+
+            [~, everyChannel] = Unfold.fitBins(EEG, scan{:});
+            [~, scalpOnly] = Unfold.fitBins(EEG, scan{:}, 'Channels', 'scalp');
+            [~, unscanned] = Unfold.fitBins(EEG, 'WindowMs', UnfoldBinsTest.WindowMs, ...
+                'ArtifactThresholdUv', 0);      % only the zone around the cut at sample 1
+
+            testCase.verifyGreaterThan(everyChannel.excludedSeconds, unscanned.excludedSeconds, ...
+                'The eye channel''s swings are marked.');
+            testCase.verifyEqual(scalpOnly.excludedSeconds, unscanned.excludedSeconds, ...
+                'The scalp channels never exceed the threshold.');
+            testCase.verifyEqual(scalpOnly.artifact.channels, 'scalp');
+        end
+
+        function theDialogsChoicesReachTheFit(testCase)
+        %THEDIALOGSCHOICESREACHTHEFIT  artifactChannels and marginal, as the
+        %   dialog stores them, are what the fit is given.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.withEyeChannel(DeconvolveTest.untaggedRecording());
+
+            everyChannel = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 150, ...
+                'artifactChannels', 'all'));
+            scalpOnly = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 150, ...
+                'artifactChannels', 'scalp'));
+            unscanned = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 0));
+            mem = Deconvolve(EEG, DeconvolveTest.options('output', 'terms', 'marginal', 'MEM'));
+            ame = Deconvolve(EEG, DeconvolveTest.options('output', 'terms', 'marginal', 'AME'));
+
+            cutOnly = unscanned.etc.alz.unfold.excludedSeconds;   % the zone around the cut
+            testCase.verifyGreaterThan(everyChannel.etc.alz.unfold.excludedSeconds, cutOnly);
+            testCase.verifyEqual(scalpOnly.etc.alz.unfold.excludedSeconds, cutOnly);
+            testCase.verifyEqual(mem.etc.alz.unfold.marginal, 'MEM');
+            testCase.verifyEqual(ame.etc.alz.unfold.marginal, 'AME');
+        end
+
+        function missingValuesAreFilledInOrRefusedAsStored(testCase)
+        %MISSINGVALUESAREFILLEDINORREFUSEDASSTORED  missingValues reaches
+        %   the fit; options stored before it existed refuse, as they did.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+            rng(8);
+            for k = 1:numel(EEG.event)
+                EEG.event(k).rt = 400 + 50 * randn();
+            end
+            first = find(strcmp({EEG.event.type}, 'S1'), 1);
+            EEG.event(first).rt = NaN;
+            formulas = struct('bin', 'Frequent', 'formula', 'y ~ 1 + rt');
+
+            filled = Deconvolve(EEG, DeconvolveTest.options('formulas', formulas, ...
+                'missingValues', 'mean'));
+            testCase.verifyEqual(filled.etc.alz.unfold.missingValues, 'mean');
+            testCase.verifyError(@() Deconvolve(EEG, DeconvolveTest.options('formulas', formulas)), ...
+                'Alakazam:Unfold:MissingValue');
+        end
+
+        function optionsStoredBeforeTheChoicesReplayAsTheyRan(testCase)
+        %OPTIONSSTOREDBEFORETHECHOICESREPLAYASTHEYRAN  A template saved before
+        %   artifactChannels and marginal existed has neither field; it was
+        %   run with the scalp-only scan and 'AME', and replays with them, so
+        %   its result does not change.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.withEyeChannel(DeconvolveTest.untaggedRecording());
+
+            waveforms = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 150));
+            unscanned = Deconvolve(EEG, DeconvolveTest.options('artifactThresholdUv', 0));
+            terms = Deconvolve(EEG, DeconvolveTest.options('output', 'terms'));
+
+            testCase.verifyEqual(waveforms.etc.alz.unfold.artifact.channels, 'scalp');
+            testCase.verifyEqual(waveforms.etc.alz.unfold.excludedSeconds, ...
+                unscanned.etc.alz.unfold.excludedSeconds, 'The eye channel was not scanned.');
+            testCase.verifyEqual(terms.etc.alz.unfold.marginal, 'AME');
         end
 
         function aThresholdThatMarksEverythingIsRefused(testCase)
@@ -337,6 +438,20 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             end
             EEG.event = rmfield(EEG.event, 'bini');
             EEG = rmfield(EEG, 'bindesc');
+        end
+
+        function EEG = withEyeChannel(EEG)
+        %WITHEYECHANNEL  EEG with a third channel, HEOG, whose eye movements
+        %   swing 400 uV for 200 ms three times, where the scalp channels
+        %   stay within a few microvolts. Centred, so the fit takes it.
+            rng(11);
+            eye = 0.05 * randn(1, size(EEG.data, 2));
+            for start = [4000 9000 14000]
+                eye(start:start + round(0.2 * EEG.srate)) = 400;
+            end
+            EEG.data = [EEG.data; eye - mean(eye)];
+            EEG.nbchan = size(EEG.data, 1);
+            EEG.chanlocs(end + 1).labels = 'HEOG';
         end
 
         function options = options(varargin)

@@ -213,6 +213,96 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             testCase.verifyEqual(options.evaluateAt, 'rt = 300 500');
         end
 
+        % ---- the toolbox's defaults, each a choice ----------------------- %
+        function theToolboxsDefaultsComeFirst(testCase)
+        %THETOOLBOXSDEFAULTSCOMEFIRST  On first use: the scan on every
+        %   channel, the terms with the other terms at their mean value, and
+        %   the betas as fitted, as Unfold does each.
+            options = testCase.runDialog(@(f) []);
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.artifactChannels, 'all');
+            testCase.verifyEqual(options.marginal, 'MEM');
+            testCase.verifyEmpty(options.baselineMs, 'No baseline until it is ticked.');
+            testCase.verifyEqual(options.missingValues, 'median', 'uf_imputeMissing''s own default.');
+        end
+
+        function theScanTheMarginalAndTheBaselineAreChoices(testCase)
+            options = testCase.runDialog(@(f) chooseAll(f));
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.artifactChannels, 'scalp');
+            testCase.verifyEqual(options.marginal, 'AME');
+            testCase.verifyEqual(options.baselineMs, [-200 0], 'The pre-event window it offers.');
+
+            function chooseAll(f)
+                choose(f, 'artifactChannels', 'scalp');
+                choose(f, 'output', 'terms');
+                choose(f, 'marginal', 'AME');
+                box = findall(f, 'Type', 'uicheckbox', 'Text', 'Baseline-correct the result');
+                box(1).Value = true;
+                box(1).ValueChangedFcn(box(1), []);
+            end
+        end
+
+        function storedChoicesAreShownAgain(testCase)
+            stored = struct('artifactChannels', 'scalp', 'marginal', 'AME', 'baselineMs', [-100 0], ...
+                'missingValues', 'drop');
+            options = testCase.runDialog(@(f) [], stored);
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.artifactChannels, 'scalp');
+            testCase.verifyEqual(options.marginal, 'AME');
+            testCase.verifyEqual(options.baselineMs, [-100 0]);
+            testCase.verifyEqual(options.missingValues, 'drop');
+        end
+
+        function olderStoredOptionsAreShownAsTheyRun(testCase)
+        %OLDERSTOREDOPTIONSARESHOWNASTHEYRUN  A set stored before these were
+        %   choices replays with the scalp-only scan, 'AME' and the pre-event
+        %   baseline (Deconvolve), so the dialog shows those, and OK keeps them.
+            options = testCase.runDialog(@(f) [], struct('output', 'average'));
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyEqual(options.artifactChannels, 'scalp');
+            testCase.verifyEqual(options.marginal, 'AME');
+            testCase.verifyEqual(options.baselineMs, [-200 0]);
+            testCase.verifyEqual(options.missingValues, 'refuse');
+        end
+
+        function aMissingNumberIsFilledInOrRefusedAsChosen(testCase)
+        %AMISSINGNUMBERISFILLEDINORREFUSEDASCHOSEN  One Rare event has no
+        %   rt. With the median (the default) OK accepts a formula using rt;
+        %   with Refused it refuses, as the fit would.
+            EEG = DeconvolveDialogTest.recording('gap');
+
+            filled = testCase.runDialog(@(f) setFormula(f, 'Rare', 'y ~ 1 + rt'), [], EEG);
+            refused = testCase.runDialog(@(f) refuseWithRt(f), [], EEG);
+
+            testCase.verifyNotEmpty(filled);
+            testCase.verifyEqual(filled.missingValues, 'median');
+            testCase.verifyEmpty(refused, 'OK refuses what the fit would refuse.');
+
+            function refuseWithRt(f)
+                setFormula(f, 'Rare', 'y ~ 1 + rt');
+                choose(f, 'missingValues', 'refuse');
+            end
+        end
+
+        function theMarginalOpensOnlyForTheTerms(testCase)
+            enabled = {};
+            testCase.runDialog(@(f) record(f));
+
+            testCase.verifyEqual(enabled, {'off', 'on'});
+
+            function record(f)
+                dropdown = findall(f, 'Type', 'uidropdown', 'Tag', 'marginal');
+                enabled{end + 1} = char(dropdown.Enable);
+                choose(f, 'output', 'terms');
+                enabled{end + 1} = char(dropdown.Enable);
+            end
+        end
+
         function valuesForATermNoFormulaHasAreRefusedAtOK(testCase)
             options = testCase.runDialog(@(f) termsAt(f, 'constantField = 7'));
 
@@ -277,6 +367,11 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
         %   600 ms after it, as UnfoldBinsTest builds them, which the dialog
         %   warns about.
             EEG = UnfoldCovariatesTest.recording();
+            if nargin > 0 && strcmp(variant, 'gap')
+                % RECORDING('gap'): one Rare event without its rt.
+                rare = find(arrayfun(@(e) isequal(e.bini, 2), EEG.event), 1);
+                EEG.event(rare).rt = NaN;
+            end
             if nargin < 1 || ~strcmp(variant, 'locked')
                 % Its own stream, so the jitter is the same on every run and
                 % the global generator other tests seed is left alone.

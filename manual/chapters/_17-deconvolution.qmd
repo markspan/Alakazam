@@ -11,7 +11,10 @@ event's response at once on the continuous recording [@smith2015;
 chapter works through a
 complete analysis on published data: Figure 11 of the Unfold toolbox paper
 [@ehinger2019], rebuilt from the authors' own recording with a template that
-ships with Alakazam (`FaceSaccadesDeconvolution.alztemplate`).
+ships with Alakazam (`FaceSaccadesDeconvolution.alztemplate`). How
+Deconvolve calls the toolbox, step by step against the toolbox's own
+workflow, is in the technical note [*Deconvolve and the Unfold
+workflow*](https://github.com/markspan/Alakazam/blob/Development/Docs/unfold-technical-note.md).
 
 ## The data
 
@@ -38,7 +41,8 @@ comparison.
     "Saccade" "saccade"`, `bin 3 "Button" "buttonpress"`);
   - a response window from -1500 to 1000 ms around each event;
   - every stretch whose peak-to-peak amplitude exceeds 250 µV in a moving
-    2 s window left out of the model (13.5% of this recording);
+    2 s window on the scalp channels (**Artefact scan on**: the scalp EEG
+    only) left out of the model (13.5% of this recording);
   - a formula per bin: `y ~ 1` for the face and the button press, and
     `y ~ 1 + spl(sac_amplitude, 5)` for the saccade, since larger saccades
     are followed by larger lambda responses, and not in a straight line.
@@ -55,7 +59,9 @@ comparison.
   moving-window peak-to-peak criterion, on the scalp channels) and
   **Average**: the comparison without deconvolution.
 - **Deconvolve** a third time, returning the model's terms, with the saccade
-  spline evaluated at amplitudes of 0.3, 0.6, 1.5 and 3 degrees.
+  spline evaluated at amplitudes of 0.3, 0.6, 1.5 and 3 degrees, and the
+  other terms added as their average marginal effect (**Other terms added
+  at**: AME).
 
 Built by hand, the first node is **Tools > 3. Epoching and Averaging >
 Deconvolve**, with the bins written under **Define bins** and the formulas
@@ -120,7 +126,9 @@ subtracted there, and is dropped. Averaging the kept trials comes within
 The last node returns the model's own view of the saccade term: the saccade
 response at each amplitude asked for, each a whole waveform with the other
 terms as their average marginal effects (Unfold's `uf_predictContinuous` and
-`uf_addmarginal`).
+`uf_addmarginal`). With AME the intercept is the response averaged over this
+participant's saccades; with the toolbox's default, MEM, it would be the
+response to a saccade of the mean amplitude.
 
 ![The saccade response at Oz for saccades of 0.3, 0.6, 1.5 and 3 degrees, and the intercept (red): the response averaged over this participant's saccades, from the model's terms.](images/deconvolve-terms.jpg){#fig-deconvolve-terms}
 
@@ -135,9 +143,9 @@ microsaccades were.
 ## Where it differs from the paper
 
 - The artefact scan covers the 36 scalp channels, where the authors' script
-  scans all 40, the eye electrodes included; an eye channel's range is
-  several times the EEG's, so scanning it leaves out far more of the
-  recording.
+  scans all 40, the eye electrodes included, as the toolbox does by default
+  (**Artefact scan on**: every channel); an eye channel's range is several
+  times the EEG's, so scanning it leaves out far more of the recording.
 - One baseline, -200 to 0 ms, serves every bin, where the authors' script
   baselines the button-locked panels at 400 to 600 ms.
 - The saccade takes five splines, as the paper says; the authors' script

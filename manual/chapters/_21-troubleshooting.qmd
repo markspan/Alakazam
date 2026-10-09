@@ -71,6 +71,18 @@ lacks that field: MATLAB's `struct2table` then reads the levels as characters
 rather than as text. Give the levels longer names (`left`, `right`); the
 message names the factor (@sec-tr-deconvolve).
 
+**Deconvolve says the toolbox could not draw the missing values.** With
+**Missing values** set to a random draw (marginal), the Unfold toolbox (1.3.1)
+stops when two predictors miss different numbers of values: it reuses one
+list of drawn values from predictor to predictor. Choose the median, the mean
+or leaving the events out instead; the message names the fields and how many
+values each lacks (@sec-tr-deconvolve).
+
+**Deconvolve refuses a factor some events have no level of.** The Unfold
+toolbox cannot build a factor with an event that has no level of it, and
+**Missing values** fills in numbers, not levels. Give those events a level,
+or leave the factor out of that bin's formula.
+
 **TimeFrequency or the Coherence Map is empty after artefact rejection.**
 An earlier version let one rejected trial blank the whole map; recalculate
 nodes computed with it.

@@ -28,18 +28,22 @@ function [EEG, info] = fitBins(input, varargin)
 %   silently de-meaning someone's data would hide the one fact that decides
 %   whether the numbers mean anything.
 %
-%   Options, all with paper-grounded defaults:
+%   Options; where the toolbox has a default, it is the default here:
 %     WindowMs           [-200 800], the response window per event. It should
 %                        cover the whole response, including anything that
 %                        precedes the event (a saccade's own motor activity
 %                        precedes the fixation it produces).
-%     BaselineMs         the window the fitted waveforms are baseline-
-%                        corrected over, by default the pre-event part of
-%                        WindowMs. A beta is a regression coefficient, so its
-%                        zero is wherever the model put it, and comparing one
-%                        with an average (which Baseline has corrected) means
-%                        correcting this the same way. [] leaves the betas
-%                        exactly as the solver returned them.
+%     BaselineMs         [] (the default) leaves the betas exactly as the
+%                        solver returned them, as uf_condense does. A window
+%                        [start stop] in ms, or 'pre-event' (the part of
+%                        WindowMs before the event), baseline-corrects the
+%                        fitted waveforms over it. A beta is a regression
+%                        coefficient, so its zero is wherever the model put
+%                        it, and reading one beside an average (which
+%                        Baseline has corrected) means correcting it too. The
+%                        window is taken as Unfold's uf_plotParam takes its
+%                        baseline: the samples from start up to, but not
+%                        including, stop (baselineSamples).
 %     OtherEvents        which event codes in no bin to fit as nuisance and
 %                        drop from the result: 'all' (default), a cellstr of
 %                        codes, or {} for none. See Unfold.binModel for why
@@ -52,10 +56,11 @@ function [EEG, info] = fitBins(input, varargin)
 %                        Unfold.eventCovariates lists what a dataset offers.
 %     EvaluateAt         for Output 'terms': where each continuous or spline
 %                        term is evaluated, as text, "sac_amplitude = 0.5 1 2;
-%                        rating = 1 5". A term not named is evaluated at five
-%                        quantiles of its own values, which differ from one
-%                        recording to the next, so name the values when the
-%                        terms are to be combined across subjects.
+%                        rating = 1 5". A term not named is evaluated at ten
+%                        quantiles of its own values (uf_predictContinuous's
+%                        own default), which differ from one recording to
+%                        the next, so name the values when the terms are to
+%                        be combined across subjects.
 %     ArtifactThresholdUv, ArtifactWindowMs, ArtifactStepMs
 %                        150 uV in a 2000 ms window stepped by 100 ms, which
 %                        are the toolbox's own defaults and the paper's
@@ -104,11 +109,37 @@ function [EEG, info] = fitBins(input, varargin)
 %                        reaches it says so in the notes; raising it lets a
 %                        slow but sound fit finish, while a nearly collinear
 %                        design needs a different model instead.
-%     Channels           which channels the artifact scan looks at. The
-%                        default is the scalp EEG (eegChannelMask), not every
-%                        channel: an EOG channel's range is several times the
-%                        EEG's, so scanning it marks most of the recording bad
-%                        and takes the bins' data with it.
+%     Channels           which channels the artefact scan looks at: [] (the
+%                        default) for every channel, as
+%                        uf_continuousArtifactDetect scans by default;
+%                        'scalp' for the scalp EEG only (eegChannelMask); or
+%                        channel indices. An EOG channel's range is several
+%                        times the EEG's, so scanning it can mark much of the
+%                        recording bad and take the bins' data with it, which
+%                        is what 'scalp' is for.
+%     Marginal           for Output 'terms': 'MEM' (the default, as
+%                        uf_addmarginal's) or 'AME' (see below).
+%     MissingValues      what happens to an event whose formula names a
+%                        field it has no number for: one of the toolbox's
+%                        uf_imputeMissing methods, 'median' (the default, as
+%                        the toolbox's), 'mean', 'marginal' (a random draw
+%                        from the others) or 'drop' (the event left out of
+%                        the model, so not overlap-corrected either), applied
+%                        between the design and its time expansion, as
+%                        toolboxWorkflow.rst places it; or 'refuse'. A factor
+%                        without a level is refused whatever the choice:
+%                        uf_designmat cannot build it, and uf_imputeMissing
+%                        fills in numbers. TOOLBOX BEHAVIOURS KEPT AS THEY
+%                        ARE (1.3.1): it fills a spline's basis column by
+%                        column, so the row it makes is not the spline at any
+%                        one value; its warning that more than 5% are
+%                        missing counts against every event in the model, not
+%                        the type's own; and 'marginal' fails when two
+%                        predictors miss different numbers of values, since
+%                        it reuses one list of drawn values from predictor to
+%                        predictor (refused here with that reason). A
+%                        waveform per bin is held at the values the events
+%                        have, not at filled-in ones (Unfold.binModel).
 %     Output             'average' (the default): one waveform per bin, as
 %                        described above. 'trials': one OVERLAP-CORRECTED
 %                        TRIAL per binned event instead, in the epoched shape
@@ -157,14 +188,16 @@ function [EEG, info] = fitBins(input, varargin)
 %
 %   THE TERMS OUTPUT is Unfold's own view of the model: uf_condense, then
 %   uf_predictContinuous (each continuous and spline term at the EvaluateAt
-%   values, or five quantiles), then uf_addmarginal with 'type' 'AME', which
-%   makes every term a whole waveform with the others as their average
-%   marginal effects: a spline averaged over its events' values, as a bin's
-%   waveform has it, and not evaluated at the mean value (the toolbox's
-%   default, 'MEM'), which for an angle is a direction no event need have
-%   had. So the intercept is the response at each factor's reference level,
-%   a factor level is the response at that level, and a spline at a value is
-%   the response at that value. One "bin" per term of every modelled set of
+%   values, or ten quantiles), then uf_addmarginal, which makes every term a
+%   whole waveform with the model's other terms added in. With Marginal
+%   'MEM', the toolbox's default, those other terms are at their mean value;
+%   with 'AME' they are their average marginal effect, a spline averaged
+%   over its events' own values, as a bin's waveform has it. The two differ
+%   only for a spline, and most for a circular one, whose mean angle can be
+%   a direction no event had. So the intercept is the response at each
+%   factor's reference level, a factor level is the response at that level,
+%   and a spline at a value is the response at that value. One "bin" per
+%   term of every modelled set of
 %   bins, labelled "<bin>: <term>" ("<bin>: x = 1, z = 2" for a 2D spline),
 %   in Average's shape, so Measure, GrandAverage and the reports read them.
 %   A TOOLBOX BEHAVIOUR KEPT AS IT IS, by design, and the toolbox's own
@@ -188,7 +221,7 @@ function [EEG, info] = fitBins(input, varargin)
 %   See also UNFOLD.BINMODEL, UNFOLD.ENSURE, AVERAGE, DEFINEBINS.
     parsed = inputParser();
     parsed.addParameter('WindowMs', [-200 800], @(v) isnumeric(v) && numel(v) == 2 && v(1) < v(2));
-    parsed.addParameter('BaselineMs', 'pre-event', ...
+    parsed.addParameter('BaselineMs', [], ...
         @(v) isempty(v) || (ischar(v) || isstring(v)) || (isnumeric(v) && numel(v) == 2 && v(1) < v(2)));
     parsed.addParameter('OtherEvents', 'all', @(v) isempty(v) || ischar(v) || iscellstr(v) || isstring(v));
     parsed.addParameter('Covariates', {}, @(v) isempty(v) || iscellstr(v) || isstring(v));
@@ -197,17 +230,23 @@ function [EEG, info] = fitBins(input, varargin)
     parsed.addParameter('ArtifactThresholdUv', 150, @(v) isnumeric(v) && isscalar(v) && v >= 0);
     parsed.addParameter('ArtifactWindowMs', 2000, @(v) isnumeric(v) && isscalar(v) && v > 0);
     parsed.addParameter('ArtifactStepMs', 100, @(v) isnumeric(v) && isscalar(v) && v > 0);
-    parsed.addParameter('Channels', [], @(v) isnumeric(v));
+    parsed.addParameter('Channels', [], @(v) isnumeric(v) || ((ischar(v) || isstring(v)) && strcmpi(v, 'scalp')));
+    parsed.addParameter('Marginal', 'MEM', ...
+        @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'MEM', 'AME'})));
+    parsed.addParameter('MissingValues', 'median', @(v) (ischar(v) || isstring(v)) && ...
+        any(strcmpi(char(string(v)), {'refuse', 'median', 'mean', 'marginal', 'drop'})));
     parsed.addParameter('SolverIterations', 400, @(v) isnumeric(v) && isscalar(v) && v >= 1 && v == round(v));
     parsed.addParameter('Output', 'average', ...
         @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'average', 'trials', 'terms'})));
     parsed.parse(varargin{:});
     opts = parsed.Results;
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
+    opts.Marginal = upper(char(string(opts.Marginal)));
+    opts.MissingValues = lower(char(string(opts.MissingValues)));
 
     requireCentredData(input);
     plan = Unfold.binModel(input, 'OtherEvents', opts.OtherEvents, 'Covariates', opts.Covariates, ...
-        'Formulas', opts.Formulas);
+        'Formulas', opts.Formulas, 'MissingValues', opts.MissingValues);
     if isempty(plan.eventTypes)
         throw(MException('Alakazam:Unfold:NothingToFit', ...
             ['None of this dataset''s bins hold any events, so there is no model to fit. ' ...
@@ -227,6 +266,10 @@ function [EEG, info] = fitBins(input, varargin)
     %    Unfold.binModel).
     work = Unfold.designMatrix(input, plan);
 
+    % Missing values, filled in or their events left out by the toolbox's
+    % own uf_imputeMissing, before the time expansion, as the workflow has it.
+    [work, plan] = imputeMissing(work, plan);
+
     % 2. Time expansion: the design matrix gains one column per predictor per
     %    time point in the window, which is what makes the fit a
     %    deconvolution rather than a regression on epochs.
@@ -239,9 +282,13 @@ function [EEG, info] = fitBins(input, varargin)
     %    boundary events from the design (Unfold.binModel) but knows nothing
     %    about the data around them, which is why the interval is added here,
     %    through the toolbox's own combiner.
+    % Every channel unless asked otherwise, as the toolbox scans by default;
+    % 'scalp' leaves the peripheral channels out (see this file's header).
     channels = opts.Channels;
-    if isempty(channels)
+    if ischar(channels) || isstring(channels)
         channels = scalpChannels(input);
+    elseif isempty(channels)
+        channels = 1:size(input.data, 1);
     end
     excluded = boundaryIntervals(input, opts.WindowMs, srate);
     if opts.ArtifactThresholdUv > 0
@@ -299,6 +346,54 @@ function [EEG, info] = fitBins(input, varargin)
 end
 
 % ======================================================================= %
+function [work, plan] = imputeMissing(work, plan)
+%IMPUTEMISSING  The events without a number, as the toolbox's own
+%   uf_imputeMissing handles them (plan.missingValues: 'median', 'mean',
+%   'marginal' or 'drop'; under 'refuse' Unfold.binModel has refused them
+%   already). Its printed lines are kept out of the command window, but its
+%   warning that a predictor misses more than 5% of its values goes into the
+%   notes. With 'drop' it zeroes each such event's row of the design, and
+%   Unfold.binModel has left the same events out of the bins (plan.kept),
+%   which is checked here: a difference would mean the two disagree about
+%   which events the fit holds.
+    missingRows = reshape(any(isnan(work.unfold.X), 2), 1, []);
+    if ~any(missingRows)
+        return;
+    end
+    method = plan.missingValues;
+    try
+        said = evalc('work = uf_imputeMissing(work, ''method'', method);');
+    catch err
+        if strcmp(method, 'marginal') && contains(err.message, 'Unable to perform assignment')
+            throw(MException('Alakazam:Unfold:Marginal', '%s', sprintf([ ...
+                'The Unfold toolbox could not draw the missing values ("%s"). Its ' ...
+                'uf_imputeMissing (1.3.1) keeps the values it drew for one predictor and draws ' ...
+                'into the same list for the next, so when two predictors miss different numbers ' ...
+                'of values the second draw does not fit. Here: %s. Would you choose the median, ' ...
+                'the mean or drop under Missing values instead?'], err.message, ...
+                missingList(plan.missing))));
+        end
+        rethrow(err);
+    end
+    warned = regexp(said, '[^\n]*are missing! This could bias your analysis', 'match');
+    for k = 1:numel(warned)
+        plan.notes{end + 1} = ['The Unfold toolbox warns: ' ...
+            regexprep(strtrim(warned{k}), '^\[?Warning:\s*', '')]; %#ok<AGROW>
+    end
+    if strcmp(method, 'drop') && ~isequal(missingRows, ~plan.kept)
+        throw(MException('Alakazam:Unfold:Dropped', '%s', sprintf([ ...
+            'uf_imputeMissing left out %d event(s) where %d were expected, so the bins would ' ...
+            'count events the fit does not hold. This is a fault in Alakazam, not in the model.'], ...
+            nnz(missingRows), nnz(~plan.kept))));
+    end
+end
+
+function text = missingList(missing)
+%MISSINGLIST  "rt, 2 of the 60 events of "A"; size, 1 of ..." for a message.
+    text = strjoin(arrayfun(@(m) sprintf('%s, %d of the %d events of "%s"', m.field, m.n, ...
+        m.of, m.label), missing, 'UniformOutput', false), '; ');
+end
+
 function [data, times, notes] = fittedWaveforms(input, plan, unfold, opts)
 %FITTEDWAVEFORMS  One fitted waveform per bin, baseline-corrected, with the
 %   combination bins computed from them. Each is the model's prediction at
@@ -331,7 +426,10 @@ function [data, times, notes] = fittedWaveforms(input, plan, unfold, opts)
     ordinary = find(~comboMask(input.bindesc));
     fitted = false(1, nbin);
     for k = 1:numel(plan.binLabels)
+        % A set whose events were all left out (uf_imputeMissing's 'drop')
+        % weighs nothing, and has no waveform to weigh.
         cells = plan.binCells{k};
+        cells = cells(plan.cellCounts(cells) > 0);
         if isempty(cells) || any(cellfun(@isempty, perCell(cells)))
             continue;   % a bin with no events: left as NaN, and noted by binModel
         end
@@ -406,9 +504,7 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
     end
     trials = trials(:, :, usable);
     if ~isempty(opts.BaselineMs)
-        % The samples inside the window, as Unfold's own baseline
-        % (uf_plotParam) takes them.
-        inWindow = times >= opts.BaselineMs(1) & times <= opts.BaselineMs(2);
+        inWindow = baselineSamples(times, opts.BaselineMs);
         trials = trials - mean(trials(:, inWindow, :), 2);
     end
 
@@ -467,8 +563,11 @@ function info = modelInfo(input, plan, opts, excluded, srate)
         'excludedSeconds', sum(diff(excluded, 1, 2)) / srate, ...
         'recordingSeconds', size(input.data, 2) / srate, ...
         'artifact', struct('thresholdUv', opts.ArtifactThresholdUv, ...
-                           'windowMs', opts.ArtifactWindowMs, 'stepMs', opts.ArtifactStepMs), ...
+                           'windowMs', opts.ArtifactWindowMs, 'stepMs', opts.ArtifactStepMs, ...
+                           'channels', {opts.Channels}), ...
         'solverIterations', opts.SolverIterations, ...
+        'missingValues', plan.missingValues, 'missing', {plan.missing}, ...
+        'dropped', nnz(~plan.kept), ...
         'cellLabels', {plan.cellLabels}, 'binCells', {plan.binCells}, ...
         'hasStandardError', false);
 end
@@ -489,10 +588,10 @@ function EEG = recordInfo(EEG, info, plan)
 end
 
 function window = resolveBaseline(requested, responseWindow)
-%RESOLVEBASELINE  The baseline window, defaulting to the pre-event part of the
-%   response window. A response window that starts at or after the event has
-%   no pre-event part, so there is nothing to default to and the correction is
-%   left off rather than invented.
+%RESOLVEBASELINE  The baseline window: [] for none, the window as given, or
+%   for 'pre-event' the part of the response window before the event. A
+%   response window that starts at or after the event has no pre-event part,
+%   so 'pre-event' then leaves the correction off rather than invent one.
     if isempty(requested)
         window = [];
         return;
@@ -524,10 +623,23 @@ function data = applyBaseline(data, fitted, times, window)
     if isempty(window)
         return;
     end
-    inWindow = times >= window(1) & times <= window(2);   % inside, as Unfold's uf_plotParam
+    inWindow = baselineSamples(times, window);
     for b = find(fitted)
         slice = data(:, :, b);
         data(:, :, b) = slice - mean(slice(:, inWindow), 2);
+    end
+end
+
+function inWindow = baselineSamples(times, window)
+%BASELINESAMPLES  The samples a baseline window covers, as Unfold's
+%   uf_plotParam takes its baseline: from the start up to, but not
+%   including, the stop, so the default -200 to 0 ms leaves out the sample
+%   at 0 ms. A window too short to hold a sample has no mean to subtract.
+    inWindow = times >= window(1) & times < window(2);
+    if ~any(inWindow)
+        throw(MException('Alakazam:Unfold:Baseline', '%s', sprintf([ ...
+            'The baseline window (%g to %g ms) holds no sample at this sampling rate, so ' ...
+            'there is nothing to average over. Would you widen it?'], window(1), window(2))));
     end
 end
 
@@ -588,9 +700,10 @@ function EEG = forArtefactScan(EEG, events)
 end
 
 function channels = scalpChannels(EEG)
-%SCALPCHANNELS  Which channels the artefact scan looks at by default: the
-%   scalp EEG. An EOG channel swings several times as far as the EEG, so
-%   including it means the scan reports the eyes rather than the data.
+%SCALPCHANNELS  Which channels the artefact scan looks at with Channels
+%   'scalp': the scalp EEG. An EOG channel swings several times as far as
+%   the EEG, so including it means the scan reports the eyes rather than
+%   the data.
     channels = 1:size(EEG.data, 1);
     if ~isfield(EEG, 'chanlocs') || numel(EEG.chanlocs) ~= numel(channels)
         return;
@@ -719,7 +832,10 @@ function [waveform, notes] = referencePrediction(unfold, plan, c)
     if isempty(t)
         return;
     end
-    rows = strcmp({plan.events.type}, eventType);
+    rows = strcmp({plan.events.type}, eventType) & plan.kept;   % not those 'drop' left out
+    if ~any(rows)
+        return;
+    end
     cols = reshape(find(unfold.cols2eventtypes == t), 1, []);
     weights = mean(unfold.X(rows, cols), 1);
     variableOf = unfold.cols2variablenames(cols);
@@ -762,6 +878,7 @@ function [basis, notes] = splineBasis(spl, pooled, events, name, label)
     if ~contains(func2str(spl.splinefunction), 'cyclical')
         if isempty(pooled.common)
             values = [events.(name)];
+            values = values(isfinite(values));   % a missing value is not one of them
             notes{end + 1} = sprintf(['The bins using "%s" share no values of it, so it ' ...
                 'cannot be held constant across them: "%s" is evaluated over its own.'], ...
                 name, label);
@@ -786,6 +903,7 @@ function [basis, notes] = surfaceBasis(spl, pooled, events, label)
     fields = sprintf('"%s" and "%s"', pooled.pair{1}, pooled.pair{2});
     if isempty(pooled.common)
         values = [[events.(pooled.pair{1})]; [events.(pooled.pair{2})]];
+        values = values(:, all(isfinite(values), 1));   % a pair missing a value is left out
         notes{end + 1} = sprintf(['The bins using the 2D spline of %s share no values of it, so ' ...
             'it cannot be held constant across them: "%s" is evaluated over its own.'], fields, label);
     else
@@ -815,7 +933,7 @@ function weights = pooledInteractions(plan, c, ncols, interactions)
 %   toolbox's own uf_designmat (Unfold.designMatrix), so the columns are
 %   built exactly as the fitted ones were. A factor-by-factor interaction
 %   has no such field and comes out as its own average row, as before.
-    rows = strcmp({plan.events.type}, plan.cellTypes{c});
+    rows = strcmp({plan.events.type}, plan.cellTypes{c}) & plan.kept;
     events = plan.events(rows);
     vars = plan.variables{c};
     single = cellfun(@isempty, {plan.pooled.pair});
@@ -856,17 +974,15 @@ function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
 %PACKAGETERMS  One waveform per model term of every binned event type, by
 %   Unfold's own route (see this file's header), in Average's shape.
     result = uf_condense(work);
-    args = {'auto_method', 'quantile', 'auto_n', 5};
+    args = {'auto_method', 'quantile', 'auto_n', 10};   % the toolbox's own defaults
     predictAt = Unfold.predictionValues(opts.EvaluateAt, result.unfold);
     if ~isempty(predictAt)
         args = [args, {'predictAt', predictAt}];
     end
     lastwarn('');
-    % 'AME': the other terms as their average marginal effects, a spline
-    % averaged over its events' own values, not evaluated at their mean
-    % (the toolbox's default, 'MEM'), which for an angle is a direction no
-    % event need have had. It is what a bin's waveform does as well.
-    marginal = uf_addmarginal(uf_predictContinuous(result, args{:}), 'type', 'AME');
+    % 'MEM' (the toolbox's default) adds the other terms at their mean
+    % value, 'AME' as their average marginal effect (see this file's header).
+    marginal = uf_addmarginal(uf_predictContinuous(result, args{:}), 'type', opts.Marginal);
     [warningText, ~] = lastwarn();
     if contains(lower(warningText), 'interaction')
         plan.notes{end + 1} = ['The model has interactions, which uf_addmarginal does not ' ...
@@ -887,7 +1003,7 @@ function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
         binLabel = labelOf(events{keep(j)});
         labels{j} = termLabel(binLabel, p, ...
             referenceLevels(result.unfold, plan.events, events{keep(j)}), surfaces);
-        counts(j) = nnz(strcmp({plan.events.type}, events{keep(j)}));
+        counts(j) = nnz(strcmp({plan.events.type}, events{keep(j)}) & plan.kept);
         terms(j) = struct('label', labels{j}, 'bin', binLabel, 'name', char(string(p.name)), ...
             'type', char(string(p.type)), 'value', double(p.value));
     end
@@ -913,6 +1029,7 @@ function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
     info.output = 'terms';
     info.terms = terms;
     info.evaluateAt = char(string(opts.EvaluateAt));
+    info.marginal = opts.Marginal;
 end
 
 function text = referenceLevels(unfold, events, eventType)

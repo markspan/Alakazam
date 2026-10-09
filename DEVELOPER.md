@@ -5,7 +5,7 @@ view, extend a report, or cut a release. Using Alakazam is described in the
 [user manual](manual/manual.qmd); what Alakazam is, in the
 [README](README.MD).
 
-Four companion documents hold the detail this guide points to rather than
+Five companion documents hold the detail this guide points to rather than
 repeats:
 
 | Document | What it holds |
@@ -14,6 +14,7 @@ repeats:
 | [`dependencies.md`](dependencies.md) | Every external toolkit, its pinned version, licence, and how it is installed |
 | [`DATA.md`](DATA.md) | The datasets the tests, templates and manual use, and where to get them (none are in the repository) |
 | [`Docs/transformation-provenance.md`](Docs/transformation-provenance.md) | Which transformations wrap a toolkit call and which carry their own method |
+| [`Docs/unfold-technical-note.md`](Docs/unfold-technical-note.md) | How Deconvolve follows the Unfold toolbox's workflow, step by step, and where it departs from its defaults |
 
 The project history is in [`CHANGELOG.md`](CHANGELOG.md); why the interface is
 built on `uihtml` rather than MathWorks' own widgets is in

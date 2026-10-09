@@ -188,8 +188,11 @@ Alakazam adopts it.
   leaves rejected samples out of its mean, as `ft_preproc_baselinecorrect`
   does. The exceptions follow their own toolbox: TimeFrequency's baseline
   takes the samples inside, as `ft_freqbaseline` and `newtimef` do, and
-  Deconvolve's, as Unfold's does. `FieldTripReferenceTest` holds Baseline to
-  `ft_preprocessing`'s demean.
+  Deconvolve's takes those from its start up to, but not including, its
+  stop, as Unfold's `uf_plotParam` does. (Until 2026-10-09 Deconvolve took
+  the stop sample too, while this note said it followed Unfold; see
+  `Docs/unfold-technical-note.md`.) `FieldTripReferenceTest` holds Baseline
+  to `ft_preprocessing`'s demean.
 - **DC-Detrend's fits.** The robust fit is now `robustfit` with Huber weights.
   Least squares was meant to become FieldTrip's `ft_preproc_polyremoval`,
   which does exactly this job, but as FieldTrip calls it (without its

@@ -65,9 +65,10 @@ function [EEG, options] = Deconvolve(input, varargin)
 %   (so a term is a control: see Unfold.fitBins) and every factor at the
 %   bin's own mix; overlap-corrected trials; or one waveform per model term
 %   ('terms'): every factor level, every spline or continuous term at chosen
-%   values (evaluateAt), each as a whole waveform with the other terms as
-%   their average marginal effects (uf_predictContinuous, and uf_addmarginal
-%   with 'AME'). A waveform has no standard error of its own: see
+%   values (evaluateAt), each as a whole waveform with the other terms added
+%   at their mean value or as their average marginal effect (marginal;
+%   uf_predictContinuous, then uf_addmarginal). A waveform has no standard
+%   error of its own: see
 %   Unfold.fitBins, which also lists the toolbox behaviours kept as they are.
 %
 %   Options (all set in DeconvolveDialog, stored per user by
@@ -76,8 +77,10 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          means the dataset's own tags are used
 %     windowMs             response window per event, default -200 to 800 ms
 %     baselineMs           window the fitted waveforms are baseline-corrected
-%                          over, default the pre-event part of windowMs; []
-%                          or an unticked box leaves them uncorrected
+%                          over; [] or an unticked box (the dialog's first
+%                          choice, as Unfold returns its betas) leaves them
+%                          uncorrected. Absent, it is the pre-event part of
+%                          windowMs, which is what it always meant
 %     formulas             each bin's formula, as a struct array of .bin (the
 %                          label) and .formula; a bin without one is 'y ~ 1'
 %     covariates           the older way to add terms (templates saved before
@@ -94,8 +97,26 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          default 150 uV (0 skips detection)
 %     artifactWindowMs     the moving window it is measured in, default 2000
 %     artifactStepMs       how far that window steps, default 100
+%     artifactChannels     the channels the artefact scan looks at: 'all'
+%                          (the toolbox's default) or 'scalp' (the scalp EEG
+%                          only, leaving the eye and other peripheral
+%                          channels out)
+%     marginal             for output 'terms': 'MEM' (uf_addmarginal's
+%                          default, the other terms at their mean value) or
+%                          'AME' (their average marginal effect)
+%     missingValues        an event without a number its formula uses:
+%                          filled in or left out by the toolbox's
+%                          uf_imputeMissing, 'median' (its default), 'mean',
+%                          'marginal' or 'drop', or 'refuse' (see
+%                          Unfold.fitBins)
 %     solverIterations     the solver's iteration limit, default 400 (the
 %                          toolbox's own); a fit that reaches it says so
+%
+%   OPTIONS STORED BEFORE artifactChannels, marginal AND missingValues
+%   EXISTED replay as they were run: absent, they are 'scalp', 'AME' and
+%   'refuse', the choices Deconvolve made then, so a template gives the same
+%   result it always gave. The dialog starts from the toolbox's defaults and
+%   stores all three.
 %     output               'average' (default): one waveform per bin;
 %                          'trials': overlap-corrected trials, epoched;
 %                          'terms': one waveform per model term
@@ -139,6 +160,9 @@ tagged = applyBins(input, options);
     'ArtifactThresholdUv', TransTools.FieldOr(options, 'artifactThresholdUv', 150), ...
     'ArtifactWindowMs', TransTools.FieldOr(options, 'artifactWindowMs', 2000), ...
     'ArtifactStepMs', TransTools.FieldOr(options, 'artifactStepMs', 100), ...
+    'Channels', scanChannels(options), ...
+    'Marginal', char(string(TransTools.FieldOr(options, 'marginal', 'AME'))), ...
+    'MissingValues', char(string(TransTools.FieldOr(options, 'missingValues', 'refuse'))), ...
     'SolverIterations', TransTools.FieldOr(options, 'solverIterations', 400), ...
     'Output', char(string(TransTools.FieldOr(options, 'output', 'average'))));
 
@@ -156,6 +180,19 @@ function window = baselineOption(options)
     window = 'pre-event';   % the default: the pre-event part of the window
     if isstruct(options) && isfield(options, 'baselineMs')
         window = options.baselineMs;
+    end
+end
+
+% ======================================================================= %
+function channels = scanChannels(options)
+%SCANCHANNELS  The artefact scan's channels as Unfold.fitBins takes them:
+%   [] for every channel ('all'), 'scalp' for the scalp EEG. Absent, as in
+%   options stored before the setting existed, 'scalp', which they ran with.
+    choice = lower(char(string(TransTools.FieldOr(options, 'artifactChannels', 'scalp'))));
+    if strcmp(choice, 'all')
+        channels = [];
+    else
+        channels = 'scalp';
     end
 end
 
