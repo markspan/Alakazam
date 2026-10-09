@@ -16,7 +16,9 @@ classdef ExportSetTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'IO'), ...
-                     fullfile(root, 'src', 'Transformations'), fullfile(root, 'src', 'Support')}
+                     fullfile(root, 'src', 'Transformations'), fullfile(root, 'src', 'Support'), ...
+                     fullfile(root, 'src', 'Transformations', 'DefineBins'), ...
+                     fullfile(root, 'src', 'Transformations', 'Average')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
@@ -40,6 +42,35 @@ classdef ExportSetTest < matlab.unittest.TestCase
             testCase.verifyEqual(loaded.times(end), (EEG.pnts - 1) / EEG.srate * 1000, 'AbsTol', 1e-6, ...
                 'EEGLAB''s time axis is in milliseconds.');
             testCase.verifyEqual(loaded.data, EEG.data, 'The data are the data.');
+        end
+
+        function anAverageOfRealTrialsSavesWithItsBinsAsEpochs(testCase)
+        %ANAVERAGEOFREALTRIALSSAVESWITHITSBINSASEPOCHS  An average made by
+        %   Average from DefineBins' trials still carried the trials' own
+        %   epoch records, and pop_saveset refused it: "the number of epoch
+        %   indices in the epoch array/struct (233) is different from the
+        %   number of epochs in the data (5)". EEGLAB reads its bins as its
+        %   epochs, so that is what it gets: one epoch per bin, its event at
+        %   time zero named by the bin.
+            EEG = ExportSetTest.continuousRecording();
+            script = ['bin 1 "First" "S1"' newline 'bin 2 "Second" "S2"' newline ...
+                'bin 3 "Second minus first" = bin 2 - bin 1' newline 'epoch [-200,800] ms'];
+            epoched = [];
+            evalc('epoched = DefineBins(EEG, struct(''script'', script));');
+            average = [];
+            evalc('average = Average(epoched);');
+            testCase.assertEqual(size(average.data, 3), 3);
+
+            loaded = testCase.roundTrip(average);
+
+            testCase.verifyEqual(loaded.trials, 3, 'One epoch per bin.');
+            testCase.verifyEqual(double(loaded.data), double(average.data), 'AbsTol', 1e-5);
+            testCase.verifyEqual(loaded.times, average.times, 'AbsTol', 1e-6);
+            types = arrayfun(@(e) char(string(e.eventtype)), loaded.epoch, 'UniformOutput', false);
+            testCase.verifyEqual(types, {'First', 'Second', 'Second minus first'});
+            latencies = arrayfun(@(e) double(e.eventlatency), loaded.epoch);
+            testCase.verifyEqual(latencies, [0 0 0], 'AbsTol', 1000 / EEG.srate, ...
+                'Each bin''s event sits at its time zero.');
         end
 
         function anAverageKeepsItsMillisecondAxis(testCase)

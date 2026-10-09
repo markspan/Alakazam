@@ -11,6 +11,15 @@ function ERP = averagedToErpset(EEG)
 %   their reported trial count -- a string like "68-74" -- is not numeric, so
 %   ERP.ntrials.accepted records 0 for those bins.
 %
+%   ERP.version is an ERPLAB version number, as ERPLAB stamps its own ERPsets
+%   (buildERPstruct: ERP.version = geterplabversion). ERPLAB's loader reads it
+%   (olderpscan) to decide whether the file needs updating, and the word
+%   'Alakazam' it once said was read as a very old ERPset: ERPLAB warned
+%   "created from an older ERPLAB version", rebuilt the struct, and dropped
+%   its file name. ERPLAB notes any other version too, so the installed
+%   ERPLAB's is written where there is one, else 13.10, the ERPLAB this
+%   ERPset's shape was checked against.
+%
 %   See also ERPSETTOAVERAGED, ONEXPORTERPSET.
     if ~isfield(EEG, 'DataFormat') || ~strcmpi(char(string(EEG.DataFormat)), 'Averaged')
         error('Alakazam:averagedToErpset', ...
@@ -63,7 +72,7 @@ function ERP = averagedToErpset(EEG)
     ERP.isfilt     = 0;
     ERP.history    = '';
     ERP.saved      = 'no';
-    ERP.version    = 'Alakazam';
+    ERP.version    = erplabVersion();
     ERP.splinefile = '';
     ERP.EVENTLIST  = [];
 end
@@ -73,6 +82,37 @@ end
 % on a non-struct already returns false safely, so this is not a
 % behavioural change). firstNonEmpty (src/Support/) used to be duplicated
 % locally here too.
+
+function version = erplabVersion()
+%ERPLABVERSION  The installed ERPLAB's version: geterplabversion's answer
+%   when ERPLAB is on the path, else the erplabver its erplab_default_values
+%   sets (what geterplabversion returns), read from EEGLAB's plugins folder,
+%   since Alakazam does not put ERPLAB on the path. The newest when there are
+%   several, and 13.10 when there is none.
+    version = '13.10';
+    if ~isempty(which('geterplabversion'))
+        version = char(string(geterplabversion()));
+        return;
+    end
+    if isempty(which('eeglab'))
+        return;
+    end
+    found = dir(fullfile(fileparts(which('eeglab')), 'plugins', 'erplab*', 'erplab_default_values.m'));
+    versions = {};
+    for f = reshape(found, 1, [])
+        number = regexp(fileread(fullfile(f.folder, f.name)), ...
+            'erplabver\s*=\s*''(\d+(?:\.\d+)*)''', 'tokens', 'once');
+        if ~isempty(number)
+            versions{end + 1} = number{1}; %#ok<AGROW>
+        end
+    end
+    if isempty(versions)
+        return;
+    end
+    parts = cellfun(@(v) [str2double(strsplit(v, '.')), 0, 0], versions, 'UniformOutput', false);
+    [~, order] = sortrows(cell2mat(cellfun(@(p) p(1:3), parts, 'UniformOutput', false)'), 'descend');
+    version = versions{order(1)};
+end
 
 function e = binError(EEG, sz)
     if isfield(EEG, 'stErr') && ~isempty(EEG.stErr) && isequal(size(EEG.stErr), sz)

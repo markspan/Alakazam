@@ -4,6 +4,24 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Fixed
+
+- **An average could not be exported as .set.** EEGLAB refused the file:
+  "the number of epoch indices in the epoch array/struct (233) is
+  different from the number of epochs in the data (5)". An average kept
+  the records of the trials it was made from, while EEGLAB reads its bins
+  as its epochs. It is now saved as EEGLAB reads it: one epoch per bin,
+  with one event at time zero named by the bin. Export as ERPset was not
+  affected.
+- **ERPLAB took an exported ERPset for a very old one.** The file gave its
+  version as "Alakazam", which ERPLAB cannot read as a version number, so
+  on opening it warned "created from an older ERPLAB version", rebuilt the
+  ERPset and forgot its file name. The data and bins were unaffected. An
+  ERPset now carries the installed ERPLAB's version, as ERPLAB's own do, and
+  13.10 when ERPLAB is not installed.
+
 ## V0.4.5 (2026-10-09)
 
 ### Added
