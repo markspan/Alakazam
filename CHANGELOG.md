@@ -52,6 +52,14 @@ bar. Dates are those of the tag.
   ERPset and forgot its file name. The data and bins were unaffected. An
   ERPset now carries the installed ERPLAB's version, as ERPLAB's own do, and
   13.10 when ERPLAB is not installed.
+- **Removing trials with SelectData left the bins naming the old trials.**
+  Each bin keeps a list of its trials, and SelectData renumbered the data
+  but not those lists. Average then stopped with "Index in position 3
+  exceeds array bounds", or, where the old numbers were still in range,
+  averaged the wrong trials. Keeping or removing trials now renumbers every
+  bin's trials, with their reaction times and counts, and the records kept
+  per trial: the interpolated channels, and where each trial was cut from
+  and which events surrounded it.
 
 ## V0.4.5 (2026-10-09)
 
