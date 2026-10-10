@@ -1183,7 +1183,7 @@ function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
 %   Unfold's own route (see this file's header), in Average's shape.
     result = uf_condense(work);
     args = {'auto_method', 'quantile', 'auto_n', 10};   % the toolbox's own defaults
-    predictAt = Unfold.predictionValues(opts.EvaluateAt, result.unfold);
+    predictAt = Unfold.predictionValues(opts.EvaluateAt, result.unfold, plan.typeLabels);
     if ~isempty(predictAt)
         args = [args, {'predictAt', predictAt}];
     end

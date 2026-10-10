@@ -571,6 +571,82 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             testCase.verifySubstring(err.message, 'draws into the same list');
         end
 
+        % ---- values to evaluate the terms at ---------------------------- %
+        function valuesForAFieldNoTermUsesAreRefusedSayingSo(testCase)
+        %VALUESFORAFIELDNOTERMUSESAREREFUSEDSAYINGSO  A model of intercepts
+        %   only (every formula y ~ 1) and values left over for a field: the
+        %   refusal says the model has no such term. Without a 2D spline in
+        %   the model the check once compared the name letter by letter and
+        %   stopped with MATLAB's own "Operands to the short-circuit AND".
+            onlyIntercepts = struct('splines', {{}}, 'variabletypes', {{'intercept', 'intercept'}}, ...
+                'cols2variablenames', [1 2], 'colnames', {{'(Intercept)', '2_(Intercept)'}});
+
+            err = UnfoldCovariatesTest.refusal(@() ...
+                Unfold.predictionValues('sac_amplitude = 0.3 0.6 1.5 3', onlyIntercepts));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:EvaluateAt');
+            testCase.verifySubstring(err.message, 'no formula in this model uses "sac_amplitude"');
+            testCase.verifySubstring(err.message, 'Every bin is fitted as y ~ 1');
+            testCase.verifySubstring(err.message, 'clear Terms evaluated at');
+            testCase.verifySubstring(err.message, 'y ~ 1 + spl(sac_amplitude, 5)', ...
+                'It shows how to put the term back.');
+        end
+
+        function valuesForAnotherFieldAreRefusedNamingTheTerms(testCase)
+        %VALUESFORANOTHERFIELDAREREFUSEDNAMINGTHETERMS  The refusal lists
+        %   the terms the model does have, each with its kind and its bin.
+            [withRt, labels] = UnfoldCovariatesTest.rtDesign();
+
+            err = UnfoldCovariatesTest.refusal(@() Unfold.predictionValues('gain = 1 2', withRt, labels));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:EvaluateAt');
+            testCase.verifySubstring(err.message, 'no formula in this model uses "gain"');
+            testCase.verifySubstring(err.message, '"rt", a straight line, in "Rare"');
+        end
+
+        function aPartThatIsNotNameAndNumbersIsRefusedSayingWhy(testCase)
+        %APARTTHATISNOTNAMEANDNUMBERSISREFUSEDSAYINGWHY  A unit typed after
+        %   the values, and a part without its equals sign: each refusal
+        %   says what it could not read, and shows the form with one of the
+        %   model's own terms.
+            [withRt, labels] = UnfoldCovariatesTest.rtDesign();
+
+            unit = UnfoldCovariatesTest.refusal(@() Unfold.predictionValues('rt = 300 ms', withRt, labels));
+            noEquals = UnfoldCovariatesTest.refusal(@() Unfold.predictionValues('rt 300', withRt, labels));
+
+            testCase.verifyEqual(unit.identifier, 'Alakazam:Unfold:EvaluateAt');
+            testCase.verifySubstring(unit.message, '"ms" is not a number I can read');
+            testCase.verifySubstring(unit.message, '"rt = 0.5 1 2"');
+            testCase.verifySubstring(noEquals.message, 'there is no equals sign');
+        end
+
+        function halfATwoDimensionalSplineIsRefusedSayingWhatIsMissing(testCase)
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.surfaceRecording();
+
+            err = UnfoldCovariatesTest.refusal(@() Unfold.fitBins(EEG, 'WindowMs', [-100 400], ...
+                'ArtifactThresholdUv', 0, 'Formulas', struct('bin', 'A', 'formula', 'y ~ 1 + 2dspl(g, h, 4)'), ...
+                'Output', 'terms', 'EvaluateAt', 'g = 1 2'));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:EvaluateAt');
+            testCase.verifySubstring(err.message, 'I have none for "h"');
+            testCase.verifySubstring(err.message, 'in the formula of "A"');
+        end
+
+        function aTermsFitWithValuesLeftOverIsRefusedSayingSo(testCase)
+        %ATERMSFITWITHVALUESLEFTOVERISREFUSEDSAYINGSO  The case as it arose:
+        %   a terms node whose formula became y ~ 1 while its values to
+        %   evaluate at stayed.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = UnfoldCovariatesTest.confoundedRecording();
+
+            err = UnfoldCovariatesTest.refusal(@() Unfold.fitBins(EEG, 'WindowMs', [-100 400], ...
+                'ArtifactThresholdUv', 0, 'Output', 'terms', 'EvaluateAt', 'gain = 1 2'));
+
+            testCase.verifyEqual(err.identifier, 'Alakazam:Unfold:EvaluateAt');
+            testCase.verifySubstring(err.message, 'Every bin is fitted as y ~ 1');
+        end
+
         function aTermNotNamedIsDrawnAtTheToolboxsTenQuantiles(testCase)
         %ATERMNOTNAMEDISDRAWNATTHETOOLBOXSTENQUANTILES  Without values in
         %   EvaluateAt, uf_predictContinuous's own default: ten quantiles.
@@ -671,6 +747,17 @@ classdef UnfoldCovariatesTest < matlab.unittest.TestCase
             gaps = A(round(linspace(2, numel(A) - 1, count)));
             known = [EEG.event(setdiff(A, gaps)).(field)];
             [EEG.event(gaps).(field)] = deal(NaN);
+        end
+
+        function [unfold, labels] = rtDesign()
+        %RTDESIGN  A hand-built EEG.unfold of two bins, "Frequent" (y ~ 1)
+        %   and "Rare" (y ~ 1 + rt), as uf_designmat lays one out.
+            unfold = struct('splines', {{}}, ...
+                'variabletypes', {{'intercept', 'intercept', 'continuous'}}, ...
+                'variablenames', {{'(Intercept)', '2_(Intercept)', '2_rt'}}, ...
+                'cols2variablenames', [1 2 3], 'colnames', {{'(Intercept)', '2_(Intercept)', '2_rt'}}, ...
+                'cols2eventtypes', [1 2 2], 'eventtypes', {{{'bin_Frequent'}, {'bin_Rare'}}});
+            labels = {'Frequent', 'Rare'};
         end
 
         function err = refusal(call)

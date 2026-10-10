@@ -762,7 +762,7 @@ function options = DeconvolveDialog(EEG, stored)
         if strcmp(candidate.output, 'terms') && ~isempty(candidate.evaluateAt) && Unfold.isAvailable()
             try
                 designed = quietDesign(tagged, plan);
-                Unfold.predictionValues(candidate.evaluateAt, designed.unfold);
+                Unfold.predictionValues(candidate.evaluateAt, designed.unfold, plan.typeLabels);
             catch err
                 uialert(fig, err.message, 'Check the values to evaluate at');
                 return;

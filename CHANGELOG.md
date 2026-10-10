@@ -50,6 +50,13 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **Deconvolve's model terms stopped with a MATLAB error** ("Operands to the
+  short-circuit AND...") when **Terms evaluated at** named a field no formula
+  used any more, as when a saccade's spline became `y ~ 1`, in a model
+  without a 2D spline. It now says so, lists the terms the model does have,
+  each with its kind and its bin, and how to clear the field or put the term
+  back; a part that is not "name = numbers" (a unit after the values, a
+  missing equals sign) and half of a 2D spline are explained as fully.
 - **An average could not be exported as .set.** EEGLAB refused the file:
   "the number of epoch indices in the epoch array/struct (233) is
   different from the number of epochs in the data (5)". An average kept
