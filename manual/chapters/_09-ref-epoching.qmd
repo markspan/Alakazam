@@ -308,7 +308,10 @@ explained by two events is shared between them [@smith2015; @ehinger2019;
 | **Artefact threshold**, **Measured in a window of**, **Stepped by** | 150 µV, 2000 ms, 100 ms | Stretches whose peak-to-peak amplitude in the moving window exceeds the threshold are left out of the model; 0 turns this off. |
 | **Artefact scan on** | every channel | The channels the scan looks at: every channel, as the toolbox scans, or the scalp EEG only. |
 | **Missing values** | filled in with the median | An event without a number its formula uses: filled in with the median, the mean or a random one of its bin's other values, or the event left out of the model, by Unfold's `uf_imputeMissing`; or refused. |
-| **Solver iterations** | 400 | The most iterations the solver takes per channel, the toolbox's own limit. A fit that reaches it says so. |
+| **Overlap correction** | on | On: the bins fitted against the continuous recording (deconvolution). Off: the same formulas fitted to epochs, without the neighbours' overlap taken out (below). |
+| **Solver** | the toolbox's default | lsmr (on epochs, pinv); MATLAB's exact solver; or glmnet's regularised fit (below). |
+| **Solver iterations** | 400 | The most iterations lsmr takes per channel, the toolbox's own limit. A fit that reaches it says so. |
+| **glmnet alpha** | 1 | For glmnet: 1 is lasso, 0 ridge, between them elastic net. |
 
 : Deconvolve's options. {#tbl-deconvolve}
 
@@ -409,14 +412,39 @@ model the saccades and blinks instead.
   angles near 0 and 360 degrees is a direction no event had. A 2D spline is
   named by both fields in **Terms evaluated at** (`x = 1 2; y = 0.5`).
 
-Deconvolve needs continuous data without a DC offset, since the regression
-has no intercept for the recording as a whole: high-pass filter first.
+With overlap correction, Deconvolve needs continuous data without a DC
+offset, since the regression has no intercept for the recording as a whole:
+high-pass filter first.
+
+### Without overlap correction, and the solvers
+
+**Overlap correction off** fits the same bins and formulas the toolbox's
+other way, a regression on epochs (Unfold's `uf_epoch` and
+`uf_glmfit_nodc`): each event's window on its own, the neighbours' overlap
+left in. With `y ~ 1` a bin is then the mean of its epochs, as Average
+gives it, except that the toolbox rounds each event to the nearest sample
+where DefineBins takes the sample at or before it. With a formula it is the
+regression without deconvolution, which is what Unfold compares a
+deconvolution with. An epoch that touches a stretch the artefact scan
+marks, spans a cut or runs off the recording is left out, and counted; the
+trials are the epochs as they were cut. A DC offset is no obstacle here,
+since every sample of an epoch has its own intercept.
+
+**Solver** chooses how the fit is solved. The toolbox's default is lsmr, an
+iterative solver (pinv on epochs). The exact solver, MATLAB's own, needs no
+iteration limit but, as the toolbox warns, can need tens of gigabytes of
+memory for a long recording. glmnet fits a regularised model, its strength
+chosen by cross-validation: its betas are shrunk towards zero, and lasso
+(**glmnet alpha** 1) sets some to exactly zero, so the waveforms are no
+longer the least-squares ones. The toolbox's other two methods are not
+offered, since its own help advises against them.
 
 **Settings stored before these choices existed.** A template saved before
 **Artefact scan on**, **Other terms added at** and **Missing values** were
 settings (with V0.4.5 or earlier) was run with the scalp EEG only, AME and
 missing numbers refused, and replays and reopens with them, so it gives the
-result it always gave.
+result it always gave. Without **Overlap correction** or **Solver** it is a
+deconvolution by lsmr, as it always was.
 
 ### How the Unfold toolbox is called
 

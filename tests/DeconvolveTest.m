@@ -309,6 +309,27 @@ classdef DeconvolveTest < matlab.unittest.TestCase
             testCase.verifyEqual(ame.etc.alz.unfold.marginal, 'AME');
         end
 
+        function theFitAndTheSolverReachTheFit(testCase)
+        %THEFITANDTHESOLVERREACHTHEFIT  overlapCorrection, solver and
+        %   glmnetAlpha, as the dialog stores them, are what the fit is
+        %   given; options stored before them mean a deconvolution by the
+        %   toolbox's default solver, as they always did.
+            testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
+            EEG = DeconvolveTest.untaggedRecording();
+
+            onEpochs = Deconvolve(EEG, DeconvolveTest.options('overlapCorrection', false, ...
+                'solver', 'matlab'));
+            ridge = Deconvolve(EEG, DeconvolveTest.options('solver', 'glmnet', 'glmnetAlpha', 0, ...
+                'modelOtherEvents', false));
+            older = Deconvolve(EEG, DeconvolveTest.options());
+
+            testCase.verifyFalse(onEpochs.etc.alz.unfold.overlapCorrection);
+            testCase.verifyEqual(onEpochs.etc.alz.unfold.solver, 'matlab');
+            testCase.verifyEqual(ridge.etc.alz.unfold.glmnetAlpha, 0);
+            testCase.verifyTrue(older.etc.alz.unfold.overlapCorrection);
+            testCase.verifyEqual(older.etc.alz.unfold.solver, 'default');
+        end
+
         function missingValuesAreFilledInOrRefusedAsStored(testCase)
         %MISSINGVALUESAREFILLEDINORREFUSEDASSTORED  missingValues reaches
         %   the fit; options stored before it existed refuse, as they did.

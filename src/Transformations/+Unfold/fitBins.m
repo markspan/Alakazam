@@ -26,7 +26,19 @@ function [EEG, info] = fitBins(input, varargin)
 %   electrode offset) averages perfectly and deconvolves into nonsense. The
 %   remedy belongs upstream, in DCDetrend or a high-pass Filter, not here:
 %   silently de-meaning someone's data would hide the one fact that decides
-%   whether the numbers mean anything.
+%   whether the numbers mean anything. Without overlap correction (below)
+%   the offset is no obstacle: each epoch's sample has its own intercept.
+%
+%   WITHOUT OVERLAP CORRECTION (OverlapCorrection false) the same design is
+%   fitted the toolbox's other way, a mass-univariate regression on epochs:
+%   uf_epoch cuts the events' windows, leaving out every one that touches a
+%   stretch the artefact scan marked, spans a cut or runs off the recording,
+%   and uf_glmfit_nodc fits the design at every sample of them. With y ~ 1
+%   a bin's waveform is then the mean of its epochs, as Average gives it,
+%   but with Unfold's rounding of each latency to the nearest sample; with a
+%   formula it is the same regression as the deconvolution, without the
+%   neighbours' overlap taken out. It is the toolbox's own comparison of the
+%   two (its tutorial on deconvolved and not deconvolved results).
 %
 %   Options; where the toolbox has a default, it is the default here:
 %     WindowMs           [-200 800], the response window per event. It should
@@ -109,6 +121,22 @@ function [EEG, info] = fitBins(input, varargin)
 %                        reaches it says so in the notes; raising it lets a
 %                        slow but sound fit finish, while a nearly collinear
 %                        design needs a different model instead.
+%     Solver             'default' (the default): each fitting function's
+%                        own, lsmr for uf_glmfit and pinv for uf_glmfit_nodc;
+%                        'matlab', MATLAB's own exact solver, which needs no
+%                        iteration limit but, as the toolbox warns, can need a
+%                        great deal of memory for a long recording; or
+%                        'glmnet', a regularised fit (lasso, ridge or elastic
+%                        net) whose strength is chosen by cross-validation,
+%                        so its betas are shrunk towards zero and are not the
+%                        least-squares waveforms. The toolbox's other two,
+%                        'par-lsmr' and 'pinv' for a deconvolution, are not
+%                        offered: its own help calls the first no faster and
+%                        not recommended, and the second unstable.
+%     GlmnetAlpha        for Solver 'glmnet': 1 (the default, the toolbox's)
+%                        is lasso, 0 ridge, between them elastic net.
+%     OverlapCorrection  true (the default): deconvolution. false: a
+%                        regression on epochs (see above).
 %     Channels           which channels the artefact scan looks at: [] (the
 %                        default) for every channel, as
 %                        uf_continuousArtifactDetect scans by default;
@@ -153,7 +181,9 @@ function [EEG, info] = fitBins(input, varargin)
 %                        waveform). A trial whose window touches a stretch
 %                        the model left out, or runs off the recording, is
 %                        dropped, since nothing was subtracted there; the
-%                        count is in the provenance. 'terms': one waveform
+%                        count is in the provenance. Without overlap
+%                        correction the trials are the epochs as uf_epoch
+%                        cut them, nothing subtracted. 'terms': one waveform
 %                        per model term instead (see below).
 %
 %   A BIN'S WAVEFORM is the model's prediction with every continuous and
@@ -236,6 +266,10 @@ function [EEG, info] = fitBins(input, varargin)
     parsed.addParameter('MissingValues', 'median', @(v) (ischar(v) || isstring(v)) && ...
         any(strcmpi(char(string(v)), {'refuse', 'median', 'mean', 'marginal', 'drop'})));
     parsed.addParameter('SolverIterations', 400, @(v) isnumeric(v) && isscalar(v) && v >= 1 && v == round(v));
+    parsed.addParameter('Solver', 'default', @(v) (ischar(v) || isstring(v)) && ...
+        any(strcmpi(char(string(v)), {'default', 'matlab', 'glmnet'})));
+    parsed.addParameter('GlmnetAlpha', 1, @(v) isnumeric(v) && isscalar(v) && v >= 0 && v <= 1);
+    parsed.addParameter('OverlapCorrection', true, @(v) (islogical(v) || isnumeric(v)) && isscalar(v));
     parsed.addParameter('Output', 'average', ...
         @(v) (ischar(v) || isstring(v)) && any(strcmpi(char(string(v)), {'average', 'trials', 'terms'})));
     parsed.parse(varargin{:});
@@ -243,10 +277,18 @@ function [EEG, info] = fitBins(input, varargin)
     opts.BaselineMs = resolveBaseline(opts.BaselineMs, opts.WindowMs);
     opts.Marginal = upper(char(string(opts.Marginal)));
     opts.MissingValues = lower(char(string(opts.MissingValues)));
+    opts.Solver = lower(char(string(opts.Solver)));
+    opts.OverlapCorrection = logical(opts.OverlapCorrection);
 
-    requireCentredData(input);
+    % Only the time-expanded design lacks a constant term; a regression on
+    % epochs has an intercept at every sample, which takes up an offset as
+    % an average does.
+    if opts.OverlapCorrection
+        requireCentredData(input);
+    end
     plan = Unfold.binModel(input, 'OtherEvents', opts.OtherEvents, 'Covariates', opts.Covariates, ...
-        'Formulas', opts.Formulas, 'MissingValues', opts.MissingValues);
+        'Formulas', opts.Formulas, 'MissingValues', opts.MissingValues, ...
+        'OverlapCorrection', opts.OverlapCorrection);
     if isempty(plan.eventTypes)
         throw(MException('Alakazam:Unfold:NothingToFit', ...
             ['None of this dataset''s bins hold any events, so there is no model to fit. ' ...
@@ -259,8 +301,12 @@ function [EEG, info] = fitBins(input, varargin)
     % Events in no bin that keep a near-constant lag to another modelled type
     % make the design nearly collinear, the usual reason the solver does not
     % converge; they are named in the notes before the fit, not only after it.
-    locked = Unfold.timeLockedEvents(plan, srate, opts.WindowMs);
-    plan.notes = [plan.notes, {locked.note}];
+    % Only a deconvolution has to tell them apart.
+    locked = struct('code', {}, 'other', {}, 'lagMs', {}, 'sdMs', {}, 'note', {});
+    if opts.OverlapCorrection
+        locked = Unfold.timeLockedEvents(plan, srate, opts.WindowMs);
+        plan.notes = [plan.notes, {locked.note}];
+    end
 
     % 1. The design: one event type per bin, each with its own formula (see
     %    Unfold.binModel).
@@ -270,6 +316,54 @@ function [EEG, info] = fitBins(input, varargin)
     % own uf_imputeMissing, before the time expansion, as the workflow has it.
     [work, plan] = imputeMissing(work, plan);
 
+    % Every channel unless asked otherwise, as the toolbox scans by default;
+    % 'scalp' leaves the peripheral channels out (see this file's header).
+    channels = opts.Channels;
+    if ischar(channels) || isstring(channels)
+        channels = scalpChannels(input);
+    elseif isempty(channels)
+        channels = 1:size(input.data, 1);
+    end
+
+    % 2 to 4: the time expansion, what not to model, and the fit; or, without
+    % overlap correction, the epochs and a regression on them.
+    if opts.OverlapCorrection
+        [work, plan, excluded] = deconvolve(work, plan, input, opts, channels, srate, locked);
+        model = work.unfold;
+        model.beta = model.beta_dc;
+    else
+        [work, plan, excluded, epoched] = regressOnEpochs(work, plan, input, opts, channels);
+        model = work.unfold;
+        model.beta = model.beta_nodc;
+        X = zeros(numel(plan.events), size(model.X, 2));   % X's rows back on the plan's events
+        X(epoched, :) = model.X;
+        model.X = X;
+    end
+
+    % The waveforms are checked in every case: a fit that produced no
+    % numbers produces no trials or terms either, and says so the same way.
+    [waveforms, times, evaluationNotes] = fittedWaveforms(input, plan, model, opts);
+    plan.notes = [plan.notes, evaluationNotes];
+    info = modelInfo(input, plan, opts, excluded, srate);
+    switch lower(char(string(opts.Output)))
+        case 'trials'
+            if opts.OverlapCorrection
+                [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times);
+            else
+                [EEG, info] = packageEpochs(input, plan, work, epoched, info, opts, srate, times);
+            end
+        case 'terms'
+            [EEG, info] = packageTerms(input, plan, work, info, opts, times);
+        otherwise
+            EEG = package(input, plan, waveforms, times);
+    end
+    EEG = recordInfo(EEG, info, plan);
+end
+
+% ======================================================================= %
+function [work, plan, excluded] = deconvolve(work, plan, input, opts, channels, srate, locked)
+%DECONVOLVE  Steps 2 to 4 with overlap correction: the time expansion, the
+%   stretches left out of the model, and the fit by uf_glmfit.
     % 2. Time expansion: the design matrix gains one column per predictor per
     %    time point in the window, which is what makes the fit a
     %    deconvolution rather than a regression on epochs.
@@ -282,21 +376,9 @@ function [EEG, info] = fitBins(input, varargin)
     %    boundary events from the design (Unfold.binModel) but knows nothing
     %    about the data around them, which is why the interval is added here,
     %    through the toolbox's own combiner.
-    % Every channel unless asked otherwise, as the toolbox scans by default;
-    % 'scalp' leaves the peripheral channels out (see this file's header).
-    channels = opts.Channels;
-    if ischar(channels) || isstring(channels)
-        channels = scalpChannels(input);
-    elseif isempty(channels)
-        channels = 1:size(input.data, 1);
-    end
     excluded = boundaryIntervals(input, opts.WindowMs, srate);
-    if opts.ArtifactThresholdUv > 0
-        detected = uf_continuousArtifactDetect(forArtefactScan(work, input.event), ...
-            'amplitudeThreshold', opts.ArtifactThresholdUv, ...
-            'windowsize', opts.ArtifactWindowMs, ...
-            'stepsize', opts.ArtifactStepMs, ...
-            'channels', channels);
+    detected = artefactScan(work, input, opts, channels);
+    if ~isempty(detected)
         excluded = combineIntervals(excluded, detected);
     end
     if ~isempty(excluded)
@@ -309,14 +391,20 @@ function [EEG, info] = fitBins(input, varargin)
     end
 
     % 4. The fit, by the toolbox's default solver (lsmr) with its iteration
-    %    limit as a setting. The solver warns rather than fails when it runs
-    %    out of iterations, and an under-converged fit looks like a result,
-    %    so the warning is caught and carried into the notes instead of
-    %    scrolling past in the log.
+    %    limit as a setting, or by MATLAB's own exact solver, or regularised
+    %    by glmnet. lsmr warns rather than fails when it runs out of
+    %    iterations, and an under-converged fit looks like a result, so the
+    %    warning is caught and carried into the notes instead of scrolling
+    %    past in the log.
+    method = opts.Solver;
+    if strcmp(method, 'default')
+        method = 'lsmr';
+    end
     lastwarn('');
-    work = uf_glmfit(work, 'lsmriterations', opts.SolverIterations);
+    work = uf_glmfit(work, 'method', method, 'lsmriterations', opts.SolverIterations, ...
+        'glmnetalpha', opts.GlmnetAlpha);
     [solverWarning, ~] = lastwarn();
-    if contains(lower(solverWarning), 'did not converge')
+    if strcmp(method, 'lsmr') && contains(lower(solverWarning), 'did not converge')
         plan.notes{end + 1} = sprintf(['The solver ran out of iterations (Solver iterations, %d) ' ...
             'before it converged, for at least one channel, so these waveforms are an unfinished ' ...
             'estimate. That usually means the design is close to collinear (bins whose events ' ...
@@ -328,21 +416,94 @@ function [EEG, info] = fitBins(input, varargin)
                 locked, 'UniformOutput', false), ', '));
         end
     end
+end
 
-    % The waveforms are checked in every case: a fit that produced no
-    % numbers produces no trials or terms either, and says so the same way.
-    [waveforms, times, evaluationNotes] = fittedWaveforms(input, plan, work.unfold, opts);
-    plan.notes = [plan.notes, evaluationNotes];
-    info = modelInfo(input, plan, opts, excluded, srate);
-    switch lower(char(string(opts.Output)))
-        case 'trials'
-            [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, srate, times);
-        case 'terms'
-            [EEG, info] = packageTerms(input, plan, work, info, opts, times);
-        otherwise
-            EEG = package(input, plan, waveforms, times);
+function [fitted, plan, excluded, epoched] = regressOnEpochs(work, plan, input, opts, channels)
+%REGRESSONEPOCHS  Steps 2 to 4 without overlap correction: the toolbox's
+%   own mass-univariate regression on epochs, uf_epoch then
+%   uf_glmfit_nodc, as toolboxWorkflow.rst sets it out.
+%
+%   uf_epoch leaves out every event whose window touches a stretch handed to
+%   it (WINREJ) and, through EEGLAB's pop_epoch, every one whose window runs
+%   off the recording. It is handed the scan's marks and the recording's
+%   cuts, each a single sample, so an epoch is left out when it spans a
+%   cut, as DefineBins leaves one out. EPOCHED lists the rows of plan.events
+%   that became epochs, in the order of the epochs (read back from a field
+%   the copy's events carry, alzRow), and the plan keeps only those
+%   (Unfold.keepEvents). A regression on epochs has no neighbours to tell
+%   apart, so the epochs left out are simply not in the fit.
+%
+%   The method is uf_glmfit_nodc's own default, pinv, unless MATLAB's exact
+%   solver or glmnet is chosen.
+    excluded = artefactScan(work, input, opts, channels);
+    if ~isempty(excluded)
+        requireEnoughDataLeft(excluded, size(input.data, 2), opts, numel(channels));
     end
-    EEG = recordInfo(EEG, info, plan);
+    cuts = round(double([input.event(strcmpi(arrayfun(@(e) char(string(e.type)), input.event, ...
+        'UniformOutput', false), 'boundary')).latency]));
+    winrej = [excluded; [cuts(:), cuts(:)]];
+
+    candidates = nnz(plan.kept);
+    binned = numel(unique([plan.membership{:}]));
+    copy = forEpoching(work);
+    epochs = [];
+    evalc('epochs = uf_epoch(copy, ''winrej'', winrej, ''timelimits'', opts.WindowMs / 1000);');
+    epoched = [epochs.urevent.alzRow];
+    keep = false(1, numel(plan.events));
+    keep(epoched) = true;
+    plan = Unfold.keepEvents(plan, keep);
+    plan.binnedLeftOut = binned - numel(unique([plan.membership{:}]));
+    left = candidates - nnz(plan.kept);
+    if left > 0
+        plan.notes{end + 1} = sprintf(['%d event(s) were left out (uf_epoch): their %g to %g ms ' ...
+            'window touches a stretch left out as artefact or a cut, or runs off the recording.'], ...
+            left, opts.WindowMs(1), opts.WindowMs(2));
+    end
+    if isempty(epoched)
+        throw(MException('Alakazam:Unfold:NoEpochs', '%s', sprintf([ ...
+            'None of the events has a whole %g to %g ms window of data clear of artefacts and ' ...
+            'cuts, so there is nothing to regress on. Would you lower or switch off the artefact ' ...
+            'threshold, or shorten the window?'], opts.WindowMs(1), opts.WindowMs(2))));
+    end
+
+    method = opts.Solver;
+    if strcmp(method, 'default')
+        method = 'pinv';
+    end
+    fitted = uf_glmfit_nodc(epochs, 'method', method, 'glmnetalpha', opts.GlmnetAlpha);
+end
+
+function detected = artefactScan(work, input, opts, channels)
+%ARTEFACTSCAN  The stretches the toolbox's scan marks, by its own
+%   uf_continuousArtifactDetect, as a winrej array; none with the threshold
+%   at 0.
+    detected = zeros(0, 2);
+    if opts.ArtifactThresholdUv > 0
+        detected = uf_continuousArtifactDetect(forArtefactScan(work, input.event), ...
+            'amplitudeThreshold', opts.ArtifactThresholdUv, ...
+            'windowsize', opts.ArtifactWindowMs, ...
+            'stepsize', opts.ArtifactStepMs, ...
+            'channels', channels);
+    end
+end
+
+function EEG = forEpoching(EEG)
+%FOREPOCHING  A copy shaped the way uf_epoch, through EEGLAB's pop_epoch,
+%   expects a dataset: every field of EEGLAB's own empty dataset that the
+%   Alakazam dataset lacks (pop_epoch reads .setname, among others), the
+%   time axis left for EEGLAB to rebuild in its milliseconds (Alakazam keeps
+%   a continuous recording's in seconds), and each event's row of the plan
+%   in .alzRow, which the toolbox carries into the epochs' .urevent.
+    empty = eeg_emptyset();
+    for f = reshape(fieldnames(empty), 1, [])
+        if ~isfield(EEG, f{1})
+            EEG.(f{1}) = empty.(f{1});
+        end
+    end
+    EEG.times = [];
+    for k = 1:numel(EEG.event)
+        EEG.event(k).alzRow = k;
+    end
 end
 
 % ======================================================================= %
@@ -400,9 +561,10 @@ function [data, times, notes] = fittedWaveforms(input, plan, unfold, opts)
 %   the pooled values of its continuous and spline terms (see this file's
 %   header), read from the documented EEG.unfold fields: X, colnames,
 %   cols2eventtypes, cols2variablenames, variablenames, variabletypes,
-%   splines, eventtypes and beta_dc, whose third dimension runs over X's
-%   columns. NOTES say where a spline could not be averaged over every
-%   pooled value (see referencePrediction).
+%   splines, eventtypes, and beta_dc (or, fitted on epochs, beta_nodc),
+%   whose third dimension runs over X's columns, passed as UNFOLD.beta, with
+%   X's rows on the plan's events. NOTES say where a spline could not be
+%   averaged over every pooled value (see referencePrediction).
 %
 %   A BIN IS THE EVENT-WEIGHTED MEAN OF ITS SETS: the waveform of each event
 %   type (a set of bins its events share, Unfold.binModel's plan.cellTypes)
@@ -410,7 +572,7 @@ function [data, times, notes] = fittedWaveforms(input, plan, unfold, opts)
 %   no events each bin is one set and this is its own waveform; for nested
 %   bins it is what Average gives, each event counted in every bin it is in.
     times = reshape(double(unfold.times) * 1000, 1, []);   % Unfold keeps seconds
-    nchan = size(unfold.beta_dc, 1);
+    nchan = size(unfold.beta, 1);
     nbin = numel(input.bindesc);
     data = nan(nchan, numel(times), nbin);
     notes = {};
@@ -488,6 +650,7 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
     end
     model = struct('Xdc', work.unfold.Xdc, 'Xdc_terms2cols', work.unfold.Xdc_terms2cols, ...
         'X', work.unfold.X, 'beta_dc', work.unfold.beta_dc, ...
+        'betaCustom', TransTools.FieldOr(work.unfold, 'beta_dcCustomrow', []), ...
         'timelimits', opts.WindowMs / 1000, 'srate', srate);
     anchors = double([input.event(events).latency]);
     [trials, usable] = Unfold.overlapCorrectedTrials(input.data, model, owner, anchors, bad);
@@ -502,16 +665,45 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
             'threshold, or ask for one waveform per bin instead?'], ...
             numel(events), opts.WindowMs(1), opts.WindowMs(2))));
     end
-    trials = trials(:, :, usable);
+    EEG = asEpochNode(input, plan, kept, trials(:, :, usable), opts, srate, times);
+
+    info.output = 'trials';
+    info.trialCandidates = numel(events);
+    info.trials = numel(kept);
+    info.trialsDropped = numel(events) - numel(kept);
+end
+
+function [EEG, info] = packageEpochs(input, plan, fitted, epoched, info, opts, srate, times)
+%PACKAGEEPOCHS  Without overlap correction, the trials are the epochs as
+%   uf_epoch cut them, one per binned event in the fit, laid out as
+%   packageTrials lays out the corrected ones. Nothing is subtracted: there
+%   is no model of the neighbours to subtract.
+    kept = unique([plan.membership{:}]);              % binned events in the fit
+    if isempty(kept)
+        throw(MException('Alakazam:Unfold:NoTrials', ...
+            'None of the binned events became an epoch, so there are no trials to return.'));
+    end
+    epochOf = zeros(1, numel(plan.events));
+    epochOf(epoched) = 1:numel(epoched);
+    rowOf = arrayfun(@(e) find(plan.eventSource == e, 1), kept);
+    EEG = asEpochNode(input, plan, kept, fitted.data(:, :, epochOf(rowOf)), opts, srate, times);
+
+    info.output = 'trials';
+    info.trialCandidates = numel(kept) + plan.binnedLeftOut;
+    info.trials = numel(kept);
+    info.trialsDropped = plan.binnedLeftOut;
+end
+
+function EEG = asEpochNode(input, plan, kept, trials, opts, srate, times)
+%ASEPOCHNODE  TRIALS, one per event in KEPT, baseline-corrected as the
+%   waveforms are, and laid out by DefineBins' cutEpochs, time zero on the
+%   sample Unfold placed each event on. cutEpochs is handed one channel
+%   only: it would otherwise cut every channel of the raw recording just for
+%   that to be replaced by the trials a line later.
     if ~isempty(opts.BaselineMs)
         inWindow = baselineSamples(times, opts.BaselineMs);
         trials = trials - mean(trials(:, inWindow, :), 2);
     end
-
-    % cutEpochs lays out the kept events' trials, time zero on the sample
-    % Unfold placed each event on. It is handed one channel only: it would
-    % otherwise cut every channel of the raw recording just for that to be
-    % replaced by the corrected trials a line later.
     layout = input;
     layout.data = input.data(1, :);
     centre = zeros(1, numel(input.event));
@@ -522,11 +714,6 @@ function [EEG, info] = packageTrials(input, plan, work, info, opts, excluded, sr
     EEG.bindesc = bindesc;
     EEG.data = trials;
     EEG.times = times;      % uf_condense's own, which the waveforms carry too
-
-    info.output = 'trials';
-    info.trialCandidates = numel(events);
-    info.trials = numel(kept);
-    info.trialsDropped = numel(events) - numel(kept);
 end
 
 function bindesc = keptBins(bindesc, plan, kept)
@@ -566,8 +753,11 @@ function info = modelInfo(input, plan, opts, excluded, srate)
                            'windowMs', opts.ArtifactWindowMs, 'stepMs', opts.ArtifactStepMs, ...
                            'channels', {opts.Channels}), ...
         'solverIterations', opts.SolverIterations, ...
+        'solver', opts.Solver, 'glmnetAlpha', opts.GlmnetAlpha, ...
+        'overlapCorrection', opts.OverlapCorrection, ...
         'missingValues', plan.missingValues, 'missing', {plan.missing}, ...
-        'dropped', nnz(~plan.kept), ...
+        'dropped', strcmp(plan.missingValues, 'drop') * nnz(plan.missingRows), ...
+        'epochsLeftOut', TransTools.FieldOr(plan, 'binnedLeftOut', 0), ...
         'cellLabels', {plan.cellLabels}, 'binCells', {plan.binCells}, ...
         'hasStandardError', false);
 end
@@ -828,7 +1018,7 @@ function [waveform, notes] = referencePrediction(unfold, plan, c)
     notes = {};
     eventType = plan.cellTypes{c};
     label = plan.cellLabels{c};
-    t = find(cellfun(@(e) any(strcmp(cellstr(e), eventType)), unfold.eventtypes), 1);
+    t = typeIndex(unfold, eventType);
     if isempty(t)
         return;
     end
@@ -867,7 +1057,7 @@ function [waveform, notes] = referencePrediction(unfold, plan, c)
     if any(interactions) && any(~[vars.categorical] & ~[vars.spline])
         weights(interactions) = pooledInteractions(plan, c, numel(cols), interactions);
     end
-    waveform = sum(unfold.beta_dc(:, :, cols) .* reshape(weights, 1, 1, []), 3);
+    waveform = sum(unfold.beta(:, :, cols) .* reshape(weights, 1, 1, []), 3);
 end
 
 function [basis, notes] = splineBasis(spl, pooled, events, name, label)
@@ -955,6 +1145,24 @@ function weights = pooledInteractions(plan, c, ncols, interactions)
     weights = mean(designed.unfold.X(:, interactions), 1);
 end
 
+function t = typeIndex(unfold, eventType)
+%TYPEINDEX  Which entry of EEG.unfold.eventtypes holds EVENTTYPE, [] if
+%   none. Not every entry is an event type: glmnet adds a column of its own,
+%   'glmnet-DC-Correction', its intercept for the whole recording, whose
+%   entry is {NaN} (uf_glmfit, through uf_designmat_addcol).
+    t = [];
+    for k = 1:numel(unfold.eventtypes)
+        names = unfold.eventtypes{k};
+        if ~iscell(names)
+            names = {names};
+        end
+        if any(cellfun(@(x) (ischar(x) || isstring(x)) && strcmp(x, eventType), names))
+            t = k;
+            return;
+        end
+    end
+end
+
 function spl = splineFor(unfold, colnames)
 %SPLINEFOR  The entry of EEG.unfold.splines whose columns are COLNAMES, the
 %   columns of X it produced. Matched on the columns rather than the name,
@@ -1008,7 +1216,11 @@ function [EEG, info] = packageTerms(input, plan, work, info, opts, times)
             'type', char(string(p.type)), 'value', double(p.value));
     end
 
-    data = marginal.beta(:, :, keep);
+    field = 'beta';          % uf_condense's name for a deconvolution's betas,
+    if ~isfield(marginal, field)
+        field = 'beta_nodc';     % and for a regression on epochs'
+    end
+    data = marginal.(field)(:, :, keep);
     requireFiniteBetas(data, true(1, numel(keep)), struct('label', labels), opts);
     data = applyBaseline(data, true(1, numel(keep)), times, opts.BaselineMs);
 
@@ -1038,7 +1250,7 @@ function text = referenceLevels(unfold, events, eventType)
 %   (Unfold's reference coding makes the first level, in sorted order, the
 %   reference). '' for a type without factors.
     text = '';
-    t = find(cellfun(@(e) any(strcmp(cellstr(e), eventType)), unfold.eventtypes), 1);
+    t = typeIndex(unfold, eventType);
     if isempty(t)
         return;
     end

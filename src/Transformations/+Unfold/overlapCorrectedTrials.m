@@ -20,7 +20,12 @@ function [trials, usable] = overlapCorrectedTrials(data, model, owner, anchors, 
 %               .timelimits and .srate, which place each lag on the
 %               recording exactly as uf_timeexpandDesignmat placed it.
 %               Stick (identity) time expansion, which is what Deconvolve
-%               asks for: one lag per column.
+%               asks for: one lag per column. Optionally .betaCustom
+%               (channels x columns), the betas of columns uf_glmfit added
+%               after the event types' own (glmnet's intercept for the whole
+%               recording, 'glmnet-DC-Correction', whose column of X is NaN):
+%               part of the prediction, so subtracted with the neighbours,
+%               but no event's own response.
 %     OWNER     one value per row of .X: the trial that modelled event belongs
 %               to, or 0 for an event that is only a neighbour (a nuisance
 %               event, whose response is removed but which is not a trial).
@@ -86,7 +91,7 @@ function [trials, usable] = overlapCorrectedTrials(data, model, owner, anchors, 
     flat = xdcBetas(model);
     perLag = reshape(model.beta_dc, nchan * nlags, npred);
     ownRows = sparse(owner(owner > 0), find(owner > 0), 1, ntrials, numel(owner));
-    ownDesign = full(ownRows * model.X);                         % trials x predictors
+    ownDesign = full(ownRows * model.X(:, 1:npred));             % trials x predictors
 
     % In chunks: the prediction for a few hundred trials at a time is a few
     % hundred windows of samples by every channel, which stays small however
@@ -111,9 +116,15 @@ function flat = xdcBetas(model)
 %   of Xdc belongs to, rather than an assumed column order. Within a term the
 %   columns run over the lags in order.
     terms = reshape(model.Xdc_terms2cols, 1, []);
+    npred = size(model.beta_dc, 3);
     flat = zeros(numel(terms), size(model.beta_dc, 1));
     for p = unique(terms)
         cols = find(terms == p);
-        flat(cols, :) = permute(model.beta_dc(:, 1:numel(cols), p), [2 1]);
+        if p <= npred
+            flat(cols, :) = permute(model.beta_dc(:, 1:numel(cols), p), [2 1]);
+        else
+            % A column uf_glmfit added (see MODEL.betaCustom), one beta each.
+            flat(cols, :) = repmat(reshape(model.betaCustom(:, p - npred), 1, []), numel(cols), 1);
+        end
     end
 end

@@ -49,7 +49,9 @@ function options = DeconvolveDialog(EEG, stored)
 %   number filled in with the median (uf_imputeMissing). Each is a choice
 %   here: the scalp EEG only, the average marginal effect ('AME'), a
 %   baseline window, and the mean, a random draw, leaving the event out or
-%   refusing.
+%   refusing. So are the toolbox's other ways to fit: MATLAB's exact solver
+%   or glmnet's regularised one instead of lsmr, and a regression on epochs
+%   (uf_epoch, uf_glmfit_nodc) instead of a deconvolution.
 %
 %   OK checks the settings the way Deconvolve will apply them, so a design
 %   the fit would refuse is reported here rather than after the dialog closes.
@@ -150,8 +152,8 @@ function options = DeconvolveDialog(EEG, stored)
     uibutton(binsRow, 'Text', 'Define bins...', 'ButtonPushedFcn', @(~, ~) onDefineBins(), ...
         'Tooltip', 'Write the bins to fit, in DefineBins'' language');
 
-    settings = uigridlayout(outer, [10 4], 'ColumnWidth', {190, 90, 210, 90}, ...
-        'RowHeight', repmat({'fit'}, 1, 10), 'Padding', [0 0 0 0], 'RowSpacing', 4);
+    settings = uigridlayout(outer, [12 4], 'ColumnWidth', {190, 90, 210, 90}, ...
+        'RowHeight', repmat({'fit'}, 1, 12), 'Padding', [0 0 0 0], 'RowSpacing', 4);
     uilabel(settings, 'Text', 'Window start (ms):');
     % The window decides which events overlap, so the model is shown again.
     startField = uieditfield(settings, 'numeric', 'Value', seed.windowMs(1), ...
@@ -268,17 +270,60 @@ function options = DeconvolveDialog(EEG, stored)
     missingDropdown.Layout.Row = 9;
     missingDropdown.Layout.Column = [2 4];
 
+    % Deconvolution, or the toolbox's other route: a regression on epochs,
+    % the same design without the neighbours' overlap taken out. The model
+    % is shown again, since only a deconvolution has pairs to warn about.
+    overlapLabel = uilabel(settings, 'Text', 'Overlap correction:');
+    overlapLabel.Layout.Row = 10;
+    overlapLabel.Layout.Column = 1;
+    overlapDropdown = uidropdown(settings, 'Tag', 'overlapCorrection', ...
+        'Items', {'On: fitted against the continuous recording (deconvolution)', ...
+                  'Off: a regression on epochs (uf_epoch, uf_glmfit_nodc)'}, ...
+        'ItemsData', {'on', 'off'}, 'Value', onOff(seed.overlapCorrection), ...
+        'ValueChangedFcn', @(~, ~) onFitChanged(true), ...
+        'Tooltip', ['Off fits the same formulas to epochs, each event''s window on its own, ' ...
+         'as the toolbox does to compare: with y ~ 1 a bin is the mean of its epochs. An ' ...
+         'epoch touching an artefact or a cut, or running off the recording, is left out.']);
+    overlapDropdown.Layout.Row = 10;
+    overlapDropdown.Layout.Column = [2 4];
+
+    solverLabel = uilabel(settings, 'Text', 'Solver:');
+    solverLabel.Layout.Row = 11;
+    solverLabel.Layout.Column = 1;
+    solverDropdown = uidropdown(settings, 'Tag', 'solver', ...
+        'Items', {'The toolbox''s default (lsmr; pinv on epochs)', ...
+                  'Exact (MATLAB''s own solver; needs much memory)', ...
+                  'Regularised (glmnet, cross-validated)'}, ...
+        'ItemsData', {'toolbox', 'matlab', 'glmnet'}, ...    % not 'default': graphics reads
+        'Value', choiceSeed(strrep(char(string(seed.solver)), 'default', 'toolbox'), ...   % that as "reset"
+            {'toolbox', 'matlab', 'glmnet'}), ...
+        'ValueChangedFcn', @(~, ~) onFitChanged(false), ...
+        'Tooltip', ['The exact solver needs no iteration limit, but for a long recording it ' ...
+         'can need tens of gigabytes, as the toolbox warns. glmnet shrinks the betas towards ' ...
+         'zero by an amount chosen by cross-validation: lasso, ridge or in between.']);
+    solverDropdown.Layout.Row = 11;
+    solverDropdown.Layout.Column = [2 4];
+
     % The solver's limit: the toolbox's own 400 unless a fit said it ran out.
     iterationsLabel = uilabel(settings, 'Text', 'Solver iterations:');
-    iterationsLabel.Layout.Row = 10;
+    iterationsLabel.Layout.Row = 12;
     iterationsLabel.Layout.Column = 1;
     iterationsField = uieditfield(settings, 'numeric', 'Tag', 'solverIterations', ...
         'Value', seed.solverIterations, 'Limits', [1 Inf], 'RoundFractionalValues', 'on', ...
         'Tooltip', ['The most iterations the solver takes per channel (the toolbox''s own ' ...
          'default is 400). A fit that runs out says so; raise this when it does and the ' ...
          'design is otherwise sound.']);
-    iterationsField.Layout.Row = 10;
+    iterationsField.Layout.Row = 12;
     iterationsField.Layout.Column = 2;
+    alphaLabel = uilabel(settings, 'Text', 'glmnet alpha (1 lasso, 0 ridge):');
+    alphaLabel.Layout.Row = 12;
+    alphaLabel.Layout.Column = 3;
+    alphaField = uieditfield(settings, 'numeric', 'Tag', 'glmnetAlpha', ...
+        'Value', seed.glmnetAlpha, 'Limits', [0 1], ...
+        'Tooltip', 'glmnet''s mix of penalties: 1 is lasso (the toolbox''s default), 0 ridge.');
+    alphaField.Layout.Row = 12;
+    alphaField.Layout.Column = 4;
+    onFitChanged(false);
 
     % The formulas, the model they make, and what a formula can use share
     % the stretchy row: a formula is only readable next to the columns it
@@ -502,6 +547,19 @@ function options = DeconvolveDialog(EEG, stored)
     end
 
     % ---- the rest ------------------------------------------------------ %
+    function onFitChanged(refresh)
+    %ONFITCHANGED  The iteration limit is lsmr's, which only the toolbox's
+    %   default solver with overlap correction runs; alpha is glmnet's. With
+    %   REFRESH the model is shown again (overlap correction decides which
+    %   warnings it has).
+        lsmr = strcmp(solverDropdown.Value, 'toolbox') && strcmp(overlapDropdown.Value, 'on');
+        iterationsField.Enable = matlab.lang.OnOffSwitchState(lsmr);
+        alphaField.Enable = matlab.lang.OnOffSwitchState(strcmp(solverDropdown.Value, 'glmnet'));
+        if refresh
+            showModel();
+        end
+    end
+
     function onBaselineToggled()
     %ONBASELINETOGGLED  The two fields follow the checkbox, so an unticked box
     %   cannot leave a window behind that looks as if it were being used.
@@ -562,7 +620,8 @@ function options = DeconvolveDialog(EEG, stored)
         seedFormulaTable(tagged);
         try
             plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value);
+                'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value, ...
+                'OverlapCorrection', strcmp(overlapDropdown.Value, 'on'));
             % A code chosen earlier can stop being "in no bin" when the bins
             % change, and would then only produce a note saying it is absent.
             % The list is the user's view of the choice, so the choice follows
@@ -572,7 +631,8 @@ function options = DeconvolveDialog(EEG, stored)
                 if ~all(ismember(otherSelection, available))
                     otherSelection = intersect(otherSelection, available, 'stable');
                     plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                        'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value);
+                        'Formulas', tableFormulas(), 'MissingValues', missingDropdown.Value, ...
+                        'OverlapCorrection', strcmp(overlapDropdown.Value, 'on'));
                 end
             end
             refreshOtherTree(plan.unbinnedCodes);
@@ -605,7 +665,10 @@ function options = DeconvolveDialog(EEG, stored)
             lines{end + 1} = ''; %#ok<AGROW>
             lines{end + 1} = ['Note: ' plan.notes{k}]; %#ok<AGROW>
         end
-        locked = Unfold.timeLockedEvents(plan, tagged.srate, [startField.Value stopField.Value]);
+        locked = struct('note', {});
+        if strcmp(overlapDropdown.Value, 'on')   % only a deconvolution has pairs to tell apart
+            locked = Unfold.timeLockedEvents(plan, tagged.srate, [startField.Value stopField.Value]);
+        end
         for k = 1:numel(locked)
             lines{end + 1} = ''; %#ok<AGROW>
             lines{end + 1} = ['Warning: ' locked(k).note]; %#ok<AGROW>
@@ -654,6 +717,9 @@ function options = DeconvolveDialog(EEG, stored)
             'artifactStepMs', artStepField.Value, ...
             'artifactChannels', channelsDropdown.Value, ...
             'missingValues', missingDropdown.Value, ...
+            'overlapCorrection', strcmp(overlapDropdown.Value, 'on'), ...
+            'solver', strrep(solverDropdown.Value, 'toolbox', 'default'), ...
+            'glmnetAlpha', alphaField.Value, ...
             'marginal', marginalDropdown.Value, ...
             'solverIterations', iterationsField.Value, ...
             'output', outputDropdown.Value);
@@ -683,7 +749,8 @@ function options = DeconvolveDialog(EEG, stored)
         end
         try
             plan = Unfold.binModel(tagged, 'OtherEvents', otherSelection, ...
-                'Formulas', candidate.formulas, 'MissingValues', candidate.missingValues);
+                'Formulas', candidate.formulas, 'MissingValues', candidate.missingValues, ...
+                'OverlapCorrection', candidate.overlapCorrection);
             designLines(tagged, plan);
         catch err
             uialert(fig, err.message, 'Check the design');
@@ -931,7 +998,17 @@ function seed = defaults()
         'windowMs', [-200 800], 'artifactThresholdUv', 150, ...
         'artifactWindowMs', 2000, 'artifactStepMs', 100, 'artifactChannels', 'all', ...
         'marginal', 'MEM', 'missingValues', 'median', 'solverIterations', 400, ...
+        'solver', 'default', 'glmnetAlpha', 1, 'overlapCorrection', true, ...
         'output', 'average');
+end
+
+function value = onOff(flag)
+%ONOFF  A stored overlapCorrection, true or false, as the dropdown's 'on' or
+%   'off'; anything unreadable is the default, on.
+    value = 'on';
+    if (islogical(flag) || isnumeric(flag)) && isscalar(flag) && ~flag
+        value = 'off';
+    end
 end
 
 function value = choiceSeed(stored, offered)

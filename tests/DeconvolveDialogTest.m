@@ -225,6 +225,9 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             testCase.verifyEqual(options.marginal, 'MEM');
             testCase.verifyEmpty(options.baselineMs, 'No baseline until it is ticked.');
             testCase.verifyEqual(options.missingValues, 'median', 'uf_imputeMissing''s own default.');
+            testCase.verifyTrue(options.overlapCorrection);
+            testCase.verifyEqual(options.solver, 'default');
+            testCase.verifyEqual(options.glmnetAlpha, 1, 'glmnet''s own default.');
         end
 
         function theScanTheMarginalAndTheBaselineAreChoices(testCase)
@@ -286,6 +289,42 @@ classdef DeconvolveDialogTest < matlab.unittest.TestCase
             function refuseWithRt(f)
                 setFormula(f, 'Rare', 'y ~ 1 + rt');
                 choose(f, 'missingValues', 'refuse');
+            end
+        end
+
+        function theFitAndTheSolverAreChoices(testCase)
+            options = testCase.runDialog(@(f) chooseFit(f));
+
+            testCase.assertNotEmpty(options);
+            testCase.verifyFalse(options.overlapCorrection);
+            testCase.verifyEqual(options.solver, 'glmnet');
+            testCase.verifyEqual(options.glmnetAlpha, 0.5);
+
+            function chooseFit(f)
+                choose(f, 'overlapCorrection', 'off');
+                choose(f, 'solver', 'glmnet');
+                setNumber(f, 'glmnetAlpha', 0.5);
+            end
+        end
+
+        function eachSolversSettingOpensForItAlone(testCase)
+        %EACHSOLVERSSETTINGOPENSFORITALONE  The iteration limit is lsmr's,
+        %   run only by the default solver with overlap correction; alpha is
+        %   glmnet's.
+            states = {};
+            testCase.runDialog(@(f) record(f));
+
+            testCase.verifyEqual(states, {'on', 'off'; 'off', 'on'; 'off', 'off'});
+
+            function record(f)
+                iterations = findall(f, 'Tag', 'solverIterations');
+                alpha = findall(f, 'Tag', 'glmnetAlpha');
+                states(end + 1, :) = {char(iterations.Enable), char(alpha.Enable)};
+                choose(f, 'solver', 'glmnet');
+                states(end + 1, :) = {char(iterations.Enable), char(alpha.Enable)};
+                choose(f, 'solver', 'toolbox');
+                choose(f, 'overlapCorrection', 'off');
+                states(end + 1, :) = {char(iterations.Enable), char(alpha.Enable)};
             end
         end
 

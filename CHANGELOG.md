@@ -32,6 +32,17 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **Deconvolve without overlap correction.** **Overlap correction: Off** fits
+  the same bins and formulas to epochs, the Unfold toolbox's own regression
+  without deconvolution (`uf_epoch`, `uf_glmfit_nodc`): with `y ~ 1` a bin is
+  the mean of its epochs, and with a formula it is what the toolbox compares
+  a deconvolution with. Epochs on an artefact or across a cut are left out
+  and counted, and the trials are the epochs as cut.
+- **A choice of solver in Deconvolve.** Beside the toolbox's default (lsmr),
+  MATLAB's exact solver, which needs no iteration limit but much memory, and
+  glmnet's regularised fit (lasso, ridge or elastic net, by **glmnet
+  alpha**), as `uf_glmfit` offers them. Its two methods its own help advises
+  against are not offered.
 - **A technical note on Deconvolve and Unfold**
   (`Docs/unfold-technical-note.md`, linked from chapters 9 and 17): the
   toolbox's own workflow step by step, which function Deconvolve calls with

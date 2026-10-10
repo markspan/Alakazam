@@ -111,6 +111,12 @@ function [EEG, options] = Deconvolve(input, varargin)
 %                          Unfold.fitBins)
 %     solverIterations     the solver's iteration limit, default 400 (the
 %                          toolbox's own); a fit that reaches it says so
+%     solver               'default' (each fitting function's own: lsmr, or
+%                          pinv on epochs), 'matlab' (exact, memory-hungry)
+%                          or 'glmnet' (regularised); see Unfold.fitBins
+%     glmnetAlpha          for glmnet: 1 lasso (the default), 0 ridge
+%     overlapCorrection    true (the default): deconvolution; false: the
+%                          toolbox's regression on epochs, without it
 %
 %   OPTIONS STORED BEFORE artifactChannels, marginal AND missingValues
 %   EXISTED replay as they were run: absent, they are 'scalp', 'AME' and
@@ -163,6 +169,9 @@ tagged = applyBins(input, options);
     'Channels', scanChannels(options), ...
     'Marginal', char(string(TransTools.FieldOr(options, 'marginal', 'AME'))), ...
     'MissingValues', char(string(TransTools.FieldOr(options, 'missingValues', 'refuse'))), ...
+    'Solver', char(string(TransTools.FieldOr(options, 'solver', 'default'))), ...
+    'GlmnetAlpha', TransTools.FieldOr(options, 'glmnetAlpha', 1), ...
+    'OverlapCorrection', logical(TransTools.FieldOr(options, 'overlapCorrection', true)), ...
     'SolverIterations', TransTools.FieldOr(options, 'solverIterations', 400), ...
     'Output', char(string(TransTools.FieldOr(options, 'output', 'average'))));
 
@@ -235,6 +244,12 @@ function report(info)
     if info.excludedSeconds > 0
         fprintf('; %.1f s excluded as artefact', info.excludedSeconds);
     end
+    if ~info.overlapCorrection
+        fprintf('; regressed on epochs, without overlap correction');
+    end
+    if ~strcmp(info.solver, 'default')
+        fprintf('; solver %s', info.solver);
+    end
     fprintf('.\n');
     for k = 1:numel(info.binLabels)
         fprintf('  %-28s %4d event(s)\n', info.binLabels{k}, info.binCounts(k));
@@ -249,7 +264,11 @@ function report(info)
             strjoin({info.terms.label}, '; '));
     end
     if isfield(info, 'output') && strcmpi(info.output, 'trials')
-        fprintf('  Returned as %d overlap-corrected trial(s)', info.trials);
+        what = 'overlap-corrected trial(s)';
+        if ~info.overlapCorrection
+            what = 'epoch(s), as cut';
+        end
+        fprintf('  Returned as %d %s', info.trials, what);
         if info.trialsDropped > 0
             fprintf(', %d dropped (window off the recording or on a stretch left out of the model)', ...
                 info.trialsDropped);

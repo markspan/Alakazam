@@ -82,7 +82,12 @@ function plan = binModel(EEG, varargin)
 %   for events without a number, and which fields lack how many; see
 %   checkVariables), .kept (which rows of .events the fit uses: all of
 %   them, until uf_imputeMissing's 'drop' leaves some out, see
-%   Unfold.fitBins) and .notes.
+%   Unfold.fitBins), .missingRows (the rows of .events missing a number
+%   their formula uses) and .notes.
+%
+%   'OverlapCorrection' false (a regression on epochs, see Unfold.fitBins)
+%   leaves out the note on bins at a fixed lag, which only a deconvolution
+%   has to tell apart.
 %
 %   'MissingValues' says what is to happen to an event whose formula names
 %   a field it has no number for: 'refuse' (the default here, where nothing
@@ -117,6 +122,7 @@ function plan = binModel(EEG, varargin)
     parsed.addParameter('Formulas', [], @(v) isempty(v) || isstruct(v));
     parsed.addParameter('MissingValues', 'refuse', @(v) (ischar(v) || isstring(v)) && ...
         any(strcmpi(char(string(v)), {'refuse', 'median', 'mean', 'marginal', 'drop'})));
+    parsed.addParameter('OverlapCorrection', true, @(v) (islogical(v) || isnumeric(v)) && isscalar(v));
     parsed.parse(varargin{:});
     missingValues = lower(char(string(parsed.Results.MissingValues)));
     choice.otherEvents = parsed.Results.OtherEvents;
@@ -168,7 +174,9 @@ function plan = binModel(EEG, varargin)
 
     latencies = arrayfun(@(c) double([EEG.event(eventCell == c).latency]), ...
         1:numel(plan.cellBins), 'UniformOutput', false);
-    plan.notes = [plan.notes, fixedLagNotes(latencies, plan.cellLabels, 1:numel(plan.cellBins))];
+    if parsed.Results.OverlapCorrection   % only a deconvolution has to tell them apart
+        plan.notes = [plan.notes, fixedLagNotes(latencies, plan.cellLabels, 1:numel(plan.cellBins))];
+    end
 
     plan.eventTypes = [plan.cellTypes, plan.nuisanceTypes];
     plan.typeLabels = [plan.cellLabels, cellstr(string({plan.unbinnedCodes([plan.unbinnedCodes.modelled]).code}))];
@@ -185,29 +193,17 @@ function plan = binModel(EEG, varargin)
     [plan.events, plan.missing, absentRows] = checkVariables(plan.events, plan.eventSource, ...
         plan.eventTypes, plan.typeLabels, plan.formulas, EEG, missingValues);
     plan.missingValues = missingValues;
+    plan.missingRows = absentRows;
     plan.notes = [plan.notes, missingNotes(plan.missing, missingValues)];
     plan.kept = true(1, numel(plan.events));
+    plan.variables = cellfun(@Unfold.formulaVariables, plan.formulas, 'UniformOutput', false);
+    plan.pooled = Unfold.pooledValues(plan.events, plan.eventTypes, plan.formulas);
     if strcmp(missingValues, 'drop')
-        plan = withoutDropped(plan, absentRows);
+        % The events uf_imputeMissing will leave out: those missing a number
+        % their formula uses, whose rows of the design it zeroes
+        % (Unfold.fitBins checks it zeroed exactly these).
+        plan = Unfold.keepEvents(plan, ~absentRows);
     end
-    plan.variables = cellfun(@formulaVariables, plan.formulas, 'UniformOutput', false);
-    plan.pooled = pooledValues(plan.events(plan.kept), plan.eventTypes, plan.formulas);
-end
-
-function plan = withoutDropped(plan, dropped)
-%WITHOUTDROPPED  The plan without the events uf_imputeMissing's 'drop' will
-%   leave out: those missing a number their formula uses, whose rows of the
-%   design it zeroes (Unfold.fitBins checks it zeroed exactly these). They
-%   stay in .events, as the toolbox keeps them in EEG.event, but are not
-%   .kept: not in a bin's count, its events or its trials, nor among the
-%   values its waveform is held at.
-    plan.kept = ~dropped;
-    gone = plan.eventSource(dropped);
-    for k = 1:numel(plan.membership)
-        plan.membership{k} = setdiff(plan.membership{k}, gone, 'stable');
-    end
-    plan.binCounts = cellfun(@numel, plan.membership);
-    plan.cellCounts = cellfun(@(type) nnz(strcmp({plan.events.type}, type) & plan.kept), plan.cellTypes);
 end
 
 function notes = missingNotes(missing, method)
@@ -347,64 +343,6 @@ function parts = topLevelSplit(text, separator)
 end
 
 % ======================================================================= %
-function pooled = pooledValues(events, eventTypes, formulas)
-%POOLEDVALUES  For each continuous or spline field any formula uses, its
-%   values over every modelled event whose type uses it: the common ground
-%   Unfold.fitBins evaluates every bin's waveform on, so that a covariate
-%   whose values differ between bins is held at the same values for all of
-%   them rather than at each bin's own (see Unfold.fitBins). Factors are
-%   not pooled: each bin keeps its own mix of levels. .common is the range
-%   of values every type using the field shares, [] when they share none:
-%   a spline is only evaluated there, since outside a bin's own values it
-%   would be extrapolating.
-%
-%   A 2D SPLINE (2dspl(x, z, n)) is evaluated at both fields at once, so it
-%   gets an entry of its own: named as the toolbox names it, the two field
-%   names run together ("xz"), with .pair {x, z}, .values the pairs of every
-%   event that uses it (2 x n, from the same events), and .common a 2 x 2
-%   box, each row the range of one field every type using it shares.
-    pooled = struct('name', {}, 'values', {}, 'common', {}, 'pair', {});
-    for t = 1:numel(eventTypes)
-        rows = strcmp({events.type}, eventTypes{t});
-        [vars, pairs] = formulaVariables(formulas{t});
-        for v = vars
-            if v.categorical
-                continue;
-            end
-            pooled = addPooled(pooled, v.name, [events(rows).(v.name)], {});
-        end
-        for p = pairs
-            pooled = addPooled(pooled, [p{1}{:}], ...
-                [[events(rows).(p{1}{1})]; [events(rows).(p{1}{2})]], p{1});
-        end
-    end
-end
-
-function pooled = addPooled(pooled, name, values, pair)
-%ADDPOOLED  VALUES (one row per field) added to the entry NAME of the same
-%   kind (a field, or a 2D spline's PAIR), and the range every type using it
-%   shares narrowed to the values of this one. A missing value (NaN, before
-%   uf_imputeMissing fills it in) is not a value of the field, so it is
-%   left out, and a pair with one missing is left out whole.
-    values = values(:, all(isfinite(values), 1));
-    span = [min(values, [], 2), max(values, [], 2)];
-    at = find(strcmp({pooled.name}, name) & cellfun(@isempty, {pooled.pair}) == isempty(pair), 1);
-    if isempty(at)
-        pooled(end + 1) = struct('name', name, 'values', values, 'common', span, 'pair', {pair});
-        return;
-    end
-    pooled(at).values = [pooled(at).values, values];
-    common = pooled(at).common;
-    if ~isempty(common)
-        common = [max(common(:, 1), span(:, 1)), min(common(:, 2), span(:, 2))];
-        if any(common(:, 1) > common(:, 2))
-            common = [];
-        end
-    end
-    pooled(at).common = common;
-end
-
-% ======================================================================= %
 function [formula, given] = formulaFor(formulas, label)
 %FORMULAFOR  The formula written for the bin LABEL, as 'y ~ ...', or 'y ~ 1'
 %   when there is none. A formula written without its left-hand side is
@@ -501,7 +439,7 @@ function [events, missing, absentRows] = checkVariables(events, source, eventTyp
     absentRows = false(1, numel(events));
     for t = 1:numel(eventTypes)
         rows = find(strcmp({events.type}, eventTypes{t}));
-        for v = formulaVariables(formulas{t})
+        for v = Unfold.formulaVariables(formulas{t})
             if ~isfield(EEG.event, v.name)
                 throw(MException('Alakazam:Unfold:NoSuchField', '%s', sprintf([ ...
                     'The formula for "%s" (%s) uses "%s", which is not a field of this ' ...
@@ -578,28 +516,6 @@ function events = fillPlaceholders(events)
         end
         [events(blank).(name{1})] = deal(filler);
     end
-end
-
-function [vars, pairs] = formulaVariables(formula)
-%FORMULAVARIABLES  The event fields a formula names, whether each is a
-%   factor (inside cat()) and whether it is a spline's (inside spl(),
-%   circspl() or 2dspl()). Everything that is a name and not one of Unfold's
-%   term functions, or the response y, is a field. A name has to start the
-%   word: Unfold spells its 2D spline 2dspl, which once read as a field
-%   called "dspl". PAIRS lists each 2dspl's two fields, {x, z}, in order.
-    rhs = regexprep(formula, '^[^~]*~', '');
-    names = unique(regexp(rhs, '(?<![\w.])[A-Za-z_]\w*', 'match'), 'stable');
-    % A row, even when empty: a 0x1 list would still take one turn of a for
-    % loop over its columns.
-    names = reshape(setdiff(names, {'y', 'cat', 'spl', 'circspl'}, 'stable'), 1, []);
-    factors = cellfun(@(t) t{1}, regexp(rhs, '(?<!\w)cat\s*\(\s*([A-Za-z_]\w*)', 'tokens'), ...
-        'UniformOutput', false);
-    splines = cellfun(@(t) t{1}, regexp(rhs, '(?<!\w)(?:spl|circspl)\s*\(\s*([A-Za-z_]\w*)', 'tokens'), ...
-        'UniformOutput', false);
-    pairs = regexp(rhs, '(?<!\w)2dspl\s*\(\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)', 'tokens');
-    surfaces = [pairs{:}];
-    vars = struct('name', names, 'categorical', num2cell(ismember(names, factors)), ...
-        'spline', num2cell(ismember(names, [splines, surfaces])));
 end
 
 function level = levelOf(value)

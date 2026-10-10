@@ -21,12 +21,12 @@ own functions, and with the toolbox's own defaults wherever it has one:
 | Time expansion | `uf_timeexpandDesignmat` | called, `'stick'` (the default) |
 | Removing artefactual data | `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude` | called, with `uf_combineWinrej` to join marks |
 | Imputation of missing data | `uf_imputeMissing` | called where a number is missing, `'median'` (its default) unless another method, or a refusal, is chosen |
-| Fitting | `uf_glmfit` | called, `'lsmr'` (the default) |
+| Fitting | `uf_glmfit` | called, `'lsmr'` (the default), or `'matlab'` or `'glmnet'` as chosen |
 | Condensing | `uf_condense` | called for the model's terms; the other results read the same betas directly |
 | Prediction (from the tutorials) | `uf_predictContinuous`, `uf_addmarginal` | called for the model's terms |
 | Plotting | `uf_plotParam` and others | not called: Alakazam's own views |
 | Group-level statistics | left to the user | Grand Average and Alakazam's cluster test |
-| rERP without deconvolution | `uf_epoch`, `uf_glmfit_nodc` | not offered |
+| rERP without deconvolution | `uf_epoch`, `uf_glmfit_nodc` | called with **Overlap correction** off, in place of the time expansion and `uf_glmfit` |
 
 What Alakazam adds lies before the first step and after the last. Before it,
 DefineBins' bins are turned into Unfold's event types and formulas (section 1).
@@ -111,6 +111,11 @@ opens. The bins are applied to the continuous recording by DefineBins in
 tags-only mode, without an epoch window, which writes `EEG.bindesc` and each
 event's `.bini` and leaves the data continuous (`applyBins` in
 `Deconvolve.m`).
+
+With overlap correction, Deconvolve also refuses a recording with a DC offset
+(`requireCentredData`, section 3): the time-expanded design has no constant
+term. A regression on epochs (2.10) has an intercept at every sample, which
+takes up a standing voltage as an average does, so there it is not refused.
 
 ### 2.1 Definition of the design: `uf_designmat`
 
@@ -224,14 +229,36 @@ Three consequences are Alakazam's to handle, and are handled:
 ### 2.5 Fitting: `uf_glmfit`
 
 ```matlab
-EEG = uf_glmfit(EEG, 'lsmriterations', solverIterations);
+EEG = uf_glmfit(EEG, 'method', method, 'lsmriterations', solverIterations, ...
+    'glmnetalpha', glmnetAlpha);
 ```
 
-The method is the default, `'lsmr'`, and the iteration limit is the dialog's
-**Solver iterations**, which starts at the toolbox's own 400. The toolbox warns,
-rather than fails, when the solver runs out of iterations; Deconvolve catches
-that warning and puts it in the result's notes. The other methods (`'pinv'`,
-`'matlab'`, `'par-lsmr'` and the regularised `'glmnet'`) are not offered.
+**Solver** chooses the method:
+
+- **The toolbox's default**, `'lsmr'`, an iterative solver on the sparse
+  design, channel by channel. Its iteration limit is **Solver iterations**,
+  which starts at the toolbox's own 400. The toolbox warns, rather than fails,
+  when it runs out of iterations; Deconvolve catches that warning and puts it
+  in the result's notes.
+- **Exact**, `'matlab'`: MATLAB's own solver, all channels at once. It needs
+  no iteration limit, so it never stops short, but the toolbox's help warns
+  that for moderate to big designs it needs a great deal of memory ("40-60GB
+  is easily reached"). On a design lsmr solves, it gives lsmr's answer.
+- **Regularised**, `'glmnet'`: a penalised fit, lasso by default, ridge with
+  **glmnet alpha** 0, elastic net between them, its strength chosen by
+  cross-validation (`cvglmnet`, at `'lambda_1se'`). Its betas are shrunk
+  towards zero, so they are not the least-squares waveforms; lasso sets some
+  exactly to zero. The toolbox fits glmnet with an intercept for the whole
+  recording, which it keeps as a column of its own (`'glmnet-DC-Correction'`,
+  NaN in `X`, its beta in `beta_dcCustomrow`); Alakazam leaves that column out
+  of every bin's waveform and subtracts it from the overlap-corrected trials
+  with the neighbours. The glmnet library ships with Unfold, with a Windows
+  build that runs under MATLAB R2026a.
+
+The toolbox's two other methods are not offered, for the reasons its own help
+gives: `'par-lsmr'` is lsmr in parallel, which "does not seem to be any
+faster" and is "Not recommended"; `'pinv'` is "generally not recommended due
+to floating point instability".
 
 ### 2.6 Condensing: `uf_condense`
 
@@ -338,11 +365,45 @@ threshold-free cluster enhancement as its default (manual, chapter 14).
 EPT-TFCE itself is not installed: it is a git submodule of Unfold, empty in
 the source archive Alakazam installs, and nothing in the fitting path uses it.
 
-### 2.10 rERP without deconvolution: not offered
+### 2.10 rERP without deconvolution: `uf_epoch`, `uf_glmfit_nodc`
 
-toolboxWorkflow.rst also describes mass-univariate regression on epochs
-(`uf_epoch`, `uf_glmfit_nodc`). Deconvolve does not offer it; DefineBins and
-Average are Alakazam's epoch-based route.
+toolboxWorkflow.rst also describes a mass-univariate regression on epochs,
+without deconvolution, and the toolbox's tutorials use it to show what
+deconvolution changes. Deconvolve runs it with **Overlap correction** off, in
+place of 2.2, 2.3 and 2.5, on the same design (2.1, 2.4):
+
+```matlab
+EEG = uf_epoch(EEG, 'winrej', winrej, 'timelimits', windowMs / 1000);
+EEG = uf_glmfit_nodc(EEG, 'method', method, 'glmnetalpha', glmnetAlpha);
+```
+
+- `winrej` holds the scan's marks (2.3) and each cut as a stretch of one
+  sample. `uf_epoch` leaves out every event whose window touches one of them,
+  so an epoch spanning a cut is left out, as DefineBins leaves one out; and,
+  through EEGLAB's `pop_epoch`, every event whose window runs off the
+  recording.
+- `uf_epoch` rounds each latency to the nearest sample, where Alakazam's own
+  epoching floors it as EEGLAB does; and `pop_epoch` stops a sample before the
+  window's end (-200 to 790 ms at 100 Hz), as DefineBins does.
+- The method is `uf_glmfit_nodc`'s own default, `'pinv'`, the
+  pseudo-inverse of the epochs-by-predictors design, a small system here, or
+  the exact or glmnet solver as chosen under **Solver**.
+- `pop_epoch` reads fields an Alakazam dataset need not carry (`setname` among
+  them), so the copy handed to `uf_epoch` is given every field of EEGLAB's own
+  empty dataset that it lacks, a time axis for EEGLAB to rebuild in its
+  milliseconds, and each event's row of the plan, which the toolbox carries
+  into the epochs (`forEpoching`). That row tells which events became epochs:
+  the others are not in the fit, so the bins count and average without them
+  (`Unfold.keepEvents`).
+
+With `y ~ 1` a bin's waveform is the mean of its epochs, as Average gives it
+but for the rounding; with a formula, it is the same regression as a
+deconvolution, with the neighbours' overlap left in. **The trials** are the
+epochs as `uf_epoch` cut them, nothing subtracted. **The model's terms** come
+from `uf_condense`, `uf_predictContinuous` and `uf_addmarginal` as before,
+which return the betas as `beta_nodc`. Bins at a fixed lag, and codes locked
+to another type, are not noted: a regression on epochs fits each epoch on its
+own and has nothing to tell apart.
 
 ## 3. Checks Alakazam adds
 
@@ -351,7 +412,7 @@ could not give a usable answer, or notes what the reader needs to know.
 
 | Check | When | What it does |
 |---|---|---|
-| A DC offset: on the median channel, \|mean\| above one standard deviation (`requireCentredData`) | before | refuses, naming DCDetrend or a high-pass Filter. The time-expanded design has no constant term, so a standing voltage would have to come out of the event responses. |
+| A DC offset, with overlap correction: on the median channel, \|mean\| above one standard deviation (`requireCentredData`) | before | refuses, naming DCDetrend or a high-pass Filter. The time-expanded design has no constant term, so a standing voltage would have to come out of the event responses. |
 | No bin holds any event | before | refuses |
 | A bin holds no event in this recording | before | notes it; the bin is empty in the result |
 | A field a formula names: absent from the recording, without a number on every one of the bin's events, or the same on all of them (`checkVariables`) | before | refuses, naming the bin. The last is common with EYE-EEG, which writes 0 into every field that does not apply. |
@@ -359,8 +420,9 @@ could not give a usable answer, or notes what the reader needs to know.
 | A factor level missing on some of the bin's events | before | refuses, whatever **Missing values** says (2.4) |
 | A formula `uf_designmat` refuses | before | each type is tried alone, and the refusal names the bin (`namedRefusal`) |
 | Factor levels of one letter each (`oneLetterFactors`) | when `uf_designmat` refuses | says why: see section 5 |
-| Two bins at an exactly constant lag (`fixedLagNotes`) | before | notes that their waveforms are not identified apart |
-| A modelled code in no bin locked to another type: median lag shorter than the window, 80 % of each type's events within 40 ms of it, spread under 20 ms (`Unfold.timeLockedEvents`) | before | notes it, in the dialog too; named as the likely cause if the solver then does not converge |
+| Two bins at an exactly constant lag, with overlap correction (`fixedLagNotes`) | before | notes that their waveforms are not identified apart |
+| A modelled code in no bin locked to another type, with overlap correction: median lag shorter than the window, 80 % of each type's events within 40 ms of it, spread under 20 ms (`Unfold.timeLockedEvents`) | before | notes it, in the dialog too; named as the likely cause if the solver then does not converge |
+| Without overlap correction, events left out by `uf_epoch` | after epoching | notes how many; none at all is refused |
 | Codes in no bin left out | before | notes that their overlap stays in the bins |
 | More than half of the recording marked as artefact (`requireEnoughDataLeft`) | before the fit | refuses |
 | The solver ran out of iterations | after | notes it |
@@ -379,17 +441,21 @@ offered beside it:
 | **Terms evaluated at** (`uf_predictContinuous`) | ten quantiles | values named per term |
 | **Missing values** (`uf_imputeMissing` `'method'`) | the median | the mean, a random draw (`'marginal'`), the events left out (`'drop'`), or a refusal |
 | Artefact threshold, window and step | 150 µV, 2000 ms, 100 ms | any values |
+| **Solver** (`uf_glmfit` and `uf_glmfit_nodc` `'method'`) | each function's own: `'lsmr'`, and `'pinv'` on epochs | MATLAB's exact solver (`'matlab'`), or glmnet's regularised fit (`'glmnet'`) |
+| **glmnet alpha** (`'glmnetalpha'`) | 1, lasso | 0, ridge, or between them |
 | **Solver iterations** (`uf_glmfit` `'lsmriterations'`) | 400 | any number |
+| **Overlap correction** | on: `uf_timeexpandDesignmat` and `uf_glmfit` | off: `uf_epoch` and `uf_glmfit_nodc` (2.10) |
 
-`'codingschema'`, `'splinespacing'`, the stick time expansion and the lsmr
-solver are the toolbox's defaults and are not settings.
+`'codingschema'`, `'splinespacing'` and the stick time expansion are the
+toolbox's defaults and are not settings.
 
 **Options stored before the scan's channels, the marginal effect and
 missing values were settings** (templates saved with V0.4.5 or earlier) have
 none of these fields. They were run with the scalp-only scan, `'AME'`, a
 refusal of missing numbers and, where the field is absent, a pre-event
 baseline, and they replay and reopen with those, so a template gives the
-result it always gave. The shipped Ehinger & Dimigen Figure 11
+result it always gave. Without **Solver** or **Overlap correction** they are
+fitted as they always were, by deconvolution with lsmr. The shipped Ehinger & Dimigen Figure 11
 template (manual, chapter 17) now states its choices, the scalp EEG only,
 `'AME'` and the median (nothing is missing in its data), so its numbers in
 the chapter are unchanged.
@@ -455,6 +521,7 @@ each and when it can arise.
 | `src/Transformations/+Unfold/overlapCorrectedTrials.m` | the trials (2.7) |
 | `src/Transformations/+Unfold/predictionValues.m` | **Terms evaluated at** into `predictAt` |
 | `src/Transformations/+Unfold/timeLockedEvents.m` | the time-locked pairs (section 3) |
+| `src/Transformations/+Unfold/keepEvents.m`, `pooledValues.m`, `formulaVariables.m` | the events in the fit, the values a waveform is held at, and a formula's fields |
 | `src/Transformations/+Unfold/ensure.m`, `startToolbox.m`, `isAvailable.m` | installing and starting (section 6) |
 
 ## 8. How it is tested
@@ -472,7 +539,11 @@ each and when it can arise.
   around them.
 - `DeconvolveTest`: the transformation, the scan between cuts and on every
   channel by default, the baseline window as `uf_plotParam` takes it, and
-  older options replaying as they ran. `DeconvolveDialogTest`: the dialog,
+  older options replaying as they ran. `UnfoldSolversTest`: the exact solver
+  giving lsmr's answer, glmnet's lasso and ridge, and the regression on epochs
+  (a bin the mean of its epochs, cut by hand as `uf_epoch` cuts them, epochs
+  on an artefact or across a cut left out, the trials and terms from it, an
+  offset no obstacle there). `DeconvolveDialogTest`: the dialog,
   its defaults and its choices. `UnfoldToolboxTest`: installing and starting.
 - `LibraryReplayTest` replays the Figure 11 template (manual, chapter 17) on
   the authors' recording and holds it to the chapter's numbers.
