@@ -8,6 +8,16 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
+- **A workspace whose folders were moved keeps its grand averages and
+  reports.** Both record where they came from by full path, so after a move
+  to another disk the grand averages vanished from the tree as another
+  study's (or showed their sources as deleted), the reports vanished as
+  another workspace's, and a report's page could not be opened. A grand
+  average's sources are now read where they are in the moved cache, for
+  listing, reports, Recalculate and Clear WorkSpace alike; a report is
+  listed when its Raw folder has the same name and it names a recording of
+  this workspace; and a report opens on the page beside it.
+
 - **The manual's pictures show what a new installation shows.** Many had
   been taken with one user's own settings: the jet colour map, sorted ERP
   images reversed, trials grouped by bin and a narrower confidence band.

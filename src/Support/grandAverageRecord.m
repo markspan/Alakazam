@@ -24,14 +24,7 @@ function record = grandAverageRecord(file)
     if isfield(proxy, 'id') && ~isempty(proxy.id)
         record.name = char(string(proxy.id));
     end
-    if ~isfield(proxy, 'etc') || ~isstruct(proxy.etc) || ~isfield(proxy.etc, 'GrandAverage') ...
-            || ~isstruct(proxy.etc.GrandAverage) || ~isfield(proxy.etc.GrandAverage, 'sources')
-        return;
-    end
-    sources = proxy.etc.GrandAverage.sources;
-    if isempty(sources)
-        return;
-    end
-    record.sources = reshape(cellstr(sources), 1, []);
+    % Where they are now, should the workspace's folders have moved.
+    record.sources = grandAverageSources(proxy, file);
     record.missing = ~cellfun(@(s) exist(s, 'file') == 2, record.sources);
 end

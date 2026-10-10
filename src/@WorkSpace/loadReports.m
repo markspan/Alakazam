@@ -14,6 +14,15 @@ function loadReports(this)
 %   made it (WorkSpace.ownerRecord: its Raw directory), and is listed where
 %   that matches.
 %
+%   A WORKSPACE WHOSE FOLDERS WERE MOVED (to another disk, say) keeps its
+%   reports. The record names the Raw directory as it was, so it is also
+%   matched by what a move keeps: the Raw directory's own folder name, and
+%   the recordings, of which the report's CSVs must name one of this
+%   workspace's (as below). Both are needed: two studies whose recordings
+%   share names (Luck's chapter 2 and chapter 3 both have subject 6) are
+%   told apart by their folders. A report that names no recording is not
+%   claimed this way, since nothing then says it was made here.
+%
 %   A REPORT MADE BEFORE THAT RECORD EXISTED is judged by its own data. A
 %   report is built from one workspace's datasets, and its CSVs name them in
 %   their dataset column by the recording they come from; one row that
@@ -61,7 +70,13 @@ function tf = belongsHere(this, file, meta, recordings)
         record = meta.workspace;
     end
     if isstruct(record) && isfield(record, 'raw') && ~isempty(record.raw)
-        tf = samePath(this.fromStoredPath(record.raw), this.RawDirectory);
+        recorded = this.fromStoredPath(record.raw);
+        % Made here, or here before the workspace's folders were moved:
+        % a Raw directory of the same name, and a recording of this
+        % workspace named in the report (see the header).
+        tf = samePath(recorded, this.RawDirectory) ...
+            || (sameFolderName(recorded, this.RawDirectory) ...
+                && any(ismember(namedRecordings(file), recordings)));
         return;
     end
     named = namedRecordings(file);
@@ -155,5 +170,19 @@ function tf = samePath(a, b)
         tf = strcmpi(norm(a), norm(b));
     else
         tf = strcmp(norm(a), norm(b));
+    end
+end
+
+function tf = sameFolderName(a, b)
+%SAMEFOLDERNAME  Whether two directory paths end in the same folder name,
+%   case folded on Windows as samePath folds it.
+    leaf = @(p) regexprep(regexprep(strrep(char(p), '\', '/'), '/+$', ''), '^.*/', '');
+    nameA = leaf(a);
+    if isempty(nameA)
+        tf = false;
+    elseif ispc
+        tf = strcmpi(nameA, leaf(b));
+    else
+        tf = strcmp(nameA, leaf(b));
     end
 end

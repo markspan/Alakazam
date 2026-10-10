@@ -39,6 +39,13 @@ function loadGrandAverages(this)
 %   enough to keep a wholly unrelated study's grand averages out, which is
 %   what this is for.
 %
+%   A WORKSPACE WHOSE FOLDERS WERE MOVED keeps its grand averages. Their
+%   sources are recorded by full path, under the Cache directory they were
+%   made in, and are read where they are now (grandAverageSources): below
+%   this Cache directory, where a move or a copy of the whole cache put
+%   them. Read as recorded, every grand average made before a move to
+%   another disk failed this test and vanished.
+%
 %   The steps run on a grand average are listed under it again, from the
 %   folder named after it (see treeTraverse); only the grand averages
 %   themselves sit at the top level of the folder.
@@ -61,7 +68,7 @@ function loadGrandAverages(this)
         % its name, its recorded sources and the flags optsFor reads are
         % needed here.
         proxy = eegProxyFromCacheMeta(readEegCacheMeta(file));
-        if ~belongsHere(proxy, owned, recordingFolders)
+        if ~belongsHere(grandAverageSources(proxy, file), owned, recordingFolders)
             continue;
         end
         label = grandAverageLabel(file);
@@ -102,8 +109,9 @@ function [owned, recordingFolders] = ownedCacheFiles(this)
     end
 end
 
-function tf = belongsHere(EEG, owned, recordingFolders)
-%BELONGSHERE  Does this grand average descend from data in this workspace?
+function tf = belongsHere(sources, owned, recordingFolders)
+%BELONGSHERE  Does a grand average made from SOURCES (grandAverageSources:
+%   where they are now) descend from data in this workspace?
     tf = true;
     if owned.Count == 0
         % No data tree at all (an empty Raw directory): nothing can be
@@ -113,16 +121,8 @@ function tf = belongsHere(EEG, owned, recordingFolders)
         tf = false;
         return;
     end
-    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'GrandAverage')
+    if isempty(sources)
         return;   % no provenance recorded: shown, see the header note
-    end
-    ga = EEG.etc.GrandAverage;
-    if ~isstruct(ga) || ~isfield(ga, 'sources') || isempty(ga.sources)
-        return;   % ditto
-    end
-    sources = ga.sources;
-    if ~iscell(sources)
-        sources = {sources};
     end
     for i = 1:numel(sources)
         key = normalisePath(sources{i});

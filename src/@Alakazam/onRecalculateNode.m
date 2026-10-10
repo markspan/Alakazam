@@ -30,8 +30,10 @@ function onRecalculateNode(this)
 
     isGrandAverageNode = node.IsRoot && isfield(ownEEG, "etc") && isfield(ownEEG.etc, "GrandAverage");
     if isGrandAverageNode
+        % Its sources where they are now, should the workspace's folders
+        % have moved (grandAverageSources); recomputing records those.
         existingSpec = struct('name', ownEEG.id, ...
-            'sources', {ownEEG.etc.GrandAverage.sources}, ...
+            'sources', {grandAverageSources(ownEEG, file)}, ...
             'weighted', ownEEG.etc.GrandAverage.weighted);
 
         [candidateFiles, candidateLabels, candidateKinds] = this.findGrandAverageCandidates();

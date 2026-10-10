@@ -59,6 +59,8 @@ classdef ReportView < AlakazamView
         %   and responsive margins have less to work with, and printing and
         %   saving belong to the browser anyway.
             this.Figure = fig;
+            % Its page where it is now, should the Exports folder have moved.
+            eeg.ReportHtmlFile = reportHtmlFile(eeg);
             this.EEG    = eeg;
             fig.BackgroundColor = [1 1 1];
             this.Grid = uigridlayout(fig, [2 1], "RowHeight", {'1x', 28}, ...

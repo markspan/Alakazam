@@ -135,17 +135,10 @@ function tf = whollyOwned(gaFile, ownedFiles)
     catch
         return;   % unreadable: leave it alone
     end
-    EEG = loaded.EEG;
-    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'GrandAverage')
+    % Where its sources are now, should the workspace's folders have moved.
+    sources = grandAverageSources(loaded.EEG, gaFile);
+    if isempty(sources)
         return;
-    end
-    ga = EEG.etc.GrandAverage;
-    if ~isstruct(ga) || ~isfield(ga, 'sources') || isempty(ga.sources)
-        return;
-    end
-    sources = ga.sources;
-    if ~iscell(sources)
-        sources = {sources};
     end
     for i = 1:numel(sources)
         key = normalisePath(sources{i});

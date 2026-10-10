@@ -79,6 +79,13 @@ A cache folder can be shared by several workspaces: each recording's results
 live in a subfolder named after it, and a workspace touches only its own
 recordings' subfolders.
 
+A workspace can be moved, to another disk say: move its folders, then point
+it at them with **Edit WorkSpace**. Its results come along when the cache
+and exports folders are each moved whole. A grand average finds the datasets
+it was made from in the new cache. A report is still listed when the raw
+folder keeps its name: that, and the recordings the report names, tell it
+apart from another workspace's.
+
 ## Cleaning a workspace {#sec-clear}
 
 **Clear WorkSpace** asks for one of two levels:

@@ -22,6 +22,10 @@ function recalculateAffectedGrandAverages(this, touchedFiles)
         if ~isfield(gaEEG, "etc") || ~isfield(gaEEG.etc, "GrandAverage")
             continue;
         end
+        % Where its sources are now, should the workspace's folders have
+        % moved (grandAverageSources): the touched files are named where
+        % they are.
+        sources = grandAverageSources(gaEEG, gaFile);
         % Case-insensitive on Windows (paths there are
         % case-insensitive; ismember/strcmp are not -- same
         % reasoning as toStoredPath's own ispc branch), so a
@@ -29,16 +33,16 @@ function recalculateAffectedGrandAverages(this, touchedFiles)
         % was originally recorded and how it comes back from a
         % fresh dir() scan doesn't silently defeat the match.
         if ispc
-            matched = any(cellfun(@(s) any(strcmpi(s, touchedFiles)), gaEEG.etc.GrandAverage.sources));
+            matched = any(cellfun(@(s) any(strcmpi(s, touchedFiles)), sources));
         else
-            matched = any(cellfun(@(s) any(strcmp(s, touchedFiles)), gaEEG.etc.GrandAverage.sources));
+            matched = any(cellfun(@(s) any(strcmp(s, touchedFiles)), sources));
         end
         if ~matched
             continue; % this Grand Average does not draw on anything just recalculated
         end
 
         spec = struct('name', gaEEG.id, ...
-            'sources', {gaEEG.etc.GrandAverage.sources}, ...
+            'sources', {sources}, ...
             'weighted', gaEEG.etc.GrandAverage.weighted);
         % Same stale-tab risk saveGrandAverage's own plotCurrent
         % call has (see recalculateTransformNode's own note):

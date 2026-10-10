@@ -237,6 +237,40 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.verifyEqual(grandTree.Added{1, 4}, gone);
         end
 
+        function aMovedWorkspacesGrandAveragesAreStillListed(testCase)
+        %AMOVEDWORKSPACESGRANDAVERAGESARESTILLLISTED  A grand average records
+        %   its sources by full path, under the Cache directory it was made
+        %   in. Moved with the whole cache (to another disk, say), every one
+        %   vanished from the tree as another study's. Read where they are
+        %   now, they are this workspace's and are not called deleted; one
+        %   deleted after the move is still ours, and says so; another
+        %   study's is still left out.
+            cache = fullfile(testCase.Folder, 'moved', 'cache');
+            mkdir(fullfile(cache, 'subject1'));
+            owned = fullfile(cache, 'subject1.mat');
+            write(owned, 'a recording''s cache file');
+            average = fullfile(cache, 'subject1', 'Average01.mat');
+            write(average, 'its average');
+            old = fullfile(testCase.Folder, 'old', 'Data', 'Cache');
+            ours = fullfile(cache, 'GrandAverages', 'ours.mat');
+            testCase.grandAverageNode(ours, 'Ours', {fullfile(old, 'subject1', 'Average01.mat')});
+            testCase.grandAverageNode(fullfile(cache, 'GrandAverages', 'gone.mat'), 'Gone', ...
+                {fullfile(old, 'subject1', 'Average02.mat')});
+            testCase.grandAverageNode(fullfile(cache, 'GrandAverages', 'theirs.mat'), 'Theirs', ...
+                {fullfile(old, 'elsewhere', 'Average01.mat')});
+
+            grandTree = FakeTree();
+            app = FakeApp(struct('CacheDirectory', cache, 'Tree', FakeTree({owned, average}), ...
+                'GrandAveragesTree', grandTree, 'treeTraverse', @(varargin) []));
+            testCase.copyMethod('loadGrandAverages', 'gaCopy', '@WorkSpace');
+
+            gaCopy(app);
+
+            testCase.verifyEqual(sort(grandTree.Added(:, 1))', {'Gone (sources deleted)', 'Ours'});
+            testCase.verifyEqual(grandAverageRecord(ours).sources, {average}, ...
+                'Its sources are read where they are now.');
+        end
+
         function aStepOnAGrandAverageIsListedUnderItAgain(testCase)
         %ASTEPONAGRANDAVERAGEISLISTEDUNDERITAGAIN  A Filter run on a grand
         %   average is saved in a folder named after it, as every node's
@@ -346,6 +380,53 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             testCase.verifyEqual(sort(tree.Added(:, 1))', {'Clusters', 'Mine'});
         end
 
+        function aMovedWorkspacesReportsAreStillListed(testCase)
+        %AMOVEDWORKSPACESREPORTSARESTILLLISTED  A report records the Raw
+        %   directory it was made from as it was, so every report vanished
+        %   when the workspace's folders were moved. What a move keeps claims
+        %   it: the folder's name and a recording it names. A folder of
+        %   another name does not, though its report names the same
+        %   recording (Luck's chapters 2 and 3 both have subject 6), nor a
+        %   report that names no recording, nor one naming only others.
+            reports = fullfile(testCase.Folder, 'reports');
+            mkdir(reports);
+            testCase.reportNode(fullfile(reports, 'moved_node.mat'), 'Moved', ...
+                struct('name', '', 'raw', '~/old/disk/studyA/raw/'));
+            writeLines(fullfile(reports, 'moved_quality.csv'), {'dataset,value', 'node1,1'});
+            testCase.reportNode(fullfile(reports, 'sibling_node.mat'), 'Sibling', ...
+                struct('name', '', 'raw', '/data/studyA/other'));
+            writeLines(fullfile(reports, 'sibling_quality.csv'), {'dataset,value', 'node1,1'});
+            testCase.reportNode(fullfile(reports, 'stranger_node.mat'), 'Stranger', ...
+                struct('name', '', 'raw', '/old/disk/studyB/raw'));
+            writeLines(fullfile(reports, 'stranger_quality.csv'), {'dataset,value', 'S99,1'});
+            testCase.reportNode(fullfile(reports, 'unnamed_node.mat'), 'Unnamed', ...
+                struct('name', '', 'raw', '/old/disk/studyA/raw'));
+            writeLines(fullfile(reports, 'unnamed_stat.csv'), {'channel,time,stat', 'Cz,100,2.1'});
+
+            tree = FakeTree();
+            testCase.copyMethod('loadReports', 'reportsCopy', '@WorkSpace');
+            reportsCopy(testCase.reportsApp(tree, reports));
+
+            testCase.verifyEqual(tree.Added(:, 1), {'Moved'});
+        end
+
+        function aMovedReportOpensOnItsPageWhereItIsNow(testCase)
+        %AMOVEDREPORTOPENSONITSPAGEWHEREITISNOW  The node records its page by
+        %   full path; moved with the Exports folder, the report opened on a
+        %   page that was no longer there. The page beside the node is used.
+            reports = fullfile(testCase.Folder, 'reports');
+            mkdir(reports);
+            page = fullfile(reports, 'r1.html');
+            write(page, '<html></html>');
+            EEG = struct('ReportHtmlFile', fullfile(testCase.Folder, 'old', 'Reports', 'r1.html'), ...
+                'File', fullfile(reports, 'r1_node.mat'));
+
+            testCase.verifyEqual(reportHtmlFile(EEG), page);
+            EEG.ReportHtmlFile = fullfile(testCase.Folder, 'old', 'Reports', 'r2.html');
+            testCase.verifyEqual(reportHtmlFile(EEG), EEG.ReportHtmlFile, ...
+                'With no page beside the node, the recorded one is kept.');
+        end
+
         function aGrandAverageIsRefreshedWhenAnyOfItsSourcesWasRecalculated(testCase)
             ga = fullfile(testCase.Folder, 'ga.mat');
             testCase.grandAverageNode(ga, 'GA', {'src1.mat', 'src2.mat'});
@@ -366,6 +447,31 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             app.SavedSpec = [];
             gaRefresh(app, {'unrelated.mat'});
             testCase.verifyEmpty(app.SavedSpec, 'No source was touched, so nothing is rebuilt.');
+        end
+
+        function aMovedGrandAverageIsRefreshedFromWhereItsSourcesAreNow(testCase)
+        %AMOVEDGRANDAVERAGEISREFRESHEDFROMWHEREITSSOURCESARENOW  Its sources
+        %   are recorded under the Cache directory as it was. A recalculated
+        %   source, named where it is now, matched none of them, and the
+        %   rebuild would have read files that are no longer there.
+            cache = fullfile(testCase.Folder, 'cache');
+            mkdir(fullfile(cache, 'subject1'));
+            current = {fullfile(cache, 'subject1', 'Average01.mat'), fullfile(cache, 'subject1', 'Average02.mat')};
+            cellfun(@(f) write(f, 'an average'), current);
+            old = fullfile(testCase.Folder, 'old', 'cache', 'subject1');
+            ga = fullfile(cache, 'GrandAverages', 'ga.mat');
+            testCase.grandAverageNode(ga, 'GA', {fullfile(old, 'Average01.mat'), fullfile(old, 'Average02.mat')});
+            app = FakeApp(struct( ...
+                'Workspace', struct('GrandAveragesTree', FakeTree({ga})), ...
+                'closeTab', @(~) [], 'SavedSpec', []));
+            app.addprop('saveGrandAverage');
+            app.saveGrandAverage = @(spec, ~) setSpec(app, spec);
+            testCase.copyMethod('recalculateAffectedGrandAverages', 'gaRefresh');
+
+            gaRefresh(app, current(2));
+
+            testCase.assertNotEmpty(app.SavedSpec);
+            testCase.verifyEqual(app.SavedSpec.sources, current);
         end
 
         % --- A Shift-drop moves a branch (moveDroppedBranch) --------------- %
