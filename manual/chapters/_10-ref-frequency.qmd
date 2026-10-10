@@ -516,18 +516,28 @@ installed, FieldTrip's choice, `fminunc`, stops with an error, and FieldTrip
 returns only the grid search's starting point; Dipole Fit then refuses the
 fit and says so. Choose **fminsearch** there.
 
-A dipole is the right model only when one focal generator is a fair
-assumption, as for an early sensory response; it is not the right model for
-a component with distributed generators, such as the N400 below. The
-**residual variance**, the share of the scalp data in the window the dipoles
-do not reproduce, is the check, and the view puts it in the title. A low
-value says the model can explain the map, not that the generator is where
-the dipole is: with a template head and template electrode positions, a
-position is good to a centimetre or two. Each dipole is named by the AAL
-region at or within 10 mm of it, by FieldTrip's `ft_volumelookup`, since a
-fitted dipole often lies just beneath the cortex.
+A dipole is the right model only when one focal generator (or one in each
+hemisphere) is a fair assumption, as for an early sensory response; it is
+not the right model for a component with distributed generators, such as
+the N400. The **residual variance**, the share of the scalp data in the
+window the dipoles do not reproduce, is the check, and the view puts it in
+the title. A low value says the model can explain the map, not that the
+generator is where the dipole is: with a template head and template
+electrode positions, a position is good to a centimetre or two. Each dipole
+is named by the AAL region at or within 10 mm of it, by FieldTrip's
+`ft_volumelookup`, since a fitted dipole often lies just beneath the cortex.
 
-![A single dipole fitted to the N400 difference from 300 to 500 ms. The residual variance in the title says how much a single dipole leaves unexplained: much, as expected of a component with distributed generators.](images/dipolefit-result.jpg){#fig-dipolefit-result}
+The example is an early sensory response: the visual response to the faces
+in Ehinger and Dimigen's recording (@sec-deconvolution), in the plain
+average of the **Stimulus** bin (454 trials), around its first peak at
+102 ms, strongly positive over O1 and O2. From 82 to 122 ms a mirrored pair
+lands in the calcarine cortex of each hemisphere, at ±24, -69, 4 mm, and
+leaves 1.7% of the data unexplained. A single dipole over the same window
+leaves only 2.4%, yet sits on the midline, in the cerebellar vermis, between
+the two hemispheres' generators: the two models fit almost equally well,
+and only one of them is where the visual cortex is.
+
+![A mirrored pair fitted to the visual response to faces, 82 to 122 ms: one dipole in the calcarine cortex of each hemisphere, 1.7% of the data unexplained.](images/dipolefit-result.jpg){#fig-dipolefit-result}
 
 ## Beamformer {#sec-tr-beamformer}
 

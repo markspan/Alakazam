@@ -32,6 +32,11 @@ bar. Dates are those of the tag.
 
 ### Added
 
+- **Dipole Fit's example in the manual is an early sensory response**, as
+  its own advice asks: the visual response to the faces of Ehinger and
+  Dimigen's recording, where a mirrored pair lands in the calcarine cortex
+  with 1.7% of the data unexplained. It was the N400, a component the same
+  paragraph calls a poor fit for a dipole.
 - **Deconvolve without overlap correction.** **Overlap correction: Off** fits
   the same bins and formulas to epochs, the Unfold toolbox's own regression
   without deconvolution (`uf_epoch`, `uf_glmfit_nodc`): with `y ~ 1` a bin is
