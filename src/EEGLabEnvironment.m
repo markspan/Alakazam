@@ -158,12 +158,22 @@ classdef EEGLabEnvironment
             folder = names{find(keys == max(keys), 1, 'last')};
         end
 
-        function folder = findInstalled(targetName, probeFile)
+        function folder = findInstalled(targetName, probeFile, release)
         %FINDINSTALLED  Locate a previous installFromZip install on disk.
         %   FOLDER = FINDINSTALLED(TARGETNAME, PROBEFILE) looks for PROBEFILE
         %   under <home>/Documents/MATLAB/<targetName> (where installFromZip
         %   puts things) and returns its containing folder, or '' if not
         %   found. Does NOT check or modify the MATLAB path.
+        %
+        %   FOLDER = FINDINSTALLED(TARGETNAME, PROBEFILE, RELEASE) looks only
+        %   in <targetName>/<RELEASE>, the folder a pinned archive unzips
+        %   into (fieldtrip-20260924, EEG-Clean-Tools-0.57.0). Every pinned
+        %   toolbox passes its RELEASE, so moving a pin reaches a machine
+        %   that has the previous one: that install is not taken for the
+        %   pinned one, the pinned one is downloaded beside it (with
+        %   consent), and the older stays on disk. Without it the first
+        %   install found won, which was the oldest, and a new pin changed
+        %   nothing where an older one had been installed.
         %
         %   addpath is session-only (installFromZip deliberately never calls
         %   savepath), so a previously-downloaded plugin is not back on the
@@ -178,6 +188,9 @@ classdef EEGLabEnvironment
                 home = char(java.lang.System.getProperty('user.home'));
             end
             target = fullfile(home, 'Documents', 'MATLAB', targetName);
+            if nargin >= 3 && ~isempty(release)
+                target = fullfile(target, release);
+            end
             if ~exist(target, 'dir')
                 return;
             end
@@ -187,7 +200,7 @@ classdef EEGLabEnvironment
             end
         end
 
-        function installFromZip(url, targetName, probeFile)
+        function installFromZip(url, targetName, probeFile, release)
         %INSTALLFROMZIP  Download a zip, unzip under Documents/MATLAB, add to path.
         %   If PROBEFILE is already present on disk from a previous install
         %   (see findInstalled), reattaches that folder to the path and
@@ -199,7 +212,15 @@ classdef EEGLabEnvironment
         %   savepath. Public (not just used at startup): individual
         %   transformations, e.g. Deconvolve, call this directly to install an
         %   optional plugin on first use, after their own consent prompt.
-            existing = EEGLabEnvironment.findInstalled(targetName, probeFile);
+        %
+        %   INSTALLFROMZIP(URL, TARGETNAME, PROBEFILE, RELEASE) is the same
+        %   for a pinned archive: only <targetName>/<RELEASE> counts as
+        %   installed (see findInstalled), and the archive must unzip into
+        %   it, which catches a RELEASE that does not match the URL.
+            if nargin < 4
+                release = '';
+            end
+            existing = EEGLabEnvironment.findInstalled(targetName, probeFile, release);
             if ~isempty(existing)
                 addpath(existing);
                 return;
@@ -227,11 +248,15 @@ classdef EEGLabEnvironment
 
             % The archive usually unzips into a versioned subfolder; locate the
             % probe file within it and add that folder to the path.
-            found = dir(fullfile(target, '**', probeFile));
+            unzipped = target;
+            if ~isempty(release)
+                unzipped = fullfile(target, release);
+            end
+            found = dir(fullfile(unzipped, '**', probeFile));
             if isempty(found)
                 error('Alakazam:installMissing', ...
                     'I''m afraid %s was not found under %s after unzipping %s.', ...
-                    probeFile, target, url);
+                    probeFile, unzipped, url);
             end
             addpath(found(1).folder);
         end

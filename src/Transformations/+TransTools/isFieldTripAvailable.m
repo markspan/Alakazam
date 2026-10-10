@@ -26,7 +26,8 @@ function tf = isFieldTripAvailable()
         return;
     end
 
-    existing = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m');
+    % The pinned build only (fieldTripRelease), as ensureFieldTrip looks.
+    existing = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m', TransTools.fieldTripRelease());
     if isempty(existing)
         tf = false;
         return;

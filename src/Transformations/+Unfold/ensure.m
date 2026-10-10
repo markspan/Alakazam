@@ -22,7 +22,9 @@ function ensure(featureLabel)
 %   stable, which is an argument for using it, not for tracking its default
 %   branch: an analysis whose numbers change because of when someone happened
 %   to install is not reproducible either way. Update UnfoldUrl by hand when a
-%   refresh is actually wanted, and re-run the suite against it.
+%   refresh is actually wanted, with the folder its archive unzips into
+%   ('unfold-1.3.1', here and in isAvailable: only that install is used,
+%   see EEGLabEnvironment.findInstalled), and re-run the suite against it.
 %
 %   NOT A RELEASE ASSET, because the newest releases have none: 1.1 and 1.0
 %   carry a zip, 1.2 onwards carry nothing but the auto-generated source
@@ -57,7 +59,7 @@ function ensure(featureLabel)
     % install from a previous session is still on disk but off the path.
     % Reattach it rather than asking again for consent already given, or
     % downloading something already downloaded.
-    existing = EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m');
+    existing = EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m', 'unfold-1.3.1');
     if ~isempty(existing)
         Unfold.startToolbox(existing);
         return;
@@ -87,6 +89,6 @@ function ensure(featureLabel)
             featureLabel)));
     end
 
-    EEGLabEnvironment.installFromZip(unfoldUrl, 'unfold', 'init_unfold.m');
-    Unfold.startToolbox(EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m'));
+    EEGLabEnvironment.installFromZip(unfoldUrl, 'unfold', 'init_unfold.m', 'unfold-1.3.1');
+    Unfold.startToolbox(EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m', 'unfold-1.3.1'));
 end

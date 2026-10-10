@@ -34,7 +34,7 @@ Thirteen transformations.
 | `SourceEstimate` | FieldTrip: `ft_prepare_leadfield` and the template head, electrode and cortex files for the forward model (`TransTools.BuildSourceForwardModel`), and `ft_inverse_mne`, `ft_inverse_sloreta`, `ft_inverse_eloreta` for the spatial filter (`TransTools.InverseSolution`) |
 | `Deconvolve` | `uf_designmat`, `uf_timeexpandDesignmat`, `uf_continuousArtifactDetect`, `uf_continuousArtifactExclude`, `uf_combineWinrej`, `uf_glmfit`, `uf_condense`, `uf_predictContinuous`, `uf_addmarginal` (Unfold), through `Unfold.fitBins` and `Unfold.designMatrix` |
 | `EyeTracking` | `parseeyelink`, `pop_importeyetracker` (EYE-EEG) |
-| `PREP` | `prepPipeline` (the PREP pipeline, v0.56.0): line noise, bad channels, the robust average reference and the interpolation; `pop_chanedit` fills positions |
+| `PREP` | `prepPipeline` (the PREP pipeline, v0.57.0): line noise, bad channels, the robust average reference and the interpolation; `pop_chanedit` fills positions |
 | `ASR` | `clean_flatlines`, `clean_channels`, `clean_asr`, `clean_windows` (EEGLAB's clean_rawdata), `eeg_interp` puts the removed channels back; `pop_select`, `pop_chanedit` |
 
 `Deconvolve` has the most of its own around the toolkit: turning DefineBins'

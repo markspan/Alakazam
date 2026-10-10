@@ -148,19 +148,20 @@ classdef UnfoldToolboxTest < matlab.unittest.TestCase
         end
 
         function allThreeFunctionsAgreeOnWhereAnInstallLives(testCase)
-        %ALLTHREEFUNCTIONSAGREEONWHEREANINSTALLLIVES  The target name and the
-        %   probe file are the same two strings in three files. If the check
-        %   looked under one name and the installer wrote another, the app
-        %   would download the toolbox again on every single call and nothing
-        %   would fail loudly enough to notice.
+        %ALLTHREEFUNCTIONSAGREEONWHEREANINSTALLLIVES  The target name, the
+        %   probe file and the pinned release's folder are the same three
+        %   strings in three files. If the check looked under one name and the
+        %   installer wrote another, the app would download the toolbox again
+        %   on every single call and nothing would fail loudly enough to
+        %   notice.
             folder = fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations', '+Unfold');
             for f = {'isAvailable.m', 'ensure.m'}
                 source = fileread(fullfile(folder, f{1}));
-                testCase.verifySubstring(source, "findInstalled('unfold', 'init_unfold.m')", ...
+                testCase.verifySubstring(source, "findInstalled('unfold', 'init_unfold.m', 'unfold-1.3.1')", ...
                     sprintf('%s looks for the install somewhere else.', f{1}));
             end
             testCase.verifySubstring(fileread(fullfile(folder, 'ensure.m')), ...
-                "installFromZip(unfoldUrl, 'unfold', 'init_unfold.m')", ...
+                "installFromZip(unfoldUrl, 'unfold', 'init_unfold.m', 'unfold-1.3.1')", ...
                 'The installer writes where the others look.');
         end
     end

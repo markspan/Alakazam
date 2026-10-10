@@ -6,6 +6,21 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Changed
+
+- **FieldTrip is pinned to 20260924 and the PREP pipeline to v0.57.0**, from
+  20260812 and v0.56.0. Nothing Alakazam calls changed its results between
+  them: FieldTrip's changes touch FOOOF, MEG coils and when a warning
+  appears, PREP's its EEGLAB dialog and its own report. PREP v0.57.0 still
+  reports itself as 0.56.0 (its version number was raised after the tag);
+  that is kept and documented.
+- **A new pin now reaches a machine that has the previous one.** Each
+  pinned toolbox (FieldTrip, PREP, Unfold, EYE-EEG) is looked for in the
+  folder its pinned archive unzips into, so the new build is downloaded,
+  with consent, beside the old one, which stays on disk. Before, the first
+  install found was used, which was the oldest. A FieldTrip already on the
+  MATLAB path is still used as it is.
+
 ### Fixed
 
 - **A workspace whose folders were moved keeps its grand averages and

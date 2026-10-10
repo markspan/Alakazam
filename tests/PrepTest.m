@@ -51,6 +51,8 @@ classdef PrepTest < matlab.unittest.TestCase
         %   consent dialog names, and the manual's toolbox table agree.
             spec = prepToolbox();
             testCase.verifySubstring(spec.Url, ['v' spec.Version '.zip']);
+            testCase.verifyEqual(spec.Release, ['EEG-Clean-Tools-' spec.Version], ...
+                'The folder looked for is the one this archive unzips into.');
             root = fileparts(fileparts(mfilename('fullpath')));
             manual = fileread(fullfile(root, 'manual', 'chapters', '_02-installation.qmd'));
             testCase.verifySubstring(manual, spec.Version, ...

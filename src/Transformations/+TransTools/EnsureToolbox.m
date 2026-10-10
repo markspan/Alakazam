@@ -13,7 +13,10 @@ function EnsureToolbox(spec)
 %     .ProbeFile   the file that function lives in ('prepPipeline.m')
 %     .Folder      its install folder under Documents/MATLAB ('PrepPipeline')
 %     .Url         the pinned archive
-%     .Version     the pinned version, for the dialog ('0.56.0')
+%     .Version     the pinned version, for the dialog ('0.57.0')
+%     .Release     the folder that archive unzips into under .Folder
+%                  ('EEG-Clean-Tools-0.57.0'): only it counts as installed,
+%                  so an older pin's install is not used (findInstalled)
 %     .About       one sentence: who made it, under what licence, what for
 %     .Subfolders  true when its subfolders must be on the path too
 %
@@ -51,7 +54,7 @@ function EnsureToolbox(spec)
             spec.Feature, spec.Name, spec.Url, spec.Feature)));
     end
 
-    EEGLabEnvironment.installFromZip(spec.Url, spec.Folder, spec.ProbeFile);
+    EEGLabEnvironment.installFromZip(spec.Url, spec.Folder, spec.ProbeFile, spec.Release);
     if ~TransTools.ToolboxAvailable(spec)   % attaches the subfolders when it needs them
         throw(MException('Alakazam:ToolboxMissing', ['I downloaded %s, but cannot find %s ' ...
             'in it afterwards, so I am not confident the install worked. Would you look in ' ...

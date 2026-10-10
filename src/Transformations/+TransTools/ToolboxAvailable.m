@@ -23,7 +23,8 @@ function tf = ToolboxAvailable(spec)
     if ~isempty(onPath)
         folder = fileparts(onPath);
     else
-        folder = EEGLabEnvironment.findInstalled(spec.Folder, spec.ProbeFile);
+        % The pinned release only: an older one installed beside it is not used.
+        folder = EEGLabEnvironment.findInstalled(spec.Folder, spec.ProbeFile, spec.Release);
     end
     if isempty(folder)
         return;

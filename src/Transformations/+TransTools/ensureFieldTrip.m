@@ -30,7 +30,7 @@ function ensureFieldTrip(featureLabel)
 %   fixed, once-verified version keeps source-modeling results
 %   reproducible across a project's lifetime rather than silently
 %   shifting under a user whenever a new FieldTrip snapshot appears.
-%   Update FieldTripUrl by hand when a refresh is actually wanted.
+%   Move the pin (fieldTripRelease) by hand when a refresh is actually wanted.
     if nargin < 1 || isempty(featureLabel)
         featureLabel = 'Source-estimate mode';
     end
@@ -43,22 +43,33 @@ function ensureFieldTrip(featureLabel)
     % previous install is not back on the path in a fresh MATLAB session
     % even though it is still on disk -- reattach it quietly here instead
     % of re-asking for consent (already given) and re-downloading
-    % (unnecessary) every single time this is needed.
-    existing = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m');
+    % (unnecessary) every single time this is needed. Only the pinned
+    % build counts (fieldTripRelease): an older one is not used.
+    release = TransTools.fieldTripRelease();
+    existing = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m', release);
     if ~isempty(existing)
         addpath(existing);
         ft_defaults;
         return;
     end
 
-    fieldTripUrl = 'https://download.fieldtriptoolbox.org/fieldtrip-20260812.zip';
+    fieldTripUrl = ['https://download.fieldtriptoolbox.org/' release '.zip'];
+
+    % An older build installed beside it is not used; say so, so the
+    % question does not read as though FieldTrip were missing altogether.
+    older = '';
+    previous = EEGLabEnvironment.findInstalled('fieldtrip', 'ft_defaults.m');
+    if ~isempty(previous)
+        older = [newline, newline, 'The FieldTrip installed in ', previous, ...
+            ' is not the build Alakazam uses now; it stays where it is.'];
+    end
 
     % LEGACY-JAVA-GUI: questdlg, matching AutoGEDAI's ensureLatestGEDAI:
     % the same "optional heavy download, consent-gated" pattern, not
     % (yet) migrated to a uiconfirm anywhere in this codebase.
     answer = questdlg([ ...
-        featureLabel ' needs the FieldTrip toolbox, which was not found ', ...
-        'on the MATLAB path.', newline, newline, ...
+        featureLabel ' needs FieldTrip ', strrep(release, 'fieldtrip-', ''), ...
+        ', which was not found on the MATLAB path.', older, newline, newline, ...
         'FieldTrip is free, open-source (GPLv2/v3) research software from the ', ...
         'Donders Institute. This downloads the full release (about 400 MB, ', ...
         'including its template head/source models) into your Documents/MATLAB ', ...
@@ -76,6 +87,6 @@ function ensureFieldTrip(featureLabel)
              'try again and accept the download prompt.'], featureLabel)));
     end
 
-    EEGLabEnvironment.installFromZip(fieldTripUrl, 'fieldtrip', 'ft_defaults.m');
+    EEGLabEnvironment.installFromZip(fieldTripUrl, 'fieldtrip', 'ft_defaults.m', release);
     ft_defaults;
 end

@@ -10,7 +10,7 @@ function tf = isAvailable()
     if tf
         return;
     end
-    existing = EEGLabEnvironment.findInstalled('eye-eeg', 'pop_importeyetracker.m');
+    existing = EEGLabEnvironment.findInstalled('eye-eeg', 'pop_importeyetracker.m', 'eye-eeg-1.01');
     if isempty(existing)
         return;
     end

@@ -32,7 +32,7 @@ function tf = isAvailable()
         return;
     end
 
-    existing = EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m');
+    existing = EEGLabEnvironment.findInstalled('unfold', 'init_unfold.m', 'unfold-1.3.1');
     if isempty(existing)
         tf = false;
         return;

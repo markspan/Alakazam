@@ -40,7 +40,7 @@ function [EEG, options] = PREP(input, varargin)
 %   doing with care: its filters then run across the discontinuities.
 %
 %   PREP is not bundled. It is downloaded on first use, after consent,
-%   pinned to version 0.56.0 (see prepToolbox).
+%   pinned to version 0.57.0 (see prepToolbox).
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = PREP(input)        % interactive dialog
@@ -199,7 +199,7 @@ function name = datasetName(EEG)
 end
 
 function v = prepVersion()
-%PREPVERSION  PREP's own version string ('PrepPipeline0.56.0'), for the
+%PREPVERSION  PREP's own version string ('PrepPipeline0.57.0'), for the
 %   methods section; 'unknown' from a copy too old to say.
     try
         v = getPrepVersion();

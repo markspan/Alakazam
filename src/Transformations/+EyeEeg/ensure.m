@@ -15,7 +15,9 @@ function ensure(featureLabel)
 %   when someone happened to install is not reproducible. v1.01 in particular
 %   carries the fix for EEGLAB 2025.1 and later, whose event handling broke
 %   eye-movement detection in 1.0. Update EyeEegUrl by hand when a refresh is
-%   actually wanted, and re-run the suite against it.
+%   actually wanted, with the folder its archive unzips into ('eye-eeg-1.01',
+%   here and in isAvailable: only that install is used, see
+%   EEGLabEnvironment.findInstalled), and re-run the suite against it.
 %
 %   See also EYEEEG.ISAVAILABLE, EYEEEG.ATTACH, UNFOLD.ENSURE.
     if nargin < 1 || isempty(featureLabel)
@@ -50,6 +52,6 @@ function ensure(featureLabel)
             featureLabel)));
     end
 
-    EEGLabEnvironment.installFromZip(eyeEegUrl, 'eye-eeg', 'pop_importeyetracker.m');
-    EyeEeg.attach(EEGLabEnvironment.findInstalled('eye-eeg', 'pop_importeyetracker.m'));
+    EEGLabEnvironment.installFromZip(eyeEegUrl, 'eye-eeg', 'pop_importeyetracker.m', 'eye-eeg-1.01');
+    EyeEeg.attach(EEGLabEnvironment.findInstalled('eye-eeg', 'pop_importeyetracker.m', 'eye-eeg-1.01'));
 end
