@@ -142,7 +142,7 @@ will usually apply a **Baseline** correction and some artefact handling,
 either threshold-based rejection with **ArtefactDetect** or one of the
 correction methods in **2. Artifact Rejection / Reduction**.
 
-![The epochs DefineBins cut from the filtered N400 recording, as an ERP image at CPz: one row per trial, grouped by bin, with the average of all trials below.](images/definebins-result.jpg){#fig-first-epochs}
+![The epochs DefineBins cut from the filtered N400 recording, as an ERP image at CPz: one row per trial in recording order, with the average of all trials below.](images/definebins-result.jpg){#fig-first-epochs}
 
 The order of these steps matters, and in places it is a contested question
 rather than a matter of taste. The principle that settles most of it is

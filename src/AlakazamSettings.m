@@ -81,6 +81,16 @@ classdef AlakazamSettings < handle
             AlakazamSettings.instance().refresh();
         end
 
+        function useDefaults()
+        %USEDEFAULTS  Every setting at its default for this MATLAB session,
+        %   the bands included, while the stored file stays as it is
+        %   (nothing is written until save is called; reload reads it back).
+        %   What the manual's pictures are taken with (captureManualImages),
+        %   so they show what a new installation shows, whoever takes them.
+            obj = AlakazamSettings.instance();
+            obj.Values = AlakazamSettings.buildValues(struct());
+        end
+
         function bands = getBands()
         %GETBANDS  The frequency-band list (label/loFreq/hiFreq/color struct
         %   array) FourierView shades its power spectrum with.

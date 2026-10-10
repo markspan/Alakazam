@@ -5,6 +5,12 @@ function captureManualImages(varargin)
 %   or result view, and writes the pictures to manual/images. What each
 %   picture shows, and on which data, is listed in manualShots.
 %
+%   THE PICTURES SHOW THE DEFAULT SETTINGS, the colour map among them, not
+%   those of whoever runs this (AlakazamSettings.useDefaults, for this
+%   session only; the stored settings are read back at the end). The
+%   manual's pictures once showed one user's jet colour map where a new
+%   installation shows the diverging one.
+%
 %   NOTHING REAL IS TOUCHED. Each dataset's raw file is copied into a scratch
 %   workspace of its own (under tempdir, or 'Scratch'), with its own cache,
 %   so no workspace or cache of the user's changes. Results are computed
@@ -39,6 +45,11 @@ function captureManualImages(varargin)
     parsed.addParameter('Scratch', '', @(v) ischar(v) || isstring(v));
     parsed.parse(varargin{:});
     opts = parsed.Results;
+
+    % The pictures show the app's default settings (the colour map above
+    % all), whoever takes them; the user's own are read back afterwards.
+    AlakazamSettings.useDefaults();
+    restoreSettings = onCleanup(@() AlakazamSettings.reload());
 
     repo = fileparts(fileparts(fileparts(fileparts(mfilename('fullpath')))));
     out = char(opts.Output);
@@ -262,10 +273,18 @@ end
 
 function selectNode(ctx, s)
 %SELECTNODE  Click the node a picture needs, by name, in the tree it names.
+%   A name ending in * is a prefix, and the last node it matches is taken:
+%   the newest report, whose label ends in the date it was made.
     if isempty(s.select); return; end
     tree = ctx.app.Workspace.(s.tree);
     nodes = tree.allNodes();
-    hit = find(strcmp({nodes.Name}, s.select), 1);
+    names = {};
+    if ~isempty(nodes); names = {nodes.Name}; end
+    if endsWith(s.select, '*')
+        hit = find(startsWith(names, s.select(1:end - 1)), 1, 'last');
+    else
+        hit = find(strcmp(names, s.select), 1);
+    end
     if isempty(hit)
         error('captureManualImages:node', 'No node "%s" in %s.', s.select, s.tree);
     end

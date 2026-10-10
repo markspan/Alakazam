@@ -36,7 +36,8 @@ application by `captureManualImages`, from the list in `manualShots`: which
 dataset, which transformation or view, and which settings each picture
 shows. Nothing real is touched: each dataset is copied into a scratch
 workspace of its own, and dialogs are caught by a timer, exported and
-cancelled.
+cancelled. The pictures show the default settings, not those of whoever
+takes them (`AlakazamSettings.useDefaults`, for that MATLAB session only).
 
 Run it from the repository root, with the datasets in `DATA.md` in place:
 

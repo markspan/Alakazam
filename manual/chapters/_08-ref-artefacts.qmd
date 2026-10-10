@@ -99,7 +99,7 @@ such as a blink, is present on the neighbours too, so interpolating the
 worst channel copies the artefact rather than removing it: interpolation
 suits a single bad electrode, not a blink.
 
-![The epochs of the ERP CORE N400 recording at FP1 after ArtefactDetect, grouped by bin in recording order. Rejected trials are blank rows.](images/artefactdetect-result.jpg){#fig-artefactdetect-result}
+![The epochs of the ERP CORE N400 recording at FP1 after ArtefactDetect, in recording order. Rejected trials are blank rows.](images/artefactdetect-result.jpg){#fig-artefactdetect-result}
 
 ### Which detector cost which trials
 
@@ -184,7 +184,7 @@ data-quality report shows the share of the data that was rebuilt; its
 provenance section lists, per subject, the epochs rejected, the channel-epochs
 interpolated and the range of the learnt thresholds.
 
-![The epochs of the ERP CORE N400 recording at FP1 after AutoReject, grouped by bin in recording order. Rejected epochs are blank rows; in the others, the channels found bad were interpolated.](images/autoreject-result.jpg){#fig-autoreject-result}
+![The epochs of the ERP CORE N400 recording at FP1 after AutoReject, in recording order. Rejected epochs are blank rows; in the others, the channels found bad were interpolated.](images/autoreject-result.jpg){#fig-autoreject-result}
 
 The folds are autoreject's own, contiguous and not shuffled, so the result is
 deterministic and a replay reproduces it. Two details differ from the Python

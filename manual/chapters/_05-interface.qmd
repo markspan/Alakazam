@@ -204,7 +204,7 @@ time: overlaying another replaces it.
 
 ### Epoched data: the ERP image
 
-![The ERP image of an epoched dataset at one channel: one row per trial, colour for amplitude, grouped by bin, and the trial average below.](images/definebins-result.jpg){#fig-erp-image}
+![The ERP image of an epoched dataset at one channel: one row per trial in recording order, colour for amplitude, and the trial average below.](images/definebins-result.jpg){#fig-erp-image}
 
 Epoched data is drawn as an ERP image [@jung2001]: one row per trial, time
 across, colour for amplitude, with the average of the shown trials below.

@@ -4,6 +4,20 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Fixed
+
+- **The manual's pictures show what a new installation shows.** Many had
+  been taken with one user's own settings: the jet colour map, sorted ERP
+  images reversed, trials grouped by bin and a narrower confidence band.
+  Those pictures now show the default diverging map and settings the manual
+  describes, and the captions of the four ERP images now say recording
+  order. The capture tool (`captureManualImages`) now always takes them
+  with the default settings and leaves the user's own untouched. Coherence
+  Topography's result showed one of its three maps, and the ERSP was still
+  cut from -200 to 800 ms where its caption describes -1000 to 1500 ms.
+
 ## V0.4.5.1 (2026-10-10)
 
 ### Changed

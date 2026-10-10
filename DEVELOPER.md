@@ -563,7 +563,15 @@ dataset that opens an existing workspace (the Grand Average and report
 pictures) may only select nodes and open cancellable dialogs: **Data Quality
 Report** has no dialog and writes a report the moment it is pressed, and the
 exports open a system file picker a timer cannot reach, so neither is on the
-list. The datasets are those in `DATA.md`.
+list. That workspace is `Chapter3.wksp`: its grand average **All subjects**
+and its newest data-quality report are the nodes shown, so a picture fails
+when the workspace no longer lists them. The datasets are those in `DATA.md`.
+
+The pictures show the default settings, whoever takes them: the capture sets
+every setting to its default for its own MATLAB session
+(`AlakazamSettings.useDefaults`), writes nothing, and reads the stored
+settings back at the end. A picture taken with one user's colour map or sort
+order once contradicted the manual's own text.
 
 ### Style
 
