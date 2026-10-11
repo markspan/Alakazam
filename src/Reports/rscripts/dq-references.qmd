@@ -13,7 +13,18 @@ ica_methods <- if ("method" %in% names(prov)) {
 } else {
   character()
 }
-refs <- "Luck, S. J., Stewart, A. X., Simmons, A. M., & Kappenman, E. S. (2021). Standardized measurement error: A universal metric of data quality for averaged event-related potentials. *Psychophysiology*, *58*(6), e13793. https://doi.org/10.1111/psyp.13793"
+refs <- "Luck, S. J., Stewart, A. X., Simmons, A. M., & Rhemtulla, M. (2021). Standardized measurement error: A universal metric of data quality for averaged event-related potentials. *Psychophysiology*, *58*(6), e13793. https://doi.org/10.1111/psyp.13793"
+# Blinks by condition, when the report has that section.
+if (exists("blk")) {
+  refs <- c(refs, "Zhang, G., Garrett, D. R., Simmons, A. M., Kiat, J. E., & Luck, S. J. (2024). Evaluating the effectiveness of artifact correction and rejection in event-related potential research. *Psychophysiology*, *61*(5), e14511. https://doi.org/10.1111/psyp.14511")
+}
+# Dependability, and what it is not for, when the per-trial measurements
+# that section needs were read.
+if (exists("meas") && !is.null(meas)) {
+  refs <- c(refs,
+    "Clayson, P. E., & Miller, G. A. (2017). ERP Reliability Analysis (ERA) Toolbox: An open-source toolbox for analyzing the reliability of event-related brain potentials. *International Journal of Psychophysiology*, *111*, 68–79. https://doi.org/10.1016/j.ijpsycho.2016.10.012",
+    "Hedge, C., Powell, G., & Sumner, P. (2018). The reliability paradox: Why robust cognitive tasks do not produce reliable individual differences. *Behavior Research Methods*, *50*(3), 1166–1186. https://doi.org/10.3758/s13428-017-0935-1")
+}
 if ("EyeTracking" %in% steps) {
   refs <- c(refs, "Dimigen, O., Sommer, W., Hohlfeld, A., Jacobs, A. M., & Kliegl, R. (2011). Coregistration of eye movements and EEG in natural reading: Analyses and review. *Journal of Experimental Psychology: General*, *140*(4), 552\u2013572. https://doi.org/10.1037/a0023885")
 }

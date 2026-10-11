@@ -322,7 +322,10 @@ classdef Plugins
                 throw(MException('Alakazam:Plugins:noSource', ...
                     'I am afraid no zip file or link was given.'));
             end
-            if isfile(source)
+            % A link first: isfile answers true for an https address it can
+            % reach, and the page there would then be read as the zip.
+            isLink = startsWith(source, {'http://', 'https://'}, 'IgnoreCase', true);
+            if ~isLink && isfile(source)
                 spec.Kind = 'file';
                 return;
             end

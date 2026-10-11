@@ -373,6 +373,23 @@ classdef DataQualityTest < matlab.unittest.TestCase
             testCase.verifySubstring(qmd, 'title: "Alakazam Data Quality Report"');
         end
 
+        function theBlinkSectionComesWithItsFiles(testCase)
+        %THEBLINKSECTIONCOMESWITHITSFILES  Blinks by condition reads two CSVs
+        %   an older export does not have, so it is written only when they are
+        %   named, and then reads them.
+            entries = testCase.twoSubjectEntries();
+            without = generateDataQualityReport(entries, 'q.csv', 't.csv');
+            testCase.verifyEmpty(strfind(without, 'Blinks by Condition')); %#ok<STRIFCND>
+            testCase.verifyEmpty(strfind(without, 'blk <-')); %#ok<STRIFCND>
+            testCase.verifyEmpty(strfind(without, 'with a blink **per bin**')); %#ok<STRIFCND>
+
+            with = generateDataQualityReport(entries, 'q.csv', 't.csv', '', '', '', {'b.csv', 'v.csv'});
+            testCase.verifySubstring(with, '## Blinks by Condition');
+            testCase.verifySubstring(with, '| % trials with a blink **per bin** |');
+            testCase.verifySubstring(with, 'read_csv("b.csv"');
+            testCase.verifySubstring(with, 'read_csv("v.csv"');
+        end
+
         function symbolsAndPipeEscapesSurviveIntoTheReport(testCase)
         %SYMBOLSANDPIPEESCAPESSURVIVEINTOTHEREPORT  Two things were easy to
         %   get wrong here and both were, until a real render showed it.

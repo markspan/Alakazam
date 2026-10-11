@@ -586,6 +586,16 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
 
             out = testCase.referencesFor(chunk, 'data.frame(step = character())');
             testCase.verifyListed(out, {'Luck, S. J.'});
+            testCase.verifySubstring(out, 'Simmons, A. M., & Rhemtulla, M. (2021)', ...
+                'The SME paper''s fourth author is Rhemtulla.');
+
+            % Dependability, and what it is not for, when its per-trial
+            % measurements were read; blinks by condition when that section is in.
+            out = testCase.referencesFor(chunk, 'data.frame(step = character())', ...
+                ['meas <- data.frame(value = 1)' newline 'blk <- data.frame()']);
+            testCase.verifyListed(out, {'Luck, S. J.', 'Clayson, P. E.', 'Hedge, C.', 'Zhang, G.'});
+            out = testCase.referencesFor(chunk, 'data.frame(step = character())', 'meas <- NULL');
+            testCase.verifyListed(out, {'Luck, S. J.'});
         end
     end
 
@@ -593,9 +603,9 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
         function verifyListed(testCase, out, expected)
         %VERIFYLISTED  OUT lists exactly the works in EXPECTED, by the start
         %   of each: every one there, and no other the chunk knows.
-            every = {'Bell, A. J.', 'Bigdely-Shamlo, N.', 'Chang, C.-Y.', 'Dimigen, O.', ...
-                'Oja, E. (2000)', 'Jas, M.', 'Luck, S. J.', 'Mullen, T. R.', ...
-                'Pion-Tonachini, L.', 'Ros, T.'};
+            every = {'Bell, A. J.', 'Bigdely-Shamlo, N.', 'Chang, C.-Y.', 'Clayson, P. E.', ...
+                'Dimigen, O.', 'Hedge, C.', 'Oja, E. (2000)', 'Jas, M.', 'Luck, S. J.', ...
+                'Mullen, T. R.', 'Pion-Tonachini, L.', 'Ros, T.', 'Zhang, G.'};
             for k = 1:numel(every)
                 testCase.verifyEqual(contains(out, every{k}), ismember(every{k}, expected), ...
                     sprintf('%s: listed should be %d, in: %s', every{k}, ...
@@ -603,10 +613,14 @@ classdef DataQualityProvenanceTest < matlab.unittest.TestCase
             end
         end
 
-        function out = referencesFor(testCase, chunk, provFrame)
+        function out = referencesFor(testCase, chunk, provFrame, extra)
         %REFERENCESFOR  What the references chunk prints for the provenance
-        %   table PROVFRAME (R code for a data frame).
-            [status, out] = ReportFixtures.runRscript(['prov <- ' provFrame newline chunk]);
+        %   table PROVFRAME (R code for a data frame), after the R code EXTRA,
+        %   when given, has set what else the chunk reads.
+            if nargin < 4
+                extra = '';
+            end
+            [status, out] = ReportFixtures.runRscript(['prov <- ' provFrame newline extra newline chunk]);
             testCase.assertEqual(status, 0, sprintf('The references chunk failed in R:\n%s', out));
         end
     end

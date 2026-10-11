@@ -79,7 +79,7 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 %   Alakazam.collectDataQualityEntries, which reads it off the tree), or []
 %   when it does not.
 %
-%   Returns a struct of five long-format tables, one row per unit of
+%   Returns a struct of seven long-format tables, one row per unit of
 %   analysis, ready for exportDataQualityCSVs:
 %     q.subject         scalar struct: n_trials/n_rejected/pct_rejected/...
 %     q.byBinChannel    struct array, one row per (bin, channel)
@@ -91,6 +91,11 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
 %                       Which detector cost which trials, and what the
 %                       correction steps removed. Empty when no step in the
 %                       chain recorded anything. See provenanceRows.
+%     q.blinks          struct array, one row per bin: how many of its
+%                       averaged trials hold a blink in the vertical EOG;
+%     q.veog            struct array, one row per bin x sample: the bin's
+%                       average vertical EOG. Both empty when there is no
+%                       vertical EOG. See blinkRows.
 %
 %   See also ERPSCORESME, EXPORTDATAQUALITYCSVS, GENERATEDATAQUALITYREPORT,
 %   AVERAGE, MEASURE.
@@ -241,6 +246,108 @@ function q = dataQualityMetrics(epoched, averaged, windows, rejectionRan)
                 'baseline_z', baselineZ(t), ...
                 'rejected', double(trialRejected(t)), ...
                 'baseline_outlier', double(isOutlier(t)));
+        end
+    end
+
+    [q.blinks, q.veog] = blinkRows(epoched, bins, labels);
+end
+
+% ======================================================================= %
+function [blinks, veog] = blinkRows(EEG, bins, labels)
+%BLINKROWS  Blinks by condition, the confound Zhang et al. (2024) check
+%   first: in each bin, how many of the trials that were averaged hold a
+%   blink, and the bin's average vertical EOG, whose shape shows when the
+%   blinks fall. A blink rate, or a blink timing, that differs between
+%   conditions puts a difference into the ERP that is not the brain's.
+%
+%   The vertical EOG is the bipolar one (verticalEog). A blink is a step
+%   in it of more than 100 uV, by ArtefactDetect's step function with its
+%   own defaults (a 200 ms window, moved 50 ms at a time), over the whole
+%   epoch. A trial whose vertical EOG holds no samples is left out: a
+%   rejected trial, which is NaN on every channel and which Average leaves
+%   out, or one whose EOG was rejected on its own. N_ASSESSED says how many
+%   remain.
+%
+%   THE EOG HERE IS UNCORRECTED. AutoICA and ICA decompose and correct the
+%   scalp channels only and put the EOG channels back as they were, so the
+%   EOG of the averaged trials still holds every blink: it says where blinks
+%   were, not how much of them the correction left in the scalp channels,
+%   which Zhang et al. measure with an EOG channel corrected along with the
+%   rest.
+%
+%   BLINKS has one row per bin: .bin, .source (the channel, or the pair
+%   subtracted), .n_trials, .n_assessed, .n_blinks, .pct_blinks. VEOG has
+%   one row per bin and sample: .bin, .time_ms, .veog_uv. Both are empty
+%   when the dataset has no vertical EOG this recognises.
+    blinks = struct('bin', {}, 'source', {}, 'n_trials', {}, 'n_assessed', {}, ...
+        'n_blinks', {}, 'pct_blinks', {});
+    veog = struct('bin', {}, 'time_ms', {}, 'veog_uv', {});
+    [signal, source] = verticalEog(EEG.data, labels);
+    if isempty(source)
+        return;
+    end
+    srate = double(EEG.srate);
+    winN = max(2, round(200 / 1000 * srate));
+    stepN = max(1, round(50 / 1000 * srate));
+    nTrials = size(signal, 3);
+    assessed = false(1, nTrials);
+    blink = false(1, nTrials);
+    for t = 1:nTrials
+        s = signal(1, :, t);
+        if ~any(isfinite(s))
+            continue;
+        end
+        assessed(t) = true;
+        blink(t) = TransTools.LargestWindowValue(TransTools.MovingWindows(s, winN, stepN), 'step') > 100;
+    end
+    nSamp = size(signal, 2);
+    if isfield(EEG, 'times') && numel(EEG.times) == nSamp
+        times = double(EEG.times(:)).';
+    else
+        times = (0:nSamp - 1) / srate * 1000;
+    end
+    for b = 1:numel(bins)
+        member = bins(b).trials;
+        used = member(assessed(member));
+        blinks(end + 1) = struct('bin', bins(b).label, 'source', source, ... %#ok<AGROW>
+            'n_trials', numel(member), 'n_assessed', numel(used), ...
+            'n_blinks', sum(blink(used)), 'pct_blinks', pct(sum(blink(used)), numel(used)));
+        if isempty(used)
+            continue;
+        end
+        wave = mean(signal(1, :, used), 3, 'omitnan');
+        veog = [veog, struct('bin', repmat({bins(b).label}, 1, nSamp), ...
+            'time_ms', num2cell(times), 'veog_uv', num2cell(wave))]; %#ok<AGROW>
+    end
+end
+
+function [signal, source] = verticalEog(data, labels)
+%VERTICALEOG  The bipolar vertical EOG, above the eye minus below it, and a
+%   description of where it came from; '' when there is none.
+%
+%   A channel already named VEOG or VEOG-bipolar is taken as it is: Luck's
+%   preprocessed recordings carry one (its sign is whatever that recording
+%   chose, which the step function ignores). Otherwise a channel below an
+%   eye is subtracted from the frontal-pole channel above it: VEOG-lower
+%   (ERP CORE's, under the right eye) from FP2, IO1 from FP1, IO2 from FP2.
+%   Labels are compared without case, spaces, hyphens or underscores.
+    signal = [];
+    source = '';
+    norm = lower(regexprep(labels, '[\s_\-]', ''));
+    k = find(ismember(norm, {'veogbipolar', 'veog'}), 1);
+    if ~isempty(k)
+        signal = data(k, :, :);
+        source = labels{k};
+        return;
+    end
+    pairs = {'veoglower', 'fp2'; 'io1', 'fp1'; 'io2', 'fp2'};
+    for p = 1:size(pairs, 1)
+        below = find(strcmp(norm, pairs{p, 1}), 1);
+        above = find(strcmp(norm, pairs{p, 2}), 1);
+        if ~isempty(below) && ~isempty(above)
+            signal = data(above, :, :) - data(below, :, :);
+            source = sprintf('%s - %s', labels{above}, labels{below});
+            return;
         end
     end
 end

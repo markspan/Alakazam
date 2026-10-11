@@ -349,6 +349,26 @@ basis for a choice. Peak measures are more sensitive to high-frequency noise
 than mean amplitudes, and so benefit more from a low-pass. A notch filter is
 rarely needed after a 30 Hz low-pass.
 
+| Component | High-pass, amplitude | High-pass, latency | Low-pass, mean amplitude | Low-pass, peak amplitude | Low-pass, peak latency | Low-pass, 50% area latency |
+|---|---|---|---|---|---|---|
+| N170 | 0.9 | ≤ 0.9 | ≥ 30 or none | ≥ 30 or none (30^a^) | 10 to 20 | 10 to 20 |
+| MMN | 0.5 | ≤ 0.5 | ≥ 20 or none | ≥ 20 or none (30^a^) | 10 (5^b^) | ≥ 20 or none |
+| N2pc | 0.5 | 0.01 or none | ≥ 20 or none | 20 to 40 (20^a^) | 10 | 5 (10^c^) |
+| P3 | 0.2 | 0.2 | ≥ 10 or none | ≥ 10 or none (10^a^) | 10 (5^a^) | 10 (5^a^) |
+| N400 | 0.2 | 0.2 | ≥ 10 or none | ≥ 10 or none (10^a^) | 10 (5^a^) | 10 (5^a^) |
+| LRP | 0.3 | 0.3 | ≥ 30 or none | 30 (20^a^) | 5 (10^c^) | 5 (10^c^) |
+| ERN | 0.4 | 0.4 | ≥ 20 or none | ≥ 20 or none | 10 | 10 |
+
+: The filters @zhang2024b recommend for neurotypical young adults, in Hz, for each component and scoring method: the high-pass for the two amplitude measures and for the two latency measures, and the low-pass for each measure. In brackets, the setting for data with moderate high-frequency noise (^a^), for data with moderate broadband noise where distorted onset and offset times can be tolerated (^b^), and to avoid distorting onset and offset times (^c^). {#tbl-filter-recommendations}
+
+These settings were found for one filter: ERPLAB's Butterworth IIR with a
+roll-off of 12 dB per octave, applied forwards and backwards, whose cutoff is
+the frequency at which the amplitude is halved. Alakazam's windowed-sinc FIR
+also halves the amplitude at its cutoff, but its roll-off is far steeper
+(@tbl-filter-design), and the distortion a filter causes depends on its slope
+as well as on its cutoff, so the recommended values are only known to hold
+for the filter they were found with.
+
 Every filter also spreads a brief event over the length of its impulse
 response, and its ringing can pass for an oscillation. A methods section
 should therefore describe each filter in enough detail to reproduce it,

@@ -596,7 +596,7 @@ microvolts and depends on the component, montage, reference, filter, measurement
 window and trial count, so a number that is fine for a large slow component (P3b)
 would be poor for a small fast one (N170). It is meant for *relative* comparison,
 not a fixed pass/fail cutoff. Published **benchmarks** do exist to compare against:
-the SME metric was introduced by Luck, Stewart, Simmons & Kappenman (2021), and the
+the SME metric was introduced by Luck, Stewart, Simmons & Rhemtulla (2021), and the
 ERP CORE paper (Kappenman et al., 2021) reports per-component data-quality figures
 for exactly these datasets, the natural reference for this walkthrough. Use them
 that way, against a published value for the same component and measurement, or

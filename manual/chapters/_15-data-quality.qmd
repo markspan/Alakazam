@@ -24,6 +24,7 @@ the argument is theirs [@mathot2023].
 |-------------------------|-------------------------------------------------------|
 | % trials rejected | How much of the recording survived rejection. |
 | % trials rejected **per bin** | Whether the loss is even: the one metric that can invalidate a result rather than weaken it. |
+| % trials with a blink **per bin** | Whether blinks, a likely confound, differ between the conditions in the trials that were averaged [@zhang2024c]. |
 | % trials truncated | Epochs that ran off the start or end of the recording. |
 | % channel-epochs flagged | Loss confined to single channels, usually one bad electrode; given per channel and subject, which is what a decision to interpolate or exclude a channel rests on. |
 | Prestimulus SD | Per-trial noise. (The prestimulus *mean* is zero by construction after Baseline, so its variability is used instead.) |
@@ -39,6 +40,32 @@ across the session, a subject-by-channel noise map, and, where groups are
 assigned, the same even-loss comparison between groups: a systematic
 difference in noise or rejection between groups is an alternative
 explanation for any group difference in the ERP.
+
+## Blinks by condition {#sec-dq-blinks}
+
+Rejection is not the only way the conditions can come to differ for a reason
+other than the brain. If participants blink more often in one condition, or
+at another moment, whatever of those blinks the correction leaves in the
+scalp channels differs between the conditions as well, and so does the ERP.
+@zhang2024c found such differences in several ERP CORE paradigms, and found
+that ICA reduced them but usually did not remove them. The report therefore
+counts, per subject and bin, the averaged trials that hold a blink, with a
+Friedman test across subjects, and draws each bin's average vertical EOG,
+whose shape shows when the blinks fall: equal counts can still differ in
+timing.
+
+A blink is a step of more than 100 µV in the bipolar vertical EOG, by
+ArtefactDetect's step function with its defaults (a 200 ms window, moved 50
+ms at a time), over the whole epoch. The vertical EOG is a channel named VEOG
+or VEOG-bipolar, or else the frontal-pole channel above the eye less one below
+it: VEOG-lower (ERP CORE's, under the right eye) or IO2 from FP2, IO1 from
+FP1. Without one, the section says so.
+
+AutoICA and ICA correct the scalp channels only, and put the EOG channels
+back as they were. The count therefore says where the blinks were, not how
+much of them the correction left in the scalp channels; @zhang2024c measure
+that with an EOG channel corrected along with the rest, which Alakazam does
+not do.
 
 ## Measurement error {#sec-sme}
 
@@ -79,17 +106,26 @@ collecting more trials would not help.
 
 ## Dependability {#sec-dependability}
 
-Dependability answers the question the rest of the report only circles:
-whether a score is reliable enough to correlate with anything. Single-trial
-amplitude varies between people, which is the signal a correlation or a group
-difference rests on, and within a person from trial to trial, which is noise
-that averaging reduces. Dependability is the between-person variance as a
+Dependability answers a question the rest of the report does not: whether a
+score is reliable enough to correlate with anything. Single-trial amplitude
+varies between people, which is the signal a correlation rests on, and within
+a person from trial to trial, which is noise that averaging reduces.
+Dependability is the between-person variance as a
 share of what an average of $n$ trials measures, from generalizability
 theory [@clayson2017]. The report inverts it into the number wanted: how
 many trials per person a dependability of .70 or .80 would take, for this
 measure, at this channel, in this condition. The variance components come
 from a random-intercept model rather than from ANOVA mean squares, because
 trial counts differ between people after rejection.
+
+It is the measure for studies of individual differences, not for an
+experimental effect. Dependability rises with the spread between people, so
+a homogeneous sample can have low dependability and still high power for a
+difference between conditions, and a varied sample the reverse. Whether a
+difference between conditions can be detected depends on the measurement
+error of each person's score, which is what the SME gives
+[@luck2021; @hedge2018]. A low dependability is therefore no reason to doubt
+an experimental result.
 
 It needs every trial's score, so it appears only where ERP Measure was also
 run on the **epoched** node; otherwise the section says so and names the step

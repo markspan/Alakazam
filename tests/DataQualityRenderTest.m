@@ -43,6 +43,7 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src', 'Reports'), fullfile(root, 'src', 'Support'), ...
+                     fullfile(root, 'src', 'Transformations'), ...
                      fullfile(root, 'tests'), fullfile(root, 'tests', 'fixtures')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
@@ -59,6 +60,48 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
     end
 
     methods (Test, TestTags = {'Slow', 'External'})
+        function itShowsBlinksByCondition(testCase)
+        %ITSHOWSBLINKSBYCONDITION  Six subjects who blink in one or two of
+        %   bin A's ten trials and in six of bin B's: the section names the
+        %   channel, draws the bins, finds the difference, and the reference
+        %   list carries the paper the check comes from.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            entries = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {});
+            for s = 1:6
+                EEG = makeTestEEG('nbchan', 3, 'trials', 20);
+                EEG.chanlocs = struct('labels', {'Fz', 'Cz', 'VEOG'});
+                EEG.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:10, 11:20});
+                t = double(EEG.times);
+                inside = abs(t - 300) < 150;
+                blink = zeros(size(t));
+                blink(inside) = 300 * (1 + cos(pi * (t(inside) - 300) / 150)) / 2;
+                for trial = [1:1 + mod(s, 2), 11:16]
+                    EEG.data(3, :, trial) = EEG.data(3, :, trial) + blink;
+                end
+                entries(end + 1) = struct('subject', sprintf('s%02d', s), 'group', '', ...
+                    'session', '', 'quality', dataQualityMetrics(EEG)); %#ok<AGROW>
+            end
+            stem = fullfile(folder, 'dq');
+            [summaryCsv, trialCsv, smeCsv, provenanceCsv, blinkCsv, veogCsv] = ...
+                exportDataQualityCSVs(entries, stem);
+            names = cellfun(@(f) [regexprep(f, '^.*[\\/]', '')], ...
+                {summaryCsv, trialCsv, smeCsv, provenanceCsv, blinkCsv, veogCsv}, 'UniformOutput', false);
+            qmd = generateDataQualityReport(entries, names{1}, names{2}, names{3}, '', names{4}, ...
+                names(5:6));
+            qmdFile = fullfile(folder, 'dq.qmd');
+            writeQmdFile(qmdFile, qmd, 'Alakazam:DataQualityRenderTest');
+
+            [html, errorMessage] = renderQuartoReport(qmdFile);
+
+            testCase.assertEmpty(errorMessage, errorMessage);
+            page = fileread(html);
+            testCase.verifySubstring(page, 'Blinks by Condition');
+            testCase.verifySubstring(page, 'The vertical EOG was VEOG (6 subjects)');
+            testCase.verifySubstring(page, '<strong>significant</strong> evidence that the share of trials with a blink differs');
+            testCase.verifySubstring(page, 'Zhang, G., Garrett, D. R., Simmons, A. M., Kiat, J. E., &amp; Luck, S. J. (2024)');
+            testCase.verifyEmpty(strfind(page, 'No subject has a vertical EOG'));
+        end
+
         function itRendersWithADeconvolvedSubject(testCase)
         %ITRENDERSWITHADECONVOLVEDSUBJECT  A deconvolved subject reaches this
         %   report with every trial-based column empty, because it has no
@@ -83,13 +126,16 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
                 'session', '', 'quality', dataQualityMetrics(tracked));
 
             stem = fullfile(folder, 'dq');
-            [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(entries, stem);
+            [summaryCsv, trialCsv, smeCsv, provenanceCsv, blinkCsv, veogCsv] = ...
+                exportDataQualityCSVs(entries, stem);
             [~, s] = fileparts(summaryCsv);
             [~, t] = fileparts(trialCsv);
             [~, m] = fileparts(smeCsv);
             [~, p] = fileparts(provenanceCsv);
+            [~, k] = fileparts(blinkCsv);
+            [~, v] = fileparts(veogCsv);
             qmd = generateDataQualityReport(entries, [s '.csv'], [t '.csv'], [m '.csv'], '', ...
-                [p '.csv']);   % the provenance CSV, as onExportDataQuality passes it
+                [p '.csv'], {[k '.csv'], [v '.csv']});   % as onExportDataQuality passes them
             qmdFile = fullfile(folder, 'dq.qmd');
             writeQmdFile(qmdFile, qmd, 'Alakazam:DataQualityRenderTest');
 
@@ -106,6 +152,8 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
                  'draws provenance steps it knows by name.']);
             testCase.verifySubstring(page, 'Eye-Tracking Synchronisation', ...
                 'How well the eye track was joined is drawn for the subject that has one.');
+            testCase.verifySubstring(page, 'No subject has a vertical EOG', ...
+                'None of these subjects has a VEOG channel, and the section says so.');
         end
 
         function dependabilityMatchesItsClosedForm(testCase)

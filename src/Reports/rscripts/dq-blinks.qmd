@@ -1,0 +1,89 @@
+```{r}
+#| label: blinks-by-bin
+#| fig-height: 5
+#| results: asis
+# Blinks by condition (dataQualityMetrics' blinkRows): one row per subject x
+# bin, from the vertical EOG of the trials that were averaged.
+if (nrow(blk) == 0) {
+  cat(paste0("\n\nNo subject has a vertical EOG this report recognises (a channel named VEOG ",
+             "or VEOG-bipolar, or VEOG-lower, IO1 or IO2 with FP2 or FP1 above it), so blinks ",
+             "could not be compared between conditions.\n\n"))
+} else {
+  sources <- blk %>% distinct(dataset, source) %>% count(source, name = "n")
+  cat(sprintf("\n\nThe vertical EOG was %s.\n\n",
+              paste(sprintf("%s (%d subject%s)", sources$source, sources$n,
+                            ifelse(sources$n == 1, "", "s")), collapse = "; ")))
+  if (n_distinct(blk$bin) < 2) {
+    cat("Only one bin is present, so there is no between-condition comparison to make here.\n\n")
+  } else {
+    bp <- ggplot(blk, aes(x = bin, y = pct_blinks, group = dataset)) +
+      geom_line(colour = "grey65", alpha = 0.7) +
+      geom_point(colour = alz_blue, size = 1.6) +
+      stat_summary(aes(group = 1), fun = mean, geom = "line",
+                   colour = alz_red, linewidth = 1.2) +
+      stat_summary(aes(group = 1), fun = mean, geom = "point",
+                   colour = alz_red, size = 3) +
+      labs(x = NULL, y = "Averaged trials with a blink (%)",
+           subtitle = "Grey: individual subjects. Red: mean across subjects") +
+      alz_theme()
+    print(bp)
+  }
+}
+```
+
+```{r}
+#| label: blinks-by-bin-test
+#| results: asis
+# Friedman, as for the rejection rate above and for the same reasons: blink
+# percentages are bounded, skewed and often 0. Subjects without every bin
+# are left out, and counted.
+if (nrow(blk) > 0 && n_distinct(blk$bin) >= 2 && n_distinct(blk$dataset) >= 2) {
+  wide <- blk %>% select(dataset, bin, pct_blinks) %>%
+    pivot_wider(names_from = bin, values_from = pct_blinks)
+  complete_rows <- wide %>% drop_na()
+  n_dropped <- nrow(wide) - nrow(complete_rows)
+  if (nrow(complete_rows) >= 2) {
+    mat <- as.matrix(complete_rows %>% select(-dataset))
+    if (all(apply(mat, 1, function(r) length(unique(r))) == 1)) {
+      cat("\n\nEvery subject blinked in the same share of trials in every bin, so there is nothing to test.\n\n")
+    } else {
+      ft <- friedman.test(mat)
+      cat(sprintf(paste0("\nA Friedman test across %d subject(s) with a complete set of bins ",
+                         "found %s evidence that the share of trials with a blink differs ",
+                         "between conditions, χ²(%d) = %s, *p* %s.\n\n"),
+                  nrow(complete_rows),
+                  ifelse(ft$p.value < .05, "**significant**", "no significant"),
+                  ft$parameter, apa_num(ft$statistic), apa_p(ft$p.value)))
+      if (ft$p.value < .05) {
+        cat(paste0("Blinks are then a potential confound: whatever of them the correction ",
+                   "left in the scalp channels differs between the conditions it is compared ",
+                   "across. Rejecting the trials with a blink near the stimulus, or checking ",
+                   "the effect at channels far from the eyes, are the usual safeguards.\n\n"))
+      }
+    }
+  }
+  if (n_dropped > 0) {
+    cat(sprintf("*%d subject(s) were left out of that test for having no assessable trials in at least one bin.*\n\n", n_dropped))
+  }
+}
+```
+
+```{r}
+#| label: veog-by-bin
+#| fig-height: 4.5
+# Equal blink rates can still differ in timing, which an averaged waveform
+# shows and a count does not.
+if (nrow(veog) > 0 && n_distinct(veog$bin) >= 2) {
+  ga <- veog %>% group_by(bin, time_ms) %>%
+    summarise(veog_uv = mean(veog_uv, na.rm = TRUE), .groups = "drop")
+  vp <- ggplot(ga, aes(x = time_ms, y = veog_uv, colour = bin)) +
+    geom_hline(yintercept = 0, colour = "grey80") +
+    geom_vline(xintercept = 0, colour = "grey80") +
+    geom_line(linewidth = 0.8) +
+    scale_colour_brewer(palette = "Set2") +
+    labs(x = "Time (ms)", y = "Vertical EOG (µV)", colour = NULL,
+         subtitle = "Each bin's average, meaned across subjects") +
+    alz_theme()
+  print(vp)
+}
+```

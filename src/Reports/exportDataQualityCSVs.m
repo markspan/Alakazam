@@ -1,4 +1,4 @@
-function [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(entries, targetStem)
+function [summaryCsv, trialCsv, smeCsv, provenanceCsv, blinkCsv, veogCsv] = exportDataQualityCSVs(entries, targetStem)
 %EXPORTDATAQUALITYCSVS  Write the two long-format CSVs
 %   generateDataQualityReport.m's own R code reads: TARGETSTEM +
 %   "_quality.csv" (one row per subject x bin x channel: rejection rates,
@@ -21,6 +21,12 @@ function [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(e
 %   folding them together would repeat every coarser value once per finer
 %   row.
 %
+%   Two more carry blinks by condition (dataQualityMetrics' blinkRows):
+%   TARGETSTEM + "_blinks.csv", one row per subject x bin, how many of its
+%   averaged trials hold a blink in the vertical EOG; and TARGETSTEM +
+%   "_veog.csv", one row per subject x bin x sample, the bin's average
+%   vertical EOG. Both are written header-only when no subject has one.
+%
 %   ENTRIES is a struct array with .subject/.group/.session/.quality, where
 %   .quality is one dataQualityMetrics() return -- see
 %   Alakazam.collectDataQualityEntries.
@@ -30,11 +36,58 @@ function [summaryCsv, trialCsv, smeCsv, provenanceCsv] = exportDataQualityCSVs(e
     trialCsv      = [targetStem '_trials.csv'];
     smeCsv        = [targetStem '_sme.csv'];
     provenanceCsv = [targetStem '_provenance.csv'];
+    blinkCsv      = [targetStem '_blinks.csv'];
+    veogCsv       = [targetStem '_veog.csv'];
 
     writeSummaryCsv(summaryCsv, entries);
     writeTrialCsv(trialCsv, entries);
     writeSmeCsv(smeCsv, entries);
     writeProvenanceCsv(provenanceCsv, entries);
+    writeBlinkCsv(blinkCsv, entries);
+    writeVeogCsv(veogCsv, entries);
+end
+
+% ----------------------------------------------------------------------- %
+function writeBlinkCsv(file, entries)
+%WRITEBLINKCSV  One row per subject x bin: the trials averaged, how many
+%   could be assessed, and how many hold a blink.
+    fid = openOrThrow(file);
+    closeFile = onCleanup(@() fclose(fid));
+    fprintf(fid, 'dataset,group,session,bin,source,n_trials,n_assessed,n_blinks,pct_blinks\n');
+    for e = 1:numel(entries)
+        entry = entries(e);
+        if ~isfield(entry.quality, 'blinks')
+            continue;
+        end
+        rows = entry.quality.blinks;
+        for r = 1:numel(rows)
+            fprintf(fid, '%s,%s,%s,%s,%s,%s,%s,%s,%s\n', ...
+                csvField(entry.subject), csvField(entry.group), csvField(entry.session), ...
+                csvField(rows(r).bin), csvField(rows(r).source), num(rows(r).n_trials), ...
+                num(rows(r).n_assessed), num(rows(r).n_blinks), num(rows(r).pct_blinks));
+        end
+    end
+end
+
+function writeVeogCsv(file, entries)
+%WRITEVEOGCSV  One row per subject x bin x sample: the bin's average
+%   vertical EOG.
+    fid = openOrThrow(file);
+    closeFile = onCleanup(@() fclose(fid));
+    fprintf(fid, 'dataset,group,session,bin,time_ms,veog_uv\n');
+    for e = 1:numel(entries)
+        entry = entries(e);
+        if ~isfield(entry.quality, 'veog')
+            continue;
+        end
+        rows = entry.quality.veog;
+        prefix = sprintf('%s,%s,%s,', csvField(entry.subject), csvField(entry.group), ...
+            csvField(entry.session));
+        for r = 1:numel(rows)
+            fprintf(fid, '%s%s,%s,%s\n', prefix, csvField(rows(r).bin), ...
+                num(rows(r).time_ms), num(rows(r).veog_uv));
+        end
+    end
 end
 
 % ----------------------------------------------------------------------- %

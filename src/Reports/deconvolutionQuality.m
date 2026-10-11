@@ -78,6 +78,11 @@ function q = deconvolutionQuality(averaged)
         'method', {}, 'sme_uv', {}, 'score', {});
     q.byTrial = struct('bin', {}, 'trial', {}, 'baseline_sd_uv', {}, 'baseline_z', {}, ...
         'rejected', {}, 'baseline_outlier', {});
+    % Blinks are counted among the trials that were averaged, and a
+    % deconvolution averages none; empty, in dataQualityMetrics' columns.
+    q.blinks = struct('bin', {}, 'source', {}, 'n_trials', {}, 'n_assessed', {}, ...
+        'n_blinks', {}, 'pct_blinks', {});
+    q.veog = struct('bin', {}, 'time_ms', {}, 'veog_uv', {});
     template = blankRow(emptyProvenance(), '', '', NaN, NaN);
     q.provenance = deconvolutionRows(averaged, template, nChan);
     % A deconvolution often follows an eye-track join (fixation-related

@@ -42,11 +42,13 @@ function onExportDataQuality(this)
         stampTxt = char(string(stamp, 'yyyyMMdd_HHmmss'));
         stem = fullfile(reportsDir, ['data_quality_' stampTxt]);
 
-        [summaryCsv, trialCsv, smeCsv, provCsv] = exportDataQualityCSVs(entries, stem);
+        [summaryCsv, trialCsv, smeCsv, provCsv, blinkCsv, veogCsv] = exportDataQualityCSVs(entries, stem);
         [~, summaryName] = fileparts(summaryCsv);
         [~, trialName]   = fileparts(trialCsv);
         [~, smeName]     = fileparts(smeCsv);
         [~, provName]    = fileparts(provCsv);
+        [~, blinkName]   = fileparts(blinkCsv);
+        [~, veogName]    = fileparts(veogCsv);
 
         % Generated before the .qmd is opened, for the same reason
         % onExportMeasurements does it in that order: opening (and so
@@ -73,7 +75,8 @@ function onExportDataQuality(this)
         end
 
         qmdText = generateDataQualityReport(entries, [summaryName '.csv'], ...
-            [trialName '.csv'], [smeName '.csv'], measureName, [provName '.csv']);
+            [trialName '.csv'], [smeName '.csv'], measureName, [provName '.csv'], ...
+            {[blinkName '.csv'], [veogName '.csv']});
         qmdFile = [stem '.qmd'];
         writeQmdFile(qmdFile, qmdText, 'Alakazam:onExportDataQuality');
 

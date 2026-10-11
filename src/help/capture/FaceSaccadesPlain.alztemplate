@@ -1,0 +1,48 @@
+{
+  "alakazamTemplate": true,
+  "version": 2,
+  "name": "Figure 11 of Ehinger & Dimigen (2019), without deconvolution: the plain epochs and average chapter 17 compares with",
+  "nodes": [
+    {
+      "transformId": "DefineBins",
+      "params": {
+        "script": "% The same three event types as plain epochs, without deconvolution: the\n% figure's \"no deconvolution\" ERPs and single-trial images, for comparison.\nbin 1 \"Stimulus\" \"stimonset\"\nbin 2 \"Saccade\" \"saccade\"\nbin 3 \"Button\" \"buttonpress\"",
+        "epoch": {
+          "lo": -1500,
+          "hi": 1000,
+          "unit": "ms"
+        }
+      },
+      "parent": -1
+    },
+    {
+      "transformId": "Baseline",
+      "params": {
+        "Start": -200,
+        "Stop": 0
+      },
+      "parent": 1
+    },
+    {
+      "transformId": "ArtefactDetect",
+      "params": {
+        "Method": [
+          "Moving-window peak-to-peak"
+        ],
+        "Threshold": 250,
+        "Window": 2000,
+        "Step": 100,
+        "Scope": "Whole epoch",
+        "Channels": "Scalp EEG only"
+      },
+      "parent": 2
+    },
+    {
+      "transformId": "Average",
+      "params": {
+        "Param": "Init"
+      },
+      "parent": 3
+    }
+  ]
+}

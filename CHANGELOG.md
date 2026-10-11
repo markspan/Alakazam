@@ -6,7 +6,32 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Added
+
+- **Blinks by condition in the data-quality report.** Per subject and bin,
+  the share of averaged trials with a blink in the bipolar vertical EOG
+  (ArtefactDetect's step function, 100 µV), with a Friedman test across
+  subjects, and each bin's average vertical EOG, which shows when the
+  blinks fall: blinks that differ between conditions are a confound
+  (Zhang, Garrett, Simmons, Kiat & Luck, 2024). The EOG is the one
+  recorded, since AutoICA and ICA correct the scalp channels only, and the
+  section says so. The vertical EOG is a channel named VEOG or
+  VEOG-bipolar, or FP2 less VEOG-lower (ERP CORE's), FP1 less IO1, or FP2
+  less IO2.
+- **The filter settings Zhang, Garrett and Luck (2024) recommend** for
+  seven ERP components and four scoring methods are in the manual's filter
+  section, with the warning that they were found with ERPLAB's
+  12 dB per octave Butterworth filter, whose slope is gentler than that of
+  Alakazam's FIR.
+
 ### Changed
+
+- **Dependability is described as what it is for.** The report and the
+  manual now say that it bears on individual differences, and that for a
+  difference between conditions the SME is the measure of precision: a
+  homogeneous sample can have low dependability and high power (Luck, 2019;
+  Hedge, Powell & Sumner, 2018). It no longer says that between-person
+  variance is what a group difference uses.
 
 - **FieldTrip is pinned to 20260924 and the PREP pipeline to v0.57.0**, from
   20260812 and v0.56.0. Nothing Alakazam calls changed its results between
@@ -22,6 +47,16 @@ bar. Dates are those of the tag.
   MATLAB path is still used as it is.
 
 ### Fixed
+
+- **Installing a plugin from a link works again.** MATLAB R2026a's `isfile`
+  answers true for an https address it can reach, so a link to a real
+  repository was taken for a zip on this computer and GitHub's web page was
+  read as one. A link is now recognised first.
+
+- **The SME paper's authors.** Luck, Stewart, Simmons and Rhemtulla (2021),
+  not Kappenman, in the manual, the data-quality report's references and
+  Docs/luck.md. The report's references also list Clayson and Miller
+  (2017), which its Dependability section cites.
 
 - **A workspace whose folders were moved keeps its grand averages and
   reports.** Both record where they came from by full path, so after a move

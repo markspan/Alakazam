@@ -426,50 +426,19 @@ function labels = channelLabels(EEG, idx)
 end
 
 function windows = ensureWindows(windows, sig, winN, stepN)
-%ENSUREWINDOWS  Cut SIG into its moving windows, once: an nWindows x WINN matrix,
-%   empty when the signal is shorter than one window.
-%
-%   The last start is forced flush with the end of the signal. Stepping by
-%   stepN alone stops at the last whole window that fits, leaving up to
-%   winN + stepN - 2 samples at the tail that no window ever covers -- for a
-%   -200..800 ms epoch at 256 Hz with ERPLAB's usual 200 ms / 100 ms
-%   settings that is the last 90 ms, i.e. an artefact sitting on the P3 or
-%   the LRP goes unseen. Found by validating against Luck's ch10 LRP data:
-%   ERPLAB's artmwppth flagged trial 222 (FC4, 311 uV peak-to-peak at
-%   602..797 ms) and this detector did not. See Docs/luck.md.
+%ENSUREWINDOWS  Cut SIG into its moving windows, once per channel-epoch, and
+%   keep them for the other moving-window detector (TransTools.MovingWindows,
+%   which says where the windows lie).
     if windows.built
         return;
     end
     windows.built = true;
-    n = numel(sig);
-    if n < winN
-        windows.W = zeros(0, winN);
-        return;
-    end
-    starts = unique([1:stepN:(n - winN + 1), n - winN + 1]);
-    windows.W = sig(starts(:) + (0:winN - 1));
+    windows.W = TransTools.MovingWindows(sig, winN, stepN);
 end
 
 function m = largestWindowValue(W, kind)
-%LARGESTWINDOWVALUE  Largest of the per-window scores, 0 if there are none.
-%   A window holding NaN (a sample rejected or blanked upstream) scores NaN for
-%   the step function and is passed over, exactly as the loop this replaces
-%   passed over a NaN by testing "v > m"; max() ignores NaN, and the 0 in front
-%   is the loop's own starting value.
-    if isempty(W)
-        m = 0;
-        return;
-    end
-    switch kind
-        case 'step'
-            % |mean(first half) - mean(second half)| of a window (the ERPLAB
-            % step function).
-            half = floor(size(W, 2) / 2);
-            v = abs(mean(W(:, 1:half), 2) - mean(W(:, half + 1:end), 2));
-        otherwise
-            v = max(W, [], 2) - min(W, [], 2);
-    end
-    m = max([0; v(:)]);
+%LARGESTWINDOWVALUE  The largest per-window score (TransTools.LargestWindowValue).
+    m = TransTools.LargestWindowValue(W, kind);
 end
 
 function opt = normaliseOptions(options)

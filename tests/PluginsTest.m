@@ -241,6 +241,25 @@ classdef PluginsTest < matlab.unittest.TestCase
             end
         end
 
+        function aLinkMatlabCanReachIsStillALink(testCase)
+        %ALINKMATLABCANREACHISSTILLALINK  isfile answers true for an https
+        %   address it can reach (R2026a does), so a link to a real
+        %   repository was taken for a zip on this computer, and GitHub's web
+        %   page was read as one: no plugin installed from a real link. The
+        %   made-up links above cannot be reached, which is why they never
+        %   showed it. Runs only where the trap is there to fall into.
+            link = 'https://github.com/markspan/Alakazam';
+            testCase.assumeTrue(isfile(link), ['isfile does not take this link for a file ' ...
+                'here (an older MATLAB, or no network), so there is nothing to fall into.']);
+            withAsset = struct('tag_name', 'v1', 'assets', struct('name', {'Plug-1.zip'}, ...
+                'browser_download_url', {'https://x/Plug-1.zip'}));
+
+            spec = Plugins.resolveSource(link, @(url) withAsset);
+
+            testCase.verifyEqual(spec.Kind, 'url');
+            testCase.verifyEqual(spec.Location, 'https://x/Plug-1.zip');
+        end
+
         function aLinkToAFolderTakesOnlyThePluginsInIt(testCase)
             top = fullfile(testCase.Work, 'plug-main');
             mkdir(fullfile(top, 'plugins'));

@@ -29,10 +29,73 @@ classdef DataQualityMetricsTest < matlab.unittest.TestCase
                 fullfile(root, 'src', 'Support')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'tests', 'fixtures')));
+            % TransTools: the step function the blink count shares with
+            % ArtefactDetect.
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations')));
         end
     end
 
     methods (Test)
+        % ---- blinks by condition (Zhang et al., 2024) --------------------
+        function blinksAreCountedPerBinAmongTheAveragedTrials(testCase)
+        %BLINKSARECOUNTEDPERBINAMONGTHEAVERAGEDTRIALS  Two blinks in bin A's
+        %   ten trials, six in bin B's, one of them in a rejected trial,
+        %   which Average leaves out and so does the count.
+            EEG = DataQualityMetricsTest.withEye({'Fz', 'Cz', 'VEOG'}, 3, [1 2], [11 12 13 14 15 16]);
+            EEG.data(:, :, 16) = NaN;
+            % A 10 Hz oscillation of 160 uV peak to peak: a large range in
+            % every window, but whole cycles in each half of it, so no step
+            % and no blink.
+            EEG.data(3, :, 5) = EEG.data(3, :, 5) + 80 * sin(2 * pi * 10 * double(EEG.times) / 1000);
+
+            q = dataQualityMetrics(EEG);
+
+            testCase.assertNumElements(q.blinks, 2);
+            a = q.blinks(strcmp({q.blinks.bin}, 'A'));
+            b = q.blinks(strcmp({q.blinks.bin}, 'B'));
+            testCase.verifyEqual([a.n_trials, a.n_assessed, a.n_blinks], [10 10 2]);
+            testCase.verifyEqual([b.n_trials, b.n_assessed, b.n_blinks], [10 9 5]);
+            testCase.verifyEqual(b.pct_blinks, 100 * 5 / 9, 'AbsTol', 1e-12);
+            testCase.verifyEqual(a.source, 'VEOG');
+        end
+
+        function theAverageVeogIsTheMeanOfTheAveragedTrials(testCase)
+            EEG = DataQualityMetricsTest.withEye({'Fz', 'Cz', 'VEOG'}, 3, [1 2], 11);
+            EEG.data(:, :, 3) = NaN;
+
+            q = dataQualityMetrics(EEG);
+
+            rows = q.veog(strcmp({q.veog.bin}, 'A'));
+            expected = mean(EEG.data(3, :, [1 2 4:10]), 3);
+            testCase.verifyEqual([rows.veog_uv], expected, 'AbsTol', 1e-9);
+            testCase.verifyEqual([rows.time_ms], double(EEG.times), 'AbsTol', 1e-12);
+        end
+
+        function aBipolarEogIsBuiltFromTheChannelBelowTheEye(testCase)
+        %ABIPOLAREOGISBUILTFROMTHECHANNELBELOWTHEEYE  ERP CORE records
+        %   VEOG-lower under the right eye; the bipolar EOG is FP2 above it
+        %   less VEOG-lower, so a blink seen in both counts once, and a
+        %   signal common to both, which is brain, is not a blink.
+            EEG = DataQualityMetricsTest.withEye({'FP2', 'Cz', 'VEOG-lower'}, 3, [], []);
+            blink = DataQualityMetricsTest.blinkShape(EEG);
+            EEG.data(1, :, 1) = EEG.data(1, :, 1) + blink;          % above the eye
+            EEG.data(3, :, 1) = EEG.data(3, :, 1) - 0.4 * blink;    % below it
+            common = 2 * blink;                                    % the same on both
+            EEG.data([1 3], :, 12) = EEG.data([1 3], :, 12) + [common; common];
+
+            q = dataQualityMetrics(EEG);
+
+            testCase.verifyEqual(q.blinks(1).source, 'FP2 - VEOG-lower');
+            testCase.verifyEqual([q.blinks.n_blinks], [1 0]);
+        end
+
+        function withoutAVerticalEogThereIsNothingToCount(testCase)
+            q = dataQualityMetrics(makeTestEEG('nbchan', 3, 'trials', 6));
+            testCase.verifyEmpty(q.blinks);
+            testCase.verifyEmpty(q.veog);
+        end
+
         function cleanDataReportsNothingLost(testCase)
         %CLEANDATAREPORTSNOTHINGLOST  A baseline for the three counts, so a
         %   later failure can be read as "this one moved" rather than
@@ -160,6 +223,30 @@ classdef DataQualityMetricsTest < matlab.unittest.TestCase
 
             row1 = rows(strcmp(names, 'Ch1'));
             testCase.verifyEqual(sum([row1.n_interpolated]), 0);
+        end
+    end
+
+    methods (Static, Access = private)
+        function EEG = withEye(labels, eye, blinksA, blinksB)
+        %WITHEYE  Twenty trials in two bins, A (1 to 10) and B (11 to 20), on
+        %   channels LABELS, with a blink added to channel EYE in the trials
+        %   BLINKSA and BLINKSB (trial numbers).
+            EEG = makeTestEEG('nbchan', numel(labels), 'trials', 20);
+            EEG.chanlocs = struct('labels', labels);
+            EEG.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:10, 11:20});
+            blink = DataQualityMetricsTest.blinkShape(EEG);
+            for t = [blinksA, blinksB]
+                EEG.data(eye, :, t) = EEG.data(eye, :, t) + blink;
+            end
+        end
+
+        function blink = blinkShape(EEG)
+        %BLINKSHAPE  A blink as the vertical EOG sees one: a 300 uV raised
+        %   cosine 300 ms long, peaking 300 ms after the event.
+            t = double(EEG.times);
+            inside = abs(t - 300) < 150;
+            blink = zeros(size(t));
+            blink(inside) = 300 * (1 + cos(pi * (t(inside) - 300) / 150)) / 2;
         end
     end
 end
