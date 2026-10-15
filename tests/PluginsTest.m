@@ -22,7 +22,7 @@ classdef PluginsTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Support'), ...
                      fullfile(root, 'src', 'Dialogs'), fullfile(root, 'src', 'IO'), ...
-                     fullfile(root, 'src', 'Transformations')}
+                     fullfile(root, 'src', 'Transformations'), fullfile(root, 'tests', 'fixtures')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
@@ -331,11 +331,11 @@ classdef PluginsTest < matlab.unittest.TestCase
                 testCase.makePlugin('AlzPlugListed', 'Version', '3.1'), 'folder'), ...
                 'BuiltInRoot', testCase.BuiltIn));
             asked = {};
-            fig = PluginsDialog([], 'Visible', false, ...
+            fig = PluginsDialog([], 'Visible', false, 'Repos', PluginsTest.noRepos(), ...
                 'Confirm', @(message, ~) confirm(message));
             closeFig = onCleanup(@() delete(fig));
             table = findobj(fig, 'Tag', 'PluginTable');
-            testCase.verifyEqual(table.Data(1, 1:3), {'AlzPlugListed', 'AlzPlugListed', '3.1'});
+            testCase.verifyEqual(table.Data(1, 2:3), {'AlzPlugListed', '3.1'});
             empty = findobj(fig, 'Tag', 'NoPlugins');
             testCase.verifyFalse(logical(empty.Visible));
 
@@ -354,6 +354,117 @@ classdef PluginsTest < matlab.unittest.TestCase
             end
         end
 
+        % ---- the account's repositories ----------------------------------
+        function theAccountsAlakazamRepositoriesAreOffered(testCase)
+        %THEACCOUNTSALAKAZAMREPOSITORIESAREOFFERED  Every repository whose name
+        %   starts with Alakazam, Alakazam itself left out, malformed ones too.
+            repos = PluginsTest.offered();
+
+            testCase.verifyEqual({repos.Repo}, {'AlakazamBroken', 'AlakazamGood'});
+            good = repos(2);
+            testCase.verifyEqual(good.Tools, {'AlzGood'});
+            testCase.verifyEqual(good.Version, '0.2.0');
+            testCase.verifyEqual(good.Asset, 'AlzGood-0.2.0.zip');
+            testCase.verifyEqual(good.Link, 'https://github.com/me/AlakazamGood');
+            testCase.verifyEmpty(good.Problem);
+            broken = repos(1);
+            testCase.verifyEmpty(broken.Tools);
+            testCase.verifySubstring(broken.Problem, 'holds no plugin');
+            testCase.verifyEqual(Plugins.providerOf('AlzGood', repos).Repo, 'AlakazamGood');
+            testCase.verifyEmpty(Plugins.providerOf('Elsewhere', repos));
+        end
+
+        function theListSaysWhatCanBeDone(testCase)
+        %THELISTSAYSWHATCANBEDONE  Not installed, an update, not a plugin yet;
+        %   Install for the first, Upgrade for the second.
+            Plugins.install(Plugins.prepare(testCase.zipOf( ...
+                testCase.makePlugin('AlzGood', 'Version', '0.1.0'), 'folder'), ...
+                'BuiltInRoot', testCase.BuiltIn));
+            installed = {};
+            fig = PluginsDialog([], 'Visible', false, 'Repos', PluginsTest.offered(), ...
+                'InstallFcn', @(link, repo) install(link, repo));
+            closeFig = onCleanup(@() delete(fig));
+            table = findobj(fig, 'Tag', 'PluginTable');
+
+            testCase.verifyEqual(table.Data(:, 1)', {'AlakazamBroken', 'AlakazamGood'});
+            testCase.verifySubstring(table.Data{1, 5}, 'Not a plugin yet');
+            testCase.verifyEqual(table.Data(2, 3:5), {'0.1.0', '0.2.0', 'Update available: 0.2.0'});
+
+            table.Selection = 2;
+            table.SelectionChangedFcn(table, []);
+            testCase.verifyFalse(logical(findobj(fig, 'Tag', 'Install').Enable));
+            upgrade = findobj(fig, 'Tag', 'Upgrade');
+            testCase.verifyTrue(logical(upgrade.Enable));
+            upgrade.ButtonPushedFcn(upgrade, []);
+            testCase.verifyEqual(installed, {'https://github.com/me/AlakazamGood', 'AlakazamGood'});
+
+            table.Selection = 1;
+            table.SelectionChangedFcn(table, []);
+            testCase.verifyTrue(logical(findobj(fig, 'Tag', 'Install').Enable), ...
+                'A malformed one can be tried: the install says, kindly, what is missing.');
+
+            function install(link, repo)
+                installed = {link, repo};
+            end
+        end
+
+        function aMalformedPluginIsRefusedVeryKindly(testCase)
+            text = Plugins.notAPluginMessage('AlakazamBroken', 'there is no plugin folder in it');
+            testCase.verifySubstring(text, 'AlakazamBroken');
+            testCase.verifySubstring(text, 'so very sorry');
+            testCase.verifySubstring(text, 'nothing has been installed or changed');
+            testCase.verifySubstring(text, '<Name>.json');
+        end
+
+        function aLinkIsRecordedForUpgrading(testCase)
+        %ALINKISRECORDEDFORUPGRADING  Where a plugin came from, as a link Update
+        %   can fetch again; one recorded before links were is read from its
+        %   source ("github.com/owner/repo, release ...").
+            zipFile = testCase.zipOf(testCase.makePlugin('AlzPlugLinked'), 'folder');
+            Plugins.install(Plugins.prepare(zipFile, 'BuiltInRoot', testCase.BuiltIn));
+            testCase.verifyEmpty(Plugins.installed().Link, 'A zip file has no link.');
+
+            file = fullfile(testCase.PluginRoot, Plugins.RegistryFile);
+            registry = jsondecode(fileread(file));
+            registry.source = 'github.com/me/AlakazamLinked, release V1 (AlzPlugLinked-1.zip)';
+            registry = rmfield(registry, 'link');
+            writeText(file, jsonencode({registry}));
+            testCase.verifyEqual(Plugins.installed().Link, 'https://github.com/me/AlakazamLinked');
+        end
+
+        function aMissingToolIsOfferedFromItsRepository(testCase)
+        %AMISSINGTOOLISOFFEREDFROMITSREPOSITORY  A step naming a tool that is not
+        %   here, held by one of the account's repositories: asked, installed
+        %   on yes; not asked for a tool no repository holds.
+            Plugins.available('Refresh', true, 'FetchJson', @PluginsTest.fakeGitHub);
+            forget = onCleanup(@() Plugins.available('Refresh', true, 'FetchJson', @(url) []));
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            MethodCopy.make(folder, '@Alakazam', 'ensureTransformation', 'ensureCopy');
+            rehash;
+            app = FakeApp(struct('MainFigure', [], 'Installed', {{}}));
+            app.addprop('onInstallPlugin');
+            app.onInstallPlugin = @(link, repo) record(link, repo);
+            asked = {};
+
+            testCase.verifyFalse(ensureCopy(app, 'AlzGood', @(varargin) say(varargin{2}, 'Not now')));
+            testCase.verifySubstring(asked{1}, 'AlakazamGood');
+            testCase.verifyEmpty(app.Installed);
+            ensureCopy(app, 'AlzGood', @(varargin) say(varargin{2}, 'Install'));
+            testCase.verifyEqual(app.Installed, {['https://github.com/' Plugins.Account '/AlakazamGood'], ...
+                'AlakazamGood'});
+            asked = {};
+            testCase.verifyFalse(ensureCopy(app, 'AlzNowhere', @(varargin) say(varargin{2}, 'Install')));
+            testCase.verifyEmpty(asked, 'No repository holds it: nothing to offer.');
+
+            function choice = say(message, choice)
+                asked{end + 1} = message;
+            end
+            function record(link, repo)
+                app.Installed = {link, repo};
+            end
+        end
+
         function theSourceDialogReturnsTheLink(testCase)
             [~, fig] = PluginSourceDialog([], 'Wait', false);
             closeFig = onCleanup(@() delete(fig));
@@ -362,6 +473,41 @@ classdef PluginsTest < matlab.unittest.TestCase
             button = findobj(fig, 'Tag', 'UseLink');
             button.ButtonPushedFcn(button, []);
             testCase.verifyEqual(getappdata(fig, 'Source'), 'https://github.com/me/plug');
+        end
+    end
+
+    methods (Static)
+        function repos = noRepos()
+            repos = struct('Repo', {}, 'Link', {}, 'Description', {}, 'Release', {}, ...
+                'Version', {}, 'Asset', {}, 'Tools', {}, 'Problem', {});
+        end
+
+        function repos = offered()
+        %OFFERED  Plugins.available on PluginsTest.fakeGitHub's account.
+            repos = Plugins.available('Refresh', true, 'Account', 'me', ...
+                'FetchJson', @PluginsTest.fakeGitHub);
+        end
+
+        function data = fakeGitHub(url)
+        %FAKEGITHUB  An account "me" with Alakazam itself, a plugin repository
+        %   with a release (AlakazamGood), one without a plugin or a release
+        %   (AlakazamBroken) and one by another name.
+            if contains(url, '/users/')
+                data = struct('name', {'Alakazam', 'AlakazamGood', 'AlakazamBroken', 'Other'}, ...
+                    'description', {'the app', 'a good one', 'not yet', 'else'}, ...
+                    'default_branch', {'main', 'main', 'main', 'main'});
+            elseif contains(url, 'AlakazamGood/git/trees')
+                data = struct('tree', struct('path', {'README.md', 'AlzGood', 'AlzGood/AlzGood.json', ...
+                    'AlzGood/AlzGood.m', 'AlzGood/+Helpers/x.m'}));
+            elseif contains(url, 'AlakazamBroken/git/trees')
+                data = struct('tree', struct('path', {'README.md', 'notes.txt'}));
+            elseif contains(url, 'AlakazamGood/releases/latest')
+                data = struct('tag_name', 'V0.2.0', 'assets', struct('name', 'AlzGood-0.2.0.zip'));
+            elseif contains(url, 'releases/latest')
+                throw(MException('MATLAB:webservices:HTTP404StatusCodeError', 'Not Found (404)'));
+            else
+                data = [];
+            end
         end
     end
 

@@ -87,6 +87,7 @@ classdef Alakazam < handle
         path = treePathOf(this, file)
         [files, labels, kinds, included, branches] = findGrandAverageCandidates(this)
         [keep, cancelled] = chooseAnalysisBranches(this, files, what, ask)
+        ok = ensureTransformation(this, transformId, ask)
         deleteBranchFiles(this, file)
         bins = candidateBinLabels(this, candidateFiles)
         epochMs = candidateEpochMs(this, candidateFiles)

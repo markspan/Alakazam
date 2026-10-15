@@ -54,6 +54,22 @@ function onApplyToAllRawFiles(this)
 
     restoreDir = this.enterRepoRoot();
 
+    % Every step of the branch has to be here before any recording is
+    % started, a tool that became a plugin being offered for installing
+    % (ensureTransformation), rather than every recording failing on it.
+    steps = this.collectBranchTree(sourceFile);
+    for id = unique({steps.transformId})
+        if ~isvarname(id{1})
+            continue;   % no transformation to run (a loaded dataset)
+        end
+        if ~this.ensureTransformation(id{1})
+            uialert(this.MainFigure, sprintf(['I''m sorry, but this branch uses ''%s'', which ' ...
+                'is not installed here, so I am unable to apply it to the other raw files.'], ...
+                id{1}), 'Cannot apply the branch', 'Icon', 'warning');
+            return;
+        end
+    end
+
     % A determinate progress dialog here, not the generic indeterminate
     % beginBusy every other call site uses: unlike those (one atomic,
     % all-or-nothing operation each), this one already loops over a known

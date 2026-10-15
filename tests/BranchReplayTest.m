@@ -693,6 +693,10 @@ classdef BranchReplayTest < matlab.unittest.TestCase
             app.addprop('isOverlayableAverage');
             app.addprop('overlayAverage');
             app.addprop('evaluateDroppedBranch');
+            app.addprop('ensureTransformation');
+            % On the path or not, without offering a plugin (ensureTransformation
+            % asks GitHub, and PluginsTest tests it).
+            app.ensureTransformation = @(id) exist(id, 'file') == 2;
             testCase.copyMethod('isOverlayableAverage', 'overlapCopy');
             testCase.copyMethod('evaluateDroppedBranch', 'evalRecurse');
 

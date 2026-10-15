@@ -60,6 +60,9 @@ classdef Plugins
         % The six fields every manifest carries (see DEVELOPER.md).
         ManifestFields = {'Name', 'Description', 'Entry', 'Icon', 'Section', 'Category'}
         RegistryFile = 'plugins.json'
+        % The GitHub account whose Alakazam* repositories the Install plugins
+        % list offers (Plugins.available).
+        Account = 'markspan'
     end
 
     methods (Static)
@@ -138,7 +141,7 @@ classdef Plugins
         %INSTALLED  Every installed plugin: its manifest's name, version and
         %   description, and the source and date of its installation.
             info = struct('Name', {}, 'Label', {}, 'Version', {}, ...
-                'Description', {}, 'Source', {}, 'Installed', {}, 'Folder', {});
+                'Description', {}, 'Source', {}, 'Link', {}, 'Installed', {}, 'Folder', {});
             root = Plugins.folder();
             if ~isfolder(root)
                 return;
@@ -160,8 +163,8 @@ classdef Plugins
                     'Label', textField(m, 'Name', name), ...
                     'Version', textField(m, 'Version', ''), ...
                     'Description', textField(m, 'Description', ''), ...
-                    'Source', record.source, 'Installed', record.installed, ...
-                    'Folder', fullfile(root, name)); %#ok<AGROW>
+                    'Source', record.source, 'Link', linkOf(record), ...
+                    'Installed', record.installed, 'Folder', fullfile(root, name)); %#ok<AGROW>
             end
         end
 
@@ -214,7 +217,13 @@ classdef Plugins
                 removeFolder(staging);
                 rethrow(err);
             end
-            candidate = struct('Source', spec.Label, 'Staging', staging, 'Plugins', plugins);
+            % The link as given, when it is one: what Update fetches again.
+            link = '';
+            if strcmp(spec.Kind, 'url')
+                link = strtrim(char(string(source)));
+            end
+            candidate = struct('Source', spec.Label, 'Link', link, 'Staging', staging, ...
+                'Plugins', plugins);
         end
 
         function text = describe(candidate)
@@ -272,7 +281,8 @@ classdef Plugins
                     copyPlugin(p.Folder, destination);
                     forgetFunction(p.Name);   % a replaced version may still be in memory
                     addpath(genpath(destination), '-end');
-                    registry = setRecord(registry, p.Name, candidate.Source, p.Version);
+                    registry = setRecord(registry, p.Name, candidate.Source, p.Version, ...
+                        candidateLink(candidate));
                     names{end + 1} = p.Name; %#ok<AGROW>
                 end
                 writeRegistry(root, registry);
@@ -368,6 +378,163 @@ classdef Plugins
             % Anything else on github.com (an archive or a release asset) is a
             % link to a zip already, and is downloaded as it is.
         end
+
+        function repos = available(opts)
+        %AVAILABLE  The plugins on offer: every repository of the account
+        %   (Plugins.Account) whose name starts with "Alakazam", Alakazam
+        %   itself left out, so a new one is offered as soon as it exists.
+        %   Malformed ones are listed too, with what is wrong.
+        %
+        %   REPOS is a struct array, one per repository: .Repo, .Link (its
+        %   https address, what installing it fetches), .Description,
+        %   .Release (the latest release's tag, '' when it has none), .Version
+        %   (that tag without its leading v), .Asset (the release's zip, ''
+        %   when it has none, and the source is then installed), .Tools (the
+        %   plugins in it: each folder holding <Name>.json and <Name>.m), and
+        %   .Problem ('' or why it cannot be installed as it is).
+        %
+        %   GitHub allows 60 unauthenticated requests an hour, and this makes
+        %   one per repository plus two, so the answer is kept for the session
+        %   and only fetched again with Refresh true. A token in the
+        %   environment variable GITHUB_TOKEN raises the limit. Name-value
+        %   options: Refresh, Account, and FetchJson (@(url) the decoded JSON,
+        %   for the tests).
+            arguments
+                opts.Refresh (1, 1) logical = false
+                opts.Account = Plugins.Account
+                opts.FetchJson = @defaultFetchJson
+            end
+            persistent cache
+            account = char(opts.Account);
+            if ~opts.Refresh && isstruct(cache) && isfield(cache, 'account') ...
+                    && strcmp(cache.account, account)
+                repos = cache.repos;
+                return;
+            end
+            repos = struct('Repo', {}, 'Link', {}, 'Description', {}, 'Release', {}, ...
+                'Version', {}, 'Asset', {}, 'Tools', {}, 'Problem', {});
+            listing = {};
+            for page = 1:10
+                batch = opts.FetchJson(sprintf( ...
+                    'https://api.github.com/users/%s/repos?per_page=100&page=%d', account, page));
+                batch = asCells(batch);
+                listing = [listing, batch]; %#ok<AGROW>
+                if numel(batch) < 100
+                    break;
+                end
+            end
+            for k = 1:numel(listing)
+                r = listing{k};
+                name = char(string(r.name));
+                if ~startsWith(name, 'Alakazam') || strcmp(name, 'Alakazam')
+                    continue;
+                end
+                entry = struct('Repo', name, 'Link', sprintf('https://github.com/%s/%s', account, name), ...
+                    'Description', textField(r, 'description', ''), 'Release', '', 'Version', '', ...
+                    'Asset', '', 'Tools', {{}}, 'Problem', '');
+                api = sprintf('https://api.github.com/repos/%s/%s', account, name);
+                try
+                    branch = textField(r, 'default_branch', 'main');
+                    tree = opts.FetchJson(sprintf('%s/git/trees/%s?recursive=1', api, branch));
+                    entry.Tools = toolsInTree(tree);
+                catch err
+                    entry.Problem = sprintf('its files could not be read (%s)', err.message);
+                end
+                try
+                    release = opts.FetchJson([api '/releases/latest']);
+                    entry.Release = char(string(release.tag_name));
+                    entry.Version = regexprep(entry.Release, '^[vV]', '');
+                    entry.Asset = zipAsset(release);
+                catch err
+                    if ~contains(err.message, '404') && ~contains(err.identifier, '404') ...
+                            && isempty(entry.Problem)
+                        entry.Problem = sprintf('its releases could not be read (%s)', err.message);
+                    end
+                end
+                if isempty(entry.Problem) && isempty(entry.Tools)
+                    entry.Problem = ['it holds no plugin: no folder with <Name>.json and ' ...
+                        '<Name>.m beside it'];
+                end
+                repos(end + 1) = entry; %#ok<AGROW>
+            end
+            [~, order] = sort(lower({repos.Repo}));
+            repos = repos(order);
+            cache = struct('account', account, 'repos', repos);
+        end
+
+        function repo = providerOf(transformId, repos)
+        %PROVIDEROF  The entry of REPOS (Plugins.available) whose repository
+        %   holds the plugin TRANSFORMID, or [] when none does.
+            repo = [];
+            for k = 1:numel(repos)
+                if any(strcmp(repos(k).Tools, char(transformId)))
+                    repo = repos(k);
+                    return;
+                end
+            end
+        end
+
+        function text = notAPluginMessage(repo, detail)
+        %NOTAPLUGINMESSAGE  What installing REPO, a repository that turned out
+        %   not to hold a plugin, says: warmly, since it is nobody's fault
+        %   here, and with what was missing (DETAIL).
+            text = sprintf([ ...
+                'Oh, I am so very sorry! I went off to fetch %s for you with the greatest of ' ...
+                'pleasure, but it turns out it is not quite a plugin yet: %s. Please do not ' ...
+                'worry in the slightest, as nothing has been installed or changed, and this is ' ...
+                'not your doing at all. Its author may well still be putting the finishing ' ...
+                'touches to it. A plugin is a folder holding <Name>.json, its manifest, and ' ...
+                '<Name>.m, its entry function, as each tool on the Tools tab is. It would be a ' ...
+                'delight to try again once it has one. Thank you ever so much for your ' ...
+                'patience, and do have a lovely day!'], repo, detail);
+        end
+    end
+end
+
+function tools = toolsInTree(tree)
+%TOOLSINTREE  The plugins in a repository's file tree (GitHub's git/trees,
+%   recursive): each folder X holding X.json and X.m.
+    tools = {};
+    if ~isstruct(tree) || ~isfield(tree, 'tree')
+        return;
+    end
+    entries = asCells(tree.tree);
+    paths = cellfun(@(e) char(string(e.path)), entries, 'UniformOutput', false);
+    for k = 1:numel(paths)
+        parts = regexp(paths{k}, '(?:^|/)([A-Za-z]\w*)/\1\.json$', 'tokens', 'once');
+        if isempty(parts)
+            continue;
+        end
+        entry = regexprep(paths{k}, '\.json$', '.m');
+        if any(strcmp(paths, entry)) && ~any(strcmp(tools, parts{1}))
+            tools{end + 1} = parts{1}; %#ok<AGROW>
+        end
+    end
+end
+
+function name = zipAsset(release)
+%ZIPASSET  The name of a release's .zip asset, '' when it has none.
+    name = '';
+    if ~isfield(release, 'assets') || isempty(release.assets)
+        return;
+    end
+    assets = asCells(release.assets);
+    names = cellfun(@(a) char(string(a.name)), assets, 'UniformOutput', false);
+    hit = find(endsWith(names, '.zip', 'IgnoreCase', true), 1);
+    if ~isempty(hit)
+        name = names{hit};
+    end
+end
+
+function c = asCells(x)
+%ASCELLS  A decoded JSON array as a row cell, whether jsondecode made it a
+%   struct array (all elements alike) or a cell (they differ).
+    if isempty(x)
+        c = {};
+    elseif iscell(x)
+        c = reshape(x, 1, []);
+    else
+        c = reshape(num2cell(x), 1, []);
     end
 end
 
@@ -403,10 +570,33 @@ function t = textField(m, field, default)
     end
 end
 
+function link = candidateLink(candidate)
+%CANDIDATELINK  The link a candidate was fetched from, '' for a zip file.
+    link = '';
+    if isfield(candidate, 'Link')
+        link = candidate.Link;
+    end
+end
+
+function link = linkOf(record)
+%LINKOF  Where a plugin can be fetched again: the link it was installed
+%   from, or, for one recorded before links were, the GitHub repository its
+%   source names ("github.com/owner/repo, release ...").
+    link = record.link;
+    if isempty(link)
+        gh = regexp(record.source, '^github\.com/([^/,\s]+)/([^/,\s]+)', 'tokens', 'once');
+        if ~isempty(gh)
+            link = sprintf('https://github.com/%s/%s', gh{1}, gh{2});
+        elseif startsWith(record.source, 'https://')
+            link = record.source;
+        end
+    end
+end
+
 function registry = readRegistry(root)
 %READREGISTRY  The record of where each plugin came from, as a struct array
 %   with .name, .source, .version and .installed.
-    registry = struct('name', {}, 'source', {}, 'version', {}, 'installed', {});
+    registry = struct('name', {}, 'source', {}, 'version', {}, 'installed', {}, 'link', {});
     file = fullfile(root, Plugins.RegistryFile);
     if ~isfile(file)
         return;
@@ -420,21 +610,24 @@ function registry = readRegistry(root)
         r = decoded(k);
         registry(end + 1) = struct('name', char(string(r.name)), ...
             'source', textField(r, 'source', ''), 'version', textField(r, 'version', ''), ...
-            'installed', textField(r, 'installed', '')); %#ok<AGROW>
+            'installed', textField(r, 'installed', ''), 'link', textField(r, 'link', '')); %#ok<AGROW>
     end
 end
 
 function record = registryRecord(registry, name)
-    record = struct('name', name, 'source', '', 'version', '', 'installed', '');
+    record = struct('name', name, 'source', '', 'version', '', 'installed', '', 'link', '');
     hit = find(strcmp({registry.name}, name), 1);
     if ~isempty(hit)
         record = registry(hit);
     end
 end
 
-function registry = setRecord(registry, name, source, version)
+function registry = setRecord(registry, name, source, version, link)
+    if nargin < 5
+        link = '';
+    end
     record = struct('name', name, 'source', source, 'version', version, ...
-        'installed', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm')));
+        'installed', char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm')), 'link', link);
     hit = find(strcmp({registry.name}, name), 1);
     if isempty(hit)
         registry(end + 1) = record;
@@ -467,8 +660,14 @@ function defaultDownload(url, file)
 end
 
 function data = defaultFetchJson(url)
-    data = webread(url, weboptions('ContentType', 'json', 'Timeout', 30, ...
-        'HeaderFields', {'Accept', 'application/vnd.github+json'; 'User-Agent', 'Alakazam'}));
+%DEFAULTFETCHJSON  GitHub's API, with the token in GITHUB_TOKEN when there
+%   is one: it raises the limit of 60 requests an hour.
+    headers = {'Accept', 'application/vnd.github+json'; 'User-Agent', 'Alakazam'};
+    token = getenv('GITHUB_TOKEN');
+    if ~isempty(token)
+        headers(end + 1, :) = {'Authorization', ['Bearer ' token]};
+    end
+    data = webread(url, weboptions('ContentType', 'json', 'Timeout', 30, 'HeaderFields', headers));
 end
 
 function [location, label] = latestRelease(gh, api, repo, fetchJson)

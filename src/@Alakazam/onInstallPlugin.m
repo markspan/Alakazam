@@ -1,8 +1,10 @@
-function onInstallPlugin(this, source)
+function onInstallPlugin(this, source, repo)
 %ONINSTALLPLUGIN  Install a plugin from a zip file or a link (see Plugins).
 %   onInstallPlugin(this) asks where from (PluginSourceDialog);
-%   onInstallPlugin(this, SOURCE) takes SOURCE as given, as Update in the
-%   list of installed plugins does.
+%   onInstallPlugin(this, SOURCE) takes SOURCE as given, as Install and
+%   Upgrade in the plugin list do; onInstallPlugin(this, SOURCE, REPO) says,
+%   when the repository REPO turns out to hold no plugin, so in the warmest
+%   terms (Plugins.notAPluginMessage), since it is listed whatever it holds.
 %
 %   THREE THINGS THE USER SEES, IN ORDER: where it comes from, what was found
 %   in it (Plugins.describe: each plugin, what it replaces, what it needs and
@@ -10,6 +12,9 @@ function onInstallPlugin(this, source)
 %   the user's rights), and the result. Nothing is installed before the
 %   second step has been answered with Install, and Cancel is the default
 %   there, so a stray Enter installs nothing.
+    if nargin < 3
+        repo = '';
+    end
     if nargin < 2 || isempty(source)
         source = PluginSourceDialog(this.MainFigure);
         if isempty(source)
@@ -24,6 +29,12 @@ function onInstallPlugin(this, source)
         candidate = Plugins.prepare(source);
     catch ME
         close(progress);
+        if ~isempty(repo) && strcmp(ME.identifier, 'Alakazam:Plugins:noPlugin')
+            uialert(this.MainFigure, Plugins.notAPluginMessage(repo, ...
+                'I looked everywhere inside it and could not find a single plugin folder'), ...
+                'Not quite a plugin yet', 'Icon', 'info');
+            return;
+        end
         uialert(this.MainFigure, ME.message, 'Could not install the plugin', 'Icon', 'warning');
         return;
     end
