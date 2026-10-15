@@ -86,6 +86,13 @@ it was made from in the new cache. A report is still listed when the raw
 folder keeps its name: that, and the recordings the report names, tell it
 apart from another workspace's.
 
+When a workspace is opened, at start-up or with **Open WorkSpace**, and a
+folder it names is not on this computer, Alakazam says which folders it
+cannot find and, once the message is closed, opens **Edit WorkSpace** with
+the workspace's folders filled in, to point it at where they are now.
+Nothing is created or changed until then: a raw folder that has moved is
+not made again as an empty one.
+
 ## Cleaning a workspace {#sec-clear}
 
 **Clear WorkSpace** asks for one of two levels:

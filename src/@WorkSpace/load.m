@@ -31,5 +31,5 @@ function load(this,~,~)
         this.Groups = struct('subject', {}, 'group', {});
     end
 
-    this.open();
+    this.openOrAsk();
 end

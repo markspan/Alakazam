@@ -245,7 +245,9 @@ classdef Alakazam < handle
                 % this guided prompt existed.
                 this.Workspace.edit(true);
             else
-                this.Workspace.open();
+                % Folders the workspace names that are not here are asked
+                % about rather than created (WorkSpace.openOrAsk).
+                this.Workspace.openOrAsk();
             end
 
             % Optional debug aid: expose this instance in the base workspace as
