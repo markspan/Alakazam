@@ -165,7 +165,7 @@ classdef Alakazam < handle
         [ok, message] = buildHelpPage(this)
         onAbout(this)
         onUpdate(this)
-        onInstallPlugin(this, source)
+        onInstallPlugin(this, source, repo)
         onManagePlugins(this)
         refreshRibbon(this)
         setPlotsViewMode(this, mode)
@@ -183,6 +183,10 @@ classdef Alakazam < handle
         beginTreesSplitResize(this)
         dragTreesSplitResize(this)
         endTreesSplitResize(this)
+        beginReportsSplitResize(this)
+        dragReportsSplitResize(this)
+        endReportsSplitResize(this)
+        newNode = persistReportNode(this, reportName, htmlFile, qmdFile)
 
         function this = Alakazam(varargin)
         %ALAKAZAM  Construct and open the application.
