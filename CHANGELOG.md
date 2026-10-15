@@ -4,7 +4,7 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
-## Unreleased
+## V0.4.5.2 (2026-10-15)
 
 ### Added
 
@@ -23,8 +23,44 @@ bar. Dates are those of the tag.
   section, with the warning that they were found with ERPLAB's
   12 dB per octave Butterworth filter, whose slope is gentler than that of
   Alakazam's FIR.
+- **Reports and grand averages ask which analysis.** Branches that start at
+  the same recording are taken to be alternative analyses. When a recording
+  has more than one, ERP & Report, Spectral & Report and the Data Quality
+  Report first ask which to report, since a report that took them all
+  counted that recording once for every analysis; the single-trial results
+  follow the choice. Define Grand shows an **Analysis** row that selects
+  every subject analysed one way.
+- **A grand average's inputs say which analysis they are.** Every
+  subject's average is called Average, so two analyses of one recording
+  were two identical rows. Each now carries what sets its branch apart, in
+  square brackets: the steps only it has ("AutoICA"), the ones it does
+  without ("without AutoICA"), or, when the steps are the same, the setting
+  in which they differ ("Filter (lowpass.freq 30)"). Settings that differ
+  between subjects, such as the components ICA removed, are not taken for
+  another analysis.
+- **A scale bar in the continuous view.** Left of the channel labels, an I
+  as long as the microvolts written above it, at the current magnification:
+  the largest 1, 2 or 5 times a power of ten within a tenth of the plot's
+  height.
+- **`DialogFields.FrequencyResponse`**, a filter's amplitude response for
+  any dialog: the gain in dB on a logarithmic frequency axis, the
+  half-amplitude level dotted, and each cutoff marked in Hz. It is the plot
+  the Butterworth plugin had; the plugin (0.2.0) and the Filter dialog now
+  both draw with it.
 
 ### Changed
+
+- **The Filter dialog's frequency response has a logarithmic frequency
+  axis**, with each ticked cutoff marked, so the high-pass is as legible as
+  the low-pass.
+- **Right-click Recalculate is called Edit/Recalculate**, since it reopens
+  the step's dialog first.
+- **The Face saccades template stops at the overlap-corrected trials and
+  their average**; chapter 17 of the manual adds the fitted waveforms, the
+  plain average and the model's terms by hand.
+- **Unfold's and EYE-EEG's helpers live in their transformation's folder**:
+  `+Unfold` in `Deconvolve/` and `+EyeEeg` in `EyeTracking/`, the one
+  transformation that calls each toolbox.
 
 - **Dependability is described as what it is for.** The report and the
   manual now say that it bears on individual differences, and that for a
@@ -47,6 +83,13 @@ bar. Dates are those of the tag.
   MATLAB path is still used as it is.
 
 ### Fixed
+
+- **A workspace whose folders are not on this computer is asked about.**
+  Opening it made any missing folder anew, so a raw folder that had moved
+  to another disk came back as an empty one and the tree as an empty tree,
+  with nothing to say why. Alakazam now says which folders it cannot find
+  and opens Edit WorkSpace to point it at them; nothing is created
+  meanwhile.
 
 - **Installing a plugin from a link works again.** MATLAB R2026a's `isfile`
   answers true for an https address it can reach, so a link to a real
