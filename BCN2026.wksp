@@ -1,0 +1,13 @@
+{
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/BCN2026/",
+  "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
+  "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
+  "TransformSettings": {
+    "Deconvolve": [],
+    "Baseline": {
+      "Start": -100,
+      "Stop": 0
+    }
+  },
+  "Groups": []
+}
