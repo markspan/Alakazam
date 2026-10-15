@@ -335,7 +335,7 @@ classdef PluginsTest < matlab.unittest.TestCase
                 'Confirm', @(message, ~) confirm(message));
             closeFig = onCleanup(@() delete(fig));
             table = findobj(fig, 'Tag', 'PluginTable');
-            testCase.verifyEqual(table.Data(1, 2:3), {'AlzPlugListed', '3.1'});
+            testCase.verifyEqual(table.Data(1, 1:2), {'AlzPlugListed', '3.1'});
             empty = findobj(fig, 'Tag', 'NoPlugins');
             testCase.verifyFalse(logical(empty.Visible));
 
@@ -386,9 +386,12 @@ classdef PluginsTest < matlab.unittest.TestCase
             closeFig = onCleanup(@() delete(fig));
             table = findobj(fig, 'Tag', 'PluginTable');
 
-            testCase.verifyEqual(table.Data(:, 1)', {'AlakazamBroken', 'AlakazamGood'});
-            testCase.verifySubstring(table.Data{1, 5}, 'Not a plugin yet');
-            testCase.verifyEqual(table.Data(2, 3:5), {'0.1.0', '0.2.0', 'Update available: 0.2.0'});
+            testCase.verifyEqual(reshape(table.ColumnName, 1, []), {'Plugin', 'Installed', 'Latest', 'Status'}, ...
+                'No column of repository names: a plugin is named by its own name.');
+            testCase.verifyEqual(table.Data(:, 1)', {'AlakazamBroken', 'AlzGood'}, ...
+                'A repository with no plugin in it yet goes by its own name.');
+            testCase.verifySubstring(table.Data{1, 4}, 'Not a plugin yet');
+            testCase.verifyEqual(table.Data(2, 2:4), {'0.1.0', '0.2.0', 'Update available: 0.2.0'});
 
             table.Selection = 2;
             table.SelectionChangedFcn(table, []);

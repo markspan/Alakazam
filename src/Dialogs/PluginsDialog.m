@@ -6,8 +6,9 @@ function fig = PluginsDialog(parentFig, varargin)
 %   (Plugins.available), so a new one is listed as soon as it exists, and a
 %   malformed one is listed too, saying what is wrong with it. A plugin
 %   installed from anywhere else (a zip, another link) is listed as well.
-%   Each row says what is installed, the latest release, and what can be
-%   done: not installed, installed, an update available, or not a plugin
+%   Each row names the plugin (a repository with none in it yet goes by its
+%   own name) and says what is installed, the latest release, and what can
+%   be done: not installed, installed, an update available, or not a plugin
 %   yet.
 %
 %   FIG = PluginsDialog(PARENTFIG, Name, Value):
@@ -69,8 +70,8 @@ function fig = PluginsDialog(parentFig, varargin)
         'Text', 'No plugins are on offer or installed.');
     emptyLabel.Layout.Row = 1;
     table = uitable(tableGrid, 'Tag', 'PluginTable', 'RowName', {}, ...
-        'ColumnName', {'Repository', 'Plugin', 'Installed', 'Latest', 'Status'}, ...
-        'ColumnWidth', {190, 150, 70, 70, 'auto'}, 'SelectionType', 'row', ...
+        'ColumnName', {'Plugin', 'Installed', 'Latest', 'Status'}, ...
+        'ColumnWidth', {190, 70, 70, 'auto'}, 'SelectionType', 'row', ...
         'Multiselect', 'off', 'SelectionChangedFcn', @(~, ~) updateButtons());
     table.Layout.Row = 2;
 
@@ -114,10 +115,9 @@ function fig = PluginsDialog(parentFig, varargin)
         where.Text = text;
         emptyLabel.Visible = isempty(rows);
         if isempty(rows)
-            table.Data = cell(0, 5);
+            table.Data = cell(0, 4);
         else
-            table.Data = [{rows.Repo}', {rows.Plugin}', {rows.Installed}', {rows.Latest}', ...
-                {rows.Status}'];
+            table.Data = [{rows.Plugin}', {rows.Installed}', {rows.Latest}', {rows.Status}'];
         end
         table.Selection = [];
         updateButtons();
@@ -240,6 +240,9 @@ function rows = pluginRows(repos, installed)
             latest = '-';
         end
         plugin = strjoin(r.Tools, ', ');
+        if isempty(plugin)
+            plugin = r.Repo;    % no plugin in it yet: the repository is its only name
+        end
         if isempty(names)
             status = 'Not installed';
             if ~isempty(r.Problem)
