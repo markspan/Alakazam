@@ -40,6 +40,7 @@ classdef UnfoldToolboxTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             for p = {fullfile(UnfoldToolboxTest.Root, 'src'), ...
                      fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations'), ...
+                     fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations', 'Deconvolve'), ...
                      fullfile(UnfoldToolboxTest.Root, 'tests')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
@@ -137,7 +138,7 @@ classdef UnfoldToolboxTest < matlab.unittest.TestCase
         %   a reason to use it, not a reason to track its branch: an analysis
         %   whose numbers depend on when it was installed is not reproducible.
             source = fileread(fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations', ...
-                '+Unfold', 'ensure.m'));
+                'Deconvolve', '+Unfold', 'ensure.m'));
 
             url = regexp(source, 'https://github\.com/unfoldtoolbox/unfold/archive/refs/tags/[\w.]+\.zip', ...
                 'match', 'once');
@@ -154,7 +155,7 @@ classdef UnfoldToolboxTest < matlab.unittest.TestCase
         %   installer wrote another, the app would download the toolbox again
         %   on every single call and nothing would fail loudly enough to
         %   notice.
-            folder = fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations', '+Unfold');
+            folder = fullfile(UnfoldToolboxTest.Root, 'src', 'Transformations', 'Deconvolve', '+Unfold');
             for f = {'isAvailable.m', 'ensure.m'}
                 source = fileread(fullfile(folder, f{1}));
                 testCase.verifySubstring(source, "findInstalled('unfold', 'init_unfold.m', 'unfold-1.3.1')", ...

@@ -169,10 +169,11 @@ Stripping from the first `%` to end of line looks equivalent and is not: it
 truncates format strings such as `'%s'`, which is how an earlier pass lost a
 real `topoplot` call in `TransTools.DrawScalpMap`. Indirect dependencies are
 resolved one hop, through the package helper a transformation calls
-(`+TransTools`, `+Unfold`, `+EyeEeg`). A helper only one transformation uses
-lives in that transformation's own folder (`CoherenceMap/ComputeCoherenceMap.m`,
-and so on), so it is already counted under "direct": the glob below reads
-every `.m` in the folder.
+(`+TransTools`, and `+Unfold` and `+EyeEeg` in the folders of `Deconvolve` and
+`EyeTracking`). Any other helper only one transformation uses lives in that
+transformation's own folder (`CoherenceMap/ComputeCoherenceMap.m`, and so on),
+so it is already counted under "direct": the glob below reads every `.m` in the
+folder.
 
 Run from `src/Transformations`:
 
@@ -182,7 +183,8 @@ PAT = re.compile(r'\b(pop_[a-zA-Z0-9_]+|eeg_[a-zA-Z0-9_]+|ft_[a-zA-Z0-9_]+'
                  r'|GEDAI|iclabel|fastica|runica|firfilt|newtimef|newcrossf'
                  r'|spectopo|topoplot|readlocs|dipfitdefs|uf_[a-zA-Z0-9_]+'
                  r'|parseeyelink)\b')
-PACKAGES = ('TransTools', 'Unfold', 'EyeEeg')
+PACKAGES = {'TransTools': '+TransTools', 'Unfold': 'Deconvolve/+Unfold',
+            'EyeEeg': 'EyeTracking/+EyeEeg'}
 
 def code(path):
     return "\n".join(l for l in io.open(path, encoding='utf-8',
@@ -190,7 +192,7 @@ def code(path):
                      if not l.lstrip().startswith('%'))
 
 helper = {p: {os.path.basename(f)[:-2]: sorted(set(PAT.findall(code(f))))
-              for f in glob.glob('+' + p + '/*.m')} for p in PACKAGES}
+              for f in glob.glob(PACKAGES[p] + '/*.m')} for p in PACKAGES}
 
 for d in sorted(os.listdir('.')):
     if not os.path.isdir(d) or d.startswith('+'):

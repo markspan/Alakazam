@@ -20,7 +20,8 @@ classdef EyeEegMeasuresTest < matlab.unittest.TestCase
     methods (TestClassSetup)
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
-            for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations')}
+            for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations'), ...
+                     fullfile(root, 'src', 'Transformations', 'Deconvolve')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end

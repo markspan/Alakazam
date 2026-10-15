@@ -515,14 +515,14 @@ each and when it can arise.
 |---|---|
 | `src/Transformations/Deconvolve/Deconvolve.m` | the transformation: bins applied, options read, the fit called |
 | `src/Transformations/Deconvolve/DeconvolveDialog.m` | the dialog, with the design preview |
-| `src/Transformations/+Unfold/binModel.m` | bins into event types and formulas (section 1) |
-| `src/Transformations/+Unfold/designMatrix.m` | the `uf_designmat` call (2.1) |
-| `src/Transformations/+Unfold/fitBins.m` | sections 2.2 to 2.8 |
-| `src/Transformations/+Unfold/overlapCorrectedTrials.m` | the trials (2.7) |
-| `src/Transformations/+Unfold/predictionValues.m` | **Terms evaluated at** into `predictAt` |
-| `src/Transformations/+Unfold/timeLockedEvents.m` | the time-locked pairs (section 3) |
-| `src/Transformations/+Unfold/keepEvents.m`, `pooledValues.m`, `formulaVariables.m` | the events in the fit, the values a waveform is held at, and a formula's fields |
-| `src/Transformations/+Unfold/ensure.m`, `startToolbox.m`, `isAvailable.m` | installing and starting (section 6) |
+| `src/Transformations/Deconvolve/+Unfold/binModel.m` | bins into event types and formulas (section 1) |
+| `src/Transformations/Deconvolve/+Unfold/designMatrix.m` | the `uf_designmat` call (2.1) |
+| `src/Transformations/Deconvolve/+Unfold/fitBins.m` | sections 2.2 to 2.8 |
+| `src/Transformations/Deconvolve/+Unfold/overlapCorrectedTrials.m` | the trials (2.7) |
+| `src/Transformations/Deconvolve/+Unfold/predictionValues.m` | **Terms evaluated at** into `predictAt` |
+| `src/Transformations/Deconvolve/+Unfold/timeLockedEvents.m` | the time-locked pairs (section 3) |
+| `src/Transformations/Deconvolve/+Unfold/keepEvents.m`, `pooledValues.m`, `formulaVariables.m` | the events in the fit, the values a waveform is held at, and a formula's fields |
+| `src/Transformations/Deconvolve/+Unfold/ensure.m`, `startToolbox.m`, `isAvailable.m` | installing and starting (section 6) |
 
 ## 8. How it is tested
 

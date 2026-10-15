@@ -19,6 +19,7 @@ classdef UnfoldSolversTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations'), ...
+                     fullfile(root, 'src', 'Transformations', 'Deconvolve'), ...
                      fullfile(root, 'src', 'Support'), fullfile(root, 'tests')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end

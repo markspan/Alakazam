@@ -128,9 +128,11 @@ A transformation is a folder `src/Transformations/<Name>/` holding:
 Manifests are found at startup and placed on the ribbon's **Tools** tab by
 their `Section`. Every non-package folder under `Transformations` is offered
 as a transformation (`RibbonScanTest` pins this), so a helper shared between
-transformations lives in a package: `+TransTools` for general helpers,
-`+Unfold`, `+EyeEeg` and `+ClusterStats` for their own domains. A helper used
-by one transformation stays in that transformation's folder.
+transformations lives in a package: `+TransTools` for general helpers and
+`+ClusterStats` for its own domain. A helper used by one transformation stays
+in that transformation's folder, a package of them included: `+Unfold` sits in
+`Deconvolve/` and `+EyeEeg` in `EyeTracking/`, the one transformation that
+calls each toolbox.
 
 ### The contract
 

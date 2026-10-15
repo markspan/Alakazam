@@ -35,7 +35,7 @@ classdef UnfoldBinsTest < matlab.unittest.TestCase
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Transformations'), ...
-                     fullfile(root, 'src', 'Support')}
+                     fullfile(root, 'src', 'Transformations', 'Deconvolve'), fullfile(root, 'src', 'Support')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
             end
         end
