@@ -32,11 +32,10 @@ authors' script calls the figure "Figure 10", its number in the preprint.
 ## The template
 
 Select the recording, right-click and **Apply Template**, choosing the
-template. It adds seven nodes: three Deconvolve nodes fitting the same model,
-and a four-node branch that epochs and averages without deconvolution, for
-comparison.
+template. It adds two nodes:
 
-- **Deconvolve**, returning one waveform per bin, with the paper's model:
+- **Deconvolve**, returning overlap-corrected trials (**Result**:
+  Overlap-corrected trials), with the paper's model:
   - three bins, one per event type (`bin 1 "Stimulus" "stimonset"`, `bin 2
     "Saccade" "saccade"`, `bin 3 "Button" "buttonpress"`);
   - a response window from -1500 to 1000 ms around each event;
@@ -52,16 +51,24 @@ comparison.
   `S 99` marker precedes each face by about 1010 ms (SD 6 ms). Lags so nearly
   constant cannot be told apart from the saccade's and the face's own
   responses, and modelling them makes the regression ill-conditioned.
-- **Deconvolve** again, with the same model, returning overlap-corrected
-  trials.
+- **Average** of those trials: the deconvolved response to each event type,
+  within 0.3 µV of the waveforms the model fits.
+
+The figure sets the deconvolved responses beside those of plain epoching,
+and the paper goes on to how the saccade's size matters. Three more steps on
+the same recording give the rest of this chapter:
+
+- **Deconvolve** again, with the same settings and **Result**: One waveform
+  per bin, for the waveforms the model fits;
 - **DefineBins** with the same three bins, epoched from -1500 to 1000 ms,
   then **Baseline** (-200 to 0 ms), **ArtefactDetect** (the same 250 µV
   moving-window peak-to-peak criterion, on the scalp channels) and
-  **Average**: the comparison without deconvolution.
-- **Deconvolve** a third time, returning the model's terms, with the saccade
-  spline evaluated at amplitudes of 0.3, 0.6, 1.5 and 3 degrees, and the
-  other terms added as their average marginal effect (**Other terms added
-  at**: AME).
+  **Average**: the comparison without deconvolution;
+- **Deconvolve** a third time, with **Result**: One waveform per model term,
+  the saccade spline evaluated at amplitudes of 0.3, 0.6, 1.5 and 3 degrees
+  (**Terms evaluated at**: `sac_amplitude = 0.3 0.6 1.5 3`), and the other
+  terms added as their average marginal effect (**Other terms added at**:
+  AME).
 
 Built by hand, the first node is **Tools > 3. Epoching and Averaging >
 Deconvolve**, with the bins written under **Define bins** and the formulas
@@ -71,9 +78,9 @@ columns, since one is already covered by the intercept (@fig-deconvolve-dialog).
 
 ## Figure 11, top row: the waveforms
 
-Select the first Deconvolve node and drag the **Average** node onto it: an
-average dropped on another of the same shape is drawn in the same plot
-rather than transformed. Pick Oz and untick everything but the two stimulus
+Select the Deconvolve node that returns one waveform per bin and drag the
+plain **Average** onto it: an average dropped on another of the same shape
+is drawn in the same plot rather than transformed. Pick Oz and untick everything but the two stimulus
 waveforms.
 
 ![The response to the faces at Oz, deconvolved and plainly averaged: Figure 11C, top.](images/deconvolve-waveforms.jpg){#fig-deconvolve-waveforms}
@@ -100,7 +107,7 @@ line.
 
 ![Trials locked to the face at Oz and sorted by the next saccade, without deconvolution. The face's response runs straight down; a second positivity follows the saccade line.](images/deconvolve-stimulus-plain.jpg){#fig-deconvolve-stimulus-plain}
 
-The same settings on the second Deconvolve node, the overlap-corrected
+The same settings on the template's Deconvolve node, the overlap-corrected
 trials, leave the face's response alone:
 
 ![The same trials, overlap-corrected: the positivity that followed the saccade line is gone.](images/deconvolve-stimulus-corrected.jpg){#fig-deconvolve-stimulus-corrected}
@@ -118,12 +125,14 @@ The **Saccade** bin sorted by **Next buttonpress** gives the remaining panel
 (Figure 11D). Each corrected trial is the recording around its event with
 every other event's fitted response subtracted. 3337 of the 3829 events keep
 a trial: a window that touches a stretch left out of the model had nothing
-subtracted there, and is dropped. Averaging the kept trials comes within
-0.3 µV of the fitted waveforms.
+subtracted there, and is dropped. The template's Average of the kept trials
+comes within 0.3 µV of the fitted waveforms; its stimulus response peaks at
+17.9 µV between 300 and 500 ms at Oz, where the fitted waveform peaks at
+17.7 µV.
 
 ## Beyond the figure: how saccade size matters
 
-The last node returns the model's own view of the saccade term: the saccade
+The third Deconvolve node returns the model's own view of the saccade term: the saccade
 response at each amplitude asked for, each a whole waveform with the other
 terms as their average marginal effects (Unfold's `uf_predictContinuous` and
 `uf_addmarginal`). With AME the intercept is the response averaged over this

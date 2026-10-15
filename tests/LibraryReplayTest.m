@@ -196,20 +196,17 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
 
         function theFaceSaccadeTemplateGivesFigureElevensNumbers(testCase)
         %THEFACESACCADETEMPLATEGIVESFIGUREELEVENSNUMBERS  Chapter 17 of the
-        %   manual: between 300 and 500 ms at Oz the plain average of the
-        %   stimulus bin peaks at 23.6 uV and the deconvolved waveform at
-        %   17.7 uV, and 3337 of the 3829 events keep an overlap-corrected
-        %   trial.
+        %   manual: 3337 of the 3829 events keep an overlap-corrected trial,
+        %   and the template's Average of them peaks at 17.9 uV between 300
+        %   and 500 ms at Oz, within 0.3 uV of the fitted waveform's 17.7.
             file = testCase.dataFile('opendata', 'face_saccades_opendata_fig10.set');
             nodes = testCase.templateNodes('FaceSaccadesDeconvolution.alztemplate');
             results = testCase.replay(nodes, file);
 
-            deconvolved = results{1};
-            trials = results{2};
-            plain = results{stepIndex(nodes, 'Average')};
-            testCase.verifyEqual(peakIn(deconvolved, 'Stimulus', 'Oz', [300 500]), 17.7, 'AbsTol', 0.06);
-            testCase.verifyEqual(peakIn(plain, 'Stimulus', 'Oz', [300 500]), 23.6, 'AbsTol', 0.06);
+            trials = results{stepIndex(nodes, 'Deconvolve')};
+            average = results{stepIndex(nodes, 'Average')};
             testCase.verifyEqual(trials.trials, 3337, 'Overlap-corrected trials kept.');
+            testCase.verifyEqual(peakIn(average, 'Stimulus', 'Oz', [300 500]), 17.9, 'AbsTol', 0.06);
         end
 
         function theReadingTemplateRunsEndToEnd(testCase)
