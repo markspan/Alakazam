@@ -105,6 +105,10 @@ classdef SignalView < AlakazamView
         DifferenceButton        % state uibutton
         RemoveButton            % uibutton
         DifferenceNote          % text in the axes: zoom in to see the difference
+        ScaleAxes               % uiaxes left of the channel labels, holding the scale bar
+        ScaleBar                % line: the scale bar, an I of ScaleMicrovolts
+        ScaleText               % text above it: how many microvolts it stands for
+        ScaleMicrovolts = NaN   % what the scale bar stands for, in microvolts
     end
 
     properties (Access = private)
@@ -118,6 +122,8 @@ classdef SignalView < AlakazamView
                                 % pages through them, showing this many at a time
         ChannelSliderPx = 18    % width of that scrollbar's column, pixels
         StepButtonPx = 16       % width of the pan step buttons, pixels
+        ScaleColumnPx = 46      % width of the scale bar's column, left of the labels
+        ScaleShareMax = 0.1     % the scale bar's longest, as a share of the plot's height
         % Above this many samples x channels in view, the difference is not
         % worked out (about 150 MB of doubles, and a second's work on every
         % slider move): the window has to be narrowed first.
@@ -354,6 +360,7 @@ classdef SignalView < AlakazamView
                 set(this.Axes, "XLim", [startTime, endTime]);
             end
             this.applyYLim(yVis);
+            this.updateScaleBar();
             this.updateScrollStep(numPoints);
             this.drawOverlaid(startIndex, endIndex, targetColumns, scaleValue, xVis);
             this.drawOverlays(startTime, endTime);
@@ -514,9 +521,26 @@ classdef SignalView < AlakazamView
                 "RowHeight", {'1x', this.SliderRowPx, this.SliderRowPx, this.SliderRowPx, 0}, ...
                 "ColumnWidth", {'1x', channelSliderCol}, ...
                 "Padding", [2 2 2 2], "RowSpacing", 2, "ColumnSpacing", 2);
-            this.Axes = uiaxes(this.Grid, "TickLabelInterpreter", "none");
+            % The plot and, left of its channel labels, the scale bar
+            % (updateScaleBar), side by side in row 1.
+            plotGrid = uigridlayout(this.Grid, [1 2], ...
+                "ColumnWidth", {this.ScaleColumnPx, '1x'}, ...
+                "Padding", [0 0 0 0], "ColumnSpacing", 0);
+            plotGrid.Layout.Row = 1;
+            plotGrid.Layout.Column = 1;
+            this.ScaleAxes = uiaxes(plotGrid, "Visible", "off", "XLim", [0 1], "YLim", [0 1], ...
+                "PickableParts", "none", "HitTest", "off");
+            this.ScaleAxes.Layout.Column = 1;
+            this.ScaleAxes.Toolbar.Visible = "off";
+            disableDefaultInteractivity(this.ScaleAxes);
+            this.ScaleBar = line(this.ScaleAxes, nan, nan, "Color", [0.15 0.15 0.15], ...
+                "LineWidth", 1.2, "Clipping", "off", "Tag", "ScaleBar");
+            this.ScaleText = text(this.ScaleAxes, 0.5, 0, "", "FontSize", 8, ...
+                "HorizontalAlignment", "center", "VerticalAlignment", "bottom", ...
+                "Clipping", "off", "Tag", "ScaleText");
+            this.Axes = uiaxes(plotGrid, "TickLabelInterpreter", "none");
             this.Axes.Layout.Row = 1;
-            this.Axes.Layout.Column = 1;
+            this.Axes.Layout.Column = 2;
             % Custom wheel scrolling needs uiaxes' own built-in scroll/drag
             % interactions disabled so they do not fight it.
             disableDefaultInteractivity(this.Axes);
@@ -664,6 +688,7 @@ classdef SignalView < AlakazamView
             if all(isfinite(yl)) && yl(2) > yl(1)
                 set(this.Axes, "YLim", yl);
             end
+            this.updateScaleBar();
             this.notifyActivated();
         end
 
@@ -812,6 +837,42 @@ classdef SignalView < AlakazamView
             if isfinite(lo) && isfinite(hi) && hi > lo
                 set(this.Axes, "YLim", [lo, hi]);
             end
+        end
+
+        function updateScaleBar(this)
+        %UPDATESCALEBAR  The scale bar left of the channel labels: an I as long
+        %   on screen as ScaleMicrovolts microvolts are in the plot at the
+        %   current magnification, labelled with that value. The value is the
+        %   largest 1, 2 or 5 x 10^k microvolts whose bar is no more than a
+        %   tenth of the plot's height (scaleMicrovolts), so it follows the
+        %   magnification. Drawn in pixels in its own axes, from the plot's
+        %   own y-limits and height, so the two need not share a layout.
+            if isempty(this.ScaleAxes) || ~isgraphics(this.ScaleAxes)
+                return;
+            end
+            yl = this.Axes.YLim;
+            gain = this.ScaleSlider.Value;
+            plotPx = this.Axes.InnerPosition(4);
+            barPx = this.ScaleAxes.InnerPosition(4);
+            if ~(diff(yl) > 0) || ~(gain > 0) || plotPx <= 1 || barPx <= 1
+                set(this.ScaleBar, "XData", nan, "YData", nan);
+                this.ScaleText.String = "";
+                this.ScaleMicrovolts = NaN;
+                return;
+            end
+            microvolts = SignalView.scaleMicrovolts(diff(yl) / gain, this.ScaleShareMax);
+            lengthPx = microvolts * gain / diff(yl) * plotPx;
+            this.ScaleAxes.YLim = [0, barPx];
+            % Its foot level with the bottom of the plot, a few pixels up.
+            bottom = max(0, this.Axes.InnerPosition(2) - this.ScaleAxes.InnerPosition(2)) + 4;
+            top = bottom + lengthPx;
+            cap = 0.18;
+            set(this.ScaleBar, ...
+                "XData", [0.5 - cap, 0.5 + cap, NaN, 0.5, 0.5, NaN, 0.5 - cap, 0.5 + cap], ...
+                "YData", [bottom, bottom, NaN, bottom, top, NaN, top, top]);
+            set(this.ScaleText, "Position", [0.5, top + 2, 0], ...
+                "String", SignalView.scaleLabel(microvolts));
+            this.ScaleMicrovolts = microvolts;
         end
 
         function updateScrollStep(this, numPoints)
@@ -1224,6 +1285,28 @@ classdef SignalView < AlakazamView
             spacing = max(eps, spacing);
             tickPos = -cumsum([0 spacing]);
             addVec = tickPos - signalMed;
+        end
+    end
+
+    methods (Static)
+        function microvolts = scaleMicrovolts(visibleMicrovolts, share)
+        %SCALEMICROVOLTS  What the scale bar stands for: the largest 1, 2 or
+        %   5 x 10^k microvolts that is no more than SHARE of the
+        %   VISIBLEMICROVOLTS the plot's height spans.
+            limit = share * visibleMicrovolts;
+            k = floor(log10(limit));
+            candidates = [1 2 5 10] * 10 ^ k;
+            microvolts = max(candidates(candidates <= limit * (1 + 1e-9)));
+        end
+
+        function text = scaleLabel(microvolts)
+        %SCALELABEL  MICROVOLTS as the scale bar's label: "50 uV", "0.5 uV",
+        %   and from a thousand up in millivolts, "2 mV" (with the micro sign).
+            if microvolts >= 1000
+                text = sprintf('%g mV', microvolts / 1000);
+            else
+                text = sprintf('%g %sV', microvolts, char(181));
+            end
         end
     end
 end

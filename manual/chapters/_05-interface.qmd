@@ -151,7 +151,7 @@ transformation that made it.
 
 ### Continuous data
 
-![Continuous data: the channels stacked, events as labelled vertical lines, a scroll bar that pages through the channels on the right, and the pan, zoom and magnification sliders below.](images/ui-continuous.jpg){#fig-continuous-ref}
+![Continuous data: the channels stacked, events as labelled vertical lines, the amplitude's scale bar left of the labels, and the pan, zoom and magnification sliders below. With more channels than fit legibly, a scroll bar on the right pages through them.](images/ui-continuous.jpg){#fig-continuous-ref}
 
 Continuous data is drawn by a renderer that precomputes a pyramid of
 per-bucket minima and maxima, so that a redraw reads about one value pair per
@@ -180,6 +180,12 @@ not carry the traces across the screen as you zoom and scroll, and **mag**
 magnifies each trace about that point. This is display only; the data are
 not changed. Turn **View-on-screen baseline** off (@sec-settings) to centre
 each channel on its row by its median over the whole recording instead.
+
+Left of the channel labels, a scale bar shaped like a capital I gives the
+amplitude: its length is the number of microvolts written above it, at the
+current magnification. It stands for the largest 1, 2 or 5 times a power of
+ten that keeps it within a tenth of the plot's height, so it changes as you
+magnify.
 
 #### Overlaying a recording {#sec-overlay-continuous}
 

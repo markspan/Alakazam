@@ -84,7 +84,7 @@ no channel is flat, and whether there is drift you will want to filter.
 Alakazam will compute a clean-looking grand average from bad data, and the
 cheapest moment to catch bad data is now.
 
-![A continuous recording (ERP CORE N400, after a 0.1 Hz high-pass filter): channels stacked, events marked as vertical lines with their codes, and the zoom, pan and magnification sliders below.](images/ui-continuous.jpg){#fig-continuous}
+![A continuous recording (ERP CORE N400, after a 0.1 Hz high-pass filter): channels stacked, events marked as vertical lines with their codes, a scale bar for the amplitude bottom left, and the zoom, pan and magnification sliders below.](images/ui-continuous.jpg){#fig-continuous}
 
 ## Your first transformation
 
