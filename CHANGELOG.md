@@ -9,13 +9,13 @@ bar. Dates are those of the tag.
 ### Added
 
 - **Install plugins**, on the Alakazam tab: every repository of the
-  markspan account on GitHub whose name starts with Alakazam is listed, with
-  the plugin it holds, the version installed, the latest release and what
-  can be done: install, upgrade, uninstall. A repository added later is
-  listed without a new Alakazam, and one that holds no plugin yet is listed
-  too, saying why; trying to install it says, kindly, what is missing and
-  changes nothing. **From a link** (the former **Install**) still installs
-  from a zip file or any link.
+  markspan account on GitHub whose name starts with Alakazam is listed by
+  the plugin it holds, with the version installed, the latest release and
+  what can be done: install, upgrade, uninstall. A repository added later
+  is listed without a new Alakazam, and one that holds no plugin yet is
+  listed too, under its own name, saying why; trying to install it says,
+  kindly, what is missing and changes nothing. **From a link** (the former
+  **Install**) still installs from a zip file or any link.
 - **A missing tool is offered for installation.** A template, a dropped
   branch, Recalculate or Apply to All that names a tool not installed here
   says which repository holds it and offers to install it, then carries on.
@@ -42,6 +42,11 @@ bar. Dates are those of the tag.
   handed the list's label for a plugin rather than where the plugin came
   from. The registry now records the link, and a plugin installed before
   that is read from its recorded source.
+- **The first build of this release** (replaced the same day) stopped
+  Install and Upgrade with "Too many input arguments": the installer's
+  declaration in the application's class lacked its new input. A test now
+  holds every method file to its declaration, and found four more that had
+  never been declared; they are declared now.
 
 ### In the Deconvolve plugin (its 0.1.0)
 
