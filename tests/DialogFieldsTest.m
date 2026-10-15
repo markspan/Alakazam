@@ -194,6 +194,46 @@ classdef DialogFieldsTest < matlab.unittest.TestCase
             end
         end
 
+        function aFrequencyResponseIsDrawnOnALogAxisWithItsCutoffs(testCase)
+        %AFREQUENCYRESPONSEISDRAWNONALOGAXISWITHITSCUTOFFS  From the values:
+        %   0 Hz left out, a zero gain drawn at the floor, the half-amplitude
+        %   level dotted, and each cutoff that is on marked in Hz.
+            field = DialogFields.FrequencyResponse(@(v) response(v), 'Floor', -80);
+            testCase.verifyFalse(field.hasValue(), 'A preview adds nothing to the options.');
+            testCase.build(field);
+
+            field.refresh(struct('Highpass', 1, 'Lowpass', 0));
+            ax = field.Axes;
+            curve = findobj(ax, 'Tag', 'FrequencyResponse');
+            testCase.assertNumElements(curve, 1);
+            testCase.verifyEqual(ax.XScale, 'log');
+            testCase.verifyEqual(curve.XData, [0.5 1 2 100]);
+            testCase.verifyEqual(curve.YData, [-80, 20 * log10(0.5), 0, 0], 'AbsTol', 1e-12, ...
+                'A zero gain is drawn at the floor, not left out.');
+            testCase.verifyEqual(findobj(ax, 'Tag', 'CutoffLevel').Value, 20 * log10(0.5), 'AbsTol', 1e-12);
+            cutoff = findobj(ax, 'Tag', 'Cutoff');
+            testCase.verifyEqual(cutoff.Value, 1, 'Only the cutoff that is on is marked.');
+            testCase.verifyEqual(char(cutoff.Label), '1 Hz');
+            testCase.verifyEqual(ax.XLim, [0.5 100]);
+            testCase.verifyEqual(ax.YLim, [-80 3]);
+
+            broken = DialogFields.FrequencyResponse(@(v) refused(v));
+            testCase.build(broken);
+            broken.refresh(struct());
+            testCase.verifySubstring(broken.Axes.Title.String, 'must lie above');
+            testCase.verifyError(@() DialogFields.FrequencyResponse(3), 'Alakazam:DialogFields');
+
+            function [f, gain, cutoffs] = response(v)
+                f = [0 0.5 1 2 100];
+                gain = [0 0 0.5 1 1];
+                cutoffs = [v.Highpass, v.Lowpass];
+            end
+
+            function [f, gain, cutoffs] = refused(~) %#ok<STOUT>
+                error('DialogFieldsTest:bandstop', 'The low-pass must lie above the high-pass.');
+            end
+        end
+
         % ---- the dialog ---------------------------------------------------
         function theDialogReturnsEveryValueButThePreview(testCase)
             testCase.requireFigures();

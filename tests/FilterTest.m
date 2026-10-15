@@ -35,6 +35,8 @@ classdef FilterTest < matlab.unittest.TestCase
                 fullfile(root, 'src', 'Transformations', 'Filter')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Transformations')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Dialogs')));
         end
 
         function ensureEeglab(testCase)
@@ -591,7 +593,8 @@ classdef FilterTest < matlab.unittest.TestCase
         function theDialogPlotsTheResponseAndFollowsTheSettings(testCase)
         %THEDIALOGPLOTSTHERESPONSEANDFOLLOWSTHESETTINGS  The dialog is modal,
         %   so a timer finds it, reads its one plot (the frequency response
-        %   from 0 Hz to Nyquist), unticks the high-pass, reads it again,
+        %   on a logarithmic axis up to Nyquist, as DialogFields.FrequencyResponse
+        %   draws it, each cutoff marked), unticks the high-pass, reads it again,
         %   unticks the low-pass too, and presses Cancel. The timer repeats
         %   until the dialog is up, so the test does not depend on how long
         %   that takes.
@@ -609,8 +612,9 @@ classdef FilterTest < matlab.unittest.TestCase
             bothFrequencies = filterFrequencyResponse(stored, srate);
             lowOnlyFrequencies = filterFrequencyResponse(filterOptions([], [30 40], []), srate);
 
-            seen = struct('impulseAxes', [], 'span', [], 'bothFrequencies', [], ...
-                'lowOnlyFrequencies', [], 'frequencyCaption', '', 'noneCaption', '', 'noneCurves', []);
+            seen = struct('impulseAxes', [], 'span', [], 'bothFrequencies', [], 'scale', '', ...
+                'cutoffs', [], 'lowOnlyFrequencies', [], 'frequencyCaption', '', 'noneCaption', '', ...
+                'noneCurves', []);
             timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                 'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
             cleanup = onCleanup(@() cleanupTimer(timerObj));
@@ -619,12 +623,14 @@ classdef FilterTest < matlab.unittest.TestCase
             clear cleanup;
 
             testCase.verifyEmpty(seen.impulseAxes, 'Only the frequency response is plotted.');
-            testCase.verifyEqual(seen.span, [0, srate / 2], 'AbsTol', 1e-12, ...
-                'The frequency response runs from 0 Hz to Nyquist.');
-            testCase.verifyEqual(seen.bothFrequencies, numel(bothFrequencies), ...
-                'The frequency response is that of both filters together.');
+            testCase.verifyEqual(seen.span, [bothFrequencies(2), srate / 2], 'AbsTol', 1e-12, ...
+                'The frequency response runs from the first frequency above 0 Hz to Nyquist.');
+            testCase.verifyEqual(seen.scale, 'log', 'The frequency axis is logarithmic.');
+            testCase.verifyEqual(sort(seen.cutoffs), [1 30], 'Each ticked cutoff is marked.');
+            testCase.verifyEqual(seen.bothFrequencies, numel(bothFrequencies) - 1, ...
+                'The frequency response is that of both filters together, without 0 Hz.');
             testCase.verifySubstring(seen.frequencyCaption, sprintf('Nyquist (%g Hz)', srate / 2));
-            testCase.verifyEqual(seen.lowOnlyFrequencies, numel(lowOnlyFrequencies), ...
+            testCase.verifyEqual(seen.lowOnlyFrequencies, numel(lowOnlyFrequencies) - 1, ...
                 'Unticking the high-pass redraws the frequency response.');
             testCase.verifySubstring(seen.noneCaption, 'No filter is ticked');
             testCase.verifyEmpty(seen.noneCurves, 'With no filter ticked there is nothing to plot.');
@@ -645,6 +651,8 @@ classdef FilterTest < matlab.unittest.TestCase
                 seen.impulseAxes = findall(f(1), 'Tag', 'ResponseAxes');
                 seen.span = curve.XData([1 end]);
                 seen.bothFrequencies = numel(curve.XData);
+                seen.scale = frequencyAxes.XScale;
+                seen.cutoffs = [findobj(frequencyAxes, 'Tag', 'Cutoff').Value];
                 seen.frequencyCaption = findall(f(1), 'Tag', 'FrequencyCaption').Text;
                 highPass = findall(f(1), 'Type', 'uicheckbox', 'Text', 'High-pass');
                 highPass.Value = false;

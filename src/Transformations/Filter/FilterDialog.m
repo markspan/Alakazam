@@ -42,11 +42,13 @@ function options = FilterDialog(srate, labels, stored)
 %
 %   In global mode, a plot under the three filters shows the frequency
 %   response of the enabled ones together (filterFrequencyResponse, from the
-%   same kernels Filter applies): the gain in dB from 0 Hz to Nyquist, with a
-%   dotted line at -6 dB, the level at which each cutoff is defined. It shows
-%   which frequencies pass, where they are cut off, and how far the rest is
-%   attenuated, and is redrawn whenever a filter is ticked or a frequency or
-%   dB changes. A setting Filter would refuse is shown there instead, with
+%   same kernels Filter applies): the gain in dB against a logarithmic
+%   frequency axis up to Nyquist, with a dotted line at -6 dB, the level at
+%   which each cutoff is defined, and each cutoff marked. It is drawn by
+%   DialogFields.FrequencyResponse, as a plugin's filter dialog draws its
+%   own. It shows which frequencies pass, where they are cut off, and how far
+%   the rest is attenuated, and is redrawn whenever a filter is ticked or a
+%   frequency or dB changes. A setting Filter would refuse is shown there instead, with
 %   the reason. Per-channel mode has no such plot, since every channel may
 %   have its own filters.
 %
@@ -366,9 +368,11 @@ function options = FilterDialog(srate, labels, stored)
             % to at most -200 dB.
             floorDb = min(floorDb, max(-200, -10 * ceil((20 - 20 * log10(max(min(gain), 1e-10))) / 10)));
         end
-        plotFrequencyResponse(frequencyAxes, frequencies, gain, floorDb, accentColor);
+        DialogFields.FrequencyResponse.draw(frequencyAxes, frequencies, gain, ...
+            'Cutoffs', cutoffsOf(settings), 'Floor', floorDb, 'Level', 10 ^ (cutoffLevelDb() / 20), ...
+            'Color', accentColor);
         frequencyCaption.Text = sprintf(['Frequency response of the ticked filters together, ' ...
-            'from 0 Hz to Nyquist (%g Hz). The dotted line is at %.0f dB, where each cutoff sits.'], ...
+            'up to Nyquist (%g Hz). The dotted line is at %.0f dB, where each cutoff sits.'], ...
             nyq, cutoffLevelDb());
     end
 
@@ -528,24 +532,16 @@ function data = seedTable(labels, seed, stored)
     end
 end
 
-function plotFrequencyResponse(ax, f, gain, floorDb, color)
-%PLOTFREQUENCYRESPONSE  Draw a linear GAIN against F (Hz) on AX as dB.
-%   The frequency axis runs from F(1), 0 Hz, to F(end), the Nyquist
-%   frequency. The gain axis runs from FLOORDB to a little above 0 dB, and
-%   the gain is clamped to FLOORDB, since a stopband's exact zeros are -Inf
-%   dB and would leave gaps in the curve. A dotted line marks the cutoff
-%   level (cutoffLevelDb) under the curve, where it can be read off.
-    HEADROOM_DB = 5;   % room above 0 dB for passband ripple
-    gainDb = max(20 * log10(gain), floorDb);
-
-    plot(ax, [f(1), f(end)], [1, 1] * cutoffLevelDb(), ':', ...
-        'Color', [0.5 0.5 0.5], 'LineWidth', 1, 'Tag', 'CutoffLevel');
-    hold(ax, 'on');
-    plot(ax, f, gainDb, 'Color', color, 'LineWidth', 1, 'Tag', 'FrequencyResponse');
-    hold(ax, 'off');
-    xlim(ax, [f(1), f(end)]);
-    ylim(ax, [floorDb, HEADROOM_DB]);
-    grid(ax, 'on');
+function cutoffs = cutoffsOf(settings)
+%CUTOFFSOF  The frequencies of the ticked filters among the three, in Hz,
+%   for the plot to mark: each cutoff, and the notch's centre.
+    cutoffs = [];
+    for key = {'highpass', 'lowpass', 'notch'}
+        s = settings.(key{1});
+        if s.enabled
+            cutoffs(end + 1) = s.freq; %#ok<AGROW>
+        end
+    end
 end
 
 function floorDb = gainFloorDb(settings)

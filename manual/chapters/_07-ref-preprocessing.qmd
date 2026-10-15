@@ -235,7 +235,7 @@ latency, and it does not filter across the boundaries of a discontinuous
 recording. A filter made in MATLAB's Filter Designer app can be added as a
 fourth (@sec-filter-designer).
 
-![**Filter** at 200 Hz: an automatic 0.1 Hz high-pass, a 30 Hz low-pass with its order set by hand (160, which at 60 dB gives a 4.56 Hz transition band), and a line-noise band-stop from the Filter Designer, applied forward and backward. The plot is their response together.](images/filter-dialog.png){#fig-filter-dialog}
+![**Filter** at 200 Hz: an automatic 0.1 Hz high-pass, a 30 Hz low-pass with its order set by hand (160, which at 60 dB gives a 4.56 Hz transition band), and a line-noise band-stop from the Filter Designer, applied forward and backward. The plot is their response together, on a logarithmic frequency axis with each cutoff marked.](images/filter-dialog.png){#fig-filter-dialog}
 
 | Option | Default | Meaning |
 |--------------------|------------------|-------------------------------------------------------|
@@ -377,8 +377,9 @@ type, cutoff, transition band and order in @tbl-filter-design are the
 details to give, and the step records the filters it applied in the
 result, with the whole design of each one in the panel. Under the filters, the dialog plots the frequency
 response of the ticked ones together, a designed filter included: the gain
-in dB from 0 Hz to the Nyquist frequency, with a dotted line at -6 dB, where
-each cutoff sits, and the axis reaching 20 dB below the deepest attenuation
+in dB against a logarithmic frequency axis up to the Nyquist frequency, with a
+dotted line at -6 dB, where each cutoff sits, each ticked cutoff (and a notch's
+centre) marked and labelled in Hz, and the axis reaching 20 dB below the deepest attenuation
 ticked, or, when a designed filter is ticked, 20 dB below the curve's lowest
 point, down to -200 dB at most.
 It shows which frequencies pass, how steep each transition band is, and how
