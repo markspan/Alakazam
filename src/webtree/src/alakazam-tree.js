@@ -134,7 +134,7 @@ const CONTEXT_ITEMS = [
     { action: 'overlay', label: 'Overlay on plot' },
     { separator: true },
     { action: 'rename', label: 'Rename' },
-    { action: 'recalculate', label: 'Recalculate' },
+    { action: 'recalculate', label: 'Edit/Recalculate' },
     { action: 'rejectionBreakdown', label: 'Rejection breakdown...' },
     { action: 'applyToAll', label: 'Apply to All Raw Files...' },
     { separator: true },

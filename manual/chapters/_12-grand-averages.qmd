@@ -66,7 +66,7 @@ A grand average is computed once, from the datasets ticked in its dialog,
 and keeps both the result and the list of files it came from. What happens
 to those files afterwards decides whether it is still current:
 
-- **Recalculate** a step in a subject's branch, and every grand average
+- **Edit/Recalculate** a step in a subject's branch, and every grand average
   made from it is computed again.
 - **Delete** a branch it was made from, or **Clear Other Analyses**, and it
   keeps its numbers, which nothing can now recompute. Both name the grand

@@ -258,7 +258,7 @@ put back unchanged.
 **Reproducibility.** ICA starts from a random point, so two runs on the same
 data give slightly different components. The decomposition and the
 classification do not depend on the threshold, so they are kept with the
-node: changing the threshold with **Recalculate** re-prunes the components
+node: changing the threshold with **Edit/Recalculate** re-prunes the components
 already found instead of decomposing again, and rerunning on unchanged data
 reuses the earlier decomposition. A new decomposition can be forced by
 setting `Redecompose` to true in the stored options.

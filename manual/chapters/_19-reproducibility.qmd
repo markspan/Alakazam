@@ -20,7 +20,7 @@ computing on the wrong one.
   recordings are processed at once (**Settings > Processing**,
   @sec-settings); on nine RIFT recordings that took 215 s on three workers
   against 364 s one at a time.
-- **Recalculate**: reopen a step's dialog with its stored options, change
+- **Edit/Recalculate**: reopen a step's dialog with its stored options, change
   them, and recompute it and everything below it. Grand averages built from
   a recalculated node are rebuilt with their own sources and weighting.
 

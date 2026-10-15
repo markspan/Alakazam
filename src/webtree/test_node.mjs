@@ -149,7 +149,7 @@ const menu = window.document.querySelector('.alz-menu')
 assert.ok(menu, 'context menu should be shown')
 const items = [...menu.querySelectorAll('.alz-menu-item')].map(el => el.textContent)
 console.log('menu items:', items);
-assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Overlay on plot', 'Rename', 'Recalculate', 'Rejection breakdown...', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
+assert.strictEqual(JSON.stringify(items), JSON.stringify(['List events', 'Overlay on plot', 'Rename', 'Edit/Recalculate', 'Rejection breakdown...', 'Apply to All Raw Files...', 'Save Template...', 'Apply Template...', 'Export as ERPset...', 'Export as EEGLAB .set...', 'Delete']))
 // 'Average1' is not an ArtefactDetect node (canRejectionBreakdown falsy) ->
 // the breakdown item is present but greyed out, the same way List events is.
 const breakdownItemC = [...menu.querySelectorAll('.alz-menu-item')].find(el => el.textContent === 'Rejection breakdown...')

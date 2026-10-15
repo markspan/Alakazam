@@ -58,7 +58,7 @@ holds the recordings.
 
 **Every result knows how it was made.** A node records the transformation
 that produced it and the exact options it used. That record is what lets a
-step be revised (**Recalculate**), replayed on another recording (drag and
+step be revised (**Edit/Recalculate**), replayed on another recording (drag and
 drop, **Apply to All Raw Files**), saved as a template, and written out as
 code. Steps that change what the numbers mean without changing how they
 look, such as interpolating a channel or removing ICA components, also

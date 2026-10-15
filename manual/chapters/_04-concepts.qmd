@@ -36,7 +36,7 @@ click) offers what can be done with that node:
 
 | Action | What it does |
 |---------------------------------------|-------------------------------------------------------|
-| **Recalculate** | Reopen the step's dialog with the options it was run with, and recompute it and everything below it. |
+| **Edit/Recalculate** | Reopen the step's dialog with the options it was run with, and recompute it and everything below it. |
 | **Apply to All Raw Files** | Replay this node's branch on every other recording in the workspace. |
 | **Save Template** / **Apply Template** | Write the branch to a template file; replay a template here. |
 | **Rename**, **Delete** | Rename a node, its open plot taking the new name too; delete it and its branch, and the files behind them. |
@@ -47,7 +47,7 @@ click) offers what can be done with that node:
 
 : A node's context menu. Actions a node cannot perform are shown disabled. {#tbl-context-menu}
 
-**Recalculate** is offered for every transformation whose dialog can be
+**Edit/Recalculate** is offered for every transformation whose dialog can be
 reopened with the options stored on the node. It is not offered for a raw
 root, for a step with no options (Average, Scalp, Brain), or where reopening
 the dialog would not mean what it meant the first time:
