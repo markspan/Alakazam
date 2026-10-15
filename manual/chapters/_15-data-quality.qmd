@@ -4,8 +4,10 @@
 of the data every result was computed from. For each subject it follows the
 average back to the epochs behind it, measures what survived artefact
 rejection and how noisy the surviving trials were, and writes a Quarto
-report beside the others in the **Reports** tree. It has no dialog: it runs
-on every averaged subject in the workspace.
+report beside the others in the **Reports** tree. It runs on every averaged
+subject in the workspace, and asks only one thing: when a recording has
+been averaged in more than one way, which of those analyses to describe
+(@sec-alternative-analyses).
 
 ![The opening of a data-quality report: what it measures and why, with its sections listed on the right.](images/ga-report.jpg){#fig-dataquality-report}
 

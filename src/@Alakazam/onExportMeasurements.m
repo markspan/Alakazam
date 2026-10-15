@@ -21,6 +21,10 @@ function onExportMeasurements(this)
 %   estimate mode, so it must never pop FieldTrip's own consent-gated
 %   ~400 MB download. Missing either condition simply omits the section;
 %   it is never an export failure.
+%
+%   When a recording has Measure results from more than one analysis, the
+%   export asks which to report (chooseAnalysisBranches), and the
+%   single-trial results follow the choice (trialsOfChosen).
     entries = this.collectMeasurementEntries();
     if isempty(entries)
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
@@ -28,6 +32,12 @@ function onExportMeasurements(this)
             'transformation on an Average or Grand Average first.'], 'Nothing to export');
         return;
     end
+    subjects = find(strcmp({entries.datasetType}, 'subject'));
+    [keep, cancelled] = this.chooseAnalysisBranches({entries(subjects).file}, 'Measure result');
+    if cancelled
+        return;
+    end
+    entries(subjects(~keep)) = [];
 
     exportsDir = this.Workspace.ExportsDirectory;
     if isempty(exportsDir) || ~isfolder(exportsDir)
@@ -149,6 +159,9 @@ function onExportMeasurements(this)
         trialCsvName = '';
         try
             trialEntries = this.collectEntriesWithField('trialMeasurements');
+            if ~all(keep)
+                trialEntries = trialsOfChosen(this.Workspace.Tree, trialEntries, {entries.file});
+            end
             if ~isempty(trialEntries)
                 trialCsvName = [stem '_' stampTxt '_trials.csv'];
                 exportTrialMeasurementsCSV(trialEntries, fullfile(reportsDir, trialCsvName));
@@ -196,4 +209,22 @@ function onExportMeasurements(this)
     msgbox(sprintf('Exported %d dataset(s)'' Measure results to:\n%s%s%s', numel(entries), ...
         targetFile, reportNote, waveformNote), ...
         'Export complete');
+end
+
+% ======================================================================= %
+function trialEntries = trialsOfChosen(tree, trialEntries, chosenFiles)
+%TRIALSOFCHOSEN  The single-trial Measure results of the analyses chosen:
+%   those measured on an epoched dataset that a chosen average was made
+%   from. A per-trial Measure node hangs off the epoched data, not off the
+%   average, so it is matched by its parent.
+    ancestors = {};
+    for f = reshape(chosenFiles, 1, [])
+        id = tree.findByFile(f{1});
+        if ~isempty(id)
+            ancestors = [ancestors, {tree.lineageOf(id).UserData}]; %#ok<AGROW>
+        end
+    end
+    mine = arrayfun(@(e) ismember(tree.parentFile(tree.findByFile(e.file)), ancestors), ...
+        trialEntries);
+    trialEntries = trialEntries(mine);
 end

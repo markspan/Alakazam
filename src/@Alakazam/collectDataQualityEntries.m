@@ -1,8 +1,12 @@
-function entries = collectDataQualityEntries(this)
+function entries = collectDataQualityEntries(this, files)
 %COLLECTDATAQUALITYENTRIES  One data-quality entry per Averaged ERP in the
-%   Data & Analyses tree, as a struct array with .subject/.group/.session
-%   and .quality (a dataQualityMetrics() return) -- see
-%   Alakazam.onExportDataQuality.
+%   Data & Analyses tree, as a struct array with .subject/.group/.session,
+%   .quality (a dataQualityMetrics() return) and .file (the average's cache
+%   file) -- see Alakazam.onExportDataQuality.
+%
+%   COLLECTDATAQUALITYENTRIES(THIS, FILES) describes only the averages in
+%   FILES, the ones a report chose (chooseAnalysisBranches); by default
+%   every subject's average (subjectAverageFiles).
 %
 %   Keyed on Average nodes, not on epoched ones, for two reasons: an
 %   Average is the unit that actually enters the group analysis (the same
@@ -21,11 +25,14 @@ function entries = collectDataQualityEntries(this)
 %   file back to its node through a file -> node map built once here.
 %
 %   See also DATAQUALITYMETRICS, COLLECTENTRIESWITHFIELD.
-    entries = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {});
+    entries = struct('subject', {}, 'group', {}, 'session', {}, 'quality', {}, 'file', {});
 
     nodes = this.Workspace.Tree.allNodes();
     if isempty(nodes)
         return;
+    end
+    if nargin < 2
+        files = this.subjectAverageFiles();
     end
     byFile = containers.Map('KeyType', 'char', 'ValueType', 'any');
     for i = 1:numel(nodes)
@@ -34,15 +41,11 @@ function entries = collectDataQualityEntries(this)
         end
     end
 
-    for i = 1:numel(nodes)
-        node = nodes(i);
-        if exist(node.UserData, 'file') ~= 2
+    for i = 1:numel(files)
+        if ~isKey(byFile, files{i}) || exist(files{i}, 'file') ~= 2
             continue; % a node can outlive its file -- see loadNodeEEG's own note
         end
-        info = readEegCacheInfo(node.UserData);
-        if ~strcmpi(info.DataFormat, 'Averaged') || ~producesSubjectAverage(info.Call)
-            continue;
-        end
+        node = byFile(files{i});
         epochedFile = nearestEpochedAncestor(this.Workspace.Tree, byFile, node);
         averaged = load(node.UserData, 'EEG');
         if isempty(epochedFile)
@@ -76,7 +79,7 @@ function entries = collectDataQualityEntries(this)
         entries(end + 1) = struct('subject', subject, ... %#ok<AGROW>
             'group', this.Workspace.groupFor(subject), ...
             'session', this.Workspace.sessionFor(subject), ...
-            'quality', quality);
+            'quality', quality, 'file', node.UserData);
     end
 end
 

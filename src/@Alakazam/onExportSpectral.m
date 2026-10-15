@@ -3,6 +3,8 @@ function onExportSpectral(this)
 %   SpectralMeasure result in the workspace -- in either tree, a subject's
 %   branch or a Grand Average's -- to one long-format, R-compatible CSV (see
 %   exportSpectralCSV). The frequency-domain sibling of onExportMeasurements.
+%   When a recording has SpectralMeasure results from more than one
+%   analysis, it asks which to report (chooseAnalysisBranches).
     entries = this.collectSpectralEntries();
     if isempty(entries)
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
@@ -10,6 +12,13 @@ function onExportSpectral(this)
             'SpectralMeasure transformation on an epoched dataset first.'], 'Nothing to export');
         return;
     end
+    subjects = find(strcmp({entries.datasetType}, 'subject'));
+    [keep, cancelled] = this.chooseAnalysisBranches({entries(subjects).file}, ...
+        'SpectralMeasure result');
+    if cancelled
+        return;
+    end
+    entries(subjects(~keep)) = [];
 
     exportsDir = this.Workspace.ExportsDirectory;
     if isempty(exportsDir) || ~isfolder(exportsDir)

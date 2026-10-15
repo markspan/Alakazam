@@ -7,6 +7,16 @@ for Spectral Measure results (@sec-frequency-tagging). The report is a
 Quarto document, rendered by R, that tests what the design calls for and
 says so in prose, with the signal behind every number drawn next to it.
 
+When a recording has Measure results from more than one branch, the export
+first asks which analyses to report, each named by what sets its branch
+apart (@sec-alternative-analyses) and the number of recordings it holds.
+Branches that start at the same recording are taken to be alternative
+analyses, and a report that took them all would count that recording once
+for every analysis, as if they were further measurements of the same thing.
+Two Measure nodes under one average, measuring different windows, are
+offered the same way; tick both to report both. The single-trial results
+follow the choice.
+
 ## The export
 
 The CSV has one row per dataset, window, bin, channel and measure type, in

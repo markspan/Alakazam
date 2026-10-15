@@ -318,6 +318,18 @@ classdef WorkSpaceTree < handle
             end
         end
 
+        function nodes = lineageOf(this, id)
+        %LINEAGEOF  The nodes from ID's root down to ID itself, in the
+        %   struct(Id,Name,UserData,IsRoot) shape of allNodes, or none if ID
+        %   is unknown. The steps a dataset was made by (see datasetBranches).
+            nodes = repmat(struct('Id', '', 'Name', '', 'UserData', '', 'IsRoot', false), 1, 0);
+            id = this.resolveId(id);
+            while ~isempty(id) && isKey(this.Nodes, id)
+                nodes = [this.nodeStruct(id), nodes]; %#ok<AGROW>
+                id = this.Nodes(id).parentId;
+            end
+        end
+
         function id = findByFile(this, file)
         %FINDBYFILE  The id of the node holding FILE, or '' when none does.
             id = '';

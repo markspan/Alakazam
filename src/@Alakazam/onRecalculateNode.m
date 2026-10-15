@@ -36,8 +36,10 @@ function onRecalculateNode(this)
             'sources', {grandAverageSources(ownEEG, file)}, ...
             'weighted', ownEEG.etc.GrandAverage.weighted);
 
-        [candidateFiles, candidateLabels, candidateKinds] = this.findGrandAverageCandidates();
-        spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, existingSpec);
+        [candidateFiles, candidateLabels, candidateKinds, ~, candidateBranches] = ...
+            this.findGrandAverageCandidates();
+        spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, existingSpec, ...
+            candidateBranches);
         if isempty(spec)
             return; % cancelled
         end

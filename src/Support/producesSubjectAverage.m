@@ -22,7 +22,8 @@ function tf = producesSubjectAverage(call)
 %
 %   IT LIVES IN ONE FILE because four places need the same answer and had
 %   four copies of it: findGrandAverageCandidates, collectDesignRecordings,
-%   collectDataQualityEntries and isOverlayableAverage. A new way of
+%   subjectAverageFiles (once collectDataQualityEntries) and
+%   isOverlayableAverage. A new way of
 %   producing an average then has to be added here and nowhere else, which
 %   is how Deconvolve came to be missing from all four at once.
 %

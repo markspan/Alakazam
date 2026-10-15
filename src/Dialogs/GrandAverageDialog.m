@@ -1,4 +1,4 @@
-function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, prefillSpec)
+function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, prefillSpec, candidateBranches)
 %GRANDAVERAGEDIALOG  Modal dialog: name, type, weighting, and which subjects
 %   to combine into a grand average.
 %
@@ -16,12 +16,24 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
 %   .sources and .weighted when revisiting an existing one (name and type are
 %   then fixed; its current sources/weighting are pre-selected).
 %
+%   CANDIDATEBRANCHES (optional) names the way each candidate was made, ''
+%   when a kind's candidates were all made the same way (see
+%   findGrandAverageCandidates). When the selected type's candidates were
+%   made in more than one way, the recordings hold alternative analyses,
+%   and an "Analysis" row asks which: choosing one selects every subject
+%   made that way, since a grand average of one subject's two analyses
+%   counts that subject twice.
+%
 %   Returns a struct with .name, .sources (the selected files) and .weighted,
 %   or [] if the user cancelled.
 
     spec = [];
     isNew = isempty(prefillSpec);
     candidateKinds = cellfun(@char, candidateKinds, 'UniformOutput', false);
+    if nargin < 5 || isempty(candidateBranches)
+        candidateBranches = repmat({''}, size(candidateFiles));
+    end
+    BY_HAND = 'Choose subjects by hand';
 
     % Kinds actually present, in a stable preferred order.
     order = {'ERP', 'TF', 'coherence'};
@@ -49,11 +61,11 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     % dialog that skipped it, with no apparent reason to look unstyled
     % next to its siblings.
     [accentColor, bgColor] = dialogChromeColors();
-    fig = uifigure('Name', 'Grand Average', 'Position', fitOnScreen([100 100 480 460]), 'Color', bgColor);
+    fig = uifigure('Name', 'Grand Average', 'Position', fitOnScreen([100 100 560 500]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
     uilabel(root, 'Text', '  Grand Average', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
-    outer = uigridlayout(root, [5 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 44}, 'Padding', [10 10 10 10]);
+    outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', 0, '1x', 44}, 'Padding', [10 10 10 10]);
 
     % Row 1: name.
     nameRow = uigridlayout(outer, [1 2], 'ColumnWidth', {90, '1x'}, 'Padding', [8 8 8 0]);
@@ -81,15 +93,29 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
     weightField = uidropdown(weightRow, 'Tag', 'gaWeight', 'Items', weightChoices, 'Value', weightChoices{1}, ...
         'Tooltip', 'Weighting applies to ERP grand averages only; map types are averaged equally.');
 
-    % Row 4: subject picker (the selected type's datasets only).
-    listRow = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, 'Padding', [8 8 8 0]);
-    listRow.Layout.Row = 4;
-    uilabel(listRow, 'Text', 'Include these subjects:');
-    subjectList = uilistbox(listRow, 'Tag', 'gaSubjects', 'Items', {}, 'Multiselect', 'on');
+    % Row 4: which analysis, shown only when the type's candidates were made
+    % in more than one way (refreshForKind).
+    branchRow = uigridlayout(outer, [2 2], 'ColumnWidth', {90, '1x'}, 'RowHeight', {'fit', 'fit'}, ...
+        'Padding', [8 8 8 0], 'Visible', 'off');
+    branchRow.Layout.Row = 4;
+    uilabel(branchRow, 'Text', 'Analysis:');
+    branchDrop = uidropdown(branchRow, 'Tag', 'gaBranch', 'Items', {BY_HAND}, ...
+        'ValueChangedFcn', @(src, ~) selectBranch(src.Value));
+    branchHint = uilabel(branchRow, 'WordWrap', 'on', 'FontSize', 11, 'Text', ...
+        ['These recordings were analysed in more than one way. Choose the analysis to ' ...
+         'average, or pick the subjects by hand.']);
+    branchHint.Layout.Column = [1 2];
 
-    % Row 5: OK / Cancel.
+    % Row 5: subject picker (the selected type's datasets only).
+    listRow = uigridlayout(outer, [2 1], 'RowHeight', {'fit', '1x'}, 'Padding', [8 8 8 0]);
+    listRow.Layout.Row = 5;
+    uilabel(listRow, 'Text', 'Include these subjects:');
+    subjectList = uilistbox(listRow, 'Tag', 'gaSubjects', 'Items', {}, 'Multiselect', 'on', ...
+        'ValueChangedFcn', @(~, ~) showBranchOfSelection());
+
+    % Row 6: OK / Cancel.
     buttons = uigridlayout(outer, [1 3], 'ColumnWidth', {'1x', 90, 90}, 'Padding', [8 6 8 6]);
-    buttons.Layout.Row = 5;
+    buttons.Layout.Row = 6;
     cancelBtn = uibutton(buttons, 'Text', 'Cancel', 'ButtonPushedFcn', @(~,~) onCancel());
     cancelBtn.Layout.Column = 2;
     okBtn = uibutton(buttons, 'Tag', 'gaOK', 'Text', 'Compute', 'BackgroundColor', accentColor, ...
@@ -107,6 +133,7 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
         typeDrop.Enable = 'off';           % a grand average's kind never changes
         refreshForKind(prefillKind);
         subjectList.Value = intersect(prefillSpec.sources, subjectList.ItemsData);
+        showBranchOfSelection();
         if strcmp(prefillKind, 'ERP') && prefillSpec.weighted
             weightField.Value = weightChoices{2};
         end
@@ -123,12 +150,50 @@ function spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKin
         subjectList.ItemsData = {};
         subjectList.Items     = candidateLabels(mask);
         subjectList.ItemsData = candidateFiles(mask);
+        ways = unique(candidateBranches(mask), 'stable');
+        ways = ways(~cellfun(@isempty, ways));
+        if numel(ways) > 1
+            branchDrop.Items = [{BY_HAND}, ways];
+            branchRow.Visible = 'on';
+            outer.RowHeight{4} = 'fit';
+        else
+            branchDrop.Items = {BY_HAND};
+            branchRow.Visible = 'off';
+            outer.RowHeight{4} = 0;
+        end
+        branchDrop.Value = BY_HAND;
         if strcmp(kind, 'ERP')
             weightField.Enable = 'on';
         else
             weightField.Enable = 'off';
             weightField.Value  = weightChoices{1};
         end
+    end
+
+    function selectBranch(way)
+    %SELECTBRANCH  Select every subject of the type made WAY; by hand
+    %   leaves the selection as it is.
+        if strcmp(way, BY_HAND)
+            return;
+        end
+        mask = strcmp(candidateKinds, typeDrop.Value) & strcmp(candidateBranches, way);
+        subjectList.Value = candidateFiles(mask);
+    end
+
+    function showBranchOfSelection()
+    %SHOWBRANCHOFSELECTION  Name the analysis the selection is, or by hand
+    %   when it is not exactly one analysis's subjects.
+        if strcmp(branchRow.Visible, 'off')
+            return;
+        end
+        shown = BY_HAND;
+        for way = branchDrop.Items(2:end)
+            mask = strcmp(candidateKinds, typeDrop.Value) & strcmp(candidateBranches, way{1});
+            if isempty(setxor(candidateFiles(mask), subjectList.Value))
+                shown = way{1};
+            end
+        end
+        branchDrop.Value = shown;
     end
 
     function onOK()

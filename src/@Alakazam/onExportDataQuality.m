@@ -14,13 +14,21 @@ function onExportDataQuality(this)
 %
 %   See also COLLECTDATAQUALITYENTRIES, DATAQUALITYMETRICS,
 %   EXPORTDATAQUALITYCSVS, GENERATEDATAQUALITYREPORT.
+    % Which analysis, asked before anything is loaded: a recording averaged
+    % in two ways would otherwise be described twice, as two subjects.
+    averages = this.subjectAverageFiles();
+    [keep, cancelled] = this.chooseAnalysisBranches(averages, 'average');
+    if cancelled
+        return;
+    end
+
     % Held for the WHOLE operation, not just the gathering step: rendering
     % the .qmd shells out to quarto and R, which is by far the slowest
     % phase here (and on a first run installs R packages, taking a minute
     % or more). Dropping the indicator before it left that entire stretch
     % with no feedback at all, which reads as the app having hung.
     [restoreBusy, setBusy] = beginBusy(this.MainFigure, 'Assessing data quality...');
-    entries = this.collectDataQualityEntries();
+    entries = this.collectDataQualityEntries(averages(keep));
 
     if isempty(entries)
         clear restoreBusy;   % dismiss the spinner BEFORE the dialog, not behind it

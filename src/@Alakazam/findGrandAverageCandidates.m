@@ -1,4 +1,4 @@
-function [files, labels, kinds, included] = findGrandAverageCandidates(this)
+function [files, labels, kinds, included, branches] = findGrandAverageCandidates(this)
 %FINDGRANDAVERAGECANDIDATES  Every grand-averageable dataset in the cache
 %   directory that is not itself a grand average -- the pool a grand average
 %   can be built from. Three kinds qualify: an Averaged ERP (.data), a
@@ -32,10 +32,22 @@ function [files, labels, kinds, included] = findGrandAverageCandidates(this)
 %   decision, but its label starts with "(not in study)", and the cluster
 %   tests leave it unselected, so it is never combined without anyone
 %   having seen that it was taken out.
+%
+%   BRANCHES names, per candidate, the way it was made, when a kind's
+%   candidates were not all made the same way ('' when they were): what
+%   sets its chain of steps apart from the others' (datasetBranches), such
+%   as "AutoICA" and "without AutoICA", or "Filter (lowpass.freq 30)". Every
+%   subject's average is called "Average", so without it two analyses of
+%   one recording were two identical rows. The label carries it in square
+%   brackets, and the Grand Average dialog offers each way as a whole.
     files    = {};
     labels   = {};
     kinds    = {};
     included = false(1, 0);
+    branches = {};
+    recordings = {};
+    ids = {};
+    bins = {};
     nodes = this.Workspace.Tree.allNodes();
     for i = 1:numel(nodes)
         file = nodes(i).UserData;
@@ -51,11 +63,26 @@ function [files, labels, kinds, included] = findGrandAverageCandidates(this)
             continue;
         end
         recording = rootNameFor(this.Workspace.Tree, nodes(i));
-        inStudy = this.Workspace.includedFor(recording);
         files{end + 1}  = file; %#ok<AGROW>
-        labels{end + 1} = candidateLabel(recording, info.id, info.bindescLabels, inStudy); %#ok<AGROW>
         kinds{end + 1}  = tag; %#ok<AGROW>
-        included(end + 1) = inStudy; %#ok<AGROW>
+        included(end + 1) = this.Workspace.includedFor(recording); %#ok<AGROW>
+        recordings{end + 1} = recording; %#ok<AGROW>
+        ids{end + 1} = info.id; %#ok<AGROW>
+        bins{end + 1} = info.bindescLabels; %#ok<AGROW>
+    end
+
+    % A grand average combines one kind, so each kind's ways are its own.
+    branches = repmat({''}, 1, numel(files));
+    for kind = reshape(unique(kinds), 1, [])
+        mine = strcmp(kinds, kind{1});
+        [branch, names] = datasetBranches(this.Workspace.Tree, files(mine));
+        if ~isempty(names)
+            branches(mine) = names(branch);
+        end
+    end
+    labels = cell(1, numel(files));
+    for k = 1:numel(files)
+        labels{k} = candidateLabel(recordings{k}, ids{k}, branches{k}, bins{k}, included(k));
     end
 end
 
@@ -80,10 +107,16 @@ function name = rootNameFor(tree, node)
     end
 end
 
-function label = candidateLabel(recording, id, binLabels, inStudy)
-%CANDIDATELABEL  "<recording>: <node> (<bins>)", marked when the recording
-%   has been taken out of the study under Grouping.
-    label = sprintf('%s: %s (%s)', recording, id, strjoin(binLabels, ', '));
+function label = candidateLabel(recording, id, branch, binLabels, inStudy)
+%CANDIDATELABEL  "<recording>: <node> [<way>] (<bins>)", marked when the
+%   recording has been taken out of the study under Grouping. The way is
+%   left out when there is only one, or when the node's own name already
+%   says it ("Average" beside "Deconvolve").
+    node = id;
+    if ~isempty(branch) && ~strcmp(branch, id)
+        node = sprintf('%s [%s]', id, branch);
+    end
+    label = sprintf('%s: %s (%s)', recording, node, strjoin(binLabels, ', '));
     if ~inStudy
         label = ['(not in study) ' label];
     end

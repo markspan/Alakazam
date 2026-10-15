@@ -16,6 +16,7 @@ every dataset in the workspace that can be combined.
 | **Name** | | The grand average's label in the tree and in every export. |
 | **Type** | the first type present | **ERP waveforms** (Average or Deconvolve results), **Time-frequency maps** or **Coherence maps**. One grand average combines datasets of one type; the list shows that type's datasets only. |
 | **Weighting** | Unweighted | ERP waveforms only (below). |
+| **Analysis** | choose subjects by hand | Shown only when the recordings were analysed in more than one way (below). Choosing an analysis selects every subject analysed that way. |
 | **Include these subjects** | none | The datasets to combine. |
 
 : The fields of **Define Grand**. {#tbl-ga-define}
@@ -28,6 +29,25 @@ The list shows every recording's datasets, including recordings taken out of
 the study under **Grouping** (@sec-design), which are marked
 "(not in study)"; leave those unticked, or use **Per Design Cell** below,
 which leaves them out.
+
+### Alternative analyses {#sec-alternative-analyses}
+
+Every subject's average is called Average, so when a recording has been
+analysed in two ways (one branch with AutoICA and one without, say, or two
+low-pass cutoffs) each dataset in the list also says which analysis it
+belongs to, in square brackets: "S01: Average [AutoICA] (Faces, Cars)" and
+"S01: Average [without AutoICA] (Faces, Cars)". The name is what sets that
+branch apart from the others: the steps only it has, or, when it has none,
+the steps it does without. When two branches have the same steps, the
+setting in which they differ names them, as in "Filter (lowpass.freq 30)".
+That setting is looked for between the branches of one recording only, so
+settings that differ from subject to subject, such as the components ICA
+removed, are not taken for another analysis.
+
+When there is more than one analysis, the dialog shows an **Analysis** row:
+choosing one selects every subject analysed that way. A grand average of
+one subject's two analyses counts that subject twice, so choose one, or pick
+the subjects by hand.
 
 ### Weighting
 

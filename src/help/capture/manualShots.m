@@ -20,9 +20,10 @@ function [datasets, shots] = manualShots(repo) %#ok<INUSD>
 %
 %   NOT EVERY BUTTON CAN BE PHOTOGRAPHED SAFELY. ERP & Report and the other
 %   exports open a system file picker first, which no timer can reach, and
-%   Data Quality Report has no dialog at all: pressing it writes a report
-%   into the workspace's Reports folder. The 'workspace' dataset is a real
-%   one, so neither is on this list.
+%   Data Quality Report has no dialog (it asks only which analysis, when a
+%   recording has more than one): pressing it writes a report into the
+%   workspace's Reports folder. The 'workspace' dataset is a real one, so
+%   neither is on this list.
 %
 %   See also CAPTUREMANUALIMAGES.
     tpl = @(file, node) struct('template', file, 'node', node);

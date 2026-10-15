@@ -4,7 +4,8 @@ function onDefineGrandAverage(this)
 %   subject datasets to combine, name it, and choose weighted/
 %   unweighted combining (GrandAverageDialog), then computes and
 %   saves it as a new top-level node in the Grand Averages tree.
-    [candidateFiles, candidateLabels, candidateKinds] = this.findGrandAverageCandidates();
+    [candidateFiles, candidateLabels, candidateKinds, ~, candidateBranches] = ...
+        this.findGrandAverageCandidates();
     if numel(candidateFiles) < 2
         % LEGACY-JAVA-GUI: msgbox, see the note near onListEvents.
         msgbox(['A grand average needs at least two datasets to combine ' ...
@@ -16,7 +17,7 @@ function onDefineGrandAverage(this)
         return;
     end
 
-    spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, []);
+    spec = GrandAverageDialog(candidateFiles, candidateLabels, candidateKinds, [], candidateBranches);
     if isempty(spec)
         return; % cancelled
     end
