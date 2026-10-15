@@ -1,8 +1,8 @@
 # Source estimation {#sec-source-estimation}
 
 Three parts of Alakazam estimate cortical sources: the source projections of
-the 3D brain view (@sec-tr-brain3d), the Source Estimate step that stores an
-estimate on a node (@sec-tr-sourceestimate), and the source cluster test
+the 3D brain view (@sec-tr-brain3d), the Source Estimate plugin that stores
+an estimate on a node (@sec-tr-sourceestimate), and the source cluster test
 (@sec-source-cluster). They share one forward model and one inverse, and this
 chapter describes both, and above all what their result can and cannot mean.
 

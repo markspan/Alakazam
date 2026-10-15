@@ -121,7 +121,7 @@ classdef DataQualityRenderTest < matlab.unittest.TestCase
             % it, so the synchronisation table has a row to draw as well.
             tracked = makeTestEEG('trials', 8, 'nbchan', 2);
             tracked.bindesc = struct('label', {'A', 'B'}, 'index', {1, 2}, 'trials', {1:4, 5:8});
-            tracked.etc.alz.eyeTracking = EyeTrackingTest.joinRecord();
+            tracked.etc.alz.eyeTracking = EyeTrackingRecordTest.joinRecord();
             entries(end + 1) = struct('subject', 'tracked01', 'group', '', ...
                 'session', '', 'quality', dataQualityMetrics(tracked));
 

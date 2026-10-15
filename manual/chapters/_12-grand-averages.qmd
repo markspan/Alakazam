@@ -78,7 +78,7 @@ unweighted.
 
 A grand average is drawn like any average (@sec-plot-area), and every
 averaged-data step applies to it: ERP Measure, Scalp, Brain (3D), Derive
-Channels, Collapse Hemispheres.
+Channels, and Collapse Hemispheres when that plugin is installed.
 
 ## Keeping a grand average current {#sec-ga-current}
 

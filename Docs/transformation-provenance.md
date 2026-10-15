@@ -17,6 +17,12 @@ CollapseHemispheres, Deconvolve and EyeTracking were added. The pattern now
 also matches EEGLAB's `newcrossf`, which has no `pop_` prefix and was missed
 before.*
 
+*Since October 2026, seven of them are plugins, each in a repository of its
+own: CollapseHemispheres, EyeTracking, Deconvolve, SourceEstimate,
+SourceRegions, DipoleFit and Beamformer. Their rows stay here as the record
+of how each calls its toolkit; the commands at the foot of this page, run on
+this repository, no longer find them.*
+
 ## Wrappers: the toolkit does the work
 
 Thirteen transformations.
@@ -45,10 +51,10 @@ fixed lag and modelled events at a near-constant lag
 (`Unfold.timeLockedEvents`); evaluating each bin's waveform at the same values
 of its terms, from the toolbox's own design matrix, betas and spline
 functions; leaving out the stretches around cuts; the baseline; the difference
-bins; and the overlap-corrected trials, which are Alakazam's arithmetic on
-Unfold's own time-expanded design and betas (`Unfold.overlapCorrectedTrials`).
-The terms output is the toolbox's own (`uf_predictContinuous`, then
-`uf_addmarginal`). `EyeTracking` adds finding the eye file beside the
+bins. The overlap-corrected trials are the toolbox's own (`uf_erpimage`, its
+modelled responses plus residuals, one channel at a time), and so is the terms
+output (`uf_predictContinuous`, then `uf_addmarginal`); every result reads the
+betas `uf_condense` returns. `EyeTracking` adds finding the eye file beside the
 recording, choosing the anchor triggers, and refusing a poor synchronisation,
 judged from EYE-EEG's own table of per-trigger offsets.
 

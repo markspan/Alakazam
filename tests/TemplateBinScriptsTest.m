@@ -4,9 +4,9 @@ classdef TemplateBinScriptsTest < matlab.unittest.TestCase
 %   The bin language refuses text before its first statement (it used to
 %   drop it silently) and knows an epoch statement, so a script that parsed
 %   before could, in principle, stop parsing. The templates are the scripts
-%   users start from, so each DefineBins script and Deconvolve bin script in
-%   library/templates/ is parsed here, and a DefineBins script must still compile to
-%   as many bins as the template stored.
+%   users start from, so each DefineBins script in library/templates/ is
+%   parsed here, and must still compile to as many bins as the template
+%   stored. (The Deconvolve plugin checks its own templates' bin scripts.)
 %
 %   Run with: runtests('tests/TemplateBinScriptsTest.m').
 %
@@ -82,7 +82,5 @@ function [script, storedBins] = binScriptOf(step)
         case 'DefineBins'
             if isfield(p, 'script'); script = char(p.script); end
             if isfield(p, 'bins'); storedBins = p.bins; end
-        case 'Deconvolve'
-            if isfield(p, 'binScript'); script = char(p.binScript); end
     end
 end

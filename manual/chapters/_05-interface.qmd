@@ -23,7 +23,7 @@ is disabled rather than hidden, so the layout never shifts.
 | Design | **Grouping** | Assign recordings to groups, persons and sessions (@sec-design). |
 | | **Show Design** | Show the design as the statistics will read it. |
 | Settings | **Global** | The application's preferences (@sec-settings). |
-| Plugins | **Install**, **Installed** | Install a transformation from a zip file or a link; list, update or uninstall the installed ones (@sec-plugins). |
+| Plugins | **Install plugins**, **From a link** | The plugins on offer and those installed: install, upgrade or uninstall them; or install one from a zip file or a link (@sec-plugins). |
 | View | **Tabs**, **Grid**, **Stack** | How the open plots are arranged (@sec-plot-area). |
 | Help | **Help** | This manual, inside the application. |
 | About | **About**, **Update** | Version and licence; check for a newer release. |
@@ -42,19 +42,18 @@ part of this manual:
 
 | Group | Transformations | Reference |
 |-----------------------------------|-------------------------------------------------------|-----------------------------|
-| 1. Preprocessing | Baseline, ChannelEditor, Collapse Hemispheres, DC-Detrend, Derive Channels, EventEditor, Eye tracking, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData | @sec-ref-preprocessing |
+| 1. Preprocessing | Baseline, ChannelEditor, DC-Detrend, Derive Channels, EventEditor, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData; plugins: Collapse Hemispheres, Eye tracking | @sec-ref-preprocessing |
 | 2. Artifact Rejection / Reduction | ArtefactDetect, ASR, AutoGEDAI, AutoICA, AutoReject, ICA, ManualReject, PREP | @sec-ref-artefacts |
-| 3. Epoching and Averaging | Average, Deconvolve, DefineBins | @sec-ref-epoching |
-| 4. Frequency and Component Analysis | Beamformer, Covariance, Cross Correlation, Dipole Fit, ERP Measure, Fourier, RESS, Source Estimate, Source Regions, Spectral Measure, Welch PSD | @sec-ref-frequency |
+| 3. Epoching and Averaging | Average, DefineBins; plugin: Deconvolve | @sec-ref-epoching |
+| 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, RESS, Spectral Measure, Welch PSD; plugins: Beamformer, Dipole Fit, Source Estimate, Source Regions | @sec-ref-frequency |
 | 5. Plots | Brain (3D), CohTopo, Coherence Map, Scalp, TimeFrequency | @sec-ref-plots |
 
-: The groups of the **Tools** tab. {#tbl-ribbon-tools}
+: The groups of the **Tools** tab. A plugin's button is there once the plugin is installed. {#tbl-ribbon-tools}
 
 The ribbon is built from the transformations it finds at startup, so a
 transformation added to the source tree appears without further
-configuration (see the developer guide). A transformation written by
-someone else can be installed as a plugin (@sec-plugins); its button
-appears in its own group like any other.
+configuration (see the developer guide). A plugin (@sec-plugins) appears in
+its own group like any other, as soon as it is installed.
 
 ### Grand Average
 
@@ -410,8 +409,43 @@ boundaries that are not in the data [@borland2007].
 
 A plugin is a transformation packed as a zip file: the same three files as
 every transformation in the source tree (a manifest, an entry function and
-an icon), with whatever else it needs. **Install** on the **Alakazam** tab
-takes the zip file, or a link to one:
+an icon), with whatever else it needs. Seven of Alakazam's own tools are
+plugins, each in a GitHub repository of its own with its tests and its
+manual page, installed only where they are needed: Collapse Hemispheres,
+Eye tracking, Deconvolve, Source Estimate, Source Regions, Dipole Fit and
+Beamformer. Each one's section in this manual says where its manual is.
+
+### Install plugins
+
+**Install plugins** on the **Alakazam** tab lists the plugins on offer:
+every repository of the account `markspan` on GitHub whose name starts
+with Alakazam, Alakazam itself left out, so a plugin added there later is
+listed without anything changing here. A plugin installed from anywhere
+else is listed too. For each, the list shows the plugin it holds, the
+version installed here, the latest release, and its status:
+
+| Status | What can be done |
+|--------------------------|-------------------------------------------------------|
+| Not installed | **Install** installs its latest release (its newest source when it has no release yet). |
+| Installed | **Uninstall** deletes it; **Show folder** opens its folder. |
+| Update available | **Upgrade** installs the latest release over the installed one. |
+| Not a plugin yet | The repository holds nothing Alakazam can install yet, and says why. **Install** can still be tried: it explains, kindly, what is missing, and changes nothing. |
+
+: The statuses in **Install plugins**. {#tbl-plugin-status}
+
+The list is read from GitHub once a session; **Refresh** reads it again.
+GitHub answers 60 such questions an hour from one address; with a token in
+the environment variable `GITHUB_TOKEN` it answers many more.
+
+A workspace or template step that names a plugin which is not installed
+here (one made before the tool became a plugin, or on another computer) is
+not refused: Alakazam says which repository holds it and offers to install
+it, then carries on.
+
+### From a link
+
+**From a link** (also in **Install plugins**, as **From a link or zip...**)
+installs a plugin from a zip file, or a link to one:
 
 - a link to a zip file on the web;
 - a link to a GitHub repository, which takes its latest release (the
@@ -434,19 +468,17 @@ installed until you choose **Install**, and **Cancel** is the default.
 ::: {.callout-warning}
 A plugin is MATLAB code, and it runs with your rights, as any MATLAB
 function you download does. Install one only if you trust where it comes
-from. **Installed**, then **Show folder**, opens a plugin's folder so its
+from. **Show folder** in **Install plugins** opens a plugin's folder so its
 code can be read.
 :::
 
 Plugins are kept in `Documents/MATLAB/AlakazamPlugins`, outside the
 application, so updating Alakazam (**Update**) leaves them in place. Their
-buttons appear at once, in the group their manifest names.
-
-**Installed** lists each plugin with its version, the date it was
-installed and where it came from. **Update** installs it again from there,
-through the same check; **Uninstall** deletes its folder and removes its
-button. Nodes made with an uninstalled plugin stay in the tree, but cannot
-be recalculated, or replayed onto other recordings, until it is installed
-again. A template or exported script that uses a plugin needs it too.
+buttons appear at once, in the group their manifest names. A plugin
+records where it came from, so **Upgrade** fetches it from there again,
+through the same check. Nodes made with an uninstalled plugin stay in the
+tree, but cannot be recalculated, or replayed onto other recordings, until
+it is installed again. A template or exported script that uses a plugin
+needs it too.
 
 How to write a plugin and pack it is in the developer guide.

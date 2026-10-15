@@ -4,24 +4,24 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
 %
 %   Each template with a recorded result was run on real data once, by hand,
 %   and the result written down: in Docs/luck.md (the Luck chapters and
-%   N400-complete), chapter 20 of the manual (the N400 worked example),
-%   Docs/dimigen.md (RIFT) and chapter 17 (the face-saccade deconvolution).
+%   N400-complete), chapter 20 of the manual (the N400 worked example) and
+%   Docs/dimigen.md (RIFT).
 %   A check made once goes stale as the code changes, and a change that moves
 %   what a template produces would pass every other test. This replays each
 %   template the way Apply Template does (every step through
 %   TransTools.invoke, each on its parent's result) and compares with those
 %   numbers.
 %
-%   Two templates have no recorded result, dimigen-rift-simplified and
-%   ReadingDeconvolution. For those this checks that they run end to end on
-%   their data and produce what they are for.
+%   One template has no recorded result, dimigen-rift-simplified. For it
+%   this checks that it runs end to end on its data and produces what it is
+%   for. The deconvolution templates came with Deconvolve when it became a
+%   plugin (AlakazamDeconvolve), and are replayed by its own tests.
 %
 %   THE DATA IS NOT IN THE REPOSITORY (see DATA.md). Every case assumes its
 %   recording is present under Data/, and skips rather than fails where it is
 %   not, naming the file it looked for. The toolboxes a template needs
-%   (EEGLAB with firfilt, FastICA and ICLabel, GEDAI, Unfold, EYE-EEG) are
-%   assumed the same way. Tagged Slow: the ICA, GEDAI and deconvolution steps
-%   take minutes.
+%   (EEGLAB with firfilt, FastICA and ICLabel, GEDAI) are assumed the same
+%   way. Tagged Slow: the ICA and GEDAI steps take minutes.
 %
 %   WHICH RECORDING. A Luck chapter's result was recorded on the first
 %   participant in that chapter's folder ("subject 1" in Docs/luck.md), so
@@ -36,7 +36,7 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
 %
 %   Run with: runtests('tests/LibraryReplayTest.m').
 %
-%   See also LIBRARYTEST, DIMIGENRIFTTEMPLATETEST, FACESACCADESTEMPLATETEST.
+%   See also LIBRARYTEST, DIMIGENRIFTTEMPLATETEST.
 
     properties (TestParameter)
         % The Luck chapter templates: the difference bin's mean amplitude, in
@@ -193,41 +193,6 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfinite(tagCoherence(final, 1, 'RIFT 60Hz')));
             testCase.verifyTrue(isfinite(tagCoherence(final, 2, 'RIFT 64Hz')));
         end
-
-        function theFaceSaccadeTemplateGivesFigureElevensNumbers(testCase)
-        %THEFACESACCADETEMPLATEGIVESFIGUREELEVENSNUMBERS  Chapter 17 of the
-        %   manual: 3337 of the 3829 events keep an overlap-corrected trial,
-        %   and the template's Average of them peaks at 17.9 uV between 300
-        %   and 500 ms at Oz, within 0.3 uV of the fitted waveform's 17.7.
-            file = testCase.dataFile('opendata', 'face_saccades_opendata_fig10.set');
-            nodes = testCase.templateNodes('FaceSaccadesDeconvolution.alztemplate');
-            results = testCase.replay(nodes, file);
-
-            trials = results{stepIndex(nodes, 'Deconvolve')};
-            average = results{stepIndex(nodes, 'Average')};
-            testCase.verifyEqual(trials.trials, 3337, 'Overlap-corrected trials kept.');
-            testCase.verifyEqual(peakIn(average, 'Stimulus', 'Oz', [300 500]), 17.9, 'AbsTol', 0.06);
-        end
-
-        function theReadingTemplateRunsEndToEnd(testCase)
-        %THEREADINGTEMPLATERUNSENDTOEND  No recorded result: the eye track
-        %   joins onto the EEG, with its synchronisation recorded, and the
-        %   deconvolution returns a waveform per bin with numbers in it.
-            file = testCase.dataFile('reading', 'reading_eeg.set');
-            nodes = testCase.templateNodes('ReadingDeconvolution.alztemplate');
-            results = testCase.replay(nodes, file);
-
-            joined = results{stepIndex(nodes, 'EyeTracking')};
-            testCase.verifyTrue(isfield(joined.etc, 'alz') && isfield(joined.etc.alz, 'eyeTracking'), ...
-                'EyeTracking should record how good the synchronisation was.');
-            testCase.verifyTrue(any(strcmpi({joined.chanlocs.type}, 'EYE')), ...
-                'The gaze and pupil channels should be typed EYE.');
-
-            fitted = results{stepIndex(nodes, 'Deconvolve')};
-            testCase.verifyEqual(char(fitted.DataFormat), 'Averaged');   % a string, as Average sets it
-            testCase.verifyNotEmpty(fitted.bindesc);
-            testCase.verifyTrue(any(isfinite(fitted.data(:))), 'The fit returned no numbers.');
-        end
     end
 
     methods (Access = private)
@@ -298,12 +263,6 @@ classdef LibraryReplayTest < matlab.unittest.TestCase
                     end
                     testCase.assumeFail('GEDAI is not installed.');
                 end
-            end
-            if ismember('Deconvolve', ids)
-                testCase.assumeTrue(Unfold.isAvailable(), 'The Unfold toolbox is not installed.');
-            end
-            if ismember('EyeTracking', ids)
-                testCase.assumeTrue(EyeEeg.isAvailable(), 'EYE-EEG is not installed.');
             end
         end
 
@@ -401,14 +360,6 @@ function value = tagCoherence(EEG, row, binLabel)
     bin = strcmp({EEG.bindesc.label}, binLabel);
     assert(nnz(oz) == 1 && nnz(bin) == 1, 'Row %d has no single Oz, or no bin "%s".', row, binLabel);
     value = m.coherence(oz, bin);
-end
-
-function value = peakIn(EEG, binLabel, channel, windowMs)
-%PEAKIN  The largest value of one bin's waveform at a channel in a window.
-    c = strcmpi({EEG.chanlocs.labels}, channel);
-    b = strcmp({EEG.bindesc.label}, binLabel);
-    t = EEG.times >= windowMs(1) & EEG.times <= windowMs(2);
-    value = max(EEG.data(c, t, b));
 end
 
 function name = fileName(file)

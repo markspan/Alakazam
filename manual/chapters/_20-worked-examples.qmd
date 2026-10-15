@@ -88,8 +88,8 @@ left- and right-hand responses. Response-locked.
 Why `0.5 bin 2 - 0.5 bin 1` on `C3 - C4` is the LRP: for a right-hand
 response C3 is contralateral, so `C3 - C4` is contra minus ipsi; for a
 left-hand response it is the negation. Half their difference is the mean over
-hands of contralateral minus ipsilateral. **Collapse Hemispheres**
-(@sec-tr-collapsehemispheres) gives the contralateral and ipsilateral
+hands of contralateral minus ipsilateral. **Collapse Hemispheres**, a
+plugin (@sec-tr-collapsehemispheres), gives the contralateral and ipsilateral
 waveforms separately, over every lateral pair at once. LRP amplitude is
 straightforward this way; LRP onset latency is better measured with a
 jackknife over subjects [@miller1998; @kiesel2008], which Alakazam does not
@@ -308,4 +308,4 @@ have.
 tutorial beside it, and repeats the comparison, so a change that moves the
 template's result away from FieldTrip's fails a test. `Docs/fieldtrip.md` in
 the repository has the details, with the same check for Dipole Fit and
-Beamformer against FieldTrip's source tutorials.
+Beamformer, now plugins, against FieldTrip's source tutorials.

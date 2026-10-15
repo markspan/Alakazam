@@ -5,7 +5,7 @@ view, extend a report, or cut a release. Using Alakazam is described in the
 [user manual](manual/manual.qmd); what Alakazam is, in the
 [README](README.MD).
 
-Five companion documents hold the detail this guide points to rather than
+Four companion documents hold the detail this guide points to rather than
 repeats:
 
 | Document | What it holds |
@@ -14,7 +14,10 @@ repeats:
 | [`dependencies.md`](dependencies.md) | Every external toolkit, its pinned version, licence, and how it is installed |
 | [`DATA.md`](DATA.md) | The datasets the tests, templates and manual use, and where to get them (none are in the repository) |
 | [`Docs/transformation-provenance.md`](Docs/transformation-provenance.md) | Which transformations wrap a toolkit call and which carry their own method |
-| [`Docs/unfold-technical-note.md`](Docs/unfold-technical-note.md) | How Deconvolve follows the Unfold toolbox's workflow, step by step, and where it departs from its defaults |
+
+How Deconvolve follows the Unfold toolbox's workflow is in its plugin's
+repository now
+([`docs/unfold-technical-note.md`](https://github.com/markspan/AlakazamDeconvolve/blob/main/docs/unfold-technical-note.md)).
 
 The project history is in [`CHANGELOG.md`](CHANGELOG.md); why the interface is
 built on `uihtml` rather than MathWorks' own widgets is in
@@ -277,9 +280,10 @@ subject) reads what it returns. So:
 ### Packaging a transformation as a plugin
 
 A transformation written outside the source tree can be installed by any
-user with **Install** on the Alakazam tab, from a zip file or a link
-(`Plugins`, documented in the manual's interface chapter). Pack it as the
-folder itself:
+user with **Install plugins** on the Alakazam tab, which lists every
+repository of the account whose name starts with Alakazam, or with **From a
+link**, from a zip file or a link (`Plugins` and `PluginsDialog`, documented
+in the manual's interface chapter). Pack it as the folder itself:
 
 ```
 MyThing.zip
@@ -309,7 +313,40 @@ or any other function's on the path, so choose a distinctive one. Plugins
 are installed into `Documents/MATLAB/AlakazamPlugins` (or the folder in the
 environment variable `ALAKAZAM_PLUGIN_FOLDER`), outside the application,
 because an update replaces the application folder. `PluginsTest` covers the
-installer.
+installer, the list of repositories (on a stand-in for GitHub) and the
+offer to install a missing tool.
+
+### The plugin repositories
+
+Seven tools left the source tree for repositories of their own on the
+markspan account: AlakazamCollapseHemisphere, AlakazamEyetracking,
+AlakazamDeconvolve, AlakazamSourceEstimate, AlakazamSourceRegions,
+AlakazamDipolefit and AlakazamBeamformer. Each is laid out the same way:
+
+```
+AlakazamThing/
+    Thing/                the plugin folder, as installed (manifest, entry, icon, helpers)
+    tests/                its tests, and PluginInstallTest
+    build.m               build() writes dist/Thing-<version>.zip
+    dist/                 the built zip, committed
+    manual/index.qmd      its manual page, published to the repository's Pages
+    .github/workflows/pages.yml
+```
+
+The tests run against Alakazam's source: the folder in `ALAKAZAM_ROOT`, or
+this repository cloned beside the plugin's. A test of a tool that runs
+another plugin finds that one beside it too (Source Regions runs Source
+Estimate, the reading template runs Eye tracking). `PluginInstallTest`
+builds the zip and installs it through `Plugins` into a temporary folder,
+so a plugin that the installer would refuse fails its own suite. A test of
+Alakazam's own code stays here even when only a plugin produces its input:
+`SourceCacheTest`, `DipoleViewTest`, `BeamformerViewTest` and
+`EyeTrackingRecordTest` work on results written by hand.
+
+A release of a plugin is a version in its manifest, `build()`, a commit, a
+tag, and a GitHub release with the zip attached; **Install plugins** offers
+the latest release, and **Upgrade** when it is newer than the installed one.
+The manual page is rendered by the Pages workflow on every push to `main`.
 
 ### Adding a transformation: the checklist
 
@@ -435,15 +472,15 @@ scripts. Reports are therefore rendered with every resource inlined.
 | [`ClusterStats.runMontecarlo`](src/+ClusterStats/runMontecarlo.m) / [`poolMontecarlo`](src/+ClusterStats/poolMontecarlo.m) | Run the permutation, optionally split across workers, and recombine the split runs into the result one run would give. |
 | [`ClusterStats.tfceStatfun`](src/+ClusterStats/tfceStatfun.m) | A statfun returning the TFCE score, which lets the compiled kernel run inside FieldTrip's public `'max'` correction without patching FieldTrip. |
 | [`TransTools.BuildSourceForwardModel`](src/Transformations/+TransTools/BuildSourceForwardModel.m) | Template head model, electrodes and cortical sheet, cached per channel set and sheet. |
-| [`TransTools.SourceEstimateKey`](src/Transformations/+TransTools/SourceEstimateKey.m), [`DataFingerprint`](src/Transformations/+TransTools/DataFingerprint.m), [`StoredSourceEstimate`](src/Transformations/+TransTools/StoredSourceEstimate.m) | The two checks a stored source estimate must pass before it is reused, and the one lookup both consumers ask through. |
+| [`SourceCache.Key`](src/Transformations/+SourceCache/Key.m), [`Fingerprint`](src/Transformations/+SourceCache/Fingerprint.m), [`Lookup`](src/Transformations/+SourceCache/Lookup.m) | The two checks a stored source estimate must pass before it is reused, and the one lookup both consumers ask through (`SourceCacheTest`). |
 | [`TransTools.BinNoiseCovariance`](src/Transformations/+TransTools/BinNoiseCovariance.m), [`ResolveNoiseModel`](src/Transformations/+TransTools/ResolveNoiseModel.m) | The noise covariance Average stores per bin, read by label; and which noise model an inverse uses (baseline or identity), resolved once for a dataset or a study. |
 | [`TransTools.AtlasRegionsAt`](src/Transformations/+TransTools/AtlasRegionsAt.m) | The AAL region at or near arbitrary positions (dipoles, beamformer peaks), by FieldTrip's `ft_volumelookup`. Not `AtlasVertexLabels`, which caches by vertex count and is for the cortical sheet. |
-| [`SourceRegions`](src/Transformations/SourceRegions/SourceRegions.m), [`DipoleFit`](src/Transformations/DipoleFit/DipoleFit.m), [`Beamformer`](src/Transformations/Beamformer/Beamformer.m) | Region time courses (`ft_sourceparcellate`), equivalent dipoles (`ft_dipolefitting`), and LCMV/DICS power maps (`ft_sourceanalysis`) on the sheet or a volume grid; drawn by `AverageView`, `DipoleView` and `BeamformerView`. Each is validated on a source simulated in the template head (`SourceRegionsTest`, `DipoleFitTest`, `BeamformerTest`). |
+| [`DipoleView`](src/Views/DipoleView.m), [`BeamformerView`](src/Views/BeamformerView.m) | The views of a dipole fit and a beamformer map (`DipoleViewTest`, `BeamformerViewTest`, on results written by hand). Source Estimate, Source Regions, Dipole Fit and Beamformer themselves are plugins, each in a repository of its own with its tests (see The plugin repositories). |
 | [`alakazam_tfce.c`](src/mex/alakazam_tfce.c) | The compiled TFCE kernel, a port of FieldTrip's exact TFCE, built on first use; FieldTrip's own implementation is the fallback. Its origin, licence and checks: [`src/mex/README.md`](src/mex/README.md). |
 
 `SourceClusterMexTest` requires the accelerated route to give exactly the
-p-values of FieldTrip's own; `SourceEstimateTest` requires a reused estimate
-to give the same statistic as a computed one; `PointSpreadTest` holds the
+p-values of FieldTrip's own; the Source Estimate plugin's own test requires a
+reused estimate to give the same statistic as a computed one; `PointSpreadTest` holds the
 point-spread figures the report prints to account.
 
 ## Testing

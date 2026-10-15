@@ -126,7 +126,7 @@ software and, more importantly, the methods the analysis used: EEGLAB
 wraps, and the specific methods named in each transformation's section of
 this manual (for instance ICLabel [@piontonachini2019] for automatic
 component classification, the Unfold toolbox [@ehinger2019] for
-deconvolution, or FieldTrip [@oostenveld2011] for cluster statistics and
+deconvolution (the Deconvolve plugin), or FieldTrip [@oostenveld2011] for cluster statistics and
 source estimates). **Export as Code** (@sec-export-code) writes the complete
 pipeline with the options actually used, which is the most precise methods
 description available.

@@ -92,9 +92,13 @@ The focus of Alakazam is on **education** and on **reusability in research**.
   coherence for steady-state and rapid invisible frequency tagging designs.
 - **Overlapping responses**: regression-based deconvolution (Unfold) for
   free viewing, reading and fast presentation, and co-registration with an
-  eye tracker (EYE-EEG).
+  eye tracker (EYE-EEG), both as plugins.
 - **Source estimation** on a template cortex (FieldTrip), with the limits of
   such an estimate stated beside it.
+- **Plugins**: deconvolution, eye tracking, the source tools (Source
+  Estimate, Source Regions, Dipole Fit, Beamformer) and Collapse Hemispheres
+  are plugins, each in a repository of its own with its tests and its
+  manual. **Install plugins** lists every one and installs those you need.
 - **Long recordings stay fast**: a purpose-built viewer scrolls hours of
   multichannel data smoothly without hiding a single artefact.
 
@@ -102,12 +106,12 @@ The focus of Alakazam is on **education** and on **reusability in research**.
 <tr>
 <td width="33%"><img src="manual/images/timefrequency-result.jpg" alt="Time-frequency maps, one per condition"></td>
 <td width="33%"><img src="manual/images/scalp-result.jpg" alt="A scalp topography of an ERP component"></td>
-<td width="33%"><img src="manual/images/deconvolve-waveforms.jpg" alt="Waveforms corrected for overlap by deconvolution"></td>
+<td width="33%"><img src="manual/images/ga-view.jpg" alt="A grand average of ten subjects with its standard error"></td>
 </tr>
 <tr>
 <td>Time-frequency power per condition.</td>
 <td>Scalp distributions over time.</td>
-<td>Overlap-corrected ERPs by deconvolution.</td>
+<td>Grand averages with their standard error.</td>
 </tr>
 </table>
 

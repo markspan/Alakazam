@@ -159,7 +159,9 @@ the loop, the refusals and the app's collector.
 ## The NatMEG recordings
 
 Alakazam's dipole fit and beamformer are FieldTrip's (`ft_dipolefitting`,
-`ft_sourceanalysis`), called on FieldTrip's template head. Their own tests
+`ft_sourceanalysis`), called on FieldTrip's template head. Both are plugins
+now, each in a repository of its own with its tests (AlakazamDipolefit and
+AlakazamBeamformer). Those tests
 simulate a source in that head and find it again, which checks the pipeline
 but not whether it is called the way FieldTrip's authors call it. The
 sections below compare them with FieldTrip's tutorials, on the
@@ -178,8 +180,9 @@ From `https://download.fieldtriptoolbox.org/workshop/natmeg2014/`:
 | `oddball1_mc_downsampled.fif` | 458 MB | the raw recording (not needed for either check) |
 
 They live under `FieldTrip/natmeg2014` in the data folder (on the machine this
-was written on, `D:\data`). `FieldTripTutorialDipoleTest` finds them through
-the `ALAKAZAM_DATA` environment variable, the repository's `Data` folder or
+was written on, `D:\data`). `FieldTripTutorialDipoleTest`, in the Dipole Fit
+plugin's repository, finds them through
+the `ALAKAZAM_DATA` environment variable, Alakazam's `Data` folder or
 `D:\data`, and skips without them; it never downloads anything.
 
 **Why Alakazam's transformations cannot be run on this recording as they

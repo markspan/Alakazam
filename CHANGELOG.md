@@ -4,6 +4,86 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **Install plugins**, on the Alakazam tab: every repository of the
+  markspan account on GitHub whose name starts with Alakazam is listed, with
+  the plugin it holds, the version installed, the latest release and what
+  can be done: install, upgrade, uninstall. A repository added later is
+  listed without a new Alakazam, and one that holds no plugin yet is listed
+  too, saying why; trying to install it says, kindly, what is missing and
+  changes nothing. **From a link** (the former **Install**) still installs
+  from a zip file or any link.
+- **A missing tool is offered for installation.** A template, a dropped
+  branch, Recalculate or Apply to All that names a tool not installed here
+  says which repository holds it and offers to install it, then carries on.
+
+### Changed
+
+- **Seven tools are plugins now**, each in a repository of its own with its
+  tests, its installable zip and its manual page: Collapse Hemispheres
+  (AlakazamCollapseHemisphere), Eye tracking (AlakazamEyetracking),
+  Deconvolve (AlakazamDeconvolve, with the face-saccade and reading
+  templates and the Unfold technical note), Source Estimate, Source Regions,
+  Dipole Fit and Beamformer (AlakazamSourceEstimate, AlakazamSourceRegions,
+  AlakazamDipolefit, AlakazamBeamformer). Install them with **Install
+  plugins**; workspaces and templates that use them open and recalculate as
+  before once they are. Their sections in the manual point to their own
+  pages. The tests of Alakazam's own code they used (the stored source
+  estimate, the dipole and beamformer views, the eye-tracking record in the
+  data-quality report, the atlas on the cortical sheet) stay here, on
+  results written by hand.
+
+### Fixed
+
+- **Update in the plugin list installed from the wrong place**: it was
+  handed the list's label for a plugin rather than where the plugin came
+  from. The registry now records the link, and a plugin installed before
+  that is read from its recorded source.
+
+### In the Deconvolve plugin (its 0.1.0)
+
+These were made while Deconvolve was built in, and went with it.
+
+- **Five more of the Unfold toolbox's settings in Deconvolve**, each
+  starting at the toolbox's default. **Collinearity**: the variance inflation
+  factors of the time-expanded design (`uf_vif`), each term's largest in the
+  notes. **Time basis**: one beta per sample, or
+  cubic splines or a Fourier set (`uf_timeexpandDesignmat`'s `method`), which
+  give smoother waveforms from fewer parameters; not for the trials, which
+  the toolbox's `uf_erpimage` cannot make for such a fit. **Factors coded as**: reference or
+  effects coding (`uf_designmat`'s `codingschema`); a bin's waveform is the
+  same either way, the terms differ. **A term not named, at**: ten quantiles,
+  ten evenly spaced values or the mean (`uf_predictContinuous`'s
+  `auto_method`). **Model fit**: R², partial R² per term, or either
+  cross-validated with folds cut at an event code (`uf_checkmodelfit`), in the
+  notes and the data-quality report.
+- **Deconvolve fits across a cut, as the Unfold toolbox does, unless asked
+  otherwise.** It used to leave the longer side of the response window out
+  on each side of every cut in the recording, always; that is now a setting,
+  **Around cuts**, which starts at the toolbox's way. A trial whose window
+  spans a cut is still left out. Options saved before the setting existed
+  (templates included) still leave the window out, so they give the result
+  they always gave.
+
+- **Deconvolve's overlap-corrected trials are the Unfold toolbox's own.**
+  They come from `uf_erpimage` (its modelled responses plus residuals, one
+  channel at a time) instead of Alakazam's own arithmetic on the fitted
+  model. A trial now sits where `uf_epoch` puts it, each event rounded to the
+  nearest sample. Where events share a sample the toolbox keeps one trial for
+  them, holding one event's fitted response under the other's label, so an
+  event that shares its sample with another now has no trial, counted in the
+  notes. Recalculate a trials node to bring it up to date.
+- **Every Deconvolve result reads the betas `uf_condense` returns**, not the
+  solver's raw ones. With the stick time basis Deconvolve uses they are the
+  same numbers, so nothing changes.
+- **glmnet with overlap-corrected trials is refused before fitting**: the
+  toolbox's `uf_erpimage` cannot make trials for a glmnet fit (Unfold 1.3.1),
+  since glmnet adds a design column whose beta `uf_condense` does not return.
+  Waveforms and terms from a glmnet fit are unaffected.
+
 ## V0.4.5.2 (2026-10-15)
 
 ### Added

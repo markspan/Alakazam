@@ -10,7 +10,9 @@ function refs = alakazamReferences()
 %   report an analysis done with it. They are not the same set: RESS is a
 %   method Alakazam implements itself, from Cohen & Gulbinaite's article, and
 %   has no toolkit to credit, while the Dimigen & Ehinger (2021) paper is
-%   where the practice Deconvolve follows on eye-movement data is set out.
+%   where the practice the Deconvolve plugin follows on eye-movement data is
+%   set out. The plugins' papers stay here, beside their toolkits in
+%   alakazamDependencies, because Alakazam installs those toolkits for them.
 %
 %   Every DOI here was checked against Crossref when it was added, and
 %   AboutDependenciesTest holds each one to appearing in the manual's
@@ -52,17 +54,17 @@ function refs = alakazamReferences()
         ['Unfold: An integrated toolbox for overlap correction, non-linear modeling, and ' ...
          'regression-based EEG analysis'], ...
         'PeerJ, 7, e7838', '10.7717/peerj.7838', ...
-        'The Unfold toolbox, which Deconvolve runs.');
+        'The Unfold toolbox, which the Deconvolve plugin runs.');
 
     refs(end + 1) = ref('Dimigen, O., & Ehinger, B. V.', 2021, ...
         'Regression-based analysis of combined EEG and eye-tracking data: Theory and applications', ...
         'Journal of Vision, 21(1), 3', '10.1167/jov.21.1.3', ...
-        'Deconvolution of fixation-related potentials.');
+        'Deconvolution of fixation-related potentials (the Deconvolve plugin).');
 
     refs(end + 1) = ref('Dimigen, O., Sommer, W., Hohlfeld, A., Jacobs, A. M., & Kliegl, R.', 2011, ...
         'Coregistration of eye movements and EEG in natural reading: Analyses and review', ...
         'Journal of Experimental Psychology: General, 140(4), 552-572', '10.1037/a0023885', ...
-        'EYE-EEG, which EyeTracking uses to join an eye-tracking recording onto the EEG.');
+        'EYE-EEG, which the Eye tracking plugin uses to join an eye-tracking recording onto the EEG.');
 end
 
 function r = ref(authors, year, title, source, doi, usedFor)
