@@ -4,7 +4,7 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
-## V0.4.5.3 (2026-10-15)
+## V0.4.5.3 (2026-10-16)
 
 ### Added
 
@@ -42,11 +42,15 @@ bar. Dates are those of the tag.
   handed the list's label for a plugin rather than where the plugin came
   from. The registry now records the link, and a plugin installed before
   that is read from its recorded source.
-- **The first build of this release** (replaced the same day) stopped
-  Install and Upgrade with "Too many input arguments": the installer's
-  declaration in the application's class lacked its new input. A test now
-  holds every method file to its declaration, and found four more that had
-  never been declared; they are declared now.
+- **The first two builds of this release** (15 October, replaced): the
+  first stopped Install and Upgrade with "Too many input arguments", since
+  the installer's declaration in the application's class lacked its new
+  input; a test now holds every method file to its declaration, and found
+  four more that had never been declared, which are declared now. In both,
+  installing from Install plugins seemed to hang: its progress, its
+  question and its result were drawn in the main window, behind the
+  Install plugins window, where they could not be seen or answered. They
+  are drawn in the Install plugins window now.
 
 ### In the Deconvolve plugin (its 0.1.0)
 
