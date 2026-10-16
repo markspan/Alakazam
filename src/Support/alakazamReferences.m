@@ -8,8 +8,8 @@ function refs = alakazamReferences()
 %   WHY THIS EXISTS BESIDE ALAKAZAMDEPENDENCIES. That list credits the code
 %   Alakazam runs on; this one names the papers a user should cite when they
 %   report an analysis done with it. They are not the same set: RESS is a
-%   method Alakazam implements itself, from Cohen & Gulbinaite's article, and
-%   has no toolkit to credit, while the Dimigen & Ehinger (2021) paper is
+%   method implemented in its plugin itself, from Cohen & Gulbinaite's
+%   article, and has no toolkit to credit, while the Dimigen & Ehinger (2021) paper is
 %   where the practice the Deconvolve plugin follows on eye-movement data is
 %   set out. The plugins' papers stay here, beside their toolkits in
 %   alakazamDependencies, because Alakazam installs those toolkits for them.
@@ -48,7 +48,7 @@ function refs = alakazamReferences()
         ['Rhythmic entrainment source separation: Optimizing analyses of neural responses ' ...
          'to rhythmic sensory stimulation'], ...
         'NeuroImage, 147, 43-56', '10.1016/j.neuroimage.2016.11.036', ...
-        'RESS, which Alakazam implements from this article.');
+        'RESS, which the RESS plugin implements from this article.');
 
     refs(end + 1) = ref('Ehinger, B. V., & Dimigen, O.', 2019, ...
         ['Unfold: An integrated toolbox for overlap correction, non-linear modeling, and ' ...

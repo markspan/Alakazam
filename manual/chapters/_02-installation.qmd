@@ -38,7 +38,7 @@ release, and records the release that ran with each result
 
 | Toolbox | Used by | Version | Licence |
 |---------------------|------------------------------------|--------|----------------------------|
-| ICLabel, bva-io, clean_rawdata | AutoICA, ICA; BrainVision import; ASR | current | EEGLAB plugins |
+| ICLabel, bva-io, clean_rawdata | AutoICA, ICA; BrainVision import; ASR (a plugin) | current | EEGLAB plugins |
 | FastICA [@hyvarinen2000] | AutoICA, when present | 2.5 | GPL |
 | GEDAI [@ros2025] | AutoGEDAI | newest | PolyForm Noncommercial 1.0.0 |
 | FieldTrip [@oostenveld2011] | source estimates, cluster statistics | 20260924 | GPL |

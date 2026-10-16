@@ -17,9 +17,9 @@ CollapseHemispheres, Deconvolve and EyeTracking were added. The pattern now
 also matches EEGLAB's `newcrossf`, which has no `pop_` prefix and was missed
 before.*
 
-*Since October 2026, seven of them are plugins, each in a repository of its
-own: CollapseHemispheres, EyeTracking, Deconvolve, SourceEstimate,
-SourceRegions, DipoleFit and Beamformer. Their rows stay here as the record
+*Since October 2026, nine of them are plugins, each in a repository of its
+own: CollapseHemispheres, EyeTracking, ASR, Deconvolve, RESS,
+SourceEstimate, SourceRegions, DipoleFit and Beamformer. Their rows stay here as the record
 of how each calls its toolkit; the commands at the foot of this page, run on
 this repository, no longer find them.*
 

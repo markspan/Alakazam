@@ -11,16 +11,18 @@ classdef RessReportTest < matlab.unittest.TestCase
 %   frames are too short to separate from the filter's. With 255 ms frames 60
 %   and 64 Hz leak into each other; with 1020 ms frames they do not.
 %
+%   The results the section reads are recorded ones (see ENTRIES): RESS is
+%   a plugin of its own, AlakazamRESS, whose tests check the components.
+%
 %   Run with: runtests('tests/RessReportTest.m').
 %
-%   See also REPORTSECTIONS.RESSSECTION, RESS, RESSTEST.
+%   See also REPORTSECTIONS.RESSSECTION.
 
     methods (TestClassSetup)
         function addSourceToPath(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             for p = {fullfile(root, 'src'), fullfile(root, 'src', 'Support'), fullfile(root, 'src', 'Dialogs'), ...
                      fullfile(root, 'src', 'Reports'), fullfile(root, 'src', 'Transformations'), ...
-                     fullfile(root, 'src', 'Transformations', 'RESS'), ...
                      fullfile(root, 'src', 'Transformations', 'SpectralMeasure'), ...
                      fullfile(root, 'src', 'Transformations', 'Measure'), fullfile(root, 'tests')}
                 testCase.applyFixture(matlab.unittest.fixtures.PathFixture(p{1}));
@@ -176,39 +178,29 @@ classdef RessReportTest < matlab.unittest.TestCase
 
     methods (Static)
         function entries = entries(winSize, secondLacks30Hz)
-        %ENTRIES  Two recordings of RESSTest's fixture, each through RESS and a
-        %   Spectral Measure reading the components with frame coherence of
-        %   WINSIZE samples to the photodiode. With SECONDLACKS30HZ, a third
-        %   component is built from the 30 Hz bin, which the second recording
-        %   has no trials of.
+        %ENTRIES  Two recordings, each through RESS and a Spectral Measure
+        %   reading the components with frame coherence of WINSIZE samples
+        %   to the photodiode. With SECONDLACKS30HZ, a third component is
+        %   built from the 30 Hz bin, which the second recording has no
+        %   trials of.
+        %
+        %   RECORDED, NOT COMPUTED. RESS is a plugin (AlakazamRESS), so the
+        %   results were made by it and Spectral Measure on its tests'
+        %   fixture when it became one, for the three cases used here, and
+        %   stored in fixtures/ressReportEntries.mat without the samples and
+        %   the spectra, which the report's text does not read.
             if nargin < 2
                 secondLacks30Hz = false;
             end
-            entries = struct('subject', {}, 'datasetType', {}, 'group', {}, 'person', {}, 'session', {}, 'EEG', {});
-            opts = RESSTest.options();
-            rows = {struct('label', '60Hz', 'freq', '60', 'channels', 'Oz RESS60Hz'), ...
-                    struct('label', '64Hz', 'freq', '64', 'channels', 'Oz RESS64Hz')};
-            if secondLacks30Hz
-                opts.rows{3} = struct('label', 'RESS30Hz', 'freq', 30, 'bins', 'SSVEP 30Hz');
-                rows{3} = struct('label', '30Hz', 'freq', '30', 'channels', 'Oz RESS30Hz');
-            end
-            spec = struct('rows', {rows}, ...
-                'fundamentals', '', 'refChannel', 'PhotoDiode', 'method', 'Hann', 'tapers', 3, ...
-                'snrNeighbours', 10, 'snrGuard', 1, 'coherenceMethod', 'frames', ...
-                'crossf', struct('Method', 'frames', 'WinSize', winSize));
-            for s = 1:2
-                EEG = RESSTest.recording();
-                EEG.data = EEG.data + 0.01 * s * randn(size(EEG.data));
-                if secondLacks30Hz && s == 2
-                    EEG.bindesc(4).trials = [];
-                end
-                warned = warning('off', 'Alakazam:RESS:noTrials');
-                R = RESS(EEG, opts);
-                warning(warned);
-                [M, used] = SpectralMeasure(R, spec);
-                M.params = used;
-                entries(end + 1) = struct('subject', sprintf('s%d', s), 'datasetType', 'subject', ...
-                    'group', '', 'person', sprintf('s%d', s), 'session', '', 'EEG', M); %#ok<AGROW>
+            stored = load(fullfile(fileparts(mfilename('fullpath')), 'fixtures', 'ressReportEntries.mat'));
+            if winSize == 100 && ~secondLacks30Hz
+                entries = stored.frames200;
+            elseif winSize == 500 && ~secondLacks30Hz
+                entries = stored.frames1000;
+            elseif winSize == 500 && secondLacks30Hz
+                entries = stored.frames1000no30Hz;
+            else
+                error('RessReportTest:noSuchCase', 'No recorded results for %d-sample frames.', winSize);
             end
         end
 

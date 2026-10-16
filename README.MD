@@ -95,10 +95,11 @@ The focus of Alakazam is on **education** and on **reusability in research**.
   eye tracker (EYE-EEG), both as plugins.
 - **Source estimation** on a template cortex (FieldTrip), with the limits of
   such an estimate stated beside it.
-- **Plugins**: deconvolution, eye tracking, the source tools (Source
-  Estimate, Source Regions, Dipole Fit, Beamformer) and Collapse Hemispheres
-  are plugins, each in a repository of its own with its tests and its
-  manual. **Install plugins** lists every one and installs those you need.
+- **Plugins**: deconvolution, eye tracking, ASR, RESS, the source tools
+  (Source Estimate, Source Regions, Dipole Fit, Beamformer) and Collapse
+  Hemispheres are plugins, each in a repository of its own with its tests
+  and its manual. **Install plugins** lists every one and installs those you
+  need.
 - **Long recordings stay fast**: a purpose-built viewer scrolls hours of
   multichannel data smoothly without hiding a single artefact.
 

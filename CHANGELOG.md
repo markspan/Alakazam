@@ -4,6 +4,18 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Changed
+
+- **ASR and RESS are plugins now**, each in a repository of its own with
+  its tests, its installable zip and its manual page (AlakazamASR,
+  AlakazamRESS). Install them with **Install plugins**; workspaces and
+  templates that use them open and recalculate as before once they are.
+  The data-quality report's ASR rows and the spectral report's RESS
+  section stay, tested on a record written by hand and on RESS results
+  recorded when it became a plugin.
+
 ## V0.4.5.3 (2026-10-16)
 
 ### Added

@@ -21,6 +21,9 @@ Data/
 *.Rhistory
 *.BLE
 ga.txt
+# A test fixture, not data: RESS results recorded for RessReportTest when
+# RESS became a plugin (see that test's entries()).
+!tests/fixtures/ressReportEntries.mat
 
 # ── Vendored toolkits (kept locally, obtained externally) ────────────
 # The app expects these on the MATLAB path at runtime. They are NOT

@@ -10,8 +10,8 @@ channel and the photodiode the natural read-out.
 
 This chapter describes how the frequency steps fit together. Each is
 documented in its own section: Spectral Measure (@sec-tr-spectralmeasure),
-RESS (@sec-tr-ress), Coherence Map (@sec-tr-coherencemap) and CohTopo
-(@sec-tr-coherencetopography).
+RESS (a plugin, @sec-tr-ress), Coherence Map (@sec-tr-coherencemap) and
+CohTopo (@sec-tr-coherencetopography).
 
 ## A tagging pipeline
 

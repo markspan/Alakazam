@@ -129,9 +129,8 @@ classdef AboutDependenciesTest < matlab.unittest.TestCase
         end
 
         function theNewMethodsHaveTheirPapers(testCase)
-        %THENEWMETHODSHAVETHEIRPAPERS  RESS, and the Deconvolve and Eye
-        %   tracking plugins, each rest on a paper a user has to be able to
-        %   find.
+        %THENEWMETHODSHAVETHEIRPAPERS  The RESS, Deconvolve and Eye tracking
+        %   plugins each rest on a paper a user has to be able to find.
             dois = {alakazamReferences().doi};
             for doi = {'10.1016/j.neuroimage.2016.11.036', '10.7717/peerj.7838', ...
                     '10.1167/jov.21.1.3', '10.1037/a0023885'}

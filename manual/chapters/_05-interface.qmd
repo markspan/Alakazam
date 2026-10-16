@@ -43,9 +43,9 @@ part of this manual:
 | Group | Transformations | Reference |
 |-----------------------------------|-------------------------------------------------------|-----------------------------|
 | 1. Preprocessing | Baseline, ChannelEditor, DC-Detrend, Derive Channels, EventEditor, Filter, Interpolate, Photodiode, ReRef, Rectify, Resample, SelectData; plugins: Collapse Hemispheres, Eye tracking | @sec-ref-preprocessing |
-| 2. Artifact Rejection / Reduction | ArtefactDetect, ASR, AutoGEDAI, AutoICA, AutoReject, ICA, ManualReject, PREP | @sec-ref-artefacts |
+| 2. Artifact Rejection / Reduction | ArtefactDetect, AutoGEDAI, AutoICA, AutoReject, ICA, ManualReject, PREP; plugin: ASR | @sec-ref-artefacts |
 | 3. Epoching and Averaging | Average, DefineBins; plugin: Deconvolve | @sec-ref-epoching |
-| 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, RESS, Spectral Measure, Welch PSD; plugins: Beamformer, Dipole Fit, Source Estimate, Source Regions | @sec-ref-frequency |
+| 4. Frequency and Component Analysis | Covariance, Cross Correlation, ERP Measure, Fourier, Spectral Measure, Welch PSD; plugins: Beamformer, Dipole Fit, RESS, Source Estimate, Source Regions | @sec-ref-frequency |
 | 5. Plots | Brain (3D), CohTopo, Coherence Map, Scalp, TimeFrequency | @sec-ref-plots |
 
 : The groups of the **Tools** tab. A plugin's button is there once the plugin is installed. {#tbl-ribbon-tools}
@@ -409,11 +409,12 @@ boundaries that are not in the data [@borland2007].
 
 A plugin is a transformation packed as a zip file: the same three files as
 every transformation in the source tree (a manifest, an entry function and
-an icon), with whatever else it needs. Seven of Alakazam's own tools are
+an icon), with whatever else it needs. Nine of Alakazam's own tools are
 plugins, each in a GitHub repository of its own with its tests and its
 manual page, installed only where they are needed: Collapse Hemispheres,
-Eye tracking, Deconvolve, Source Estimate, Source Regions, Dipole Fit and
-Beamformer. Each one's section in this manual says where its manual is.
+Eye tracking, ASR, Deconvolve, RESS, Source Estimate, Source Regions, Dipole
+Fit and Beamformer. Each one's section in this manual says where its manual
+is.
 
 ### Install plugins
 

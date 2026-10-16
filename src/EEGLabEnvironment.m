@@ -30,7 +30,7 @@ classdef EEGLabEnvironment
         Plugins = { ...
             'bva-io',  'pop_loadbv';   ...  % BrainVision (.vhdr) import
             'ICLabel', 'iclabel';      ...  % IC classification
-            'clean_rawdata', 'clean_asr'; ... % ASR (ships with EEGLAB)
+            'clean_rawdata', 'clean_asr'; ... % the ASR plugin (ships with EEGLAB)
             'dipfit',  'dipfitdefs'}        % head models + 10-20 electrode
                                              % template (AutoEyeICA, AutoGEDAI)
 

@@ -318,10 +318,11 @@ offer to install a missing tool.
 
 ### The plugin repositories
 
-Seven tools left the source tree for repositories of their own on the
+Nine tools left the source tree for repositories of their own on the
 markspan account: AlakazamCollapseHemisphere, AlakazamEyetracking,
-AlakazamDeconvolve, AlakazamSourceEstimate, AlakazamSourceRegions,
-AlakazamDipolefit and AlakazamBeamformer. Each is laid out the same way:
+AlakazamASR, AlakazamDeconvolve, AlakazamRESS, AlakazamSourceEstimate,
+AlakazamSourceRegions, AlakazamDipolefit and AlakazamBeamformer. Each is laid
+out the same way:
 
 ```
 AlakazamThing/
@@ -340,8 +341,9 @@ Estimate, the reading template runs Eye tracking). `PluginInstallTest`
 builds the zip and installs it through `Plugins` into a temporary folder,
 so a plugin that the installer would refuse fails its own suite. A test of
 Alakazam's own code stays here even when only a plugin produces its input:
-`SourceCacheTest`, `DipoleViewTest`, `BeamformerViewTest` and
-`EyeTrackingRecordTest` work on results written by hand.
+`SourceCacheTest`, `DipoleViewTest`, `BeamformerViewTest`,
+`EyeTrackingRecordTest` and `AsrRecordTest` work on results written by hand,
+and `RessReportTest` on RESS results recorded in `tests/fixtures`.
 
 A release of a plugin is a version in its manifest, `build()`, a commit, a
 tag, and a GitHub release with the zip attached; **Install plugins** offers
