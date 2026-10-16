@@ -165,7 +165,7 @@ classdef Alakazam < handle
         [ok, message] = buildHelpPage(this)
         onAbout(this)
         onUpdate(this)
-        onInstallPlugin(this, source, repo)
+        onInstallPlugin(this, source, repo, host)
         onManagePlugins(this)
         refreshRibbon(this)
         setPlotsViewMode(this, mode)

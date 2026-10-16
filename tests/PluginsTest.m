@@ -468,6 +468,90 @@ classdef PluginsTest < matlab.unittest.TestCase
             end
         end
 
+        function theInstallersQuestionsAreShownWhereInstallWasPressed(testCase)
+        %THEINSTALLERSQUESTIONSARESHOWNWHEREINSTALLWASPRESSED  The progress,
+        %   the confirmation and the alerts are drawn in the window given,
+        %   the Install plugins window, which is in front: drawn in the main
+        %   window behind it they were hidden, and the application seemed
+        %   stuck. Without a window given, the main window. Stand-ins first
+        %   on the path record where each prompt was put.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            writeText(fullfile(folder, 'uiprogressdlg.m'), strjoin({ ...
+                'function d = uiprogressdlg(f, varargin)', ...
+                'setappdata(groot, ''PluginPromptFigures'', [getappdata(groot, ''PluginPromptFigures''), {f}]);', ...
+                'd = figure(''Visible'', ''off'');', ...
+                'end'}, newline));
+            writeText(fullfile(folder, 'uialert.m'), strjoin({ ...
+                'function uialert(f, varargin)', ...
+                'setappdata(groot, ''PluginPromptFigures'', [getappdata(groot, ''PluginPromptFigures''), {f}]);', ...
+                'end'}, newline));
+            MethodCopy.make(folder, '@Alakazam', 'onInstallPlugin', 'installCopy');
+            testCase.addTeardown(@rehash);   % after the path is restored: no stand-in stays cached
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            rehash;
+            testCase.addTeardown(@() rmappdata(groot, 'PluginPromptFigures'));
+            main = uifigure('Visible', 'off');
+            testCase.addTeardown(@() delete(main));
+            pluginsWindow = uifigure('Visible', 'off');
+            testCase.addTeardown(@() delete(pluginsWindow));
+            app = FakeApp(struct('MainFigure', main));
+            nowhere = fullfile(testCase.PluginRoot, 'no-such-plugin.zip');
+
+            setappdata(groot, 'PluginPromptFigures', {});
+            installCopy(app, nowhere, 'AlakazamNothing', pluginsWindow);
+            shown = getappdata(groot, 'PluginPromptFigures');
+            testCase.verifyNotEmpty(shown, 'The failed fetch was not reported.');
+            testCase.verifyTrue(all(cellfun(@(f) isequal(f, pluginsWindow), shown)), ...
+                'A prompt went to another window than the one Install was pressed in.');
+
+            setappdata(groot, 'PluginPromptFigures', {});
+            installCopy(app, nowhere, 'AlakazamNothing');
+            shown = getappdata(groot, 'PluginPromptFigures');
+            testCase.verifyNotEmpty(shown);
+            testCase.verifyTrue(all(cellfun(@(f) isequal(f, main), shown)), ...
+                'Without a window given, the prompts belong in the main window.');
+        end
+
+        function installPluginsPassesItsOwnWindow(testCase)
+        %INSTALLPLUGINSPASSESITSOWNWINDOW  Install in the list installs with
+        %   the list's own window as the one to ask in: the window made by
+        %   PluginsDialog, not the empty handle an anonymous function would
+        %   have captured before the window existed. A stand-in
+        %   PluginsDialog hands back a window and keeps the install function.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            writeText(fullfile(folder, 'PluginsDialog.m'), strjoin({ ...
+                'function fig = PluginsDialog(~, varargin)', ...
+                'o = struct(varargin{:});', ...
+                'setappdata(groot, ''StandInInstallFcn'', o.InstallFcn);', ...
+                'fig = uifigure(''Visible'', ''off'');', ...
+                'setappdata(groot, ''StandInPluginsWindow'', fig);', ...
+                'end'}, newline));
+            MethodCopy.make(folder, '@Alakazam', 'onManagePlugins', 'manageCopy');
+            testCase.addTeardown(@rehash);   % after the path is restored: no stand-in stays cached
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            rehash;
+            testCase.addTeardown(@() rmappdata(groot, 'StandInInstallFcn'));
+            testCase.addTeardown(@() rmappdata(groot, 'StandInPluginsWindow'));
+            app = FakeApp(struct('MainFigure', [], 'Asked', {{}}));
+            app.addprop('onInstallPlugin');
+            app.onInstallPlugin = @(link, repo, host) record(link, repo, host);
+
+            manageCopy(app);
+            window = getappdata(groot, 'StandInPluginsWindow');
+            testCase.addTeardown(@() delete(window));
+            installFcn = getappdata(groot, 'StandInInstallFcn');
+            installFcn('https://github.com/me/AlakazamGood', 'AlakazamGood');
+
+            testCase.assertNumElements(app.Asked, 3);
+            testCase.verifyEqual(app.Asked(1:2), {'https://github.com/me/AlakazamGood', 'AlakazamGood'});
+            testCase.verifyTrue(isequal(app.Asked{3}, window), ...
+                'The install was not given the Install plugins window to ask in.');
+
+            function record(link, repo, host)
+                app.Asked = {link, repo, host};
+            end
+        end
+
         function theSourceDialogReturnsTheLink(testCase)
             [~, fig] = PluginSourceDialog([], 'Wait', false);
             closeFig = onCleanup(@() delete(fig));
