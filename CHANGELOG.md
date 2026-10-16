@@ -4,6 +4,15 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Fixed
+
+- **Install plugins shows the busy cursor** from the press until its window
+  is there, over the ribbon too, and in that window while GitHub is asked
+  (on **Refresh** as well). The first opening takes some seconds, and
+  without it the press seemed to do nothing.
+
 ## V0.4.5.4 (2026-10-16)
 
 ### Changed

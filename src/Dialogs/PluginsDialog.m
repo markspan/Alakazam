@@ -103,6 +103,11 @@ function fig = PluginsDialog(parentFig, varargin)
     fill(false);
 
     function fill(refresh)
+        % The busy cursor while GitHub is asked (the first time, and on
+        % Refresh), which takes some seconds.
+        fig.Pointer = "watch";
+        drawnow;
+        restorePointer = onCleanup(@() pointerBack(fig));
         [repos, problem] = listRepos(o.Repos, refresh);
         rows = pluginRows(repos, Plugins.installed());
         text = sprintf(['    Plugins come from the "Alakazam" repositories of github.com/%s, and ' ...
@@ -201,6 +206,13 @@ function fig = PluginsDialog(parentFig, varargin)
 end
 
 % ----------------------------------------------------------------------- %
+function pointerBack(fig)
+%POINTERBACK  The usual cursor again, unless the window was closed meanwhile.
+    if isvalid(fig)
+        fig.Pointer = "arrow";
+    end
+end
+
 function [repos, problem] = listRepos(source, refresh)
 %LISTREPOS  The repositories on offer, and '' or why they could not be had
 %   (no network, GitHub's hourly limit): the dialog then lists the
