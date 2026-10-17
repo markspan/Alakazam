@@ -24,8 +24,9 @@ function options = PhotodiodeDialog(EEG)
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Photodiode', 'Position', centredOn([], 1080, 680), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Photodiode', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Photodiode', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'Photodiode');
     outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 

@@ -47,17 +47,9 @@ function openExternal(evt)
 %OPENEXTERNAL  Open a link the help page was clicked on, in the real
 %   browser. Only http(s): the manual's outside links are DOIs and web
 %   addresses, and anything else would resolve against MATLAB's own server
-%   and fail anyway.
+%   and fail anyway (openInBrowser ignores it).
     if ~strcmp(evt.HTMLEventName, 'openUrl')
         return;
     end
-    url = char(string(evt.HTMLEventData));
-    if isempty(regexp(url, '^https?://', 'once'))
-        return;
-    end
-    try
-        web(url, '-browser');
-    catch
-        web(url);
-    end
+    openInBrowser(evt.HTMLEventData);
 end

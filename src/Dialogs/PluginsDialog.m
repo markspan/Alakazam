@@ -1,6 +1,7 @@
 function fig = PluginsDialog(parentFig, varargin)
 %PLUGINSDIALOG  Install plugins: every plugin repository on offer, and every
-%   plugin installed, with Install, Upgrade, Uninstall and Show folder.
+%   plugin installed, with Install, Upgrade, Uninstall, Show folder and
+%   Manual (the plugin's manual in the web browser, installed or not).
 %
 %   The repositories are the account's whose names start with "Alakazam"
 %   (Plugins.available), so a new one is listed as soon as it exists, and a
@@ -39,7 +40,7 @@ function fig = PluginsDialog(parentFig, varargin)
 
     accentColor = [0.290 0.498 0.788];   % AlakazamRibbon.html's .alz-tab-home (#4a7fc9)
     bgColor     = [0.9608 0.9608 0.9608];
-    position = [360 240 900 460];
+    position = [360 240 980 460];
     if nargin >= 1 && ~isempty(parentFig) && isvalid(parentFig)
         parentPos = parentFig.Position;
         position(1) = parentPos(1) + (parentPos(3) - position(3)) / 2;
@@ -75,8 +76,8 @@ function fig = PluginsDialog(parentFig, varargin)
         'Multiselect', 'off', 'SelectionChangedFcn', @(~, ~) updateButtons());
     table.Layout.Row = 2;
 
-    buttonRow = uigridlayout(outer, [1, 8], ...
-        'ColumnWidth', {90, 90, 90, 100, 80, 150, '1x', 90}, 'Padding', [16 6 16 10]);
+    buttonRow = uigridlayout(outer, [1, 9], ...
+        'ColumnWidth', {90, 90, 90, 100, 80, 80, 150, '1x', 90}, 'Padding', [16 6 16 10]);
     buttonRow.Layout.Row = 4;
     installButton = uibutton(buttonRow, 'Text', 'Install', 'Tag', 'Install', ...
         'Tooltip', 'Install the plugin from its repository''s latest release', ...
@@ -89,6 +90,9 @@ function fig = PluginsDialog(parentFig, varargin)
     folderButton = uibutton(buttonRow, 'Text', 'Show folder', 'Tag', 'ShowFolder', ...
         'Tooltip', 'Open the plugin''s folder, to read its code', ...
         'ButtonPushedFcn', @(~, ~) onShowFolder());
+    manualButton = uibutton(buttonRow, 'Text', 'Manual', 'Tag', 'Manual', ...
+        'Tooltip', 'The plugin''s manual, in your web browser, installed or not', ...
+        'ButtonPushedFcn', @(~, ~) onManual());
     uibutton(buttonRow, 'Text', 'Refresh', 'Tag', 'Refresh', ...
         'Tooltip', 'Ask GitHub again for the repositories and their releases', ...
         'ButtonPushedFcn', @(~, ~) fill(true));
@@ -97,7 +101,7 @@ function fig = PluginsDialog(parentFig, varargin)
         'ButtonPushedFcn', @(~, ~) onFromLink());
     closeButton = uibutton(buttonRow, 'Text', 'Close', 'BackgroundColor', accentColor, ...
         'FontColor', [1 1 1], 'ButtonPushedFcn', @(~, ~) delete(fig));
-    closeButton.Layout.Column = 8;
+    closeButton.Layout.Column = 9;
 
     rows = struct([]);
     fill(false);
@@ -142,6 +146,14 @@ function fig = PluginsDialog(parentFig, varargin)
         upgradeButton.Enable = canFetch && ~isempty(rows(k).Names);
         uninstallButton.Enable = ~isempty(k) && ~isempty(rows(k).Names);
         folderButton.Enable = ~isempty(k) && ~isempty(rows(k).Folders);
+        manualButton.Enable = ~isempty(k) && ~isempty(manualOf(rows(k)));
+    end
+
+    function onManual()
+        k = selected();
+        if ~isempty(k)
+            openInBrowser(manualOf(rows(k)));
+        end
     end
 
     function onInstall()
@@ -206,6 +218,20 @@ function fig = PluginsDialog(parentFig, varargin)
 end
 
 % ----------------------------------------------------------------------- %
+function url = manualOf(row)
+%MANUALOF  Where a row's plugin keeps its manual: what the installed
+%   plugin's own manifest or install link says (manualAddress), else the
+%   GitHub Pages of the repository on offer, so a plugin's manual can be
+%   read before it is installed. '' when neither says.
+    url = '';
+    if ~isempty(row.Names)
+        url = manualAddress(row.Names{1});
+    end
+    if isempty(url)
+        url = Plugins.pagesAddress(row.Link);
+    end
+end
+
 function pointerBack(fig)
 %POINTERBACK  The usual cursor again, unless the window was closed meanwhile.
     if isvalid(fig)

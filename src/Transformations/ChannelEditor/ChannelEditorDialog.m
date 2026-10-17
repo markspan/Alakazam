@@ -19,8 +19,9 @@ function chanlocs = ChannelEditorDialog(chanlocs, templates)
 
     fig = uifigure('Name', 'Channel editor', 'Position', fitOnScreen([100 100 560 480]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Channel editor', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Channel editor', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'ChannelEditor');
     outer = uigridlayout(root, [4 1], 'RowHeight', {'fit', '1x', 'fit', 44}, 'Padding', [10 10 10 10]);
 
     uilabel(outer, 'Text', ['Edit channel labels, types and X/Y/Z coordinates. "Look up ' ...

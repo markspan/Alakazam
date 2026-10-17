@@ -33,8 +33,9 @@ function options = ReRefDialog(chanlocs, stored, elcFile)
 
     fig = uifigure('Name', 'ReRef', 'Position', fitOnScreen([100 100 460 450]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Re-reference', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Re-reference', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'ReRef');
     outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', '1x', 'fit', 'fit', 44}, ...
         'Padding', [10 10 10 10]);
 

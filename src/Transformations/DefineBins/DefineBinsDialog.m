@@ -35,8 +35,9 @@ function result = DefineBinsDialog(defaultScript, prevEpoch, opts)
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', name, 'Position', fitOnScreen([100 100 780 520]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Define bins', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Define bins', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'DefineBins');
     outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44});
 
     % Row 1: epoch start/stop fields, side by side; or, for a caller that cuts

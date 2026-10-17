@@ -59,6 +59,34 @@ classdef TransformContractTest < matlab.unittest.TestCase
             testCase.verifyEqual(seamOpts, directOpts);
         end
 
+        function theStepIsNamedWhileItAsksForItsOptions(testCase)
+        %THESTEPISNAMEDWHILEITASKSFORITSOPTIONS  During an interactive run
+        %   TransTools.CurrentTool names the step (its dialog offers that
+        %   step's manual); a replay asks for nothing and names nothing; and
+        %   afterwards whatever was current before is current again.
+            testCase.writeFixture('AskWho', [ ...
+                "function [EEG, options] = AskWho(input, varargin)" newline ...
+                "    setappdata(groot, 'AskWhoSaw', TransTools.CurrentTool());" newline ...
+                "    EEG = input;" newline ...
+                "    options = struct('Saw', 1);" newline ...
+                "end"]);
+            testCase.addTeardown(@() rmappdata(groot, 'AskWhoSaw'));
+
+            TransTools.invoke('AskWho', struct('data', 1));
+            testCase.verifyEqual(getappdata(groot, 'AskWhoSaw'), 'AskWho');
+            testCase.verifyEqual(TransTools.CurrentTool(), '', 'Put back afterwards.');
+
+            TransTools.invoke('AskWho', struct('data', 1), struct('Saw', 1));
+            testCase.verifyEqual(getappdata(groot, 'AskWhoSaw'), '', 'A replay names nothing.');
+
+            outer = TransTools.CurrentTool('Outer'); %#ok<NASGU>
+            TransTools.invoke('AskWho', struct('data', 1));
+            testCase.verifyEqual(TransTools.CurrentTool(), 'Outer', ...
+                'A step run inside another gives the other back.');
+            clear outer
+            testCase.verifyEqual(TransTools.CurrentTool(), '');
+        end
+
         % ---- what it refuses ------------------------------------------------
         function anUnknownTransformationIsNamed(testCase)
             testCase.verifyError(@() TransTools.invoke('NoSuchThing', struct()), ...

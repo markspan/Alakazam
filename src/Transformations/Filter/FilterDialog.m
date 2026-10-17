@@ -81,8 +81,9 @@ function options = FilterDialog(srate, labels, stored)
 
     fig = uifigure('Name', 'Filter', 'Position', fitOnScreen([100 100 940 680]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Filter', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'Filter');
     % Every row below is given an EXPLICIT Layout.Row (not left to
     % uigridlayout's own auto-placement): globalPanel/copyRow/chanTable's
     % visibility and even row HEIGHT change at runtime (see refreshMode),

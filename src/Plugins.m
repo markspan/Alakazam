@@ -474,6 +474,22 @@ classdef Plugins
             end
         end
 
+        function url = pagesAddress(link)
+        %PAGESADDRESS  The GitHub Pages address of the repository LINK points
+        %   to (https://github.com/owner/repo, with or without .git or a path
+        %   after it): https://owner.github.io/repo/, where every plugin of
+        %   the account keeps its manual. '' for a link that is not a GitHub
+        %   repository's (a zip file, another site).
+            url = '';
+            parts = regexp(char(string(link)), ...
+                '^https?://(?:www\.)?github\.com/([^/\s?#]+)/([^/\s?#]+)', 'tokens', 'once');
+            if isempty(parts)
+                return;
+            end
+            repo = regexprep(parts{2}, '\.git$', '');
+            url = sprintf('https://%s.github.io/%s/', lower(parts{1}), repo);
+        end
+
         function text = notAPluginMessage(repo, detail)
         %NOTAPLUGINMESSAGE  What installing REPO, a repository that turned out
         %   not to hold a plugin, says: warmly, since it is nobody's fault

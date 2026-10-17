@@ -78,8 +78,9 @@ function [rows, fundamentals, refChannel, method, nTapers, snrN, snrGuard, cross
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'SpectralMeasure', 'Position', fitOnScreen([100 100 900 640]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Spectral measure', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Spectral measure', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'SpectralMeasure');
     outer = uigridlayout(root, [6 1], 'RowHeight', {'fit', 'fit', 'fit', '1x', 'fit', 44});
 
     uilabel(outer, 'Text', [ ...

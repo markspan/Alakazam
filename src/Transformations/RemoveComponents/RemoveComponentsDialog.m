@@ -33,8 +33,9 @@ function [removed, ok] = RemoveComponentsDialog(icl, icawinv, chanlocs, icaact, 
 
     fig = uifigure('Name', 'Remove ICA components', 'Position', fitOnScreen([100 100 1040 560]), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Remove ICA components', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Remove ICA components', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'RemoveComponents');
     outer = uigridlayout(root, [3 1], 'RowHeight', {'fit', '1x', 44}, 'Padding', [10 10 10 10]);
 
     uilabel(outer, 'Text', ['Tick the components to subtract from the data. Select a row to preview ' ...

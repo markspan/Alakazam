@@ -413,8 +413,14 @@ an icon), with whatever else it needs. Nine of Alakazam's own tools are
 plugins, each in a GitHub repository of its own with its tests and its
 manual page, installed only where they are needed: Collapse Hemispheres,
 Eye tracking, ASR, Deconvolve, RESS, Source Estimate, Source Regions, Dipole
-Fit and Beamformer. Each one's section in this manual says where its manual
-is.
+Fit and Beamformer. Others add tools Alakazam never had, such as Heartbeats
+(heartbeat-evoked potentials, from the R-peaks of the ECG).
+
+Each plugin's manual is on the web, a click away: the **?** in the title bar
+of its options dialog opens it in your web browser, and so does **Manual**
+in **Install plugins**, before the plugin is installed as well as after. The
+**?** of a built-in step's options dialog opens that step's section of this
+manual on the web.
 
 ### Install plugins
 
@@ -434,7 +440,8 @@ version installed here, the latest release, and its status:
 
 : The statuses in **Install plugins**. {#tbl-plugin-status}
 
-The list is read from GitHub once a session; **Refresh** reads it again.
+**Manual** opens the selected plugin's manual in your web browser, whatever
+its status. The list is read from GitHub once a session; **Refresh** reads it again.
 GitHub answers 60 such questions an hour from one address; with a token in
 the environment variable `GITHUB_TOKEN` it answers many more.
 

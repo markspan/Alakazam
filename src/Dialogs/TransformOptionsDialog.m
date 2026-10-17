@@ -39,6 +39,11 @@ function settings = TransformOptionsDialog(varargin)
 %   them the generated one goes further before that escape hatch is needed,
 %   and a new kind of field is a class in the package, not a change here.
 %
+%   THE MANUAL. A ? in the title bar opens the step's manual in the web
+%   browser: the step TransTools.invoke is running (TransTools.CurrentTool,
+%   manualAddress), or the address given as 'manual', URL ('' for none).
+%   Without either, there is no ?.
+%
 %   OK CHECKS FIRST. Each enabled field may refuse its value (a required
 %   channel list left empty, a script that does not parse, too few rows),
 %   and the dialog then says why and stays open, so a mistake is reported
@@ -55,7 +60,10 @@ function settings = TransformOptionsDialog(varargin)
 %   SETTINGSDIALOG (the application's own settings, schema-driven).
 
     [accentColor, bgColor] = dialogChromeColors();
-    [dlgTitle, description, specs] = parseArgs(varargin);
+    [dlgTitle, description, specs, manual] = parseArgs(varargin);
+    if isnumeric(manual)          % not given: the step being run, if any
+        manual = currentManual();
+    end
 
     % [] until OK is pressed and every field has accepted its value; Cancel
     % (button or window close) leaves it [], the caller's signal to abort.
@@ -111,6 +119,9 @@ function settings = TransformOptionsDialog(varargin)
         'FontWeight', 'bold', 'FontColor', [1 1 1], 'BackgroundColor', accentColor, ...
         'VerticalAlignment', 'center');
     header.Layout.Row = rowIdx;
+    if ~isempty(manual)
+        manualButton(header, manual);   % the step's manual, a click from its options
+    end
     rowIdx = rowIdx + 1;
 
     if descHeight > 0
@@ -251,13 +262,30 @@ function n = descriptionLines(text, figWidth)
     n = sum(max(1, ceil(cellfun(@numel, paragraphs) / perLine)));
 end
 
-function [dlgTitle, description, specs] = parseArgs(args)
+function url = currentManual()
+%CURRENTMANUAL  The manual of the step being run (TransTools.CurrentTool,
+%   set by TransTools.invoke), or '' outside one or where the lookup is not
+%   on the path (a script, a test that puts only this folder on it).
+    url = '';
+    try
+        if exist('manualAddress', 'file') == 2
+            url = manualAddress(TransTools.CurrentTool());
+        end
+    catch
+        url = '';
+    end
+end
+
+function [dlgTitle, description, specs, manual] = parseArgs(args)
 %PARSEARGS  Walks the settingsdlg-style arguments: 'title'/'description'
-%   set the two header strings; 'separator' inserts a heading; anything else
-%   is a {label; fieldname} (or bare fieldname) followed by its default,
-%   which DialogFields.fromDefault turns into a field.
+%   set the two header strings; 'manual' the address the ? button opens
+%   ('' for none; [] when not given, which means the step being run);
+%   'separator' inserts a heading; anything else is a {label; fieldname} (or
+%   bare fieldname) followed by its default, which DialogFields.fromDefault
+%   turns into a field.
     dlgTitle = 'Adjust settings';
     description = '';
+    manual = [];
     specs = {};
 
     i = 1;
@@ -271,6 +299,8 @@ function [dlgTitle, description, specs] = parseArgs(args)
             dlgTitle = char(args{i + 1});
         elseif (ischar(key) || isstring(key)) && strcmpi(key, 'description')
             description = char(args{i + 1});
+        elseif (ischar(key) || isstring(key)) && strcmpi(key, 'manual')
+            manual = char(string(args{i + 1}));
         elseif (ischar(key) || isstring(key)) && strcmpi(key, 'separator')
             specs{end + 1} = struct('kind', 'separator', 'label', char(args{i + 1}), ...
                 'name', '', 'field', []); %#ok<AGROW>

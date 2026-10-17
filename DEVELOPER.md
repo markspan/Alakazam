@@ -300,13 +300,23 @@ folders all work too: the installer looks for `S.json` beside `S.m` whose
 manifest's `Entry` is `S.m`. On GitHub, attach the zip to a release, and a
 link to the repository installs the latest release.
 
-Three optional manifest fields are read:
+Four optional manifest fields are read:
 
 | Field | Meaning |
 | --- | --- |
 | `Version` | Shown when installing and in the list of plugins; the installer says which version an update replaces. |
 | `Requires` | Functions the plugin needs, e.g. `["ft_defaults"]`. Each one not on the path is reported at install time, so a missing toolbox is said before the first run rather than during it. |
 | `Recalculable` | `true` when the dialog is seeded from `TransformSettings`, as `newTransformation` writes it. Recalculate then reopens the plugin with a node's own settings (`WorkSpaceTree.isRecalculable`). A plugin cannot add itself to `RecalculableTransforms`, which is source code. |
+| `Manual` | Where the plugin's manual is: a web address, or an anchor (`#sec-...`) in Alakazam's manual. Without it, a plugin installed from a GitHub repository has its manual on that repository's Pages (`owner.github.io/repo/`), which is where the account's plugins keep theirs. |
+
+**The ? of the options dialog.** While `TransTools.invoke` runs a step
+interactively, `TransTools.CurrentTool` names it, and `TransformOptionsDialog`
+puts a ? in its title bar that opens the step's manual (`manualAddress`) in
+the web browser: a built-in step's section of Alakazam's manual
+(`#sec-tr-<id in lower case>`, which `ManualAddressTest` checks for every
+one), a plugin's own manual. A plugin with a dialog of its own adds the
+button with `manualButton(parent, id)`. **Manual** in **Install plugins**
+opens the same, for a plugin on offer as well as one installed.
 
 The installer refuses a plugin whose name is a built-in transformation's
 or any other function's on the path, so choose a distinctive one. Plugins

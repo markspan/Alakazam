@@ -29,8 +29,9 @@ function ops = EventEditorDialog(EEG)
     [accentColor, bgColor] = dialogChromeColors();
     fig = uifigure('Name', 'Event editor', 'Position', centredOn([], 1040, 660), 'Color', bgColor);
     root = uigridlayout(fig, [2 1], 'RowHeight', {40, '1x'}, 'Padding', [0 0 0 0], 'RowSpacing', 0);
-    uilabel(root, 'Text', '  Event editor', 'FontSize', 14, 'FontWeight', 'bold', ...
+    titleBar = uilabel(root, 'Text', '  Event editor', 'FontSize', 14, 'FontWeight', 'bold', ...
         'FontColor', [1 1 1], 'BackgroundColor', accentColor, 'VerticalAlignment', 'center');
+    manualButton(titleBar, 'EventEditor');
     outer = uigridlayout(root, [2 1], 'RowHeight', {'1x', 46}, ...
         'Padding', [10 10 10 10], 'RowSpacing', 8);
 

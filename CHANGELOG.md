@@ -6,6 +6,16 @@ bar. Dates are those of the tag.
 
 ## Unreleased
 
+### Added
+
+- **Every step's manual is a click away.** The options dialog of a step has
+  a **?** in its title bar that opens the step's manual in your web browser:
+  a built-in step's section of the manual on the web, a plugin's own manual.
+  **Install plugins** has a **Manual** button that opens a plugin's manual,
+  before it is installed as well as after. A plugin says where its manual is
+  in its manifest (`Manual`), or keeps it on its GitHub repository's Pages,
+  as all of markspan's do.
+
 ### Fixed
 
 - **Install plugins shows the busy cursor** from the press until its window

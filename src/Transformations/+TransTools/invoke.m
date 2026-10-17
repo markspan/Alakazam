@@ -40,6 +40,9 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
 %   sanctioned identifier the seam recognises -- rather than a convention
 %   about return values.
 %
+%   DURING AN INTERACTIVE RUN, TransTools.CurrentTool names the step, so its
+%   options dialog can offer the step's manual.
+%
 %   ONE THING IS DONE TO THE RESULT, not only checked: its per-channel
 %   companions (the standard error and aSME of an average, the
 %   interpolation mask) are brought in step with its channel list by
@@ -61,6 +64,9 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
 
     try
         if nargin < 3
+            % Its options dialog may offer its manual (TransformOptionsDialog's
+            % ? button), so it is told which step it is asking for.
+            restoreTool = TransTools.CurrentTool(transformId); %#ok<NASGU>
             [EEG, options] = feval(transformId, inputEEG);
         else
             [EEG, options] = feval(transformId, inputEEG, params);

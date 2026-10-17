@@ -303,7 +303,89 @@ classdef DialogFieldsTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        % ---- the step's manual -------------------------------------------
+
+        function theStepsManualIsAQuestionMarkAway(testCase)
+        %THESTEPSMANUALISAQUESTIONMARKAWAY  While a step is being run
+        %   (TransTools.CurrentTool, as TransTools.invoke sets it), its
+        %   dialog has a ? that opens the step's manual: for Filter, its
+        %   section of Alakazam's manual. A stand-in openInBrowser records
+        %   the address instead of opening it.
+            testCase.requireFigures();
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(fileparts(fileparts(mfilename('fullpath'))), 'src', 'Transformations')));
+            testCase.standInBrowser();
+            restoreTool = TransTools.CurrentTool('Filter'); %#ok<NASGU>
+            found = false;
+            timerObj = timer('StartDelay', 3, 'TimerFcn', @(~, ~) askThenCancel());
+            cleanup = onCleanup(@() stopTimer(timerObj));
+            start(timerObj);
+            TransformOptionsDialog('title', 'Fields', {'Count'; 'Count'}, 3);
+            clear cleanup;
+
+            testCase.verifyTrue(found, 'No ? in the title bar while Filter is run.');
+            testCase.verifyEqual(getappdata(groot, 'OpenedInBrowser'), ...
+                {'https://markspan.github.io/Alakazam/#sec-tr-filter'});
+
+            function askThenCancel()
+                fig = findall(groot, 'Type', 'figure', 'Name', 'Fields');
+                manual = findall(fig, 'Type', 'uibutton', 'Tag', 'Manual');
+                found = ~isempty(manual);
+                if found
+                    manual(1).ButtonPushedFcn(manual(1), []);
+                end
+                pressButton('Fields', 'Cancel');
+            end
+        end
+
+        function noStepNoQuestionMarkUnlessAnAddressIsGiven(testCase)
+        %NOSTEPNOQUESTIONMARKUNLESSANADDRESSISGIVEN  Outside a step's run the
+        %   dialog has no ?, unless its caller gives the address ('manual').
+            testCase.requireFigures();
+            testCase.standInBrowser();
+            buttons = {};
+            for manual = {{}, {'manual', 'https://example.org/manual/'}}
+                timerObj = timer('StartDelay', 3, 'TimerFcn', @(~, ~) lookThenCancel());
+                cleanup = onCleanup(@() stopTimer(timerObj));
+                start(timerObj);
+                TransformOptionsDialog('title', 'Fields', manual{1}{:}, {'Count'; 'Count'}, 3);
+                clear cleanup;
+            end
+
+            testCase.verifyEqual(buttons, {0, 1}, 'A ? only where an address was given.');
+            testCase.verifyEqual(getappdata(groot, 'OpenedInBrowser'), {'https://example.org/manual/'});
+
+            function lookThenCancel()
+                fig = findall(groot, 'Type', 'figure', 'Name', 'Fields');
+                manualButton = findall(fig, 'Type', 'uibutton', 'Tag', 'Manual');
+                buttons{end + 1} = numel(manualButton);
+                if ~isempty(manualButton)
+                    manualButton(1).ButtonPushedFcn(manualButton(1), []);
+                end
+                pressButton('Fields', 'Cancel');
+            end
+        end
+    end
+
     methods (Access = private)
+        function standInBrowser(testCase)
+        %STANDINBROWSER  An openInBrowser first on the path that records the
+        %   addresses it is given (appdata OpenedInBrowser), so no test opens
+        %   a browser.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            fid = fopen(fullfile(folder, 'openInBrowser.m'), 'w');
+            fprintf(fid, '%s\n', 'function openInBrowser(url)', ...
+                'setappdata(groot, ''OpenedInBrowser'', [getappdata(groot, ''OpenedInBrowser''), {char(url)}]);', ...
+                'end');
+            fclose(fid);
+            testCase.addTeardown(@rehash);   % after the path is restored: no stand-in stays cached
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            rehash;
+            setappdata(groot, 'OpenedInBrowser', {});
+            testCase.addTeardown(@() rmappdata(groot, 'OpenedInBrowser'));
+        end
+
         function requireFigures(testCase)
             try
                 probe = uifigure('Visible', 'off');

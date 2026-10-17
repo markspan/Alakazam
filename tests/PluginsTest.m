@@ -435,6 +435,65 @@ classdef PluginsTest < matlab.unittest.TestCase
             testCase.verifyEqual(Plugins.installed().Link, 'https://github.com/me/AlakazamLinked');
         end
 
+        function aPluginsManualIsItsOwnOrItsRepositorysPages(testCase)
+        %APLUGINSMANUALISITSOWNORITSREPOSITORYSPAGES  Where a plugin's ? leads
+        %   (manualAddress): where its manifest says (a web address, or an
+        %   anchor in Alakazam's manual), else the GitHub Pages of the
+        %   repository it was installed from, else nowhere.
+            builtIn = testCase.BuiltIn;
+            install = @(name, varargin) Plugins.install(Plugins.prepare(testCase.zipOf( ...
+                testCase.makePlugin(name, varargin{:}), 'folder'), 'BuiltInRoot', builtIn));
+            install('AlzPlugOwnManual', 'Manual', 'https://example.org/own-manual/');
+            install('AlzPlugAnchored', 'Manual', '#sec-plugins');
+            install('AlzPlugFromZip');
+            testCase.verifyEqual(manualAddress('AlzPlugOwnManual'), 'https://example.org/own-manual/');
+            testCase.verifyEqual(manualAddress('AlzPlugAnchored'), ...
+                'https://markspan.github.io/Alakazam/#sec-plugins');
+            testCase.verifyEmpty(manualAddress('AlzPlugFromZip'), 'A zip file says nothing of a manual.');
+
+            file = fullfile(testCase.PluginRoot, Plugins.RegistryFile);
+            registry = jsondecode(fileread(file));
+            if ~iscell(registry)
+                registry = num2cell(registry);
+            end
+            for k = 1:numel(registry)
+                if strcmp(registry{k}.name, 'AlzPlugFromZip')
+                    registry{k}.link = 'https://github.com/Me/AlakazamFromZip';
+                end
+            end
+            writeText(file, jsonencode(registry));
+            testCase.verifyEqual(manualAddress('AlzPlugFromZip'), 'https://me.github.io/AlakazamFromZip/', ...
+                'Installed from a repository: its GitHub Pages.');
+        end
+
+        function theListOpensAPluginsManualInstalledOrNot(testCase)
+        %THELISTOPENSAPLUGINSMANUALINSTALLEDORNOT  Manual in Install plugins
+        %   opens the selected plugin's manual: for one on offer, not
+        %   installed, its repository's GitHub Pages. A stand-in
+        %   openInBrowser records the address instead of opening it.
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            writeText(fullfile(folder, 'openInBrowser.m'), strjoin({ ...
+                'function openInBrowser(url)', ...
+                'setappdata(groot, ''OpenedInBrowser'', [getappdata(groot, ''OpenedInBrowser''), {char(url)}]);', ...
+                'end'}, newline));
+            testCase.addTeardown(@rehash);   % after the path is restored: no stand-in stays cached
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+            rehash;
+            setappdata(groot, 'OpenedInBrowser', {});
+            testCase.addTeardown(@() rmappdata(groot, 'OpenedInBrowser'));
+            fig = PluginsDialog([], 'Visible', false, 'Repos', PluginsTest.offered());
+            closeFig = onCleanup(@() delete(fig));
+            table = findobj(fig, 'Tag', 'PluginTable');
+            manual = findobj(fig, 'Tag', 'Manual');
+            testCase.verifyFalse(logical(manual.Enable), 'Nothing selected, nothing to open.');
+
+            table.Selection = 2;
+            table.SelectionChangedFcn(table, []);
+            testCase.assertTrue(logical(manual.Enable));
+            manual.ButtonPushedFcn(manual, []);
+            testCase.verifyEqual(getappdata(groot, 'OpenedInBrowser'), {'https://me.github.io/AlakazamGood/'});
+        end
+
         function aMissingToolIsOfferedFromItsRepository(testCase)
         %AMISSINGTOOLISOFFEREDFROMITSREPOSITORY  A step naming a tool that is not
         %   here, held by one of the account's repositories: asked, installed
@@ -688,6 +747,7 @@ classdef PluginsTest < matlab.unittest.TestCase
             p.addParameter('Icon', true);
             p.addParameter('Requires', {});
             p.addParameter('Recalculable', []);
+            p.addParameter('Manual', '');
             p.addParameter('Drop', {});
             p.parse(varargin{:});
             o = p.Results;
@@ -705,6 +765,9 @@ classdef PluginsTest < matlab.unittest.TestCase
             end
             if ~isempty(o.Recalculable)
                 manifest.Recalculable = o.Recalculable;
+            end
+            if ~isempty(o.Manual)
+                manifest.Manual = o.Manual;
             end
             manifest = rmfield(manifest, o.Drop);
             writeText(fullfile(folder, [name '.json']), jsonencode(manifest));
