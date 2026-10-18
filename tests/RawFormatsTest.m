@@ -8,8 +8,9 @@ classdef RawFormatsTest < matlab.unittest.TestCase
 %   reader and ends in the File-IO fall-back. The chain is checked with
 %   stand-in readers, without EEGLAB: the first reader that returns data
 %   wins, a failure moves on to the next, and when all fail the error says
-%   what each one said. One real round trip, an EDF written and read back,
-%   runs where EEGLAB's BIOSIG plugin is installed.
+%   what each one said. Two real files: an EDF written and read back, where
+%   EEGLAB's BIOSIG plugin is installed, and an XDF file read by xdfimport,
+%   where it is installed.
 %
 %   Run with: runtests('tests/RawFormatsTest.m').
 %
@@ -180,6 +181,41 @@ classdef RawFormatsTest < matlab.unittest.TestCase
             % come back quantised: within one step of each channel's range.
             step = (max(EEG.data, [], 2) - min(EEG.data, [], 2)) / 65535;
             testCase.verifyLessThan(max(abs(double(back.data) - EEG.data) ./ step, [], 'all'), 2);
+        end
+
+        function anXdfIsReadByXdfimportItself(testCase)
+        %ANXDFISREADBYXDFIMPORTITSELF  An EEG stream at 500 Hz beside an ECG
+        %   stream at 1000 Hz, with load_xdf off the path, as it is when
+        %   EEGLAB started without its menus (eeglab nogui, as Alakazam
+        %   starts it, runs no plugin's hook). Still read by pop_loadxdf: the
+        %   EEG stream, at its nominal rate, with its labels. File-IO, the
+        %   fall-back, would keep the stream with the highest rate, the ECG.
+            try
+                EEGLabEnvironment.ensure();
+            catch
+            end
+            testCase.assumeNotEmpty(which('pop_loadxdf'), 'EEGLAB''s xdfimport plugin is not installed.');
+            testCase.addTeardown(@path, path);
+            while ~isempty(which('load_xdf'))   % xdfimport's own, or FieldTrip's copy
+                rmpath(fileparts(which('load_xdf')));
+            end
+            folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
+            file = fullfile(folder, 'sub01.xdf');
+            stream = RandStream('mt19937ar', 'Seed', 61);
+            eegTimes = 100 + (0:4999) / 500;
+            ecgTimes = 100 + (0:9999) / 1000;
+            offsets = [(95:5:125)', zeros(7, 1)];
+            writeXdf(file, struct('name', {'Amp EEG', 'Chest ECG'}, 'type', {'EEG', 'ECG'}, ...
+                'labels', {{'Fz', 'Cz', 'Pz'}, {'ECG'}}, 'rate', {500, 1000}, ...
+                'times', {eegTimes, ecgTimes}, 'data', {randn(stream, 3, 5000), randn(stream, 1, 10000)}, ...
+                'offsets', {offsets, offsets}));
+
+            [EEG, used] = readRecording(file, '.xdf');
+
+            testCase.verifyEqual(used, 'pop_loadxdf');
+            testCase.verifyEqual(EEG.srate, 500);
+            testCase.verifyEqual({EEG.chanlocs.labels}, {'Fz', 'Cz', 'Pz'});
+            testCase.verifyEqual(size(EEG.data), [3 5000]);
         end
     end
 

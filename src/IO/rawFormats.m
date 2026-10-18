@@ -75,7 +75,7 @@ function formats = rawFormats()
         generic('EGI simple binary', {'.raw'}, false, ...
             [reader('pop_readegi', '', '', @(path) pop_readegi(path)), fileio], ''), ...
         generic('Lab Streaming Layer (XDF)', {'.xdf'}, false, ...
-            [reader('pop_loadxdf', 'pop_loadxdf', 'xdfimport', @(path) pop_loadxdf(path, 'streamtype', 'EEG')), fileio], ...
+            [reader('pop_loadxdf', 'pop_loadxdf', 'xdfimport', @readXdf), fileio], ...
             'The EEG stream is read; markers from the other streams become events.'), ...
         generic('Micromed (TRC)', {'.trc'}, false, fileio, ''), ...
         generic('Nicolet (.e)', {'.e'}, false, fileio, ''), ...
@@ -124,4 +124,19 @@ end
 
 function r = reader(fn, backend, plugin, read)
     r = struct('function', fn, 'backend', backend, 'plugin', plugin, 'read', read);
+end
+
+function EEG = readXdf(path)
+%READXDF  The XDF file's EEG stream, read by EEGLAB's xdfimport. Its
+%   pop_loadxdf calls load_xdf, which lies in the plugin's xdf folder; the
+%   plugin's EEGLAB hook (eegplugin_xdfimport) adds that folder to the path,
+%   but EEGLAB runs the hooks only when it builds its menus, and Alakazam
+%   starts it without them (eeglab nogui). Unfound, load_xdf failed the read
+%   and the file went to File-IO, which keeps the stream with the highest
+%   rate: an ECG stream beside the EEG, sometimes. The folder is added here
+%   as the hook adds it.
+    if exist('load_xdf', 'file') ~= 2 && ~isempty(which('pop_loadxdf'))
+        addpath(fullfile(fileparts(which('pop_loadxdf')), 'xdf'));
+    end
+    EEG = pop_loadxdf(path, 'streamtype', 'EEG');
 end
