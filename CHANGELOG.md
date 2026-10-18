@@ -4,6 +4,19 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## V0.4.5.6 (2026-10-18)
+
+### Fixed
+
+- **XDF recordings open with EEGLAB's own XDF reader.** Its `load_xdf` lies
+  in a folder that EEGLAB adds to the path only when it builds its menus,
+  and Alakazam starts EEGLAB without them. So the read fell to File-IO,
+  which keeps the stream with the highest sampling rate (an ECG stream
+  beside the EEG, say), or could not read the file at all. Alakazam now adds
+  the folder itself, as the reader's own EEGLAB setup does, and the EEG
+  stream is read at its nominal rate with its channel labels, the markers of
+  the other streams as events.
+
 ## V0.4.5.5 (2026-10-17)
 
 ### Added
