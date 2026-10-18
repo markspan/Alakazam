@@ -358,6 +358,12 @@ and `RessReportTest` on RESS results recorded in `tests/fixtures`.
 A release of a plugin is a version in its manifest, `build()`, a commit, a
 tag, and a GitHub release with the zip attached; **Install plugins** offers
 the latest release, and **Upgrade** when it is newer than the installed one.
+It sees a new release at once on **Refresh**, and otherwise within a day:
+the list is read first from the plugin index (`plugin-index.json` on
+Alakazam's Pages site, GitHub's answers saved by
+`.github/scripts/plugin_index.py`), which the Manual site workflow renews
+every day and with every release of Alakazam. To renew it at once, run that
+workflow by hand with **index only** ticked.
 The manual page is rendered by the Pages workflow on every push to `main`.
 
 ### Adding a transformation: the checklist

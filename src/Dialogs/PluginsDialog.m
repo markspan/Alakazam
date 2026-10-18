@@ -14,8 +14,11 @@ function fig = PluginsDialog(parentFig, varargin)
 %
 %   FIG = PluginsDialog(PARENTFIG, Name, Value):
 %     'Repos'         the repositories, as Plugins.available returns them,
-%                     or a function returning them (@(refresh) ...); the
-%                     default asks GitHub, once a session unless refreshed
+%                     or a function returning them (@(refresh) ...), or
+%                     returning struct('Repos', REPOS, 'Notice', TEXT) to
+%                     say where they come from; the default is
+%                     Plugins.available, which asks GitHub as little as it
+%                     can and says when the list is not its answer just now
 %     'InstallFcn'    @(link, repo) installs from LINK through the usual
 %                     confirmation; REPO names the repository ('' for a link
 %                     or zip asked for here, LINK then [])
@@ -26,7 +29,7 @@ function fig = PluginsDialog(parentFig, varargin)
 %
 %   See also PLUGINS, ALAKAZAM.ONMANAGEPLUGINS, ALAKAZAM.ONINSTALLPLUGIN.
     p = inputParser();
-    p.addParameter('Repos', @(refresh) Plugins.available('Refresh', refresh));
+    p.addParameter('Repos', @offered);
     p.addParameter('InstallFcn', [], @(f) isempty(f) || isa(f, 'function_handle'));
     p.addParameter('UninstallFcn', @Plugins.uninstall, @(f) isa(f, 'function_handle'));
     p.addParameter('UpdateFcn', [], @(f) isempty(f) || isa(f, 'function_handle'));   % older name
@@ -112,7 +115,7 @@ function fig = PluginsDialog(parentFig, varargin)
         fig.Pointer = "watch";
         drawnow;
         restorePointer = onCleanup(@() pointerBack(fig));
-        [repos, problem] = listRepos(o.Repos, refresh);
+        [repos, problem, notice] = listRepos(o.Repos, refresh);
         rows = pluginRows(repos, Plugins.installed());
         text = sprintf(['    Plugins come from the "Alakazam" repositories of github.com/%s, and ' ...
             'are kept in %s, outside the application, so an update of Alakazam leaves them ' ...
@@ -120,6 +123,8 @@ function fig = PluginsDialog(parentFig, varargin)
         if ~isempty(problem)
             text = sprintf('%s The repositories could not be listed just now (%s); the installed plugins are shown.', ...
                 text, problem);
+        elseif ~isempty(notice)
+            text = sprintf('%s %s', text, notice);
         end
         where.Text = text;
         emptyLabel.Visible = isempty(rows);
@@ -239,16 +244,29 @@ function pointerBack(fig)
     end
 end
 
-function [repos, problem] = listRepos(source, refresh)
-%LISTREPOS  The repositories on offer, and '' or why they could not be had
-%   (no network, GitHub's hourly limit): the dialog then lists the
-%   installed plugins alone.
+function listing = offered(refresh)
+%OFFERED  Plugins.available's list and what it says about where it comes
+%   from, as the dialog's default source.
+    [repos, notice] = Plugins.available('Refresh', refresh);
+    listing = struct('Repos', {repos}, 'Notice', notice);
+end
+
+function [repos, problem, notice] = listRepos(source, refresh)
+%LISTREPOS  The repositories on offer, '' or why they could not be had (no
+%   network, GitHub's hourly limit with no list saved): the dialog then
+%   lists the installed plugins alone; and '' or where the list comes from
+%   when it is not GitHub's answer just now.
     problem = '';
+    notice = '';
     try
         if isa(source, 'function_handle')
             repos = source(refresh);
         else
             repos = source;
+        end
+        if isstruct(repos) && isscalar(repos) && isfield(repos, 'Repos') && isfield(repos, 'Notice')
+            notice = char(repos.Notice);
+            repos = repos.Repos;
         end
     catch err
         repos = struct('Repo', {}, 'Link', {}, 'Description', {}, 'Release', {}, ...

@@ -4,6 +4,26 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Changed
+
+- **Install plugins asks GitHub as little as it can.** Without a token,
+  GitHub answers 60 questions an hour from one network address, and the
+  list cost 23 every time it was opened in a new session: two openings and
+  a **Refresh** within the hour were enough to be refused. The list now
+  comes from Alakazam's plugin index, GitHub's answers saved on Alakazam's
+  web site and renewed every day, or from the list saved on this computer
+  when it is less than a day old; GitHub itself is asked only after those,
+  and on **Refresh**. **Install** and **Upgrade** take the release the list
+  shows without asking again.
+
+### Fixed
+
+- **When GitHub refuses for its limit, Install plugins says until when**,
+  shows the last list it had instead of none, and does not ask GitHub
+  again before that time, in this session or the next.
+
 ## V0.4.5.6 (2026-10-18)
 
 ### Fixed

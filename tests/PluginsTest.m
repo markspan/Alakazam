@@ -687,6 +687,263 @@ classdef PluginsTest < matlab.unittest.TestCase
             testCase.verifySubstring(code, 'sendEventToHTMLSource(this.Component, ''busy''');
         end
 
+        % ---- asking GitHub as little as can be -----------------------------
+        function theListIsKeptForTheNextSession(testCase)
+        %THELISTISKEPTFORTHENEXTSESSION  The list GitHub gave is saved beside
+        %   the plugins; a new session takes it while it is less than a day
+        %   old, and says so, and asks GitHub again once it is older.
+            asked = {};
+            first = Plugins.available('Refresh', true, 'Account', 'me', ...
+                'FetchJson', @(url) ask(url), 'FetchIndex', @(~) []);
+            testCase.verifyTrue(isfile(Plugins.listingFile()));
+            testCase.verifyNumElements(asked, 5, ...
+                'The repositories, then the files and the release of each of two.');
+
+            [again, notice] = Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @(url) ask(url), 'FetchIndex', @(~) []);
+            testCase.verifyNumElements(asked, 5, 'A new session: GitHub is not asked.');
+            testCase.verifyEqual(again, first);
+            testCase.verifySubstring(notice, 'The list is the one GitHub gave today at');
+            testCase.verifySubstring(notice, 'Refresh asks GitHub itself');
+
+            PluginsTest.ageListing(hours(31));
+            [~, notice] = Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @(url) ask(url), 'FetchIndex', @(~) []);
+            testCase.verifyNumElements(asked, 10, 'A day and more old: GitHub is asked again.');
+            testCase.verifyEmpty(notice, 'GitHub''s answer just now needs no word.');
+
+            function data = ask(url)
+                asked{end + 1} = url;
+                data = PluginsTest.fakeGitHub(url);
+            end
+        end
+
+        function thePluginIndexIsReadAsGitHubsOwnAnswers(testCase)
+        %THEPLUGININDEXISREADASGITHUBSOWNANSWERS  The index holds GitHub's
+        %   answers to the requests the list makes; read, they make the very
+        %   list GitHub's do, without asking GitHub. An index lacking an
+        %   answer, or another account's, is passed over.
+            fromGitHub = PluginsTest.offered();
+            delete(Plugins.listingFile());
+            index = PluginsTest.indexOf('me', datetime('now') - minutes(10));
+
+            [repos, notice] = Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @notAsked, 'FetchIndex', @(~) index);
+            testCase.verifyEqual(repos, fromGitHub);
+            testCase.verifySubstring(notice, 'The list is Alakazam''s plugin index of');
+            testCase.verifySubstring(notice, 'Refresh asks GitHub itself');
+
+            asked = 0;
+            gap = index;
+            gap.responses(end) = [];
+            delete(Plugins.listingFile());
+            Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @(url) ask(url), 'FetchIndex', @(~) gap);
+            testCase.verifyGreaterThan(asked, 0, 'An index lacking an answer: GitHub is asked.');
+
+            asked = 0;
+            other = index;
+            other.account = 'someoneElse';
+            delete(Plugins.listingFile());
+            Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @(url) ask(url), 'FetchIndex', @(~) other);
+            testCase.verifyGreaterThan(asked, 0, 'Another account''s index: GitHub is asked.');
+
+            function data = ask(url)
+                asked = asked + 1;
+                data = PluginsTest.fakeGitHub(url);
+            end
+        end
+
+        function theNewerOfTheIndexAndTheSavedListIsShown(testCase)
+        %THENEWEROFTHEINDEXANDTHESAVEDLISTISSHOWN  Both at hand: the one
+        %   GitHub gave later, whichever it is. The index here knows a newer
+        %   release of AlakazamGood than the list saved two hours ago.
+            PluginsTest.offered();
+            PluginsTest.ageListing(hours(2));
+            newerRelease = @(index) PluginsTest.withRelease(index, 'AlakazamGood', 'V0.3.0');
+
+            index = newerRelease(PluginsTest.indexOf('me', datetime('now') - minutes(30)));
+            [repos, notice] = Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @notAsked, 'FetchIndex', @(~) index);
+            testCase.verifyEqual(repos(strcmp({repos.Repo}, 'AlakazamGood')).Version, '0.3.0');
+            testCase.verifySubstring(notice, 'plugin index');
+
+            PluginsTest.offered();
+            PluginsTest.ageListing(hours(2));
+            index = newerRelease(PluginsTest.indexOf('me', datetime('now') - hours(3)));
+            [repos, notice] = Plugins.available('Account', 'me', 'Session', false, ...
+                'FetchJson', @notAsked, 'FetchIndex', @(~) index);
+            testCase.verifyEqual(repos(strcmp({repos.Repo}, 'AlakazamGood')).Version, '0.2.0');
+            testCase.verifySubstring(notice, 'the one GitHub gave');
+        end
+
+        function aRealIndexIsRead(testCase)
+        %AREALINDEXISREAD  An index the Manual site workflow's script wrote
+        %   for markspan on 2026-10-18 (tests/fixtures/plugin-index-sample.json):
+        %   eleven repositories, Heartbeats 0.2.0 among them.
+            fixtures = fullfile(fileparts(mfilename('fullpath')), 'fixtures');
+            sample = jsondecode(fileread(fullfile(fixtures, 'plugin-index-sample.json')));
+            sample.generated = PluginsTest.utcText(datetime('now') - hours(1));
+            forget = onCleanup(@() Plugins.available('Refresh', true, 'FetchJson', @(url) [], ...
+                'FetchIndex', @(~) []));
+
+            repos = Plugins.available('Session', false, 'FetchJson', @notAsked, ...
+                'FetchIndex', @(~) sample);
+            testCase.verifyNumElements(repos, 11);
+            testCase.verifyTrue(all(~cellfun(@isempty, {repos.Release})), 'Every one has a release.');
+            heartbeats = repos(strcmp({repos.Repo}, 'AlakazamHREvoked'));
+            testCase.verifyEqual(heartbeats.Tools, {'Heartbeats'});
+            testCase.verifyEqual(heartbeats.Version, '0.2.0');
+            testCase.verifyEqual(heartbeats.Asset, 'Heartbeats-0.2.0.zip');
+            testCase.verifyEmpty(heartbeats.Problem);
+            testCase.verifyEqual(heartbeats.Link, 'https://github.com/markspan/AlakazamHREvoked');
+        end
+
+        function whenGitHubRefusesTheLastListIsShownAndItWaits(testCase)
+        %WHENGITHUBREFUSESTHELASTLISTISSHOWNANDITWAITS  GitHub's limit used up:
+        %   the list saved is shown, with the time GitHub takes requests
+        %   again, and GitHub is not asked before then, in a new session
+        %   either.
+            first = PluginsTest.offered();
+            reset = dateshift(datetime('now') + minutes(40), 'start', 'minute');
+            asked = 0;
+
+            [repos, notice] = Plugins.available('Refresh', true, 'Account', 'me', ...
+                'FetchJson', @(url) refuseNow(url), 'FetchIndex', @(~) []);
+            testCase.verifyEqual(asked, 1);
+            testCase.verifyEqual(repos, first);
+            testCase.verifySubstring(notice, char(reset, 'HH:mm'));
+            testCase.verifySubstring(notice, 'without a token it allows 60 an hour');
+            testCase.verifySubstring(notice, 'The list is the one GitHub gave today at');
+
+            [~, notice] = Plugins.available('Refresh', true, 'Account', 'me', 'Session', false, ...
+                'FetchJson', @(url) refuseNow(url), 'FetchIndex', @(~) []);
+            testCase.verifyEqual(asked, 1, 'Not asked again before the time it named.');
+            testCase.verifySubstring(notice, char(reset, 'HH:mm'));
+
+            function data = refuseNow(~) %#ok<STOUT>
+                asked = asked + 1;
+                throw(GitHubRateLimit(reset));
+            end
+        end
+
+        function aRefusalPartWayEndsTheList(testCase)
+        %AREFUSALPARTWAYENDSTHELIST  The limit reached after the first
+        %   request: not a list whose repositories each say the limit, but
+        %   the last whole one.
+            first = PluginsTest.offered();
+            reset = datetime('now') + minutes(30);
+            [repos, notice] = Plugins.available('Refresh', true, 'Account', 'me', ...
+                'FetchJson', @(url) refuseFiles(url), 'FetchIndex', @(~) []);
+            testCase.verifyEqual(repos, first);
+            testCase.verifySubstring(notice, 'limit of requests');
+
+            function data = refuseFiles(url)
+                if contains(url, '/git/trees/')
+                    throw(GitHubRateLimit(reset));
+                end
+                data = PluginsTest.fakeGitHub(url);
+            end
+        end
+
+        function aRefusalWithNothingSavedSaysWhen(testCase)
+        %AREFUSALWITHNOTHINGSAVEDSAYSWHEN  No list saved and no index: the
+        %   refusal itself, which the dialog shows. With an index, the index.
+            reset = datetime('now') + minutes(30);
+            refusing = @(url) refuse(url, reset);
+            testCase.verifyError(@() Plugins.available('Refresh', true, 'Account', 'me', ...
+                'FetchJson', refusing, 'FetchIndex', @(~) []), 'Alakazam:Plugins:rateLimited');
+            try
+                Plugins.available('Refresh', true, 'Account', 'me', 'Session', false, ...
+                    'FetchJson', refusing, 'FetchIndex', @(~) []);
+            catch err
+                testCase.verifySubstring(err.message, char(reset, 'HH:mm'));
+            end
+
+            index = PluginsTest.indexOf('me', datetime('now') - hours(2));
+            [repos, notice] = Plugins.available('Refresh', true, 'Account', 'me', 'Session', false, ...
+                'FetchJson', refusing, 'FetchIndex', @(~) index);
+            testCase.verifyEqual({repos.Repo}, {'AlakazamBroken', 'AlakazamGood'});
+            testCase.verifySubstring(notice, 'limit of requests');
+            testCase.verifySubstring(notice, 'The list is Alakazam''s plugin index of');
+        end
+
+        function githubsRefusalForItsLimitIsToldApart(testCase)
+        %GITHUBSREFUSALFORITSLIMITISTOLDAPART  A 403 or 429 with none left on
+        %   /rate_limit lifts at its reset time; a burst limit in a minute;
+        %   any other refusal is not the limit.
+            err = MException('MATLAB:webservices:HTTP403StatusCodeError', ['The server returned ' ...
+                'the status 403 with message "rate limit exceeded" in response to the request ' ...
+                'to URL https://api.github.com/users/me/repos.']);
+            later = datetime('now') + minutes(20);
+            epoch = posixtime(datetime(later, 'TimeZone', 'local'));
+            info = struct('resources', struct('core', struct('limit', 60, 'remaining', 0, ...
+                'reset', round(epoch), 'used', 60)));
+
+            limit = Plugins.rateLimitOf(err, @() info);
+            testCase.verifyClass(limit, 'GitHubRateLimit');
+            testCase.verifyEqual(limit.identifier, 'Alakazam:Plugins:rateLimited');
+            testCase.verifyLessThan(abs(seconds(limit.ResetTime - later)), 1);
+
+            info.resources.core.remaining = 12;
+            limit = Plugins.rateLimitOf(err, @() info);
+            testCase.verifyLessThan(abs(seconds(limit.ResetTime - (datetime('now') + minutes(1)))), 5, ...
+                'Requests left yet "rate limit": a burst limit, a minute.');
+
+            other = MException('MATLAB:webservices:HTTP403StatusCodeError', ['The server returned ' ...
+                'the status 403 with message "Repository access blocked" in response to ...']);
+            testCase.verifyEmpty(Plugins.rateLimitOf(other, @() info));
+            missing = MException('MATLAB:webservices:HTTP404StatusCodeError', ...
+                'The server returned the status 404 with message "Not Found" in response to ...');
+            testCase.verifyEmpty(Plugins.rateLimitOf(missing, @() info));
+            info.resources.core.remaining = 0;
+            testCase.verifyNotEmpty(Plugins.rateLimitOf(other, @() info), ...
+                'None left: a 403 is the limit, whatever it says.');
+        end
+
+        function aListedPluginInstallsTheReleaseTheListShows(testCase)
+        %ALISTEDPLUGININSTALLSTHERELEASETHELISTSHOWS  A repository the list
+        %   holds with a release is fetched from that release's download
+        %   address, without asking GitHub's API; by default the list is the
+        %   one Install plugins shows.
+            known = PluginsTest.offered();
+            spec = Plugins.resolveSource('https://github.com/me/AlakazamGood', @notAsked, known);
+            testCase.verifyEqual(spec.Location, ...
+                'https://github.com/me/AlakazamGood/releases/download/V0.2.0/AlzGood-0.2.0.zip');
+            testCase.verifySubstring(spec.Label, 'release V0.2.0');
+            spec = Plugins.resolveSource('https://github.com/me/AlakazamBroken', @noReleaseYet, known);
+            testCase.verifyEqual(spec.Location, ...
+                'https://github.com/me/AlakazamBroken/archive/refs/heads/trunk.zip', ...
+                'Listed without a release: GitHub is asked.');
+
+            Plugins.available('Refresh', true, 'FetchJson', @PluginsTest.fakeGitHub, 'FetchIndex', @(~) []);
+            forget = onCleanup(@() Plugins.available('Refresh', true, 'FetchJson', @(url) [], ...
+                'FetchIndex', @(~) []));
+            zipFile = testCase.zipOf(testCase.makePlugin('AlzGood'), 'folder');
+            fetched = {};
+            candidate = Plugins.prepare(['https://github.com/' Plugins.Account '/AlakazamGood'], ...
+                'BuiltInRoot', testCase.BuiltIn, 'FetchJson', @notAsked, ...
+                'Download', @(url, file) fetch(url, file));
+            Plugins.discard(candidate);
+            testCase.verifyEqual(fetched, {sprintf( ...
+                'https://github.com/%s/AlakazamGood/releases/download/V0.2.0/AlzGood-0.2.0.zip', ...
+                Plugins.Account)});
+
+            function fetch(url, file)
+                fetched{end + 1} = url;
+                copyfile(zipFile, file);
+            end
+        end
+
+        function theListSaysWhereItComesFrom(testCase)
+            notice = 'The list is Alakazam''s plugin index of today at 05:17. Refresh asks GitHub itself.';
+            fig = PluginsDialog([], 'Visible', false, 'Repos', ...
+                @(~) struct('Repos', {PluginsTest.noRepos()}, 'Notice', notice));
+            closeFig = onCleanup(@() delete(fig));
+            testCase.verifySubstring(findobj(fig, 'Tag', 'Where').Text, notice);
+        end
+
         function theSourceDialogReturnsTheLink(testCase)
             [~, fig] = PluginSourceDialog([], 'Wait', false);
             closeFig = onCleanup(@() delete(fig));
@@ -730,6 +987,57 @@ classdef PluginsTest < matlab.unittest.TestCase
             else
                 data = [];
             end
+        end
+
+        function index = indexOf(account, generated)
+        %INDEXOF  The plugin index of fakeGitHub's account, made at GENERATED,
+        %   as the Manual site workflow's script writes it (GitHub's answer
+        %   to each request the list makes, a 404 as its status) and as it is
+        %   read back from JSON.
+            responses = struct('url', {}, 'status', {}, 'body', {});
+            users = sprintf('https://api.github.com/users/%s/repos?per_page=100&page=1', account);
+            repositories = PluginsTest.fakeGitHub(users);
+            responses(end + 1) = struct('url', users, 'status', 200, 'body', {repositories});
+            for name = {repositories.name}
+                if ~startsWith(name{1}, 'Alakazam') || strcmp(name{1}, 'Alakazam')
+                    continue;
+                end
+                api = sprintf('https://api.github.com/repos/%s/%s', account, name{1});
+                for url = {[api '/git/trees/main?recursive=1'], [api '/releases/latest']}
+                    try
+                        responses(end + 1) = struct('url', url{1}, 'status', 200, ...
+                            'body', {PluginsTest.fakeGitHub(url{1})}); %#ok<AGROW>
+                    catch
+                        responses(end + 1) = struct('url', url{1}, 'status', 404, 'body', []); %#ok<AGROW>
+                    end
+                end
+            end
+            index = jsondecode(jsonencode(struct('format', 1, 'account', account, ...
+                'generated', PluginsTest.utcText(generated), 'responses', responses)));
+        end
+
+        function index = withRelease(index, repo, tag)
+        %WITHRELEASE  INDEX with REPO's latest release answered as TAG.
+            for k = 1:numel(index.responses)
+                if endsWith(index.responses(k).url, ['/' repo '/releases/latest'])
+                    index.responses(k).body.tag_name = tag;
+                end
+            end
+        end
+
+        function text = utcText(t)
+        %UTCTEXT  A local time as GitHub and the index write it, in UTC.
+            t.TimeZone = 'local';
+            t.TimeZone = 'UTC';
+            text = char(t, 'yyyy-MM-dd''T''HH:mm:ss''Z''');
+        end
+
+        function ageListing(age)
+        %AGELISTING  Make the list saved on this computer AGE old.
+            file = Plugins.listingFile();
+            record = jsondecode(fileread(file));
+            record.fetched = char(datetime('now') - age, 'yyyy-MM-dd''T''HH:mm:ss');
+            writeText(file, jsonencode(record));
         end
     end
 
@@ -830,6 +1138,16 @@ function craftZip(file, entryName, content)
     stream.write(int8(content));
     stream.closeEntry();
     stream.close();
+end
+
+function data = notAsked(url) %#ok<STOUT>
+%NOTASKED  A FetchJson that must not be called: GitHub was not to be asked.
+    error('PluginsTest:asked', 'GitHub was asked for %s.', url);
+end
+
+function data = refuse(~, reset) %#ok<STOUT>
+%REFUSE  A FetchJson GitHub's limit refuses, until RESET.
+    throw(GitHubRateLimit(reset));
 end
 
 function data = noReleaseYet(url)

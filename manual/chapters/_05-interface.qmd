@@ -441,9 +441,23 @@ version installed here, the latest release, and its status:
 : The statuses in **Install plugins**. {#tbl-plugin-status}
 
 **Manual** opens the selected plugin's manual in your web browser, whatever
-its status. The list is read from GitHub once a session; **Refresh** reads it again.
-GitHub answers 60 such questions an hour from one address; with a token in
-the environment variable `GITHUB_TOKEN` it answers many more.
+its status.
+
+**Where the list comes from.** Without a token, GitHub answers 60 questions
+an hour from one network address, shared by everyone behind it, and the list
+costs 23 of them. So Alakazam asks GitHub itself as little as it can. It
+reads the plugin index first: GitHub's answers to those same questions,
+which Alakazam's web site keeps and renews every day. Failing that, it takes
+the list it saved on this computer, if that is less than a day old, and
+only then asks GitHub. **Refresh** asks GitHub itself, and shows a release
+made since the index was renewed. When GitHub refuses because its limit is
+used up, the window shows the last list it had, says when GitHub takes
+questions again, and does not ask it before then. A line above the list
+says where the list comes from whenever it is not GitHub's answer just now.
+**Install** and **Upgrade** install the release the list shows, without
+asking GitHub again. With a token in the environment variable
+`GITHUB_TOKEN`, GitHub answers 5,000 questions an hour; a fine-grained
+personal access token that may only read public repositories is enough.
 
 A workspace or template step that names a plugin which is not installed
 here (one made before the tool became a plugin, or on another computer) is

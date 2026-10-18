@@ -21,6 +21,19 @@ name: Manual site
 # The repository's Pages source is "GitHub Actions" (Settings > Pages), and
 # the github-pages environment allows deployments from Development, main
 # and the version tags.
+#
+# THE PLUGIN INDEX. Every run also publishes plugin-index.json beside the
+# manual: GitHub's answers about the account's Alakazam repositories, which
+# Install plugins reads in one request instead of asking GitHub's API, whose
+# limit without a token is 60 requests an hour from one network address
+# (.github/scripts/plugin_index.py says more). So that a new plugin release
+# is seen within a day, a run every day publishes a fresh index alone: the
+# site as the last run published it, taken from that run's artifact (kept 90
+# days), with the new index in it, so a manual published between releases
+# stays as it is. With no such artifact left, the manual is rendered from the
+# latest release's tag. "Run workflow" with "index only" does the same on
+# demand. A schedule runs only from the default branch, so the daily run
+# starts once this file is on main.
 
 on:
   push:
@@ -28,12 +41,20 @@ on:
       # Both spellings, matched case-sensitively, as in release.yml.
       - 'v*'
       - 'V*'
+  schedule:
+    - cron: '17 4 * * *'   # every day, the plugin index only
   workflow_dispatch:
+    inputs:
+      index_only:
+        description: 'Only a fresh plugin index; the manual stays as published'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   pages: write      # to deploy to Pages
   id-token: write   # to show the deployment comes from this workflow
+  actions: read     # to take the site the last run published (index only)
 
 # One deployment at a time; a run in flight is finished, not cancelled, so
 # the site is never left half replaced.
@@ -44,15 +65,56 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      INDEX_ONLY: ${{ github.event_name == 'schedule' || inputs.index_only == true }}
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # the tags, for the latest release's manual
+
+      - name: Keep the index script
+        # A run that renders the latest release's manual checks out its tag;
+        # the index is written by this commit's script all the same.
+        run: cp .github/scripts/plugin_index.py "$RUNNER_TEMP/"
+
+      - name: Take the site as last published
+        id: previous
+        if: env.INDEX_ONLY == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          for run in $(gh run list --workflow manual-site.yml --status success --limit 30 \
+                         --json databaseId --jq '.[].databaseId'); do
+            rm -rf previous
+            if gh run download "$run" --name github-pages --dir previous 2>/dev/null; then
+              tar -xf previous/artifact.tar -C site
+              rm -f site/plugin-index.json
+              echo "found=true" >> "$GITHUB_OUTPUT"
+              echo "The site as run $run published it."
+              exit 0
+            fi
+          done
+          echo "found=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::No earlier run's site is left; the manual is rendered from the latest release."
+
+      - name: Check out the latest release
+        if: env.INDEX_ONLY == 'true' && steps.previous.outputs.found != 'true'
+        run: |
+          set -euo pipefail
+          tag=$(git tag -l 'V*' --sort=-v:refname | head -n 1)
+          [ -n "$tag" ] || { echo "::error::No release tag to render the manual from."; exit 1; }
+          git checkout --detach "$tag"
+          echo "The manual of $tag."
 
       - name: Set up Quarto
+        if: env.INDEX_ONLY != 'true' || steps.previous.outputs.found != 'true'
         uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Render the manual as a web page
+        if: env.INDEX_ONLY != 'true' || steps.previous.outputs.found != 'true'
         working-directory: manual
         run: |
           set -euo pipefail
@@ -63,10 +125,14 @@ jobs:
           mkdir -p ../site
           cp -r index.html manual_files images ../site/
 
+      - name: Write the plugin index
+        run: python3 "$RUNNER_TEMP/plugin_index.py" "${{ github.repository_owner }}" site/plugin-index.json
+
       - name: Check the site is complete
         working-directory: site
         # Every picture, script and style the page refers to must be in the
-        # site: a missing one would be a broken page with a green build.
+        # site: a missing one would be a broken page with a green build. And
+        # the index must be JSON Alakazam can read.
         run: |
           set -euo pipefail
           grep -oE '(src|href)="[^"#:]+"' index.html \
@@ -74,12 +140,14 @@ jobs:
             | while read -r file; do
                 [ -e "$file" ] || { echo "::error::index.html refers to $file, which is not in the site."; exit 1; }
               done
+          python3 -c "import json; i = json.load(open('plugin-index.json')); assert i['format'] == 1 and i['responses']"
           du -sh .
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
+          retention-days: 90   # what an index-only run takes the site from
 
   deploy:
     needs: build

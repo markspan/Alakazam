@@ -50,9 +50,12 @@ classdef Plugins
 %   LINKS. A link to a zip file is downloaded as it is. A link to a GitHub
 %   repository takes its latest release (the release's own .zip asset when
 %   it has one, else the source at the release's tag), or the default
-%   branch when it has no release; a link to a release (.../releases/tag/T)
-%   takes that release; and a link to a folder (.../tree/BRANCH/PATH) takes
-%   the plugins inside that folder of the branch. Only https is accepted.
+%   branch when it has no release; when the list on offer holds the
+%   repository (Plugins.listed), it takes the release the list shows,
+%   without asking GitHub (AVAILABLE says why GitHub is asked little). A
+%   link to a release (.../releases/tag/T) takes that release; and a link
+%   to a folder (.../tree/BRANCH/PATH) takes the plugins inside that folder
+%   of the branch. Only https is accepted.
 %
 %   See also ALAKAZAMRIBBON, WORKSPACETREE.ISRECALCULABLE, NEWTRANSFORMATION.
 
@@ -63,6 +66,12 @@ classdef Plugins
         % The GitHub account whose Alakazam* repositories the Install plugins
         % list offers (Plugins.available).
         Account = 'markspan'
+        % The plugin index: GitHub's answers about Account's repositories,
+        % saved daily on Alakazam's web site (.github/scripts/plugin_index.py).
+        IndexAddress = 'https://markspan.github.io/Alakazam/plugin-index.json'
+        % How old a list (the index, or the one saved here) may be before
+        % GitHub is asked: a day, with room for a daily index running late.
+        MaxAge = hours(30)
     end
 
     methods (Static)
@@ -182,15 +191,19 @@ classdef Plugins
         %
         %   Name-value options, for the tests and for a caller with its own
         %   transport: BuiltInRoot (the built-in transformations, for the name
-        %   check), Download (@(url, file) writes the zip at URL to FILE) and
-        %   FetchJson (@(url) the decoded JSON at URL, for GitHub's API).
+        %   check), Download (@(url, file) writes the zip at URL to FILE),
+        %   FetchJson (@(url) the decoded JSON at URL, for GitHub's API) and
+        %   Known (the repositories whose listed release a link to them takes,
+        %   without asking GitHub: by default the list Install plugins shows,
+        %   Plugins.listed).
             arguments
                 source
                 opts.BuiltInRoot = fullfile(fileparts(mfilename('fullpath')), 'Transformations')
                 opts.Download = @defaultDownload
                 opts.FetchJson = @defaultFetchJson
+                opts.Known = Plugins.listed()
             end
-            spec = Plugins.resolveSource(source, opts.FetchJson);
+            spec = Plugins.resolveSource(source, opts.FetchJson, opts.Known);
 
             staging = tempname;
             mkdir(staging);
@@ -316,15 +329,20 @@ classdef Plugins
             rehash;
         end
 
-        function spec = resolveSource(source, fetchJson)
+        function spec = resolveSource(source, fetchJson, known)
         %RESOLVESOURCE  What to fetch for SOURCE, and how to describe it.
         %   SPEC.Kind is 'file' (a zip on this computer) or 'url';
         %   .Location the file or the URL of the zip; .Subfolder the folder
         %   inside the archive to look in ('' for all of it); .Label how the
         %   source is named to the user. FETCHJSON (@(url) decoded JSON) is
-        %   used for GitHub's API only.
-            if nargin < 2
+        %   used for GitHub's API only. KNOWN is a list of repositories as
+        %   Plugins.available returns it: a link to a repository it lists
+        %   with a release takes that release, and GitHub is not asked.
+            if nargin < 2 || isempty(fetchJson)
                 fetchJson = @defaultFetchJson;
+            end
+            if nargin < 3
+                known = emptyRepos();
             end
             source = strtrim(char(string(source)));
             spec = struct('Kind', 'url', 'Location', source, 'Subfolder', '', 'Label', source);
@@ -363,7 +381,12 @@ classdef Plugins
             tagged = regexp(rest, '^/releases/tag/(?<tag>.+)$', 'names', 'once');
             tree = regexp(rest, '^/tree/(?<branch>[^/]+)(?<path>/.*)?$', 'names', 'once');
             if isempty(rest) || strcmp(rest, '/releases/latest')
-                [spec.Location, spec.Label] = latestRelease(gh, api, repo, fetchJson);
+                entry = listedEntry(known, gh);
+                if isempty(entry)
+                    [spec.Location, spec.Label] = latestRelease(gh, api, repo, fetchJson);
+                else
+                    [spec.Location, spec.Label] = listedRelease(gh, entry, repo);
+                end
             elseif ~isempty(tagged)
                 release = fetchJson(sprintf('%s/releases/tags/%s', api, tagged.tag));
                 [spec.Location, spec.Label] = releaseZip(gh, release, repo);
@@ -379,7 +402,7 @@ classdef Plugins
             % link to a zip already, and is downloaded as it is.
         end
 
-        function repos = available(opts)
+        function [repos, notice] = available(opts)
         %AVAILABLE  The plugins on offer: every repository of the account
         %   (Plugins.Account) whose name starts with "Alakazam", Alakazam
         %   itself left out, so a new one is offered as soon as it exists.
@@ -393,73 +416,116 @@ classdef Plugins
         %   plugins in it: each folder holding <Name>.json and <Name>.m), and
         %   .Problem ('' or why it cannot be installed as it is).
         %
-        %   GitHub allows 60 unauthenticated requests an hour, and this makes
-        %   one per repository plus two, so the answer is kept for the session
-        %   and only fetched again with Refresh true. A token in the
-        %   environment variable GITHUB_TOKEN raises the limit. Name-value
-        %   options: Refresh, Account, and FetchJson (@(url) the decoded JSON,
-        %   for the tests).
+        %   WHERE THE LIST COMES FROM. Without a token GitHub answers 60
+        %   requests an hour from one network address, shared by everyone
+        %   behind it, and the list costs one request for the account's
+        %   repositories and two for each of them (its files and its latest
+        %   release): 23 for eleven repositories. So GitHub is asked last:
+        %     1. the list already had this session;
+        %     2. the newer of the plugin index (Plugins.IndexAddress) and the
+        %        list saved on this computer (Plugins.listingFile), when it is
+        %        less than MaxAge old. The index is GitHub's own answers to
+        %        those same requests, saved every day on Alakazam's web site
+        %        by its Manual site workflow and read here exactly as GitHub's
+        %        would be: one request, to a site without that limit;
+        %     3. GitHub itself, unless it refused until a time not yet come;
+        %     4. the newer of the index and the saved list, however old.
+        %   REFRESH asks GitHub first, then falls back to 4. When GitHub
+        %   refuses for its limit (GitHubRateLimit), the time it takes
+        %   requests again is saved, and it is not asked before then, in this
+        %   session or another. A token in the environment variable
+        %   GITHUB_TOKEN raises the limit to 5,000 an hour.
+        %
+        %   NOTICE says where the list comes from when it is not GitHub's
+        %   answer just now ('' when it is), and why, in the words Install
+        %   plugins shows.
+        %
+        %   Name-value options: Refresh; Account; Session (false: start
+        %   without the list had this session, as a new session would); and,
+        %   for the tests, FetchJson (@(url) the decoded JSON at URL) and
+        %   FetchIndex (@(account) the decoded index, [] when there is none).
             arguments
                 opts.Refresh (1, 1) logical = false
                 opts.Account = Plugins.Account
+                opts.Session (1, 1) logical = true
                 opts.FetchJson = @defaultFetchJson
+                opts.FetchIndex = @defaultFetchIndex
             end
-            persistent cache
             account = char(opts.Account);
-            if ~opts.Refresh && isstruct(cache) && isfield(cache, 'account') ...
-                    && strcmp(cache.account, account)
-                repos = cache.repos;
+            had = sessionListing();
+            if ~opts.Refresh && opts.Session && isstruct(had) && strcmp(had.account, account)
+                repos = had.repos;
+                notice = had.notice;
                 return;
             end
-            repos = struct('Repo', {}, 'Link', {}, 'Description', {}, 'Release', {}, ...
-                'Version', {}, 'Asset', {}, 'Tools', {}, 'Problem', {});
-            listing = {};
-            for page = 1:10
-                batch = opts.FetchJson(sprintf( ...
-                    'https://api.github.com/users/%s/repos?per_page=100&page=%d', account, page));
-                batch = asCells(batch);
-                listing = [listing, batch]; %#ok<AGROW>
-                if numel(batch) < 100
-                    break;
+
+            saved = readListing();
+            savedList = [];
+            blockedUntil = NaT;
+            if isstruct(saved)
+                blockedUntil = saved.blockedUntil;
+                if strcmp(saved.account, account)
+                    savedList = struct('repos', {saved.repos}, 'fetched', saved.fetched, ...
+                        'source', saved.source, 'fromDisk', true);
                 end
             end
-            for k = 1:numel(listing)
-                r = listing{k};
-                name = char(string(r.name));
-                if ~startsWith(name, 'Alakazam') || strcmp(name, 'Alakazam')
-                    continue;
+            refusal = [];
+            index = [];
+            if opts.Refresh
+                [listing, refusal] = askGitHub(account, opts.FetchJson, blockedUntil);
+            else
+                index = fromIndex(account, opts.FetchIndex);
+                listing = newer(index, savedList);
+                if isempty(listing) || ~(datetime('now') - listing.fetched < Plugins.MaxAge)
+                    [listing, refusal] = askGitHub(account, opts.FetchJson, blockedUntil);
                 end
-                entry = struct('Repo', name, 'Link', sprintf('https://github.com/%s/%s', account, name), ...
-                    'Description', textField(r, 'description', ''), 'Release', '', 'Version', '', ...
-                    'Asset', '', 'Tools', {{}}, 'Problem', '');
-                api = sprintf('https://api.github.com/repos/%s/%s', account, name);
-                try
-                    branch = textField(r, 'default_branch', 'main');
-                    tree = opts.FetchJson(sprintf('%s/git/trees/%s?recursive=1', api, branch));
-                    entry.Tools = toolsInTree(tree);
-                catch err
-                    entry.Problem = sprintf('its files could not be read (%s)', err.message);
-                end
-                try
-                    release = opts.FetchJson([api '/releases/latest']);
-                    entry.Release = char(string(release.tag_name));
-                    entry.Version = regexprep(entry.Release, '^[vV]', '');
-                    entry.Asset = zipAsset(release);
-                catch err
-                    if ~contains(err.message, '404') && ~contains(err.identifier, '404') ...
-                            && isempty(entry.Problem)
-                        entry.Problem = sprintf('its releases could not be read (%s)', err.message);
-                    end
-                end
-                if isempty(entry.Problem) && isempty(entry.Tools)
-                    entry.Problem = ['it holds no plugin: no folder with <Name>.json and ' ...
-                        '<Name>.m beside it'];
-                end
-                repos(end + 1) = entry; %#ok<AGROW>
             end
-            [~, order] = sort(lower({repos.Repo}));
-            repos = repos(order);
-            cache = struct('account', account, 'repos', repos);
+            if isa(refusal, 'GitHubRateLimit')
+                blockedUntil = refusal.ResetTime;
+            end
+            if isempty(listing)
+                if opts.Refresh
+                    index = fromIndex(account, opts.FetchIndex);
+                end
+                listing = newer(index, savedList);
+            end
+            if isempty(listing)
+                saveBlock(saved, blockedUntil);
+                throw(refusal);
+            end
+
+            repos = listing.repos;
+            notice = noticeOf(listing, refusal);
+            if ~listing.fromDisk
+                writeListing(account, listing, blockedUntil);
+            else
+                saveBlock(saved, blockedUntil);
+            end
+            sessionListing(struct('account', account, 'repos', repos, 'notice', notice));
+        end
+
+        function repos = listed()
+        %LISTED  The list Install plugins showed last: had this session, or
+        %   saved on this computer. Asks nothing of the network; empty when
+        %   there is none. Installing a repository it lists takes the
+        %   release it lists (Plugins.prepare), without asking GitHub.
+            repos = emptyRepos();
+            had = sessionListing();
+            if isstruct(had) && strcmp(had.account, Plugins.Account)
+                repos = had.repos;
+                return;
+            end
+            saved = readListing();
+            if isstruct(saved) && strcmp(saved.account, Plugins.Account)
+                repos = saved.repos;
+            end
+        end
+
+        function file = listingFile()
+        %LISTINGFILE  Where the list of plugins on offer is saved between
+        %   sessions, with the time GitHub takes requests again when it has
+        %   refused: beside the installed plugins.
+            file = fullfile(Plugins.folder(), 'plugin-listing.json');
         end
 
         function repo = providerOf(transformId, repos)
@@ -503,6 +569,40 @@ classdef Plugins
                 '<Name>.m, its entry function, as each tool on the Tools tab is. It would be a ' ...
                 'delight to try again once it has one. Thank you ever so much for your ' ...
                 'patience, and do have a lovely day!'], repo, detail);
+        end
+    end
+
+    methods (Static, Hidden)
+        function limit = rateLimitOf(err, askLimit)
+        %RATELIMITOF  A GitHubRateLimit when ERR is GitHub refusing a request
+        %   for its rate limit, else []. A 403 or 429 is one when GitHub's
+        %   /rate_limit (ASKLIMIT, which costs no request) has none left:
+        %   until its reset time. Or, with requests left, when the refusal
+        %   says "rate limit" itself or is a 429: a limit on bursts, which
+        %   GitHub asks to wait a minute out.
+            limit = [];
+            status = regexp(err.identifier, 'HTTP(403|429)', 'tokens', 'once');
+            if isempty(status)
+                status = regexp(err.message, 'status (403|429)\>', 'tokens', 'once');
+            end
+            if isempty(status)
+                return;
+            end
+            try
+                info = askLimit();
+                core = info.resources.core;
+                if double(core.remaining) == 0
+                    reset = datetime(double(core.reset), 'ConvertFrom', 'posixtime', 'TimeZone', 'local');
+                    reset.TimeZone = '';
+                    limit = GitHubRateLimit(reset);
+                    return;
+                end
+            catch
+                % No answer from /rate_limit either: judged by the refusal alone.
+            end
+            if strcmp(status{1}, '429') || contains(lower(err.message), 'rate limit')
+                limit = GitHubRateLimit(datetime('now') + minutes(1));
+            end
         end
     end
 end
@@ -551,6 +651,323 @@ function c = asCells(x)
         c = reshape(x, 1, []);
     else
         c = reshape(num2cell(x), 1, []);
+    end
+end
+
+% ======================================================================= %
+% The list on offer: from GitHub, the plugin index, or saved here
+% ======================================================================= %
+function repos = emptyRepos()
+    repos = struct('Repo', {}, 'Link', {}, 'Description', {}, 'Release', {}, ...
+        'Version', {}, 'Asset', {}, 'Tools', {}, 'Problem', {});
+end
+
+function repos = listFrom(account, fetchJson)
+%LISTFROM  The account's Alakazam repositories, from GitHub's answers as
+%   FETCHJSON gives them: GitHub itself, or the plugin index. A refusal for
+%   GitHub's limit, or a question the index has no answer to, ends it: a
+%   list half made of errors would be worse than the last whole one.
+    repos = emptyRepos();
+    listing = {};
+    for page = 1:10
+        batch = fetchJson(sprintf( ...
+            'https://api.github.com/users/%s/repos?per_page=100&page=%d', account, page));
+        batch = asCells(batch);
+        listing = [listing, batch]; %#ok<AGROW>
+        if numel(batch) < 100
+            break;
+        end
+    end
+    for k = 1:numel(listing)
+        r = listing{k};
+        name = char(string(r.name));
+        if ~startsWith(name, 'Alakazam') || strcmp(name, 'Alakazam')
+            continue;
+        end
+        entry = struct('Repo', name, 'Link', sprintf('https://github.com/%s/%s', account, name), ...
+            'Description', textField(r, 'description', ''), 'Release', '', 'Version', '', ...
+            'Asset', '', 'Tools', {{}}, 'Problem', '');
+        api = sprintf('https://api.github.com/repos/%s/%s', account, name);
+        try
+            branch = textField(r, 'default_branch', 'main');
+            tree = fetchJson(sprintf('%s/git/trees/%s?recursive=1', api, branch));
+            entry.Tools = toolsInTree(tree);
+        catch err
+            endsTheList(err);
+            entry.Problem = sprintf('its files could not be read (%s)', err.message);
+        end
+        try
+            release = fetchJson([api '/releases/latest']);
+            entry.Release = char(string(release.tag_name));
+            entry.Version = regexprep(entry.Release, '^[vV]', '');
+            entry.Asset = zipAsset(release);
+        catch err
+            endsTheList(err);
+            if ~contains(err.message, '404') && ~contains(err.identifier, '404') ...
+                    && isempty(entry.Problem)
+                entry.Problem = sprintf('its releases could not be read (%s)', err.message);
+            end
+        end
+        if isempty(entry.Problem) && isempty(entry.Tools)
+            entry.Problem = ['it holds no plugin: no folder with <Name>.json and ' ...
+                '<Name>.m beside it'];
+        end
+        repos(end + 1) = entry; %#ok<AGROW>
+    end
+    [~, order] = sort(lower({repos.Repo}));
+    repos = repos(order);
+end
+
+function endsTheList(err)
+%ENDSTHELIST  Throw ERR again when it is about the whole list, not one
+%   repository: GitHub's limit, or an index without the answer.
+    if isa(err, 'GitHubRateLimit') || strcmp(err.identifier, 'Alakazam:Plugins:notInIndex')
+        throw(err);
+    end
+end
+
+function [listing, refusal] = askGitHub(account, fetchJson, blockedUntil)
+%ASKGITHUB  The list from GitHub itself, or [] and why not (REFUSAL): a
+%   GitHubRateLimit when its limit is used up, and without asking at all
+%   while BLOCKEDUNTIL, the time it named before, has not come.
+    listing = [];
+    refusal = [];
+    if ~isnat(blockedUntil) && blockedUntil > datetime('now')
+        refusal = GitHubRateLimit(blockedUntil);
+        return;
+    end
+    try
+        repos = listFrom(account, fetchJson);
+    catch err
+        refusal = err;
+        return;
+    end
+    listing = struct('repos', {repos}, 'fetched', datetime('now'), 'source', 'github', ...
+        'fromDisk', false);
+end
+
+function listing = fromIndex(account, fetchIndex)
+%FROMINDEX  The list from the plugin index, GitHub's answers saved: [] when
+%   there is none, it is another account's, or it lacks an answer the list
+%   needs.
+    listing = [];
+    try
+        index = fetchIndex(account);
+        if ~isstruct(index) || ~all(isfield(index, {'account', 'generated', 'responses'})) ...
+                || ~strcmpi(char(string(index.account)), account)
+            return;
+        end
+        responses = asCells(index.responses);
+        urls = cellfun(@(r) char(string(r.url)), responses, 'UniformOutput', false);
+        repos = listFrom(account, @(url) answerIn(url, urls, responses));
+        listing = struct('repos', {repos}, 'fetched', utcTime(index.generated), ...
+            'source', 'index', 'fromDisk', false);
+    catch
+        listing = [];
+    end
+end
+
+function data = answerIn(url, urls, responses)
+%ANSWERIN  The index's answer to URL as GitHub gave it: the body, or the
+%   error a 404 would be.
+    k = find(strcmp(urls, url), 1);
+    if isempty(k)
+        throw(MException('Alakazam:Plugins:notInIndex', 'The plugin index has no answer for %s.', url));
+    end
+    status = double(responses{k}.status);
+    if status == 404
+        throw(MException('Alakazam:Plugins:HTTP404', 'Not Found (404): %s', url));
+    elseif status ~= 200
+        throw(MException('Alakazam:Plugins:notInIndex', 'The plugin index has status %d for %s.', ...
+            status, url));
+    end
+    data = responses{k}.body;
+end
+
+function listing = newer(a, b)
+%NEWER  Of two lists, either of them [], the one GitHub gave later.
+    if isempty(a)
+        listing = b;
+    elseif isempty(b) || ~(b.fetched > a.fetched)
+        listing = a;
+    else
+        listing = b;
+    end
+end
+
+function text = noticeOf(listing, refusal)
+%NOTICEOF  Where the list comes from, when it is not GitHub's answer just
+%   now, and why.
+    text = '';
+    if isempty(refusal) && strcmp(listing.source, 'github') && ~listing.fromDisk
+        return;
+    end
+    if strcmp(listing.source, 'index')
+        text = sprintf('The list is Alakazam''s plugin index of %s.', whenText(listing.fetched));
+    else
+        text = sprintf('The list is the one GitHub gave %s.', whenText(listing.fetched));
+    end
+    if isempty(refusal)
+        text = [text ' Refresh asks GitHub itself.'];
+    elseif isa(refusal, 'GitHubRateLimit')
+        text = sprintf('%s. %s', refusal.message, text);
+    else
+        text = sprintf('GitHub could not be asked just now (%s). %s', refusal.message, text);
+    end
+end
+
+function text = whenText(t)
+%WHENTEXT  A time as the notice says it: today at 14:32, yesterday at
+%   09:05, or 3 Oct 2026 at 18:00.
+    day = dateshift(t, 'start', 'day');
+    today = dateshift(datetime('now'), 'start', 'day');
+    clock = char(t, 'HH:mm', 'en_GB');
+    if day == today
+        text = ['today at ' clock];
+    elseif day == today - caldays(1)
+        text = ['yesterday at ' clock];
+    else
+        text = [char(t, 'd MMM yyyy', 'en_GB') ' at ' clock];
+    end
+end
+
+function value = sessionListing(newValue)
+%SESSIONLISTING  The list had this session (account, repos, notice), or []:
+%   set with an argument, read without.
+    persistent kept
+    if nargin
+        kept = newValue;
+    end
+    value = kept;
+end
+
+function saved = readListing()
+%READLISTING  The list saved on this computer (Plugins.listingFile): the
+%   account, when GitHub gave it, from where ('github' or 'index'), until
+%   when GitHub refuses requests (NaT when it does not), and the repos; []
+%   when there is none or it cannot be read.
+    saved = [];
+    file = Plugins.listingFile();
+    if ~isfile(file)
+        return;
+    end
+    try
+        raw = jsondecode(fileread(file));
+        saved = struct('account', char(string(raw.account)), 'fetched', isoTime(raw.fetched), ...
+            'source', char(string(raw.source)), 'blockedUntil', isoTime(raw.blockedUntil), ...
+            'repos', {normaliseRepos(raw.repos)});
+    catch
+        saved = [];
+    end
+end
+
+function writeListing(account, listing, blockedUntil)
+%WRITELISTING  Save LISTING (repos, fetched, source) for ACCOUNT, with the
+%   time GitHub takes requests again. Not being able to write it only means
+%   the next session asks again.
+    if ~isnat(blockedUntil) && blockedUntil <= datetime('now')
+        blockedUntil = NaT;
+    end
+    record = struct('format', 1, 'account', account, 'fetched', isoText(listing.fetched), ...
+        'source', listing.source, 'blockedUntil', isoText(blockedUntil), 'repos', {listing.repos});
+    try
+        file = Plugins.listingFile();
+        folder = fileparts(file);
+        if ~isfolder(folder)
+            mkdir(folder);
+        end
+        fid = fopen(file, 'w');
+        if fid < 0
+            return;
+        end
+        closeFile = onCleanup(@() fclose(fid));
+        fwrite(fid, unicode2native(jsonencode(record, 'PrettyPrint', true), 'UTF-8'));
+    catch
+    end
+end
+
+function saveBlock(saved, blockedUntil)
+%SAVEBLOCK  Save the time GitHub takes requests again with the list saved
+%   (SAVED, or none), when it is new.
+    if isnat(blockedUntil) || (isstruct(saved) && saved.blockedUntil == blockedUntil)
+        return;
+    end
+    if isstruct(saved)
+        writeListing(saved.account, saved, blockedUntil);
+    else
+        writeListing('', struct('fetched', NaT, 'source', '', 'repos', {emptyRepos()}), blockedUntil);
+    end
+end
+
+function repos = normaliseRepos(raw)
+%NORMALISEREPOS  Repositories read back from JSON as Plugins.available
+%   makes them: text as char, Tools a row cell even of one tool or none.
+    repos = emptyRepos();
+    for r = asCells(raw)
+        e = r{1};
+        tools = {};
+        if isfield(e, 'Tools') && ~isempty(e.Tools)
+            tools = reshape(cellstr(string(e.Tools)), 1, []);
+        end
+        repos(end + 1) = struct('Repo', textField(e, 'Repo', ''), 'Link', textField(e, 'Link', ''), ...
+            'Description', textField(e, 'Description', ''), 'Release', textField(e, 'Release', ''), ...
+            'Version', textField(e, 'Version', ''), 'Asset', textField(e, 'Asset', ''), ...
+            'Tools', {tools}, 'Problem', textField(e, 'Problem', '')); %#ok<AGROW>
+    end
+end
+
+function text = isoText(t)
+    text = '';
+    if ~isnat(t)
+        text = char(t, 'yyyy-MM-dd''T''HH:mm:ss');
+    end
+end
+
+function t = isoTime(text)
+    t = NaT;
+    text = char(string(text));
+    if ~isempty(text)
+        t = datetime(text, 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss');
+    end
+end
+
+function t = utcTime(text)
+%UTCTIME  A time GitHub writes (UTC, ending in Z) as the clock here shows it.
+    t = datetime(char(string(text)), 'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss''Z''', 'TimeZone', 'UTC');
+    t.TimeZone = 'local';
+    t.TimeZone = '';
+end
+
+function entry = listedEntry(known, gh)
+%LISTEDENTRY  KNOWN's entry for the repository of the link GH when it lists
+%   a release whose download address can be written from it; [] otherwise.
+    entry = [];
+    if isempty(known) || ~isfield(known, 'Link')
+        return;
+    end
+    plain = @(s) ~isempty(regexp(s, '^[\w.\-]+$', 'once'));
+    link = sprintf('https://github.com/%s/%s', gh.owner, gh.repo);
+    for k = 1:numel(known)
+        e = known(k);
+        if strcmpi(e.Link, link) && plain(e.Release) && (isempty(e.Asset) || plain(e.Asset))
+            entry = e;
+            return;
+        end
+    end
+end
+
+function [location, label] = listedRelease(gh, entry, repo)
+%LISTEDRELEASE  The release a listed repository's entry names, as
+%   RELEASEZIP takes it from GitHub's answer: its .zip asset (at GitHub's
+%   download address for it), else the source at its tag.
+    tag = entry.Release;
+    if isempty(entry.Asset)
+        location = archiveUrl(gh, 'tags', tag);
+        label = sprintf('%s, release %s', repo, tag);
+    else
+        location = sprintf('https://github.com/%s/%s/releases/download/%s/%s', ...
+            gh.owner, gh.repo, tag, entry.Asset);
+        label = sprintf('%s, release %s (%s)', repo, tag, entry.Asset);
     end
 end
 
@@ -677,13 +1094,37 @@ end
 
 function data = defaultFetchJson(url)
 %DEFAULTFETCHJSON  GitHub's API, with the token in GITHUB_TOKEN when there
-%   is one: it raises the limit of 60 requests an hour.
+%   is one: it raises the limit of 60 requests an hour to 5,000. A refusal
+%   for the limit is thrown as a GitHubRateLimit, saying when it lifts.
     headers = {'Accept', 'application/vnd.github+json'; 'User-Agent', 'Alakazam'};
     token = getenv('GITHUB_TOKEN');
     if ~isempty(token)
         headers(end + 1, :) = {'Authorization', ['Bearer ' token]};
     end
-    data = webread(url, weboptions('ContentType', 'json', 'Timeout', 30, 'HeaderFields', headers));
+    options = weboptions('ContentType', 'json', 'Timeout', 30, 'HeaderFields', headers);
+    try
+        data = webread(url, options);
+    catch err
+        limit = Plugins.rateLimitOf(err, @() webread('https://api.github.com/rate_limit', options));
+        if isempty(limit)
+            rethrow(err);
+        end
+        throw(limit);
+    end
+end
+
+function index = defaultFetchIndex(account)
+%DEFAULTFETCHINDEX  The plugin index on Alakazam's web site, which is about
+%   Plugins.Account's repositories only; [] when it cannot be had.
+    index = [];
+    if ~strcmpi(account, Plugins.Account)
+        return;
+    end
+    try
+        index = webread(Plugins.IndexAddress, weboptions('ContentType', 'json', 'Timeout', 15));
+    catch
+        index = [];
+    end
 end
 
 function [location, label] = latestRelease(gh, api, repo, fetchJson)

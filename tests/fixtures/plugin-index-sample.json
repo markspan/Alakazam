@@ -1,0 +1,897 @@
+{
+ "format": 1,
+ "account": "markspan",
+ "generated": "2026-10-18T19:56:24Z",
+ "responses": [
+  {
+   "url": "https://api.github.com/users/markspan/repos?per_page=100&page=1",
+   "status": 200,
+   "body": [
+    {
+     "name": "ACTman",
+     "description": "Actigraphy manager",
+     "default_branch": "master"
+    },
+    {
+     "name": "Alakazam",
+     "description": "EEG Analysis",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamASR",
+     "description": "ASR: Artifact Subspace Reconstruction, from EEGLAB's clean_rawdata. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamBeamformer",
+     "description": "Beamformer: LCMV and DICS maps of power change, by FieldTrip. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamButterworth",
+     "description": "Alakazam plugin: Butterworth filtering as ERPLAB does it, with Zhang, Garrett & Luck's (2024) recommended settings as presets",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamCollapseHemisphere",
+     "description": "Collapse Hemispheres: contralateral and ipsilateral waveforms (N2pc, LRP). A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamDeconvolve",
+     "description": "Deconvolve: overlap-corrected ERPs by regression, with the Unfold toolbox. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamDipolefit",
+     "description": "Dipole Fit: an equivalent current dipole, or a mirrored pair, by FieldTrip. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamEyetracking",
+     "description": "Eye tracking: an EyeLink recording joined onto the EEG by EYE-EEG, with its synchronisation checked. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamHREvoked",
+     "description": "Heartbeats: every heartbeat as an event, R-peaks found as spectHR finds them, for heartbeat-evoked potentials. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamRESS",
+     "description": "RESS: rhythmic entrainment source separation for frequency tagging. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamSourceEstimate",
+     "description": "Source Estimate: every bin inverted onto a template cortex (dSPM, sLORETA) and stored. A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AlakazamSourceRegions",
+     "description": "Source Regions: atlas region time courses from a source estimate (AAL, Brainnetome). A plugin for Alakazam.",
+     "default_branch": "main"
+    },
+    {
+     "name": "AzureKinect2lsl",
+     "description": "Stream joint positions and orientation to labstreaminglayer",
+     "default_branch": "main"
+    },
+    {
+     "name": "BalanceBoardLSL",
+     "description": "Get data from an adapted Wii Balanceboard and stream it to labstreaminglayer.",
+     "default_branch": "main"
+    },
+    {
+     "name": "BigFive-Opensesame",
+     "description": "Implementation of a bigfive questionnaire in opensesame (nl-en-de)",
+     "default_branch": "main"
+    },
+    {
+     "name": "Bumblebee",
+     "description": "convert xdf to brainvision UI",
+     "default_branch": "main"
+    },
+    {
+     "name": "Charmeleon",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "CortriumC3_matlab",
+     "description": "MATLAB scripts to load and process data from Cortrium C3 medical device",
+     "default_branch": "master"
+    },
+    {
+     "name": "DataCollection",
+     "description": "Data Collection and Analysis for the Cognitive Neurosciences *(PSMCV-2)*",
+     "default_branch": "master"
+    },
+    {
+     "name": "DCAC",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "EventExchanger",
+     "description": null,
+     "default_branch": "master"
+    },
+    {
+     "name": "EVT2",
+     "description": "Send markers through an EVT2 (RUG USB interface)",
+     "default_branch": "master"
+    },
+    {
+     "name": "evtplugins",
+     "description": "OpenSesame Plugins for communication with BSS RUG Hardware",
+     "default_branch": "master"
+    },
+    {
+     "name": "FruitFlysinTime",
+     "description": "SkinnerBox for Fruitflies code",
+     "default_branch": "main"
+    },
+    {
+     "name": "HowToThink",
+     "description": "Adaptation of the excellent open book How to Think Like a Computer Scientist",
+     "default_branch": "master"
+    },
+    {
+     "name": "KoiPondJS",
+     "description": "Another Javascript demo",
+     "default_branch": "master"
+    },
+    {
+     "name": "labstreaminglayer",
+     "description": "LabStreamingLayer super repository comprising submodules for LSL and associated apps.",
+     "default_branch": "master"
+    },
+    {
+     "name": "lsl_bridge",
+     "description": "Get data from the rowing simulator and stream to lsl",
+     "default_branch": "main"
+    },
+    {
+     "name": "markspan",
+     "description": "Config files for my GitHub profile.",
+     "default_branch": "main"
+    },
+    {
+     "name": "markspan.github.io",
+     "description": null,
+     "default_branch": "master"
+    },
+    {
+     "name": "MovieMerger",
+     "description": "Merges Videostream (TimeShot) and Audiostream (LSL Apps) ",
+     "default_branch": "main"
+    },
+    {
+     "name": "p5.JS-demo",
+     "description": "Just a proof of concept for myself",
+     "default_branch": "master"
+    },
+    {
+     "name": "PolarBand2lsl",
+     "description": "Send PolarBand H10 Data to an LSL",
+     "default_branch": "main"
+    },
+    {
+     "name": "PolarBLE",
+     "description": "C# Polar H10 LabstreamingLayer relay",
+     "default_branch": "main"
+    },
+    {
+     "name": "PreProcessing",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "Quarto",
+     "description": "Test repo",
+     "default_branch": "master"
+    },
+    {
+     "name": "Recode",
+     "description": "Change Marker codes in OpenVibe VMRK file (BrainVision format writer) from a dict.",
+     "default_branch": "main"
+    },
+    {
+     "name": "Senda-ci",
+     "description": "test",
+     "default_branch": "master"
+    },
+    {
+     "name": "spectHR",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "spectHR-depreciated",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "StopTaskBCN",
+     "description": null,
+     "default_branch": "main"
+    },
+    {
+     "name": "TimeShot",
+     "description": "videorecorder with Labstreaminglayer integration.",
+     "default_branch": "main"
+    }
+   ]
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamASR/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "ASR/ASR.json"
+     },
+     {
+      "path": "ASR/ASR.m"
+     },
+     {
+      "path": "ASR/asrRejectedSamples.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/AsrTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamASR/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.0",
+    "assets": [
+     {
+      "name": "ASR-0.1.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamASR/releases/download/V0.1.0/ASR-0.1.0.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamBeamformer/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "Beamformer/Beamformer.json"
+     },
+     {
+      "path": "Beamformer/Beamformer.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/BeamformerTest.m"
+     },
+     {
+      "path": "tests/FieldTripFixtures.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamBeamformer/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.0",
+    "assets": [
+     {
+      "name": "Beamformer-0.1.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamBeamformer/releases/download/V0.1.0/Beamformer-0.1.0.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamButterworth/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "ButterworthFilter/+Butterworth/apply.m"
+     },
+     {
+      "path": "ButterworthFilter/+Butterworth/design.m"
+     },
+     {
+      "path": "ButterworthFilter/+Butterworth/fromPreset.m"
+     },
+     {
+      "path": "ButterworthFilter/+Butterworth/recommendations.m"
+     },
+     {
+      "path": "ButterworthFilter/+Butterworth/version.m"
+     },
+     {
+      "path": "ButterworthFilter/ButterworthFilter.json"
+     },
+     {
+      "path": "ButterworthFilter/ButterworthFilter.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "icon/makeIcon.m"
+     },
+     {
+      "path": "tests/ButterworthFilterTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamButterworth/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.2.0",
+    "assets": [
+     {
+      "name": "ButterworthFilter-0.2.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamButterworth/releases/download/V0.2.0/ButterworthFilter-0.2.0.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamCollapseHemisphere/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "CollapseHemispheres/CollapseHemispheres.json"
+     },
+     {
+      "path": "CollapseHemispheres/CollapseHemispheres.m"
+     },
+     {
+      "path": "CollapseHemispheres/CollapseHemispheresDialog.m"
+     },
+     {
+      "path": "CollapseHemispheres/LateralPairs.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/CollapseHemispheresTest.m"
+     },
+     {
+      "path": "tests/LateralPairsTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamCollapseHemisphere/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.1",
+    "assets": [
+     {
+      "name": "CollapseHemispheres-0.1.1.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamCollapseHemisphere/releases/download/V0.1.1/CollapseHemispheres-0.1.1.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamDeconvolve/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "Deconvolve/+Unfold/basisTrialsMessage.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/binModel.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/designMatrix.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/ensure.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/eventCovariates.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/eyeEegMeasures.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/fitBins.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/formulaVariables.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/glmnetTrialsMessage.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/isAvailable.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/keepEvents.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/otherEventsChoice.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/pooledValues.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/predictionValues.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/requireContinuous.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/startToolbox.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/timeLockedEvents.m"
+     },
+     {
+      "path": "Deconvolve/+Unfold/workerPool.m"
+     },
+     {
+      "path": "Deconvolve/Deconvolve.json"
+     },
+     {
+      "path": "Deconvolve/Deconvolve.m"
+     },
+     {
+      "path": "Deconvolve/DeconvolveDialog.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/DeconvolveDialogTest.m"
+     },
+     {
+      "path": "tests/DeconvolveTest.m"
+     },
+     {
+      "path": "tests/EyeEegMeasuresTest.m"
+     },
+     {
+      "path": "tests/FaceSaccadesTemplateTest.m"
+     },
+     {
+      "path": "tests/FastTrialsTest.m"
+     },
+     {
+      "path": "tests/OverlapCorrectedTrialsTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     },
+     {
+      "path": "tests/TemplateReplayTest.m"
+     },
+     {
+      "path": "tests/UnfoldBinsTest.m"
+     },
+     {
+      "path": "tests/UnfoldCovariatesTest.m"
+     },
+     {
+      "path": "tests/UnfoldModelFitTest.m"
+     },
+     {
+      "path": "tests/UnfoldSolversTest.m"
+     },
+     {
+      "path": "tests/UnfoldTimeBasisTest.m"
+     },
+     {
+      "path": "tests/UnfoldTimeLockedTest.m"
+     },
+     {
+      "path": "tests/UnfoldToolboxTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamDeconvolve/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.3",
+    "assets": [
+     {
+      "name": "Deconvolve-0.1.3.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamDeconvolve/releases/download/V0.1.3/Deconvolve-0.1.3.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamDipolefit/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "DipoleFit/DipoleFit.json"
+     },
+     {
+      "path": "DipoleFit/DipoleFit.m"
+     },
+     {
+      "path": "DipoleFit/dipoleFitWindow.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/DipoleFitTest.m"
+     },
+     {
+      "path": "tests/FieldTripFixtures.m"
+     },
+     {
+      "path": "tests/FieldTripTutorialDipoleTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamDipolefit/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.0",
+    "assets": [
+     {
+      "name": "DipoleFit-0.1.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamDipolefit/releases/download/V0.1.0/DipoleFit-0.1.0.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamEyetracking/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "EyeTracking/+EyeEeg/attach.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/columns.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/ensure.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/findEyeFile.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/isAvailable.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/parse.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/rawRecording.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/sharedAnchors.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/syncQuality.m"
+     },
+     {
+      "path": "EyeTracking/+EyeEeg/triggerCodes.m"
+     },
+     {
+      "path": "EyeTracking/EyeTracking.json"
+     },
+     {
+      "path": "EyeTracking/EyeTracking.m"
+     },
+     {
+      "path": "EyeTracking/EyeTrackingDialog.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/EyeTrackingDialogTest.m"
+     },
+     {
+      "path": "tests/EyeTrackingTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamEyetracking/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.1",
+    "assets": [
+     {
+      "name": "EyeTracking-0.1.1.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamEyetracking/releases/download/V0.1.1/EyeTracking-0.1.1.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamHREvoked/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "Heartbeats/+Rpeak/beats.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/butter.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/detect.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/filtfilt.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/findPeaks.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/highpass.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/npMean.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/npMedian.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/npStd.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/npSum.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/polarity.m"
+     },
+     {
+      "path": "Heartbeats/+Rpeak/skew.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/fromRecording.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/fromXdf.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/heartField.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/matchTriggers.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/normaliseCode.m"
+     },
+     {
+      "path": "Heartbeats/+Sync/robustLine.m"
+     },
+     {
+      "path": "Heartbeats/Heartbeats.json"
+     },
+     {
+      "path": "Heartbeats/Heartbeats.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "icon/makeIcon.m"
+     },
+     {
+      "path": "tests/HeartbeatsTest.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     },
+     {
+      "path": "tests/SpectHRParityTest.m"
+     },
+     {
+      "path": "tests/SyncTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamHREvoked/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.2.0",
+    "assets": [
+     {
+      "name": "Heartbeats-0.2.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamHREvoked/releases/download/V0.2.0/Heartbeats-0.2.0.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamRESS/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "RESS/GaussianBandpass.m"
+     },
+     {
+      "path": "RESS/RESS.json"
+     },
+     {
+      "path": "RESS/RESS.m"
+     },
+     {
+      "path": "RESS/RESSChannels.m"
+     },
+     {
+      "path": "RESS/RESSComponent.m"
+     },
+     {
+      "path": "RESS/RESSDialog.m"
+     },
+     {
+      "path": "RESS/RESSFilter.m"
+     },
+     {
+      "path": "RESS/RESSPlan.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/EnabledWarningsFixture.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     },
+     {
+      "path": "tests/RESSDialogTest.m"
+     },
+     {
+      "path": "tests/RESSTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamRESS/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.1",
+    "assets": [
+     {
+      "name": "RESS-0.1.1.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamRESS/releases/download/V0.1.1/RESS-0.1.1.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamSourceEstimate/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "SourceEstimate/SourceEstimate.json"
+     },
+     {
+      "path": "SourceEstimate/SourceEstimate.m"
+     },
+     {
+      "path": "SourceEstimate/SourceEstimateDialog.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/FieldTripFixtures.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     },
+     {
+      "path": "tests/SourceEstimateTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamSourceEstimate/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.1",
+    "assets": [
+     {
+      "name": "SourceEstimate-0.1.1.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamSourceEstimate/releases/download/V0.1.1/SourceEstimate-0.1.1.zip"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamSourceRegions/git/trees/main?recursive=1",
+   "status": 200,
+   "body": {
+    "tree": [
+     {
+      "path": "SourceRegions/SourceRegions.json"
+     },
+     {
+      "path": "SourceRegions/SourceRegions.m"
+     },
+     {
+      "path": "build.m"
+     },
+     {
+      "path": "tests/FieldTripFixtures.m"
+     },
+     {
+      "path": "tests/PluginInstallTest.m"
+     },
+     {
+      "path": "tests/SourceRegionsNeedsEstimateTest.m"
+     },
+     {
+      "path": "tests/SourceRegionsTest.m"
+     }
+    ]
+   }
+  },
+  {
+   "url": "https://api.github.com/repos/markspan/AlakazamSourceRegions/releases/latest",
+   "status": 200,
+   "body": {
+    "tag_name": "V0.1.0",
+    "assets": [
+     {
+      "name": "SourceRegions-0.1.0.zip",
+      "browser_download_url": "https://github.com/markspan/AlakazamSourceRegions/releases/download/V0.1.0/SourceRegions-0.1.0.zip"
+     }
+    ]
+   }
+  }
+ ]
+}
