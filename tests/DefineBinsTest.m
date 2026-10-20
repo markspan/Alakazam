@@ -707,6 +707,147 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyEqual(bindesc(1).n, 2, ...
                 'The range should match the 21 and the 25, but not the 31.');
         end
+        % ---- reaction-time windows relative to the mean -----------------
+        function aWindowInMillisecondsFiltersOnReactionTime(testCase)
+        %AWINDOWINMILLISECONDSFILTERSONREACTIONTIME  The fixed window the
+        %   relative one extends: only the RTs inside it are kept, and a
+        %   bin without a relative bound records no trimming.
+            EEG = stimulusResponse([300 500 700 900]);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within (400,800] ms'));
+
+            testCase.verifyEqual(result.bindesc(1).rt, [500 700], 'AbsTol', 1e-9);
+            testCase.verifyEmpty(result.bindesc(1).rtTrim);
+        end
+
+        function meanPlusSdDropsTheSlowOutlier(testCase)
+        %MEANPLUSSDDROPSTHESLOWOUTLIER  The rule the feature exists for:
+        %   mean + 2.5 sd of the bin's own reaction times, with the sample
+        %   standard deviation, computed once over every matched trial.
+            rts = [400 400 400 400 400 400 400 400 400 2000];
+            EEG = stimulusResponse(rts);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within (0, mean + 2.5 sd] ms'));
+
+            trim = result.bindesc(1).rtTrim;
+            testCase.verifyEqual(result.bindesc(1).n, 9);
+            testCase.verifyEqual(trim.mean, mean(rts), 'AbsTol', 1e-9);
+            testCase.verifyEqual(trim.sd, std(rts), 'AbsTol', 1e-9);
+            testCase.verifyEqual(trim.hi, mean(rts) + 2.5 * std(rts), 'AbsTol', 1e-9);
+            testCase.verifyEqual(trim.lo, 0);
+            testCase.verifyEqual(trim.nRt, 10);
+            testCase.verifyEqual(trim.removed, 1);
+            testCase.verifyEmpty(trim.note);
+        end
+
+        function bothBoundsMayBeRelative(testCase)
+        %BOTHBOUNDSMAYBERELATIVE  [mean - k sd, mean + k sd] trims both
+        %   tails, and 'mean -2 sd' (read by the tokenizer as a negative
+        %   number) means the same as 'mean - 2 sd'.
+            rts = [100 500 500 500 500 500 500 500 500 900];
+            EEG = stimulusResponse(rts);
+            spaced = 'bin 1 "x" 112 and next(118) rt within [mean - 2 sd, mean + 2 sd] ms';
+            joined = 'bin 1 "x" 112 and next(118) rt within [mean -2 sd, mean+2sd] ms';
+
+            [a, ~] = DefineBins(EEG, struct('script', spaced));
+            [b, ~] = DefineBins(EEG, struct('script', joined));
+
+            m = mean(rts); s = std(rts);
+            testCase.verifyEqual(a.bindesc(1).rt, rts(rts >= m - 2*s & rts <= m + 2*s), 'AbsTol', 1e-9);
+            testCase.verifyEqual(a.bindesc(1).n, 8, ...
+                'Both the 100 ms and the 900 ms trial lie beyond two SDs of these RTs.');
+            testCase.verifyEqual(b.bindesc(1).rt, a.bindesc(1).rt);
+        end
+
+        function aBareMeanIsABound(testCase)
+        %ABAREMEANISABOUND  'mean' on its own is mean + 0 sd: the trials at
+        %   or below the mean, here.
+            EEG = stimulusResponse([300 400 500 600]);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within (0, mean] ms'));
+
+            testCase.verifyEqual(result.bindesc(1).rt, [300 400], 'AbsTol', 1e-9);
+        end
+
+        function theCutoffIsComputedPerRecording(testCase)
+        %THECUTOFFISCOMPUTEDPERRECORDING  Why it belongs in the language:
+        %   a compiled plan replayed on another recording trims that
+        %   recording at its own mean and sd, not at the first one's.
+            fast = stimulusResponse([300 300 300 300 300 300 300 300 300 1200]);
+            slow = stimulusResponse([900 900 900 900 900 900 900 900 900 3000]);
+            script = 'bin 1 "x" 112 and next(118) rt within (0, mean + 2.5 sd] ms';
+
+            [first, options] = DefineBins(fast, struct('script', script));
+            [replayed, ~] = DefineBins(slow, options);
+
+            testCase.verifyEqual(first.bindesc(1).n, 9);
+            testCase.verifyEqual(replayed.bindesc(1).n, 9, ...
+                'The slow recording''s 900 ms trials must survive its own cutoff.');
+            testCase.verifyGreaterThan(replayed.bindesc(1).rtTrim.hi, ...
+                first.bindesc(1).rtTrim.hi);
+        end
+
+        function aSingleReactionTimeKeepsNothingAndSaysWhy(testCase)
+        %ASINGLEREACTIONTIMEKEEPSNOTHINGANDSAYSWHY  One RT has no standard
+        %   deviation. Keeping the trial would skip the rule without a
+        %   word, so the bin is empty and the note says why.
+            EEG = stimulusResponse(500);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within (0, mean + 2.5 sd] ms'));
+
+            testCase.verifyEqual(result.bindesc(1).n, 0);
+            testCase.verifySubstring(result.bindesc(1).rtTrim.note, 'standard deviation');
+        end
+
+        function aPlanWithoutRelativeFieldsStillReplays(testCase)
+        %APLANWITHOUTRELATIVEFIELDSSTILLREPLAYS  A plan compiled before
+        %   relative bounds existed has no loSd/hiSd, and one that went
+        %   through jsonencode/jsondecode has [] where NaN was. Both are a
+        %   plain window.
+            EEG = stimulusResponse([300 500 700]);
+            spec = DefineBinsEngine.parseSpec( ...
+                'bin 1 "x" 112 and next(118) rt within (400,800] ms');
+            old = spec.bins;
+            old(1).rtWindow = rmfield(old(1).rtWindow, {'loSd', 'hiSd'});
+            decoded = spec.bins;
+            decoded(1).rtWindow.loSd = [];
+            decoded(1).rtWindow.hiSd = [];
+
+            [~, fromOld] = DefineBinsEngine.evaluateBins(EEG, old);
+            [~, fromDecoded] = DefineBinsEngine.evaluateBins(EEG, decoded);
+
+            testCase.verifyEqual(fromOld(1).rt, 500, 'AbsTol', 1e-9);
+            testCase.verifyEqual(fromDecoded(1).rt, 500, 'AbsTol', 1e-9);
+        end
+
+        function meanAndSdAreStillFreeAsAliasNames(testCase)
+        %MEANANDSDARESTILLFREEASALIASNAMES  The words mean something only
+        %   inside a reaction-time window, so a script that already named
+        %   an alias mean keeps working.
+            EEG = eegWithEvents({'112', '122'}, [100, 200]);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                ['let mean = 112' newline 'bin 1 "x" mean']));
+
+            testCase.verifyEqual(result.bindesc(1).events, 1);
+        end
+
+        function relativeBoundSpellingErrorsAreExplained(testCase)
+        %RELATIVEBOUNDSPELLINGERRORSAREEXPLAINED  The likely slips each
+        %   get a message that names the fix.
+            base = 'bin 1 "x" 112 and next(118) rt within ';
+            testCase.verifyParseError([base '(0, 2.5 sd] ms'], 'needs the word mean');
+            testCase.verifyParseError([base '(0, mean + 2.5] ms'], 'needs the word sd');
+            testCase.verifyParseError([base '(0, mean 2 sd] ms'], 'expected + or -');
+            testCase.verifyParseError([base '(0, median] ms'], 'relative to the mean');
+            testCase.verifyParseError([base '[mean + 1 sd, mean - 1 sd] ms'], 'other way round');
+            testCase.verifyParseError([base '(800, 400] ms'], 'greater than');
+            testCase.verifyParseError([base '(0, mean + 2 sd] samples'], 'milliseconds');
+        end
     end
 
     methods (Access = private)
@@ -761,6 +902,18 @@ function EEG = eegWithEvents(types, latencies)
     EEG = struct();
     EEG.srate = 250;
     EEG.event = struct('type', types, 'latency', num2cell(latencies));
+end
+
+function EEG = stimulusResponse(rts)
+%STIMULUSRESPONSE  One 112 per reaction time in RTS (ms), each followed by
+%   a 118 that much later. At 250 Hz a sample is 4 ms, so every RT here is
+%   a whole number of samples; stimuli are 4 s apart, clear of any RT used.
+    n = numel(rts);
+    stimuli = 100 + (0:n - 1) * 1000;
+    responses = stimuli + rts / 4;
+    types = repmat({'112', '118'}, 1, n);
+    latencies = reshape([stimuli; responses], 1, []);
+    EEG = eegWithEvents(types, latencies);
 end
 
 function EEG = epochFixture()

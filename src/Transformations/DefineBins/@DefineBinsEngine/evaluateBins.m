@@ -44,31 +44,51 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     % floor, matching EEGLAB/ERPLAB -- see the note in the header above.
     centerLat  = floor([EEG.event.latency]);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
-                     'combo', {}, 'events', {}, 'rt', {}, 'n', {});
+                     'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'rtTrim', {});
 
     for b = 1:numel(bins)
         if ~isempty(bins(b).combo)
             % Combination (difference) bin: no event predicate; the Average
             % step computes it from the referenced bins' averages.
-            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo);
+            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo, []);
             continue;
+        end
+
+        % Every event the condition matches, with its reaction time. The
+        % 'rt within' filter comes after, in a pass of its own, because a
+        % window relative to the mean needs all of this bin's reaction
+        % times before it can say which of them to keep.
+        candidates = [];
+        candidateRts = [];
+        for p = 1:nEv
+            [tf, capLat] = DefineBinsEngine.evalNode(bins(b).expr, p, ctx);
+            if ~tf; continue; end
+            candidates(end+1) = p;
+            if isnan(capLat)
+                candidateRts(end+1) = NaN;
+            else
+                candidateRts(end+1) = (capLat - ctx.lat(p)) / ctx.srate * 1000;
+            end
+        end
+
+        rtWindow = bins(b).rtWindow;
+        rtTrim = [];
+        if ~isempty(rtWindow)
+            [rtWindow, rtTrim] = DefineBinsEngine.resolveRtWindow(rtWindow, candidateRts);
         end
 
         matchedOrig = [];
         rts = [];
-        for p = 1:nEv
-            [tf, capLat] = DefineBinsEngine.evalNode(bins(b).expr, p, ctx);
-            if ~tf; continue; end
-
-            if isnan(capLat)
-                rtMs = NaN;
-            else
-                rtMs = (capLat - ctx.lat(p)) / ctx.srate * 1000;
-            end
+        rtRemoved = 0;
+        for c = 1:numel(candidates)
+            p = candidates(c);
+            rtMs = candidateRts(c);
 
             % 'rt within W': keep the match only if its reaction time is in W.
-            if ~isempty(bins(b).rtWindow) ...
-                    && (isnan(rtMs) || ~DefineBinsEngine.inInterval(rtMs, bins(b).rtWindow))
+            % A bound that could not be computed is NaN, and keeps nothing.
+            if ~isempty(rtWindow) ...
+                    && (isnan(rtMs) || ~DefineBinsEngine.inInterval(rtMs, rtWindow))
+                rtRemoved = rtRemoved + 1;
                 continue;
             end
 
@@ -88,7 +108,10 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
             rts(end+1)           = rtMs;
             membership{p}(end+1) = bins(b).index;
         end
-        bindesc(b) = binRecord(bins(b), matchedOrig, rts, []);
+        if ~isempty(rtTrim)
+            rtTrim.removed = rtRemoved;
+        end
+        bindesc(b) = binRecord(bins(b), matchedOrig, rts, [], rtTrim);
     end
 
     % Tag events with their bin membership (ERPLAB-style .bini).
@@ -97,8 +120,10 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     end
 end
 
-function rec = binRecord(bin, events, rts, combo)
-%BINRECORD  Build one EEG.bindesc entry with a stable field order.
+function rec = binRecord(bin, events, rts, combo, rtTrim)
+%BINRECORD  Build one EEG.bindesc entry with a stable field order. RTTRIM
+%   is what a window relative to the mean reaction time resolved to (see
+%   resolveRtWindow), or [] for a bin without one.
     rec.index  = bin.index;
     rec.label  = bin.label;
     rec.script = bin.text;
@@ -107,4 +132,5 @@ function rec = binRecord(bin, events, rts, combo)
     rec.events = events;
     rec.rt     = rts;
     rec.n      = numel(events);
+    rec.rtTrim = rtTrim;
 end

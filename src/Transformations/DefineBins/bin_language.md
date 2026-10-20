@@ -130,6 +130,41 @@ This is a **post-filter** on the already-computed RT, not another relation ,
 a match with no RT (a pure anchor bin, or one reached through `not`) is
 dropped by an `rt within` filter.
 
+### Trimming slow (or fast) responses at mean ± k SD
+
+A bound of the window may also be relative to the bin's own reaction times:
+`mean`, or `mean + k sd` / `mean - k sd`. The usual outlier rule, "drop
+trials more than 2.5 standard deviations slower than the mean", is
+
+```
+bin 1 "Correct, RT trimmed" 112 and next(118) rt within (0, mean + 2.5 sd] ms
+```
+
+and a fixed floor for anticipations combines with it in the same window:
+
+```
+bin 1 "Correct, RT trimmed" 112 and next(118) rt within (150, mean + 2.5 sd] ms
+bin 2 "Both tails"          112 and next(118) rt within [mean - 2.5 sd, mean + 2.5 sd] ms
+```
+
+The mean and standard deviation (the sample SD, n − 1) are computed from
+the reaction times of **every trial the bin's condition matched in this
+recording**, before the window is applied, once: it is a single trimming
+pass, not repeated until nothing falls outside. Each bin and each
+recording gets its own cutoff, so one script trims every participant at
+their own mean + 2.5 SD when it is replayed, dragged onto another
+recording, or applied to all raw files.
+
+What the window came to is recorded per bin in `EEG.bindesc(b).rtTrim`
+(`mean`, `sd`, `nRt`, the resolved `lo` and `hi` in ms, and how many trials
+it `removed`), and the summary after the run shows it. A bin with fewer
+than two reaction times has no standard deviation to compute the bound
+from: it keeps no trials, and the summary says why rather than skipping
+the rule without a word.
+
+`mean` and `sd` mean something only inside an `rt within` window, so they
+remain free as `let` names.
+
 ## 7. Cutting epochs
 
 ```
@@ -312,7 +347,12 @@ preceding-context relation such as `prev(cue)` never becomes the reaction
 time however early in the bin it is written. (`timelock` is unaffected and
 may still lock to a preceding event.)
 `rt within (lo,hi] ms` keeps only matches whose RT falls in that window
-(`ms` only; a `NaN` RT is always dropped).
+(`ms` only; a `NaN` RT is always dropped). Either bound may be `mean` or
+`mean ± k sd` instead of a number: the mean and sample SD of the RTs of all
+the bin's matches in the recording being processed, before the window is
+applied (see [§6](#6-reaction-time-for-free)). The resolved window is in
+`EEG.bindesc(b).rtTrim`; a bin with fewer than two RTs, whose SD bound
+cannot be computed, keeps no trials.
 
 ### Comments
 
@@ -386,7 +426,7 @@ bin 9 "Related, response-locked" 112 and answered timelock next(118)
 script      : ( <let> | <bin> | <epoch> )+              % comments only before the first
 epoch       : epoch <window>                            % ms or samples; at most once
 let         : let <name> = <expr>                       % may use earlier let names
-bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
+bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <rt-window>]
             | bin <int> "<label>" = <combo>              % combination bin (may nest)
 combo       : [ coeff ] bin <int> ( ('+'|'-') [ coeff ] bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
@@ -401,6 +441,8 @@ codeset     : <code> ( '|' <code> )*                    % pipe form
             | <name>                                    % a 'let' alias (any expr, incl. relations)
 code        : <integer> | "<text marker>"               % ? = any char, * = any run
 window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples | events ]
+rt-window   : ( '(' | '[' ) <rt-bound> , <rt-bound> ( ')' | ']' ) [ ms ]
+rt-bound    : <num> | mean [ ('+'|'-') <num> sd ]          % mean, sd: of the bin's own RTs
 comment     : % … end-of-line   |   # … end-of-line
 ```
 

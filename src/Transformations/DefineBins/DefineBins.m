@@ -71,6 +71,14 @@ function [EEG, options] = DefineBins(input, varargin)
 %                immune to jitter in the interval itself, e.g. from variable
 %                RTs). Windows are signed, so [-1200,-200) means "before".
 %
+% REACTION TIME. A bin matched through a forward relation records the delay
+% to that neighbour, and 'rt within <window>' keeps the matches whose delay
+% lies in the window. Its bounds may be numbers of ms or relative to the
+% bin's own reaction times in the recording being processed, so one script
+% trims every participant at their own cutoff:
+%
+%   bin 1 "Trimmed" : 112 and next(118) rt within (150, mean + 2.5 sd] ms
+%
 % THE EPOCH, the window cut around every matched event, is shared by all
 % bins and comes from one of two places:
 %
@@ -103,8 +111,12 @@ function [EEG, options] = DefineBins(input, varargin)
 % Adds to EEG:
 %   EEG.bindesc(b) : struct per bin with fields index, label, script, plan,
 %                    events (indices into EEG.event), rt (per-event delay to
-%                    the captured neighbour, ms; NaN when none), n, and - once
-%                    epoched - trials (indices into the epoch stack).
+%                    the captured neighbour, ms; NaN when none), n, rtTrim
+%                    (for a bin whose 'rt within' window is relative to the
+%                    mean reaction time, e.g. (150, mean + 2.5 sd] ms: the
+%                    mean, sd and bounds it resolved to in this recording,
+%                    and how many trials it removed; [] otherwise), and -
+%                    once epoched - trials (indices into the epoch stack).
 %   EEG.event(i).bini : row vector of bin numbers this event belongs to
 %                    (ERPLAB-style; an event may be in several bins).
 % With an .epoch window (see above) it also segments EEG.data into
@@ -311,10 +323,29 @@ function reportBins(bindesc, EEG, epochNote)
         end
         lines(end+1) = sprintf('bin %d "%s": %d events%s', ...
             d.index, d.label, d.n, rtStr); %#ok<AGROW>
+        if isfield(d, 'rtTrim') && ~isempty(d.rtTrim)
+            lines(end+1) = "    " + rtTrimLine(d.rtTrim); %#ok<AGROW>
+        end
     end
     if isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'EPOCHED')
         lines(end+1) = sprintf('--> segmented: %d epochs x %d samples', ...
             EEG.trials, EEG.pnts); %#ok<AGROW>
     end
     helpdlg(char(strjoin(lines, newline)), 'DefineBins: bins created');
+end
+
+function line = rtTrimLine(trim)
+%RTTRIMLINE  One summary line for a reaction-time window relative to the
+%   mean: what it was computed from, the window it came to, and how many
+%   trials it dropped. A window that could keep nothing says why, so an
+%   empty bin is never left unexplained.
+    if ~isempty(trim.note)
+        line = sprintf('rt window: no trials kept, %s', trim.note);
+        return;
+    end
+    brackets = '[(';
+    closers  = '])';
+    line = sprintf(['rt window %c%.0f, %.0f%c ms (mean %.0f, sd %.0f ms, from %d ' ...
+        'reaction times): %d trials removed'], brackets(trim.loOpen + 1), trim.lo, ...
+        trim.hi, closers(trim.hiOpen + 1), trim.mean, trim.sd, trim.nRt, trim.removed);
 end
