@@ -1,7 +1,7 @@
 {
-  "RawDirectory": "D:\\Data\\opendata\\",
-  "CacheDirectory": "d:\\Data\\Cache\\",
-  "ExportsDirectory": "d:\\Data\\Exports\\",
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/opendata/",
+  "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
+  "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
   "TransformSettings": {
     "Deconvolve": [],
     "Baseline": {
