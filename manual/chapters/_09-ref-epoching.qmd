@@ -37,7 +37,7 @@ the first of them is an error rather than being dropped. Every
 error is reported with its line, a caret under the mistake and an
 explanation of how to fix it.
 
-### The bin language, in twelve steps
+### The bin language, in thirteen steps
 
 **A bin** is a number, a quoted label, and a condition. The simplest
 condition is an event code:
@@ -170,6 +170,21 @@ bin 2 "Unrelated" "s??" not related and answered
 A name may use names defined before it, and a relation inside a name means
 exactly what it would mean written out where the name is used.
 
+**Event fields.** An event can carry numbers besides its code. The
+Heartbeats plugin gives every heartbeat its interval to the next beat
+(`ibi`, ms) and the heart rate (`hr`, beats a minute), and `field` tests
+such a number on the event itself:
+
+```
+bin 1 "Long intervals" "heartbeat" and field ibi within (1000,2000]
+bin 2 "Fast heart"     "heartbeat" and field hr within [90,200]
+```
+
+The window has no unit, since the value is compared as the event holds it.
+A missing or `NaN` value lies in no window, so the last beat before a cut,
+whose interval Heartbeats leaves `NaN`, is in neither bin. A field no event
+of the recording has is an error that lists the fields the events do have.
+
 **Difference bins** are arithmetic on other bins' averages, with integer or
 fractional coefficients:
 
@@ -232,7 +247,8 @@ let      : let <name> = <expr>
 bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <rtwindow>]
          | bin <int> "<label>" = <combo>
 combo    : [coeff] bin <int> ( (+|-) [coeff] bin <int> )*
-expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation>
+expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation> | <field>
+field    : field <name> within <window>      (no unit: compared as the event holds it)
 relation : next(<codes>) [within <window>] | prev(<codes>) [within <window>]
          | adjacent(<codes>) [within <window>] | any(<codes>) within <window>
 codes    : <code> ( | <code> )* | { <code> [,] <code> ... } | <name>

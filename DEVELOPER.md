@@ -331,8 +331,13 @@ offer to install a missing tool.
 Nine tools left the source tree for repositories of their own on the
 markspan account: AlakazamCollapseHemisphere, AlakazamEyetracking,
 AlakazamASR, AlakazamDeconvolve, AlakazamRESS, AlakazamSourceEstimate,
-AlakazamSourceRegions, AlakazamDipolefit and AlakazamBeamformer. Each is laid
-out the same way:
+AlakazamSourceRegions, AlakazamDipolefit and AlakazamBeamformer. A tenth,
+AlakazamHREvoked (**Heartbeats**: every heartbeat of an ECG as an event, its
+R-peaks found as spectHR finds them, for heartbeat-evoked potentials), was a
+plugin from the start. It gives each beat the numeric fields `ibi` and `hr`,
+which DefineBins selects on with `field ibi within (...)`; a change to how
+the bin language reads event fields is one to check against its tests too.
+Each is laid out the same way:
 
 ```
 AlakazamThing/

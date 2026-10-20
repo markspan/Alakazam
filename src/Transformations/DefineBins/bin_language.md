@@ -266,6 +266,37 @@ Declaration order doesn't matter (bin 7 could equally be written before bin
 directly or through a chain of others, or a bin number that doesn't exist,
 is caught immediately when the script is parsed.
 
+## 13. Testing an event's own fields
+
+An event can carry numbers of its own besides its code and latency. The
+Heartbeats plugin, for one, gives every heartbeat its interval to the next
+beat (`ibi`, in ms) and the heart rate that makes (`hr`, in beats a
+minute). `field <name> within <window>` tests such a number on the
+candidate event itself:
+
+```
+bin 1 "Long intervals"  "heartbeat" and field ibi within (1000,2000]
+bin 2 "Short intervals" "heartbeat" and field ibi within (0,800]
+bin 3 "Fast heart"      "heartbeat" field hr within [90,200]
+```
+
+It is a term like any other: it combines with codes and relations through
+`and`, `or` and `not`, and a `let` may name it
+(`let slow = field hr within [0,60)`). The window takes **no unit**: the
+value is compared in the unit the event holds it in, so writing `ms` after
+it is an error rather than a conversion that never happens.
+
+A value that is not one real number (empty, `NaN`, text) lies in no window,
+so the test is false for it. The Heartbeats plugin leaves the interval of
+the last beat before a cut `NaN`, so that beat is in no interval-based bin;
+under `not` it is in. A field that **no** event of the recording has is
+refused with the fields the events do have, rather than giving an empty bin
+without a word; most often it means a step was not run (Heartbeats before
+DefineBins) or the name is mistyped (field names are case-sensitive).
+
+`field` is read as a plain word, not a keyword, so an alias called `field`
+keeps working: where one is defined, the alias wins.
+
 ---
 
 ## Reference
@@ -430,8 +461,9 @@ bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <r
             | bin <int> "<label>" = <combo>              % combination bin (may nest)
 combo       : [ coeff ] bin <int> ( ('+'|'-') [ coeff ] bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
-            | <anchor> | <relation>          % 'and' optional between terms
+            | <anchor> | <relation> | <field>  % 'and' optional between terms
 anchor      : <codeset>
+field       : field <name> within <window>               % no unit: the field's own
 relation    : next( <codeset> ) [within <window>]
             | prev( <codeset> ) [within <window>]
             | adjacent( <codeset> ) [within <window>]

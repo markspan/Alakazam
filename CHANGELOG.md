@@ -4,6 +4,19 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **The bin language selects events by their own fields.** `field <name>
+  within <window>` tests a number the event carries, such as the interval to
+  the next beat (`ibi`) and the heart rate (`hr`) the Heartbeats plugin
+  gives every heartbeat: `"heartbeat" and field ibi within (1000,2000]` keeps
+  the beats followed by a long interval. It combines with codes and
+  relations like any other term. A missing or `NaN` value lies in no window,
+  and a field no event of the recording has is an error that lists the
+  fields there are, rather than an empty bin.
+
 ## V0.4.7 (2026-10-20)
 
 ### Added

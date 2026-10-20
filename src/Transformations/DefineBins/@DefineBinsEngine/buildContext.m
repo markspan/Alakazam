@@ -1,8 +1,10 @@
 function [ctx, order] = buildContext(EEG)
 %BUILDCONTEXT  Latency-ordered view of EEG.event for the evaluator: sorted
 %   latencies, canonicalised type strings in the same order, the sampling
-%   rate, and NVALID (sort() puts NaN-latency events last, so windowRange's
-%   binary search only ever needs the real, ascending-sorted prefix).
+%   rate, NVALID (sort() puts NaN-latency events last, so windowRange's
+%   binary search only ever needs the real, ascending-sorted prefix), and
+%   the events themselves in the same order, for a 'field' test to read
+%   the candidate event's own fields.
     ev  = EEG.event;
     n   = numel(ev);
     lat = zeros(1, n);
@@ -18,4 +20,5 @@ function [ctx, order] = buildContext(EEG)
     ctx.typ    = typ(order);
     ctx.srate  = EEG.srate;
     ctx.nValid = sum(~isnan(latS));
+    ctx.ev     = ev(order);
 end

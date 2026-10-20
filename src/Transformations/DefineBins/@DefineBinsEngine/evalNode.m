@@ -24,6 +24,9 @@ function [tf, cap] = evalNode(node, p, ctx)
             if ~isnan(cap) && cap <= ctx.lat(p)
                 cap = NaN;
             end
+        case 'field'
+            tf  = DefineBinsEngine.fieldInWindow(node, p, ctx);
+            cap = NaN;
         case 'not'
             tf  = ~DefineBinsEngine.evalNode(node.kid, p, ctx);
             cap = NaN;

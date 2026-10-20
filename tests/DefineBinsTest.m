@@ -848,6 +848,84 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyParseError([base '(800, 400] ms'], 'greater than');
             testCase.verifyParseError([base '(0, mean + 2 sd] samples'], 'milliseconds');
         end
+
+        % ---- selecting events by their own fields --------------------------
+        function aFieldTestSelectsBeatsByInterval(testCase)
+        %AFIELDTESTSELECTSBEATSBYINTERVAL  The case it exists for: the
+        %   Heartbeats plugin gives every beat its interbeat interval, and
+        %   a bin keeps the beats whose interval lies in the window.
+            EEG = heartbeats([700 900 1100 1300]);
+
+            matched = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and field ibi within (800,1200]');
+
+            testCase.verifyEqual(matched, [2 3]);
+        end
+
+        function aFieldTestJoinsWithoutAnd(testCase)
+        %AFIELDTESTJOINSWITHOUTAND  Like any other term, it is and-ed with
+        %   its neighbour without the keyword, and it can stand in a let.
+            EEG = heartbeats([700 900 1100 1300]);
+
+            implied = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" field ibi within [1000,2000]');
+            named = testCase.eventsFor(EEG, ...
+                ['let slow = field ibi within [1000,2000]' newline ...
+                 'bin 1 "x" "heartbeat" and slow']);
+
+            testCase.verifyEqual(implied, [3 4]);
+            testCase.verifyEqual(named, implied);
+        end
+
+        function aMissingValueIsInNoWindow(testCase)
+        %AMISSINGVALUEISINNOWINDOW  The last beat before a cut has a NaN
+        %   interval: in no window, so out of every interval-based bin and
+        %   in the same bin written under 'not'.
+            EEG = heartbeats([900 NaN 900]);
+
+            inside = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and field ibi within [0,5000]');
+            outside = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and not field ibi within [0,5000]');
+
+            testCase.verifyEqual(inside, [1 3]);
+            testCase.verifyEqual(outside, 2);
+        end
+
+        function anAliasCalledFieldKeepsItsMeaning(testCase)
+        %ANALIASCALLEDFIELDKEEPSITSMEANING  'field' is a plain word, so a
+        %   script that named an alias field before still works.
+            EEG = eegWithEvents({'112', '122'}, [100, 200]);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                ['let field = 112' newline 'bin 1 "x" field']));
+
+            testCase.verifyEqual(result.bindesc(1).events, 1);
+        end
+
+        function aFieldNoEventHasIsRefusedWithTheFieldsThatExist(testCase)
+        %AFIELDNOEVENTHASISREFUSEDWITHTHEFIELDSTHATEXIST  A slip of the
+        %   name, or Heartbeats not run, would otherwise give an empty bin
+        %   without a word.
+            EEG = heartbeats([900 900]);
+            try
+                DefineBins(EEG, struct('script', 'bin 1 "x" field IBI within (0,2000]'));
+                testCase.verifyFail('Expected DefineBins to refuse an unknown field.');
+            catch err
+                testCase.verifyEqual(err.identifier, 'Alakazam:DefineBins');
+                testCase.verifySubstring(err.message, 'did you mean field ibi');
+            end
+        end
+
+        function fieldTestSpellingErrorsAreExplained(testCase)
+        %FIELDTESTSPELLINGERRORSAREEXPLAINED  The likely slips each get a
+        %   message that names the fix.
+            base = 'bin 1 "x" "heartbeat" and ';
+            testCase.verifyParseError([base 'field ibi within (800,1200] ms'], 'takes no unit');
+            testCase.verifyParseError([base 'field ibi (800,1200]'], 'needs a window');
+            testCase.verifyParseError([base 'field within (800,1200]'], 'name of an event field');
+            testCase.verifyParseError([base 'field ibi within (1200,800]'], 'greater than');
+        end
     end
 
     methods (Access = private)
@@ -885,6 +963,13 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             matched = {EEG.event(bindesc(1).events).type};
         end
 
+        function events = eventsFor(~, EEG, script)
+        %EVENTSFOR  The event indices bin 1 of SCRIPT matched.
+            spec = DefineBinsEngine.parseSpec(script);
+            [~, bindesc] = DefineBinsEngine.evaluateBins(EEG, spec.bins);
+            events = bindesc(1).events;
+        end
+
         function rt = rtOf(~, EEG, script)
             spec = DefineBinsEngine.parseSpec(script);
             [~, bindesc] = DefineBinsEngine.evaluateBins(EEG, spec.bins);
@@ -914,6 +999,17 @@ function EEG = stimulusResponse(rts)
     types = repmat({'112', '118'}, 1, n);
     latencies = reshape([stimuli; responses], 1, []);
     EEG = eegWithEvents(types, latencies);
+end
+
+function EEG = heartbeats(ibis)
+%HEARTBEATS  One "heartbeat" event per interval in IBIS (ms), carrying it
+%   as its ibi field, as the Heartbeats plugin writes them. NaN stands for
+%   the last beat before a cut, whose interval the plugin leaves NaN.
+    n = numel(ibis);
+    EEG = eegWithEvents(repmat({'heartbeat'}, 1, n), 100 + (0:n - 1) * 250);
+    for i = 1:n
+        EEG.event(i).ibi = ibis(i);
+    end
 end
 
 function EEG = epochFixture()

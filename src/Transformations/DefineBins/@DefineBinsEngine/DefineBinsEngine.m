@@ -65,6 +65,7 @@ classdef DefineBinsEngine
         rx = wildcardToRegex(c)
         [tf, cap] = evalNode(node, p, ctx)
         [tf, cap] = evalRel(node, p, ctx)
+        tf = fieldInWindow(node, p, ctx)
         [qLo, qHi] = windowRange(p, ctx, iv)
         idx = lowerBoundIdx(sortedLat, nValid, target)
         idx = upperBoundIdx(sortedLat, nValid, target)

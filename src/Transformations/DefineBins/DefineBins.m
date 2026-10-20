@@ -40,7 +40,7 @@ function [EEG, options] = DefineBins(input, varargin)
 %   bin <n> "<label>" : <expr>
 %
 % <expr> is a boolean combination (and / or / not, grouped with parentheses;
-% 'and' between two adjacent terms is optional) of two kinds of terms, both
+% 'and' between two adjacent terms is optional) of three kinds of terms, all
 % evaluated relative to a candidate event e:
 %
 %   * anchor     a marker code (or set of codes), true when e's own marker
@@ -70,6 +70,12 @@ function [EEG, options] = DefineBins(input, varargin)
 %                -- within [-2,-2] events means "exactly two events before",
 %                immune to jitter in the interval itself, e.g. from variable
 %                RTs). Windows are signed, so [-1200,-200) means "before".
+%
+% EVENT FIELDS. A third kind of term, 'field <name> within <window>', tests
+% a number the candidate event carries itself, such as the interbeat
+% interval the Heartbeats plugin gives every beat; the window has no unit:
+%
+%   bin 1 "Long intervals" : "heartbeat" and field ibi within (1000,2000]
 %
 % REACTION TIME. A bin matched through a forward relation records the delay
 % to that neighbour, and 'rt within <window>' keeps the matches whose delay
