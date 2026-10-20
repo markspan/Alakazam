@@ -37,7 +37,7 @@ the first of them is an error rather than being dropped. Every
 error is reported with its line, a caret under the mistake and an
 explanation of how to fix it.
 
-### The bin language, in eleven steps
+### The bin language, in twelve steps
 
 **A bin** is a number, a quoted label, and a condition. The simplest
 condition is an event code:
@@ -110,6 +110,28 @@ relation that contributed to the match; a backward relation such as
 `prev(cue)` never provides it. A match without one is dropped by `rt
 within`. The reaction time also becomes a sort key of the ERP image
 (@sec-plot-area).
+
+**Outlying reaction times** are trimmed with a window relative to the
+bin's own reaction times. Either bound may be `mean`, `mean + k sd` or
+`mean - k sd` instead of a number:
+
+```
+bin 1 "Correct, trimmed" 112 and next(118) rt within (150, mean + 2.5 sd] ms
+bin 2 "Both tails"       112 and next(118) rt within [mean - 2.5 sd, mean + 2.5 sd] ms
+```
+
+The first keeps the trials slower than 150 ms and at most 2.5 standard
+deviations slower than the mean. The mean and the standard deviation
+(the sample SD, with $n - 1$) are those of every trial the bin's
+condition matched in the recording being processed, before the window is
+applied, and they are computed once rather than repeated until nothing
+more falls outside. Each recording is trimmed at its own cutoff, so the
+same script, replayed or applied to all raw files, applies the rule to
+every participant, where a cutoff typed in by hand would hold for one.
+The summary after the run gives, per bin, the mean, the SD, the window
+they came to and how many trials it removed, and `EEG.bindesc(b).rtTrim`
+keeps the same record. A bin with fewer than two reaction times has no
+standard deviation, and keeps no trials; the summary says so.
 
 **The epoch** is a statement of its own, shared by all bins, in the same
 interval notation as a window:
@@ -207,7 +229,7 @@ as far as it goes and marked with a `% WARNING:` line to finish by hand.
 script   : ( let | bin | epoch )+      (only comments before the first)
 epoch    : epoch <window>             (ms or samples; at most once)
 let      : let <name> = <expr>
-bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <window>]
+bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <rtwindow>]
          | bin <int> "<label>" = <combo>
 combo    : [coeff] bin <int> ( (+|-) [coeff] bin <int> )*
 expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation>
@@ -216,6 +238,8 @@ relation : next(<codes>) [within <window>] | prev(<codes>) [within <window>]
 codes    : <code> ( | <code> )* | { <code> [,] <code> ... } | <name>
 code     : <integer> | <integer>-<integer> | "<marker>"
 window   : ( or [ <num> , <num> ) or ] [ms | samples | events]
+rtwindow : ( or [ <rtbound> , <rtbound> ) or ] [ms]
+rtbound  : <num> | mean [ (+|-) <num> sd ]
 comment  : % or # to the end of the line
 ```
 

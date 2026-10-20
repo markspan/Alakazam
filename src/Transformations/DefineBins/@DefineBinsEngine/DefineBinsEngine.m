@@ -40,6 +40,7 @@ classdef DefineBinsEngine
         win = parseEpochStatement(stmt)
         combo = parseCombo(T, binIndex, label)
         [iv, k] = scanRtWindow(T, k, binIndex)
+        [bound, k] = scanRtBound(T, k, binIndex)
         [rel, k] = parseTimelock(T, kStart, aliases, binIndex)
         [iv, k] = scanInterval(T, k)
         [v, k] = scanNum(T, k)
@@ -69,6 +70,7 @@ classdef DefineBinsEngine
         idx = upperBoundIdx(sortedLat, nValid, target)
         d = delta(q, p, ctx, iv)
         tf = inInterval(d, iv)
+        [iv, trim] = resolveRtWindow(iv, rts)
 
         % Friendly parse-error reporting.
         throwParseError(col, what)

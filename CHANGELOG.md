@@ -4,6 +4,21 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Added
+
+- **Reaction times can be trimmed at mean ± k SD in the bin language.** A
+  bound of an `rt within` window may now be `mean`, `mean + k sd` or
+  `mean - k sd`, computed from the reaction times of the bin's own matches
+  in each recording: `rt within (150, mean + 2.5 sd] ms` drops the trials
+  more than 2.5 SD slower than the mean. Because the cutoff is computed per
+  recording, one script trims every participant at their own cutoff when it
+  is replayed or applied to all raw files, where a typed-in cutoff held for
+  one. The summary after DefineBins gives each bin's mean, SD, resulting
+  window and the number of trials removed, also kept in
+  `EEG.bindesc(b).rtTrim`.
+
 ## V0.4.6 (2026-10-18)
 
 ### Changed
