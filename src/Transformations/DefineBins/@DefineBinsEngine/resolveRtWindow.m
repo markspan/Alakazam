@@ -2,7 +2,7 @@ function [iv, trim] = resolveRtWindow(iv, rts)
 %RESOLVERTWINDOW  Turn an 'rt within' window with bounds relative to the
 %   mean reaction time into a window in plain milliseconds.
 %
-%   [IV, TRIM] = resolveRtWindow(IV, RTS) takes the window scanRtWindow
+%   [IV, TRIM] = resolveRtWindow(IV, RTS) takes the window rtWindowOf
 %   compiled and RTS, the reaction times (ms) of every event the bin's
 %   condition matched in this recording, before the window is applied. A
 %   bound written as mean + k sd becomes mean(RTS) + k * std(RTS), with the

@@ -820,8 +820,8 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [~, fromOld] = DefineBinsEngine.evaluateBins(EEG, old);
             [~, fromDecoded] = DefineBinsEngine.evaluateBins(EEG, decoded);
 
-            testCase.verifyEqual(fromOld(1).rt, 500, 'AbsTol', 1e-9);
-            testCase.verifyEqual(fromDecoded(1).rt, 500, 'AbsTol', 1e-9);
+            testCase.verifyEqual(fromOld(1).rt, [500 700], 'AbsTol', 1e-9);
+            testCase.verifyEqual(fromDecoded(1).rt, [500 700], 'AbsTol', 1e-9);
         end
 
         function meanAndSdAreStillFreeAsAliasNames(testCase)
@@ -843,7 +843,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyParseError([base '(0, 2.5 sd] ms'], 'needs the word mean');
             testCase.verifyParseError([base '(0, mean + 2.5] ms'], 'needs the word sd');
             testCase.verifyParseError([base '(0, mean 2 sd] ms'], 'expected + or -');
-            testCase.verifyParseError([base '(0, median] ms'], 'relative to the mean');
+            testCase.verifyParseError([base '(0, average] ms'], 'mean, median or a percentile');
             testCase.verifyParseError([base '[mean + 1 sd, mean - 1 sd] ms'], 'other way round');
             testCase.verifyParseError([base '(800, 400] ms'], 'greater than');
             testCase.verifyParseError([base '(0, mean + 2 sd] samples'], 'milliseconds');
@@ -925,6 +925,218 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             testCase.verifyParseError([base 'field ibi (800,1200]'], 'needs a window');
             testCase.verifyParseError([base 'field within (800,1200]'], 'name of an event field');
             testCase.verifyParseError([base 'field ibi within (1200,800]'], 'greater than');
+        end
+
+        % ---- value tests: statistics, ranks and logarithms ----------------
+        function aMedianSplitPartitionsTheTrials(testCase)
+        %AMEDIANSPLITPARTITIONSTHETRIALS  (0, median] and (median, inf) part
+        %   the trials into halves, each bin taking the median of the same
+        %   trials, and rank(rt) within [0, 50] and (50, 100] part them the
+        %   same way. What the window came to is recorded per bin.
+            rts = [312 452 520 380 700 292 640 412];
+            EEG = stimulusResponse(rts);
+            script = strjoin({ ...
+                'bin 1 "fast" 112 and next(118) rt within (0, median] ms', ...
+                'bin 2 "slow" 112 and next(118) rt within (median, inf) ms', ...
+                'bin 3 "fast by rank" 112 and next(118) rank(rt) within [0, 50]', ...
+                'bin 4 "slow by rank" 112 and next(118) rank(rt) within (50, 100]'}, newline);
+
+            [result, ~] = DefineBins(EEG, struct('script', script));
+
+            d = result.bindesc;
+            m = median(rts);
+            testCase.verifyEqual(sort(d(1).rt), sort(rts(rts <= m)), 'AbsTol', 1e-9);
+            testCase.verifyEqual(sort(d(2).rt), sort(rts(rts > m)), 'AbsTol', 1e-9);
+            testCase.verifyEqual(d(3).events, d(1).events);
+            testCase.verifyEqual(d(4).events, d(2).events);
+            record = d(1).filters;
+            testCase.verifyEqual(record.text, 'rt within (0, median] ms');
+            testCase.verifyEqual(record.median, m, 'AbsTol', 1e-9);
+            testCase.verifyEqual([record.lo record.hi], [0 m], 'AbsTol', 1e-9);
+            testCase.verifyEqual([record.n record.removed], [8 4]);
+            testCase.verifyEmpty(record.note);
+            testCase.verifyEqual(d(2).filters.hi, Inf);
+            testCase.verifyEmpty(d(1).rtTrim, 'A median is not a mean: no rtTrim.');
+        end
+
+        function ranksArePercentilesAndTiesShareOne(testCase)
+        %RANKSAREPERCENTILESANDTIESSHAREONE  rank is 100 (r - 0.5) / n, tied
+        %   values sharing the mean of their ranks: 600, 700, 700, 800 rank
+        %   12.5, 50, 50 and 87.5.
+            EEG = heartbeats([600 700 700 800]);
+
+            lowest = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and rank(field ibi) within [0, 25]');
+            tied = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and rank(field ibi) within [50, 50]');
+            highest = testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and rank(field ibi) within (87, 88)');
+
+            testCase.verifyEqual(lowest, 1);
+            testCase.verifyEqual(tied, [2 3]);
+            testCase.verifyEqual(highest, 4);
+        end
+
+        function aLogarithmIsTestedOnItsOwnStatistics(testCase)
+        %ALOGARITHMISTESTEDONITSOWNSTATISTICS  log(rt) within mean +- 1 sd
+        %   takes the mean and sd of the logarithms; a log of a field with
+        %   number bounds is a term like any other, and a value of 0 or
+        %   less has no logarithm, so it lies in no window.
+            rts = [296 352 400 452 500 600 800 1200];
+            EEG = stimulusResponse(rts);
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) log(rt) within [mean - 1 sd, mean + 1 sd]'));
+            L = log(rts);
+            kept = rts(L >= mean(L) - std(L) & L <= mean(L) + std(L));
+            testCase.verifyEqual(sort(result.bindesc(1).rt), sort(kept), 'AbsTol', 1e-9);
+            testCase.verifyEqual(result.bindesc(1).filters.mean, mean(L), 'AbsTol', 1e-12);
+
+            beats = heartbeats([600 700 900 1200 0]);
+            testCase.verifyEqual(testCase.eventsFor(beats, ...
+                'bin 1 "x" "heartbeat" and log(field ibi) within (6.5, 7]'), [2 3]);
+            testCase.verifyEqual(testCase.eventsFor(beats, ...
+                'bin 1 "x" "heartbeat" and not log(field ibi) within (-inf, inf)'), 5, ...
+                'An interval of 0 has no logarithm: in no window, so under not.');
+        end
+
+        function tukeysFencesUsePercentilesAsPrctileDoes(testCase)
+        %TUKEYSFENCESUSEPERCENTILESASPRCTILEDOES  [p25 - 1.5 iqr, p75 + 1.5
+        %   iqr] with the percentiles defined as prctile defines them: for
+        %   these nine, p25 = 404 + 0.75 * 4 = 407 and p75 = 424 + 0.25 * 4
+        %   = 425, so the fences are 380 and 452 and the 2000 ms trial goes.
+            rts = [400 404 408 412 416 420 424 428 2000];
+            EEG = stimulusResponse(rts);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within [p25 - 1.5 iqr, p75 + 1.5 iqr] ms'));
+
+            record = result.bindesc(1).filters;
+            testCase.verifyEqual(record.iqr, 18, 'AbsTol', 1e-9);
+            testCase.verifyEqual([record.lo record.hi], [380 452], 'AbsTol', 1e-9);
+            testCase.verifyEqual(result.bindesc(1).n, 8);
+            if exist('prctile', 'file') == 2
+                testCase.verifyEqual([407 425], prctile(rts, [25 75]), 'AbsTol', 1e-9, ...
+                    'The hand-worked percentiles are prctile''s.');
+            end
+        end
+
+        function aMadIsScaledToTheStandardDeviation(testCase)
+        %AMADISSCALEDTOTHESTANDARDDEVIATION  mad is 1.4826 times the median
+        %   absolute deviation (Leys et al., 2013): 8 here, so median + 3 mad
+        %   is 412 + 35.6 and the 2000 ms trial goes.
+            rts = [400 404 408 412 416 420 2000];
+            EEG = stimulusResponse(rts);
+
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" 112 and next(118) rt within [median - 3 mad, median + 3 mad] ms'));
+
+            record = result.bindesc(1).filters;
+            testCase.verifyEqual(record.mad, 1.4826 * 8, 'AbsTol', 1e-9);
+            testCase.verifyEqual(record.hi, 412 + 3 * 1.4826 * 8, 'AbsTol', 1e-9);
+            testCase.verifyEqual(result.bindesc(1).n, 6);
+        end
+
+        function aFieldMayBeSplitAtItsMedian(testCase)
+        %AFIELDMAYBESPLITATITSMEDIAN  The longer half of the intervals.
+            EEG = heartbeats([600 700 800 900 1000]);
+            testCase.verifyEqual(testCase.eventsFor(EEG, ...
+                'bin 1 "x" "heartbeat" and field ibi within (median, inf)'), [4 5]);
+        end
+
+        function theStatisticsAreThoseOfTheRestOfTheBin(testCase)
+        %THESTATISTICSARETHOSEOFTHERESTOFTHEBIN  A term (hr below 100) limits
+        %   the trials a rank is taken among: the first beat is not one of
+        %   them, so the lower half of the other five keeps three. And two
+        %   tests about the trials each take the same trials, not what the
+        %   other left: (0, median] keeps the four fastest, rank > 25 the six
+        %   slowest, together the two in between.
+            EEG = heartbeats([600 700 800 900 1000 1100]);
+            [EEG.event.hr] = deal(120, 90, 90, 90, 90, 90);
+            testCase.verifyEqual(testCase.eventsFor(EEG, ['bin 1 "x" "heartbeat" and ' ...
+                'field hr within [0, 100] and rank(field ibi) within [0, 50]']), [2 3 4]);
+
+            rts = [300 340 380 420 460 500 540 580];
+            trials = stimulusResponse(rts);
+            [result, ~] = DefineBins(trials, struct('script', ['bin 1 "x" 112 and next(118) ' ...
+                'rt within (0, median] ms and rank(rt) within (25, 100]']));
+            testCase.verifyEqual(sort(result.bindesc(1).rt), [380 420], 'AbsTol', 1e-9);
+        end
+
+        function aTestAboutTheTrialsMayStandInALet(testCase)
+        %ATESTABOUTTHETRIALSMAYSTANDINALET  An alias holding one is the same
+        %   as writing it out; and an alias called rank or log keeps its
+        %   meaning, as one called field does.
+            EEG = stimulusResponse([300 400 500 600]);
+            inline = testCase.eventsFor(EEG, ...
+                'bin 1 "x" 112 and next(118) rank(rt) within [0, 50]');
+            aliased = testCase.eventsFor(EEG, ['let fast = rank(rt) within [0, 50]' newline ...
+                'bin 1 "x" 112 and next(118) fast']);
+            testCase.verifyEqual(aliased, inline);
+            testCase.verifyNumElements(inline, 2);
+
+            named = testCase.matchesFor(EEG, ['let rank = 118' newline 'bin 1 "x" rank']);
+            testCase.verifyEqual(unique(named), {'118'});
+        end
+
+        function aValuePlanReplaysAndOldPlansStillRun(testCase)
+        %AVALUEPLANREPLAYSANDOLDPLANSSTILLRUN  A plan with tests about the
+        %   trials, replayed from its stored options as a workspace replays
+        %   a node, takes the same trials, and on another recording resolves
+        %   its windows from that recording's trials; a plan compiled before
+        %   there were any (no filters field) runs as it did.
+            rts = [312 452 520 380 700 292 640 412];
+            EEG = stimulusResponse(rts);
+            script = strjoin({ ...
+                'bin 1 "a" 112 and next(118) rt within (median, inf) ms', ...
+                'bin 2 "b" 112 and next(118) rank(rt) within [0, 50] and log(rt) within [mean - 2 sd, mean + 2 sd]', ...
+                'bin 3 "c" 112 and next(118) rt within (0, mean + 2.5 sd] ms'}, newline);
+            [first, options] = DefineBins(EEG, struct('script', script));
+
+            [again, ~] = DefineBins(EEG, options);
+            testCase.verifyEqual({again.bindesc.events}, {first.bindesc.events});
+            slower = stimulusResponse(rts + 400);
+            [other, ~] = DefineBins(slower, options);
+            testCase.verifyEqual(other.bindesc(1).filters.median, median(rts) + 400, 'AbsTol', 1e-9);
+            testCase.verifyEqual(other.bindesc(1).n, 4);
+
+            spec = DefineBinsEngine.parseSpec('bin 1 "x" 112 and next(118) rt within (400,800] ms');
+            testCase.verifyEmpty(spec.bins(1).filters, 'A plain window stays in rtWindow.');
+            [~, old] = DefineBinsEngine.evaluateBins(EEG, rmfield(spec.bins, 'filters'));
+            testCase.verifyEqual(sort(old(1).rt), sort(rts(rts > 400 & rts <= 800)), 'AbsTol', 1e-9);
+        end
+
+        function aBoundThatCannotBeComputedKeepsNothingAndSaysWhy(testCase)
+        %ABOUNDTHATCANNOTBECOMPUTEDKEEPSNOTHINGANDSAYSWHY  One value has no
+        %   standard deviation: no trial, and a note.
+            EEG = heartbeats(800);
+            [result, ~] = DefineBins(EEG, struct('script', ...
+                'bin 1 "x" "heartbeat" and field ibi within (0, median + 2 sd]'));
+            testCase.verifyEqual(result.bindesc(1).n, 0);
+            testCase.verifySubstring(result.bindesc(1).filters.note, 'standard deviation');
+        end
+
+        function valueTestSlipsAreExplained(testCase)
+        %VALUETESTSLIPSAREEXPLAINED  A test about the trials under or or not,
+        %   a unit on a rank or a logarithm, nested transforms, and windows
+        %   no trial could fall in, each get a message that names the fix.
+            base = 'bin 1 "x" 112 and ';
+            testCase.verifyParseError([base '(next(118) or rank(rt) within [0, 50])'], ...
+                'joined to the rest with and');
+            testCase.verifyParseError([base 'next(118) and not rank(rt) within [0, 50]'], ...
+                'rank(rt) within (50, 100]');
+            testCase.verifyParseError([base 'not field ibi within (median, inf)'], 'not inside');
+            testCase.verifyParseError([base 'next(118) rank(rt) within [0, 50] ms'], 'takes no unit');
+            testCase.verifyParseError([base 'next(118) log(log(rt)) within (0, 7]'], ...
+                'not another log or rank');
+            testCase.verifyParseError([base 'next(118) rank(118) within [0, 50]'], ...
+                'take rt or field');
+            testCase.verifyParseError([base 'next(118) rt within (inf, 500] ms'], 'inf down');
+            testCase.verifyParseError([base 'next(118) rt within [median + 1 iqr, median - 1 iqr] ms'], ...
+                'other way round');
+            testCase.verifyParseError([base 'next(118) rt within (0, p101] ms'], ...
+                'mean, median or a percentile');
+            testCase.verifyParseError([base 'next(118) rt within (0, median + 2] ms'], ...
+                'needs the word sd, iqr or mad');
         end
     end
 

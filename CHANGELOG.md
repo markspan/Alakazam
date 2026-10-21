@@ -16,6 +16,19 @@ bar. Dates are those of the tag.
   relations like any other term. A missing or `NaN` value lies in no window,
   and a field no event of the recording has is an error that lists the
   fields there are, rather than an empty bin.
+- **Splits, ranks and logarithms in the bin language**, for reaction times
+  and fields alike. A window's bounds may be statistics of the bin's own
+  trials: `mean`, `median` or a percentile such as `p75`, plus or minus a
+  number of `sd`, `iqr` or `mad`, or `inf`. So `rt within (0, median] ms` and
+  `rt within (median, inf) ms` split the trials at their median, `rt within
+  [p25 - 1.5 iqr, p75 + 1.5 iqr] ms` applies Tukey's fences, and `field ibi
+  within [median - 3 mad, median + 3 mad]` trims robustly. `rank(...)` gives
+  each trial its percentile rank among the bin's trials (`rank(rt) within
+  [0, 25]`, the fastest quarter) and `log(...)` the natural logarithm
+  (`log(rt) within [mean - 2.5 sd, mean + 2.5 sd]`). The statistics are
+  those of the trials the rest of the bin matches, in each recording, so
+  every participant is split at their own median. What each test came to is
+  in `EEG.bindesc(b).filters` and in the summary.
 
 ### Fixed
 

@@ -162,8 +162,10 @@ than two reaction times has no standard deviation to compute the bound
 from: it keeps no trials, and the summary says why rather than skipping
 the rule without a word.
 
-`mean` and `sd` mean something only inside an `rt within` window, so they
-remain free as `let` names.
+`mean` and `sd` mean something only inside a window's bounds, so they
+remain free as `let` names. A median split, Tukey's fences, ranks and
+logarithms, of reaction times and of fields alike, are in
+[§14](#14-splits-ranks-and-logarithms).
 
 ## 7. Cutting epochs
 
@@ -297,6 +299,81 @@ DefineBins) or the name is mistyped (field names are case-sensitive).
 `field` is read as a plain word, not a keyword, so an alias called `field`
 keeps working: where one is defined, the alias wins.
 
+## 14. Splits, ranks and logarithms
+
+A bound of a window may also be a **statistic of the bin's own trials**,
+for a reaction time and for a field alike: `mean`, `median` or a percentile
+(`p25`, `p75`, any whole number from `p0` to `p100`), plus or minus a
+number of `sd`, `iqr` or `mad`. A bound may also be `inf` or `-inf`. Two
+more ways to look at a value: `rank(...)`, its **percentile rank** among
+the bin's trials (0 to 100), and `log(...)`, its **natural logarithm**:
+
+```
+bin 1 "Fast half"       112 and next(118) rt within (0, median] ms
+bin 2 "Slow half"       112 and next(118) rt within (median, inf) ms
+bin 3 "Fastest quarter" 112 and next(118) rank(rt) within [0, 25]
+bin 4 "Tukey's fences"  112 and next(118) rt within [p25 - 1.5 iqr, p75 + 1.5 iqr] ms
+bin 5 "Log-trimmed"     112 and next(118) log(rt) within [mean - 2.5 sd, mean + 2.5 sd]
+bin 6 "Long intervals"  "heartbeat" and rank(field ibi) within (50, 100]
+bin 7 "Robust trim"     "heartbeat" and field ibi within [median - 3 mad, median + 3 mad]
+```
+
+**Which trials the statistics come from.** A test like these is about the
+bin's trials as a whole: a reaction time (the delay to the event the bin's
+relation captured), a rank, or a bound taken from statistics. Its
+statistics and ranks are those of the trials **the rest of the bin**
+matches, in the recording being processed: bins 1 and 2 take the median of
+the same trials and so split them into halves, and every participant is
+split at their own median when the script is replayed or applied to all raw
+files. Two such tests in one bin each take the same trials, not what the
+other left: in `rt within (0, median] ms and rank(rt) within (25, 100]`, the
+median and the ranks are both those of every trial `112 and next(118)`
+matched. An ordinary term, such as `field hr within [0, 100]`, does limit
+the trials: in `"heartbeat" and field hr within [0, 100] and rank(field
+ibi) within [0, 50]` the ranks are among the beats under 100 beats a
+minute.
+
+Such a test must be one of the conditions every trial meets: joined to the
+rest of the bin with `and` (or written next to it), not inside `or` or
+`not`, where no set of trials is defined. For the other trials, write the
+opposite window: `rank(rt) within (50, 100]` rather than `not rank(rt)
+within [0, 50]`. A `let` may name one, and is then used the same way.
+
+**What the statistics are.**
+
+| Word | Meaning |
+|------|---------|
+| `mean` | the mean |
+| `median` | the median (the same as `p50`) |
+| `p25`, `p75`, ... | the percentile as MATLAB's `prctile` has it (Hazen's definition: the sorted values are the 100(i − 0.5)/n percentiles, with straight lines between) |
+| `sd` | the sample standard deviation (n − 1) |
+| `iqr` | `p75` − `p25` |
+| `mad` | the median absolute deviation from the median, times 1.4826, which makes it estimate the standard deviation of normally distributed values (Leys et al., 2013): `median ± 3 mad` is comparable to `mean ± 3 sd`, but not pulled by the outliers it is meant to find |
+| `rank(...)` | 100 (r − 0.5) / n, with r the rank from 1 to n and tied values sharing the mean of their ranks, so that `rank(rt) within [0, 50]` and `rt within (0, median] ms` keep the same trials, ties at the median apart |
+| `log(...)` | the natural logarithm; a value of 0 or less has none |
+
+They are computed once, over the values that exist: a trial without one
+(no reaction time, a missing or `NaN` field, a logarithm of 0) is in no
+window. A reaction-time window is in milliseconds (`ms` may be written);
+the windows of a field, a logarithm and a rank take **no unit**.
+
+**What it came to.** `EEG.bindesc(b).filters` records, for every such test,
+the test as written, how many values it was computed from, their `mean`,
+`sd`, `median`, `iqr` and `mad`, the window it resolved to (`lo`, `hi`) and
+how many trials it `removed`; the summary after the run says the same. A
+bound that cannot be computed (no values, or one value and an `sd`) keeps
+no trials, and the summary says why rather than skipping the rule without a
+word. (A plain `rt within` window of numbers or `mean ± k sd` is recorded in
+`rtTrim`, as before; see [§6](#6-reaction-time-for-free).)
+
+`log`, `rank` and the words of the statistics are plain words, not
+keywords: an alias of any of those names keeps working.
+
+*Reference:* Leys, C., Ley, C., Klein, O., Bernard, P., & Licata, L. (2013).
+Detecting outliers: Do not use standard deviation around the mean, use
+absolute deviation around the median. *Journal of Experimental Social
+Psychology, 49*(4), 764-766. https://doi.org/10.1016/j.jesp.2013.03.013
+
 ---
 
 ## Reference
@@ -385,6 +462,20 @@ applied (see [§6](#6-reaction-time-for-free)). The resolved window is in
 `EEG.bindesc(b).rtTrim`; a bin with fewer than two RTs, whose SD bound
 cannot be computed, keeps no trials.
 
+### Value tests
+
+`<value> within <window>`, where the value is `rt`, `field <name>`, or
+`log(...)` or `rank(...)` of either, and each bound is a number, `inf`,
+`-inf`, or `mean`, `median` or `p<0-100>`, optionally `+` or `-` a number
+of `sd`, `iqr` or `mad` (see [§14](#14-splits-ranks-and-logarithms)). A
+test of a reaction time, a rank or a bound from statistics is about the
+bin's trials as a whole: it must be joined to the rest of the bin with
+`and`, and its statistics are those of the trials the rest of the bin
+matches, each such test over the same trials. Any other value test (a field
+or its logarithm against numbers) is an ordinary term, allowed anywhere. What
+each test about the trials came to is in `EEG.bindesc(b).filters`; a plain
+`rt within` window of numbers or `mean ± k sd` is in `rtTrim` instead.
+
 ### Comments
 
 `%` or `#` to end of line, on their own line or after an expression. Apart
@@ -457,13 +548,17 @@ bin 9 "Related, response-locked" 112 and answered timelock next(118)
 script      : ( <let> | <bin> | <epoch> )+              % comments only before the first
 epoch       : epoch <window>                            % ms or samples; at most once
 let         : let <name> = <expr>                       % may use earlier let names
-bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <rt-window>]
+bin         : bin <int> "<label>" [:] <expr> [timelock <relation>] [ <value-test> ... ]
             | bin <int> "<label>" = <combo>              % combination bin (may nest)
 combo       : [ coeff ] bin <int> ( ('+'|'-') [ coeff ] bin <int> )*
 expr        : expr or expr | expr [and] expr | not expr | ( expr )
-            | <anchor> | <relation> | <field>  % 'and' optional between terms
+            | <anchor> | <relation> | <value-test>  % 'and' optional between terms
 anchor      : <codeset>
-field       : field <name> within <window>               % no unit: the field's own
+value-test  : <value> within <value-window>   % rt, rank, statistics: and-ed at the top only
+value       : rt | field <name> | log( rt | field <name> ) | rank( rt | field <name> )
+value-window: ( '(' | '[' ) <bound> , <bound> ( ')' | ']' ) [ ms ]  % ms for rt alone
+bound       : <num> | inf | -inf | <stat> [ ('+'|'-') <num> ( sd | iqr | mad ) ]
+stat        : mean | median | p<0-100>                  % of the bin's own trials
 relation    : next( <codeset> ) [within <window>]
             | prev( <codeset> ) [within <window>]
             | adjacent( <codeset> ) [within <window>]
@@ -473,8 +568,6 @@ codeset     : <code> ( '|' <code> )*                    % pipe form
             | <name>                                    % a 'let' alias (any expr, incl. relations)
 code        : <integer> | "<text marker>"               % ? = any char, * = any run
 window      : ( '(' | '[' ) <num> , <num> ( ')' | ']' ) [ ms | samples | events ]
-rt-window   : ( '(' | '[' ) <rt-bound> , <rt-bound> ( ')' | ']' ) [ ms ]
-rt-bound    : <num> | mean [ ('+'|'-') <num> sd ]          % mean, sd: of the bin's own RTs
 comment     : % … end-of-line   |   # … end-of-line
 ```
 

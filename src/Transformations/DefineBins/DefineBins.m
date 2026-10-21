@@ -121,8 +121,13 @@ function [EEG, options] = DefineBins(input, varargin)
 %                    (for a bin whose 'rt within' window is relative to the
 %                    mean reaction time, e.g. (150, mean + 2.5 sd] ms: the
 %                    mean, sd and bounds it resolved to in this recording,
-%                    and how many trials it removed; [] otherwise), and -
-%                    once epoched - trials (indices into the epoch stack).
+%                    and how many trials it removed; [] otherwise), filters
+%                    (for every other test about the bin's trials as a
+%                    whole, such as rank(rt) within [0, 50] or field ibi
+%                    within (median, inf): the test, the statistics of its
+%                    values, the window it resolved to and how many trials
+%                    it removed; [] when there are none), and - once
+%                    epoched - trials (indices into the epoch stack).
 %   EEG.event(i).bini : row vector of bin numbers this event belongs to
 %                    (ERPLAB-style; an event may be in several bins).
 % With an .epoch window (see above) it also segments EEG.data into
@@ -332,6 +337,11 @@ function reportBins(bindesc, EEG, epochNote)
         if isfield(d, 'rtTrim') && ~isempty(d.rtTrim)
             lines(end+1) = "    " + rtTrimLine(d.rtTrim); %#ok<AGROW>
         end
+        if isfield(d, 'filters')
+            for f = 1:numel(d.filters)
+                lines(end+1) = "    " + filterLine(d.filters(f)); %#ok<AGROW>
+            end
+        end
     end
     if isfield(EEG, 'DataFormat') && strcmpi(EEG.DataFormat, 'EPOCHED')
         lines(end+1) = sprintf('--> segmented: %d epochs x %d samples', ...
@@ -354,4 +364,27 @@ function line = rtTrimLine(trim)
     line = sprintf(['rt window %c%.0f, %.0f%c ms (mean %.0f, sd %.0f ms, from %d ' ...
         'reaction times): %d trials removed'], brackets(trim.loOpen + 1), trim.lo, ...
         trim.hi, closers(trim.hiOpen + 1), trim.mean, trim.sd, trim.nRt, trim.removed);
+end
+
+function line = filterLine(record)
+%FILTERLINE  One summary line for a test about the bin's trials: the window
+%   it came to in this recording, from how many values, and how many trials
+%   it dropped; or, when it could keep none, why.
+    if ~isempty(record.note)
+        line = sprintf('%s: no trials kept, %s', record.text, record.note);
+        return;
+    end
+    brackets = '[(';
+    closers  = '])';
+    line = sprintf('%s came to %c%s, %s%c (from %d values): %d trials removed', ...
+        record.text, brackets(record.loOpen + 1), boundText(record.lo), ...
+        boundText(record.hi), closers(record.hiOpen + 1), record.n, record.removed);
+end
+
+function text = boundText(v)
+    if isinf(v)
+        text = strrep(sprintf('%g', v), 'Inf', 'inf');
+    else
+        text = sprintf('%.4g', v);
+    end
 end

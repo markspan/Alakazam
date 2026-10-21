@@ -37,7 +37,7 @@ the first of them is an error rather than being dropped. Every
 error is reported with its line, a caret under the mistake and an
 explanation of how to fix it.
 
-### The bin language, in thirteen steps
+### The bin language, in fourteen steps
 
 **A bin** is a number, a quoted label, and a condition. The simplest
 condition is an event code:
@@ -185,6 +185,48 @@ A missing or `NaN` value lies in no window, so the last beat before a cut,
 whose interval Heartbeats leaves `NaN`, is in neither bin. A field no event
 of the recording has is an error that lists the fields the events do have.
 
+**Splits, ranks and logarithms.** A bound of a window may also be a
+statistic of the bin's own trials, for a reaction time and a field alike:
+`mean`, `median` or a percentile (`p25`, `p75`, any whole number from `p0`
+to `p100`), plus or minus a number of `sd`, `iqr` or `mad`; and a bound may
+be `inf` or `-inf`. `rank(...)` is a value's percentile rank among the
+bin's trials, from 0 to 100, and `log(...)` its natural logarithm:
+
+```
+bin 1 "Fast half"       112 and next(118) rt within (0, median] ms
+bin 2 "Slow half"       112 and next(118) rt within (median, inf) ms
+bin 3 "Fastest quarter" 112 and next(118) rank(rt) within [0, 25]
+bin 4 "Tukey's fences"  112 and next(118) rt within [p25 - 1.5 iqr, p75 + 1.5 iqr] ms
+bin 5 "Log-trimmed"     112 and next(118) log(rt) within [mean - 2.5 sd, mean + 2.5 sd]
+bin 6 "Long intervals"  "heartbeat" and rank(field ibi) within (50, 100]
+```
+
+Such a test is about the bin's trials as a whole, so its statistics and
+ranks are those of the trials the rest of the bin matches, in the recording
+being processed: bins 1 and 2 split the same trials at their median, and
+every participant is split at their own. Two such tests in one bin each
+take the same trials, not what the other left; an ordinary term, such as
+`field hr within [0, 100]`, does limit them. The test must be joined to the
+rest of the bin with `and`, not placed inside `or` or `not`: for the other
+trials, write the opposite window, `rank(rt) within (50, 100]` rather than
+`not rank(rt) within [0, 50]`.
+
+The percentiles are those of MATLAB's `prctile` (the sorted values are the
+$100(i - 0.5)/n$ percentiles, with straight lines between), so the median is
+`p50`; `sd` is the sample standard deviation; `iqr` is `p75` minus `p25`;
+and `mad` is the median absolute deviation from the median times 1.4826,
+which makes it estimate the standard deviation of normally distributed
+values [@leys2013], so `median + 3 mad` is comparable to `mean + 3 sd`
+without being pulled by the outliers it is meant to find. A rank is
+$100 (r - 0.5) / n$, tied values sharing the mean of their ranks, so
+`rank(rt) within [0, 50]` and `rt within (0, median] ms` keep the same
+trials, ties at the median apart. A value of 0 or less has no logarithm and
+lies in no window. A reaction-time window is in `ms`; the windows of a
+field, a logarithm and a rank take no unit. `EEG.bindesc(b).filters` and
+the summary after the run say, per test, how many values it was computed
+from, their statistics, the window it came to and how many trials it
+removed; a bound that cannot be computed keeps no trials, and says why.
+
 **Difference bins** are arithmetic on other bins' averages, with integer or
 fractional coefficients:
 
@@ -244,18 +286,20 @@ as far as it goes and marked with a `% WARNING:` line to finish by hand.
 script   : ( let | bin | epoch )+      (only comments before the first)
 epoch    : epoch <window>             (ms or samples; at most once)
 let      : let <name> = <expr>
-bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [rt within <rtwindow>]
+bin      : bin <int> "<label>" [:] <expr> [timelock <relation>] [<test> ...]
          | bin <int> "<label>" = <combo>
 combo    : [coeff] bin <int> ( (+|-) [coeff] bin <int> )*
-expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation> | <field>
-field    : field <name> within <window>      (no unit: compared as the event holds it)
+expr     : expr or expr | expr [and] expr | not expr | ( expr ) | <codes> | <relation> | <test>
+test     : <value> within <vwindow>      (rt, rank, statistics: joined with and only)
+value    : rt | field <name> | log(rt | field <name>) | rank(rt | field <name>)
+vwindow  : ( or [ <bound> , <bound> ) or ] [ms]      (ms for rt alone)
+bound    : <num> | inf | -inf | <stat> [ (+|-) <num> (sd | iqr | mad) ]
+stat     : mean | median | p<0-100>          (of the bin's own trials)
 relation : next(<codes>) [within <window>] | prev(<codes>) [within <window>]
          | adjacent(<codes>) [within <window>] | any(<codes>) within <window>
 codes    : <code> ( | <code> )* | { <code> [,] <code> ... } | <name>
 code     : <integer> | <integer>-<integer> | "<marker>"
 window   : ( or [ <num> , <num> ) or ] [ms | samples | events]
-rtwindow : ( or [ <rtbound> , <rtbound> ) or ] [ms]
-rtbound  : <num> | mean [ (+|-) <num> sd ]
 comment  : % or # to the end of the line
 ```
 

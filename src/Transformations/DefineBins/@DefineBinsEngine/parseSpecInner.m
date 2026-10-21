@@ -78,7 +78,7 @@ function spec = parseSpecInner(script)
 
     % Second pass: the bins.
     bins = struct('index', {}, 'label', {}, 'text', {}, ...
-                  'expr', {}, 'combo', {}, 'rtWindow', {}, 'timelock', {});
+                  'expr', {}, 'combo', {}, 'rtWindow', {}, 'timelock', {}, 'filters', {});
     for s = 1:numel(stmts)
         if stmts{s}(1).val == "bin"
             bin = DefineBinsEngine.parseBinStatement(stmts{s}, script, aliases);

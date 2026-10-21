@@ -44,13 +44,14 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     % floor, matching EEGLAB/ERPLAB -- see the note in the header above.
     centerLat  = floor([EEG.event.latency]);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
-                     'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'rtTrim', {});
+                     'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'rtTrim', {}, ...
+                     'filters', {});
 
     for b = 1:numel(bins)
         if ~isempty(bins(b).combo)
             % Combination (difference) bin: no event predicate; the Average
             % step computes it from the referenced bins' averages.
-            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo, []);
+            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo, [], []);
             continue;
         end
 
@@ -77,6 +78,27 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
             [rtWindow, rtTrim] = DefineBinsEngine.resolveRtWindow(rtWindow, candidateRts);
         end
 
+        % The bin's other tests about its trials as a whole (ranks, medians,
+        % percentiles, ...; see splitFilters): each over the same candidates,
+        % its window resolved from their values, not from what another test
+        % left. PASSES(f, c) says whether candidate c passes test f.
+        filters = binFilters(bins(b));
+        filterRecords = [];
+        passes = true(numel(filters), numel(candidates));
+        for f = 1:numel(filters)
+            values = DefineBinsEngine.filterValues(filters(f), candidates, candidateRts, ctx);
+            [iv, record] = DefineBinsEngine.resolveValueWindow(filters(f), values);
+            for c = 1:numel(candidates)
+                passes(f, c) = ~isnan(values(c)) && DefineBinsEngine.inInterval(values(c), iv);
+            end
+            record.removed = nnz(~passes(f, :));
+            if isempty(filterRecords)
+                filterRecords = record;
+            else
+                filterRecords(f) = record;
+            end
+        end
+
         matchedOrig = [];
         rts = [];
         rtRemoved = 0;
@@ -89,6 +111,9 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
             if ~isempty(rtWindow) ...
                     && (isnan(rtMs) || ~DefineBinsEngine.inInterval(rtMs, rtWindow))
                 rtRemoved = rtRemoved + 1;
+                continue;
+            end
+            if ~all(passes(:, c))
                 continue;
             end
 
@@ -111,7 +136,7 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
         if ~isempty(rtTrim)
             rtTrim.removed = rtRemoved;
         end
-        bindesc(b) = binRecord(bins(b), matchedOrig, rts, [], rtTrim);
+        bindesc(b) = binRecord(bins(b), matchedOrig, rts, [], rtTrim, filterRecords);
     end
 
     % Tag events with their bin membership (ERPLAB-style .bini).
@@ -120,17 +145,32 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     end
 end
 
-function rec = binRecord(bin, events, rts, combo, rtTrim)
+function rec = binRecord(bin, events, rts, combo, rtTrim, filters)
 %BINRECORD  Build one EEG.bindesc entry with a stable field order. RTTRIM
 %   is what a window relative to the mean reaction time resolved to (see
-%   resolveRtWindow), or [] for a bin without one.
-    rec.index  = bin.index;
-    rec.label  = bin.label;
-    rec.script = bin.text;
-    rec.plan   = bin.expr;
-    rec.combo  = combo;
-    rec.events = events;
-    rec.rt     = rts;
-    rec.n      = numel(events);
-    rec.rtTrim = rtTrim;
+%   resolveRtWindow), or [] for a bin without one; FILTERS what each of the
+%   bin's other tests about its trials came to (resolveValueWindow), or [].
+    rec.index   = bin.index;
+    rec.label   = bin.label;
+    rec.script  = bin.text;
+    rec.plan    = bin.expr;
+    rec.combo   = combo;
+    rec.events  = events;
+    rec.rt      = rts;
+    rec.n       = numel(events);
+    rec.rtTrim  = rtTrim;
+    rec.filters = filters;
+end
+
+function filters = binFilters(bin)
+%BINFILTERS  A bin's tests about its trials beyond rtWindow: [] for a plan
+%   compiled before there were any, and a struct array whichever way a
+%   template's JSON brought it back.
+    filters = [];
+    if isfield(bin, 'filters') && ~isempty(bin.filters)
+        filters = bin.filters;
+        if iscell(filters)
+            filters = [filters{:}];
+        end
+    end
 end

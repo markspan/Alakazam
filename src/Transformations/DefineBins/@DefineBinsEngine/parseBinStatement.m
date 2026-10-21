@@ -1,6 +1,13 @@
 function bin = parseBinStatement(stmt, script, aliases)
-%PARSEBINSTATEMENT  bin <num> "<label>" [:] <expr> [rt within W] [timelock <rel>]
+%PARSEBINSTATEMENT  bin <num> "<label>" [:] <expr> [timelock <rel>] [<value tests>]
 %   or   bin <num> "<label>" = <combination>
+%
+%   The tests about the bin's trials as a whole (reaction times, ranks,
+%   bounds from the trials' statistics; see isFilterTest) are taken out of
+%   the expression by splitFilters. A plain 'rt within' window of numbers
+%   or mean +- k sd goes where it always has, in bin.rtWindow (rtWindowOf),
+%   so such a plan is what it was; any other such test goes in bin.filters,
+%   which evaluateBins applies after it.
     [~,     rest] = DefineBinsEngine.expectTok(stmt, "kw", "bin", 'the keyword ''bin''');
     [idx,   rest] = DefineBinsEngine.expectTok(rest, "num", 'a bin number after ''bin''');
     [label, rest] = DefineBinsEngine.expectTok(rest, "str", 'a quoted label');
@@ -12,6 +19,7 @@ function bin = parseBinStatement(stmt, script, aliases)
     bin.combo    = [];
     bin.rtWindow = [];
     bin.timelock = [];
+    bin.filters  = [];
 
     % A '=' after the label makes this a combination (difference) bin, defined
     % from earlier bins' averages rather than by an event predicate.
@@ -31,13 +39,16 @@ function bin = parseBinStatement(stmt, script, aliases)
             '112, or bin %g "%s" 112 and next(118) within (200,1200] ms.'], ...
             idx.val, label.val, idx.val, label.val, idx.val, label.val));
     end
-    [bin.expr, k] = DefineBinsEngine.parseExprTokens(rest, aliases);
+    [expr, k] = DefineBinsEngine.parseExprTokens(rest, aliases);
 
-    % Suffixes (either order): rt within <window>, timelock <relation>.
+    % Suffixes, in any order: timelock <relation>, and value tests (rt within
+    % <window> and the like), which are and-ed to the expression as if
+    % written in it; the expression itself stops at 'timelock'.
     while k <= numel(rest)
         t = rest(k);
-        if t.kind == "kw" && t.val == "rt"
-            [bin.rtWindow, k] = DefineBinsEngine.scanRtWindow(rest, k + 1, bin.index);
+        if DefineBinsEngine.isValueStart(rest, k, aliases)
+            [test, k] = DefineBinsEngine.scanValueTest(rest, k);
+            expr = struct('op', 'and', 'kids', {{expr, DefineBinsEngine.valueNode(test)}});
         elseif t.kind == "kw" && t.val == "timelock"
             [bin.timelock, k] = DefineBinsEngine.parseTimelock(rest, k + 1, aliases, bin.index);
         else
@@ -47,6 +58,18 @@ function bin = parseBinStatement(stmt, script, aliases)
                 '''timelock ...''. Perhaps you meant to combine two conditions? Adjacent ' ...
                 'terms are automatically and-ed (e.g. 112 next(118)), or you can join ' ...
                 'them explicitly with and/or.'], idx.val, label.val));
+        end
+    end
+
+    [bin.expr, tests] = DefineBinsEngine.splitFilters(expr);
+    for i = 1:numel(tests)
+        iv = DefineBinsEngine.rtWindowOf(tests(i));
+        if ~isempty(iv) && isempty(bin.rtWindow)
+            bin.rtWindow = iv;
+        elseif isempty(bin.filters)
+            bin.filters = tests(i);
+        else
+            bin.filters(end + 1) = tests(i);
         end
     end
 end

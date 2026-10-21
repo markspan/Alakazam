@@ -36,7 +36,7 @@ function [node, k] = parseExprTokens(T, aliases)
         t = cur();
         tf = (t.kind == "num") || (t.kind == "str") || (t.kind == "ident") ...
             || (t.kind == "kw" && any(t.val == ...
-                    ["not","next","prev","adjacent","any"])) ...
+                    ["not","next","prev","adjacent","any","rt"])) ...
             || (t.kind == "punc" && (t.val == "(" || t.val == "{"));
     end
 
@@ -54,8 +54,8 @@ function [node, k] = parseExprTokens(T, aliases)
             advance(); nd = pOr(); expectPunc(')');
         elseif isKw('next') || isKw('prev') || isKw('adjacent') || isKw('any')
             nd = pRelation();
-        elseif isFieldTest()
-            nd = pField();
+        elseif DefineBinsEngine.isValueStart(T, k, aliases)
+            nd = pValue();
         else
             nd = pCodeset();   % already a fully-formed anchor/not/and/or node
         end
@@ -78,53 +78,14 @@ function [node, k] = parseExprTokens(T, aliases)
         nd.op = 'rel'; nd.quant = quant; nd.matcher = matcher; nd.interval = iv;
     end
 
-    function tf = isFieldTest()
-    %ISFIELDTEST  Whether the cursor is at 'field <name> within <window>'.
-    %   'field' is read as a plain word rather than a keyword, so that a
-    %   script with an alias of that name keeps meaning what it meant: the
-    %   alias wins wherever one is defined.
-        t = cur();
-        tf = t.kind == "ident" && strcmpi(t.val, "field") && ~isfield(aliases, char(t.val));
-    end
-
-    function nd = pField()
-    %PFIELD  field <name> within <window>: true when the candidate event's
-    %   own numeric field NAME lies in the window, such as the interbeat
-    %   interval the Heartbeats plugin gives every beat:
+    function nd = pValue()
+    %PVALUE  <value> within <window> (scanValueTest): rt, field <name>, or
+    %   log(...) / rank(...) of either, such as the interbeat interval the
+    %   Heartbeats plugin gives every beat:
     %       "heartbeat" and field ibi within (800,1200]
-    %   The window carries no unit: the field is compared in whatever unit
-    %   it holds (ms for ibi, beats a minute for hr).
-        advance();
-        nameTok = cur();
-        if nameTok.kind ~= "ident"
-            DefineBinsEngine.throwParseError(curCol(), [ ...
-                '''field'' needs the name of an event field after it, I''m afraid, ' ...
-                'for example field ibi within (800,1200] for the interbeat interval ' ...
-                'the Heartbeats plugin gives every beat.']);
-        end
-        name = char(nameTok.val);
-        advance();
-        if ~isKw('within')
-            DefineBinsEngine.throwParseError(curCol(), sprintf([ ...
-                'field %s needs a window after it to say which values to keep, ' ...
-                'I''m afraid, for example field %s within (800,1200].'], name, name));
-        end
-        advance();
-        [iv, k] = DefineBinsEngine.scanInterval(T, k);
-
-        % scanInterval reads an optional unit and defaults to ms, so whether
-        % one was written is told by the token just read. A unit would
-        % suggest a conversion that never happens: the value is compared as
-        % the event holds it.
-        last = T(k - 1);
-        if last.kind == "kw" && any(last.val == ["ms", "samples", "events"])
-            DefineBinsEngine.throwParseError(last.pos, sprintf([ ...
-                'field %s is compared in the unit the event holds it in, so its ' ...
-                'window takes no unit, I''m afraid: field %s within (800,1200] ' ...
-                'rather than ... %s.'], name, name, char(last.val)));
-        end
-        iv.unit = '';
-        nd.op = 'field'; nd.name = name; nd.interval = iv;
+    %   compiled by valueNode.
+        [test, k] = DefineBinsEngine.scanValueTest(T, k);
+        nd = DefineBinsEngine.valueNode(test);
     end
 
     function node = pCodeset()

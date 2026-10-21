@@ -27,6 +27,14 @@ function [tf, cap] = evalNode(node, p, ctx)
         case 'field'
             tf  = DefineBinsEngine.fieldInWindow(node, p, ctx);
             cap = NaN;
+        case 'value'
+            tf  = DefineBinsEngine.valueInWindow(node, p, ctx);
+            cap = NaN;
+        case 'all'
+            % What is left of a bin made of tests about its trials alone
+            % (splitFilters): every event, which those tests then filter.
+            tf  = true;
+            cap = NaN;
         case 'not'
             tf  = ~DefineBinsEngine.evalNode(node.kid, p, ctx);
             cap = NaN;
