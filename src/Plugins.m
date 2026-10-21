@@ -67,10 +67,11 @@ classdef Plugins
         % list offers (Plugins.available).
         Account = 'markspan'
         % The plugin index: GitHub's answers about Account's repositories,
-        % saved daily on Alakazam's web site (.github/scripts/plugin_index.py).
+        % saved on Alakazam's web site with every release
+        % (.github/scripts/plugin_index.py).
         IndexAddress = 'https://markspan.github.io/Alakazam/plugin-index.json'
         % How old a list (the index, or the one saved here) may be before
-        % GitHub is asked: a day, with room for a daily index running late.
+        % GitHub is asked: about a day.
         MaxAge = hours(30)
     end
 
@@ -425,9 +426,10 @@ classdef Plugins
         %     2. the newer of the plugin index (Plugins.IndexAddress) and the
         %        list saved on this computer (Plugins.listingFile), when it is
         %        less than MaxAge old. The index is GitHub's own answers to
-        %        those same requests, saved every day on Alakazam's web site
-        %        by its Manual site workflow and read here exactly as GitHub's
-        %        would be: one request, to a site without that limit;
+        %        those same requests, saved on Alakazam's web site by its
+        %        Manual site workflow with every release, and read here
+        %        exactly as GitHub's would be: one request, to a site without
+        %        that limit;
         %     3. GitHub itself, unless it refused until a time not yet come;
         %     4. the newer of the index and the saved list, however old.
         %   REFRESH asks GitHub first, then falls back to 4. When GitHub

@@ -446,11 +446,12 @@ its status.
 **Where the list comes from.** Without a token, GitHub answers 60 questions
 an hour from one network address, shared by everyone behind it, and the list
 costs 23 of them. So Alakazam asks GitHub itself as little as it can. It
-reads the plugin index first: GitHub's answers to those same questions,
-which Alakazam's web site keeps and renews every day. Failing that, it takes
-the list it saved on this computer, if that is less than a day old, and
-only then asks GitHub. **Refresh** asks GitHub itself, and shows a release
-made since the index was renewed. When GitHub refuses because its limit is
+takes the newer of two lists it already has, if that one is less than a day
+old: the plugin index, GitHub's answers to those same questions, which
+Alakazam's web site keeps and renews with every release of Alakazam; and
+the list it saved on this computer the last time it asked. Only failing
+that does it ask GitHub. **Refresh** asks GitHub itself, and shows a
+release made since either list. When GitHub refuses because its limit is
 used up, the window shows the last list it had, says when GitHub takes
 questions again, and does not ask it before then. A line above the list
 says where the list comes from whenever it is not GitHub's answer just now.
