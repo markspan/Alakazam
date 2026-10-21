@@ -65,6 +65,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact_id }}
     env:
       INDEX_ONLY: ${{ github.event_name == 'schedule' || inputs.index_only == true }}
       GH_TOKEN: ${{ github.token }}
@@ -144,6 +146,7 @@ jobs:
           du -sh .
 
       - name: Upload the site
+        id: upload
         uses: actions/upload-pages-artifact@v5
         with:
           path: site
@@ -154,9 +157,38 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: https://markspan.github.io/Alakazam/
 
     steps:
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+        # What actions/deploy-pages does, but for the version of the build.
+        # deploy-pages always gives the commit (GITHUB_SHA, which a workflow
+        # cannot override), and GitHub Pages keeps the first deployment of a
+        # version: a second run on the same commit, as every daily index run
+        # from main is, reported success but left the site as the first had
+        # published it, or put that back. So the version here is the commit
+        # and the run.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+          version="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                    "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/pages/deployments" \
+                 -F artifact_id="$ARTIFACT_ID" -f pages_build_version="$version" \
+                 -f oidc_token="$token" --jq '.id // (.status_url | split("/") | last)')
+          echo "Pages deployment $id, version $version."
+          status=unknown
+          for attempt in $(seq 1 120); do
+            status=$(gh api "repos/$GITHUB_REPOSITORY/pages/deployments/$id" --jq .status)
+            case "$status" in
+              succeed) echo "Deployed."; exit 0 ;;
+              deployment_failed|deployment_content_failed|deployment_cancelled|deployment_lost)
+                echo "::error::The Pages deployment ended: $status."; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "::error::The Pages deployment is still $status after ten minutes."
+          exit 1

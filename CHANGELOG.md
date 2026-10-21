@@ -17,6 +17,15 @@ bar. Dates are those of the tag.
   and a field no event of the recording has is an error that lists the
   fields there are, rather than an empty bin.
 
+### Fixed
+
+- **The plugin index on Alakazam's web site is renewed every day**, as
+  V0.4.6 meant it to be. The daily run reported success but published
+  nothing: GitHub Pages keeps the first deployment of a commit, and every
+  daily run deployed the same one, so the index stayed as V0.4.6 left it,
+  and the site showed V0.4.6's manual after V0.4.7's had been published.
+  Each run is now deployed as a version of its own.
+
 ## V0.4.7 (2026-10-20)
 
 ### Added
