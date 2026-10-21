@@ -19,13 +19,16 @@ bar. Dates are those of the tag.
 
 ### Fixed
 
-- **The daily renewal of the plugin index, added in V0.4.6, is switched
-  off.** Its runs reported success but none of them changed the site: each
-  deployed a commit GitHub Pages had published before, so the index stayed
-  as V0.4.6 left it, and the run of 21 October put V0.4.6's manual back on
-  the site in place of V0.4.7's. The index is now renewed with every release
-  of Alakazam, when the manual is published. Install plugins still uses the
-  list it saved for a day, and asks GitHub only after that.
+- **The plugin index is renewed every day again, now as a release
+  asset.** V0.4.6 renewed it every day on Alakazam's web site, but those
+  runs reported success and changed nothing: each deployed a commit GitHub
+  Pages had published before, so the index stayed as V0.4.6 left it, and
+  on 21 October the site showed V0.4.6's manual rather than V0.4.7's. The
+  index is now the one file of a pre-release named "plugin-index", which is
+  not a version of Alakazam and never its latest release, replaced every day
+  by the new Plugin index workflow, and Alakazam reads it from there. The
+  copy on the web site is still renewed with every release, for V0.4.6 and
+  V0.4.7.
 
 ## V0.4.7 (2026-10-20)
 

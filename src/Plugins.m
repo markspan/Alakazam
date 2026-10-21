@@ -67,9 +67,10 @@ classdef Plugins
         % list offers (Plugins.available).
         Account = 'markspan'
         % The plugin index: GitHub's answers about Account's repositories,
-        % saved on Alakazam's web site with every release
-        % (.github/scripts/plugin_index.py).
-        IndexAddress = 'https://markspan.github.io/Alakazam/plugin-index.json'
+        % renewed every day as the asset of Alakazam's pre-release
+        % "plugin-index" (.github/workflows/plugin-index.yml), whose address
+        % never changes. A download, not a request to GitHub's API.
+        IndexAddress = 'https://github.com/markspan/Alakazam/releases/download/plugin-index/plugin-index.json'
         % How old a list (the index, or the one saved here) may be before
         % GitHub is asked: about a day.
         MaxAge = hours(30)
@@ -426,10 +427,10 @@ classdef Plugins
         %     2. the newer of the plugin index (Plugins.IndexAddress) and the
         %        list saved on this computer (Plugins.listingFile), when it is
         %        less than MaxAge old. The index is GitHub's own answers to
-        %        those same requests, saved on Alakazam's web site by its
-        %        Manual site workflow with every release, and read here
-        %        exactly as GitHub's would be: one request, to a site without
-        %        that limit;
+        %        those same requests, renewed every day by the Plugin index
+        %        workflow as an asset of the pre-release "plugin-index", and
+        %        read here exactly as GitHub's would be: one download, which
+        %        that limit does not count;
         %     3. GitHub itself, unless it refused until a time not yet come;
         %     4. the newer of the index and the saved list, however old.
         %   REFRESH asks GitHub first, then falls back to 4. When GitHub
@@ -1116,7 +1117,7 @@ function data = defaultFetchJson(url)
 end
 
 function index = defaultFetchIndex(account)
-%DEFAULTFETCHINDEX  The plugin index on Alakazam's web site, which is about
+%DEFAULTFETCHINDEX  The plugin index (Plugins.IndexAddress), which is about
 %   Plugins.Account's repositories only; [] when it cannot be had.
     index = [];
     if ~strcmpi(account, Plugins.Account)

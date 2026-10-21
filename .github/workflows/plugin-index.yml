@@ -1,0 +1,63 @@
+name: Plugin index
+
+# Renews plugin-index.json every day: GitHub's answers about the account's
+# Alakazam repositories, which Install plugins reads in one request instead
+# of asking GitHub's API, whose limit without a token is 60 requests an hour
+# from one network address (.github/scripts/plugin_index.py says more).
+#
+# The index is the one asset of the pre-release "plugin-index", replaced in
+# place, so its address never changes:
+#
+#     https://github.com/markspan/Alakazam/releases/download/plugin-index/plugin-index.json
+#
+# (Plugins.IndexAddress). A pre-release is never the latest release, so
+# Alakazam's update check (releases/latest) and its Release workflow (V tags)
+# pass it by; it is not a version of Alakazam, and its notes say so. The
+# index used to live on the Pages site beside the manual, renewed daily by
+# republishing the site; those deployments reported success but changed
+# nothing (see manual-site.yml), and an asset is renewed without deploying
+# anything. The Manual site workflow still writes a copy there with every
+# release, for the versions of Alakazam that read it from the site.
+#
+# A schedule runs only from the default branch (main); "Run workflow" renews
+# the index at once, from any branch.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to create the pre-release and replace its asset
+
+concurrency:
+  group: plugin-index
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: plugin-index
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Write the plugin index
+        run: python3 .github/scripts/plugin_index.py "${{ github.repository_owner }}" plugin-index.json
+
+      - name: Check it is an index Alakazam can read
+        run: python3 -c "import json; i = json.load(open('plugin-index.json')); assert i['format'] == 1 and i['responses']"
+
+      - name: Publish it as the pre-release's asset
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Plugin index (not a version of Alakazam)" \
+              --notes "The list of plugins Install plugins offers, renewed every day by the Plugin index workflow: plugin-index.json, GitHub's answers about the Alakazam repositories of this account. This is not a version of Alakazam; those are the releases numbered V0.4.6 and so on."
+          fi
+          gh release upload "$TAG" plugin-index.json --clobber
+          echo "Published: $(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name) \(.size) bytes, \(.updatedAt)"')"

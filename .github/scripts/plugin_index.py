@@ -3,10 +3,10 @@
 
 The index is GitHub's answers to the requests Install plugins makes about an
 account's Alakazam repositories: the account's repositories, and for each
-Alakazam one its file tree and its latest release. Alakazam reads them from
-its web site in one request (Plugins.IndexAddress) instead of asking GitHub's
-API, which answers only 60 requests an hour from one network address without
-a token, and the list costs 23.
+Alakazam one its file tree and its latest release. Alakazam downloads them in
+one go (Plugins.IndexAddress, an asset of the pre-release "plugin-index")
+instead of asking GitHub's API, which answers only 60 requests an hour from
+one network address without a token, and the list costs 23.
 
 The answers are saved as GitHub gave them, under the exact addresses
 Plugins.available asks, trimmed to the fields Alakazam reads, and Alakazam
@@ -17,7 +17,9 @@ pages of repositories, and every repository named Alakazam<something>.
 
 Usage: plugin_index.py ACCOUNT OUTPUT
 Asks through the GitHub CLI (gh api), as whoever it is logged in as: the
-workflow's token in the Manual site workflow.
+workflow's token in the Plugin index workflow, which renews the asset every
+day, and in the Manual site workflow, which keeps a copy on the Pages site
+for the versions of Alakazam that read it there.
 """
 import datetime
 import json

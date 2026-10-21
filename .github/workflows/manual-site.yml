@@ -26,14 +26,14 @@ name: Manual site
 # manual: GitHub's answers about the account's Alakazam repositories, which
 # Install plugins reads in one request instead of asking GitHub's API, whose
 # limit without a token is 60 requests an hour from one network address
-# (.github/scripts/plugin_index.py says more). It is renewed when the manual
-# is published, so with every release. V0.4.6 also renewed it every day, in
-# a run that republished the site as the last run had left it with a fresh
-# index; on 21 October 2026 it turned out that none of those runs had changed
-# the site, each deploying a commit Pages had published before, and the one
-# that day had put V0.4.6's site back in place of V0.4.7's. So there is no
-# daily run until the index has a home that can be renewed apart from the
-# manual.
+# (.github/scripts/plugin_index.py says more). This copy is for V0.4.6 and
+# V0.4.7, which read it from the site; later versions read the one the Plugin
+# index workflow renews every day as a release asset (plugin-index.yml).
+# V0.4.6 renewed this copy every day, in a run that republished the site as
+# the last run had left it with a fresh index; on 21 October 2026 it turned
+# out that none of those runs had changed the site, each deploying a commit
+# Pages had published before, and that day the site showed V0.4.6's manual
+# rather than V0.4.7's. So this workflow no longer runs every day.
 
 on:
   push:
