@@ -4,6 +4,49 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## V0.4.7.2 (2026-10-22)
+
+### Added
+
+- **Derive Channels overwrites and removes channels.** A name the dataset
+  already has is overwritten in place, keeping its place, scalp position and
+  type: `let ECG = -ECG` turns an inverted ECG the right way up. `let ECG2 =
+  []` removes a channel. The lines run in order, each on the channels the
+  lines above left, and a channel name in double quotes works on the left
+  as well (`let "53" = -"53"`). A channel the ICA decomposition was computed
+  on is not removed, since the components would no longer match the data.
+  On an average, an overwritten channel has no error band, as a derived one
+  has none.
+
+### Changed
+
+- **The "please wait" indicator is Alakazam's own, and shows the busy
+  cursor everywhere.** MATLAB's progress dialog dims the window with a layer
+  that always shows the arrow, whatever the window's cursor is, so while a
+  transformation, an export or a load ran only the dialog's bar looked busy.
+  The new layer looks the same (a title, the message, a sliding or filling
+  bar, the time left) and shows the busy cursor over the whole window. A
+  dropped branch, Apply to All Raw Files and Install plugins show it over
+  the whole window too, not only over the tree or the ribbon.
+- **A let block in ERP Measure adds to the channels derived above it.**
+  It used to remove every derived channel first, so a Measure with its own
+  `let` lines lost the channels a Derive Channels step had made. It now
+  keeps them, and overwrites one only when it names it again.
+
+### Fixed
+
+- **A second Derive Channels can use the channels of the first.** Each
+  step removed every derived channel before it ran, so deriving ECG2 from ECG,
+  removing ECG and then deriving ECG from ECG2 in another step failed with
+  "ECG2 is not a channel", although the dialog listed it.
+- **Sorting the trials by the next or previous event finds the next one.**
+  An event between two samples, as every R-peak of the Heartbeats plugin is,
+  came a fraction of a sample after its epoch's time zero and was taken for
+  its own next event: sorted by "Next heartbeat", every trial was at 0. Which
+  event is the trial's own is now decided on its exact latency. Epochs cut
+  before this keep their old values until DefineBins is run again
+  (Recalculate).
+
 ## V0.4.7.1 (2026-10-21)
 
 ### Added
