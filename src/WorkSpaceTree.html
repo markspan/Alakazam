@@ -62,6 +62,11 @@ html.alz-dragging.alz-moving, html.alz-dragging.alz-moving * { cursor: move !imp
    this can never get stuck on. */
 html.alz-busy, html.alz-busy * { cursor: wait !important; }
 
+/* The same cursor while MATLAB says the whole app is busy (bridge.js's
+   'busy' listener, sent by busyCursor.m): a transformation run from the
+   ribbon, an export, a branch being applied. */
+html.alz-app-busy, html.alz-app-busy * { cursor: wait !important; }
+
 /* The node currently under the drag -- i.e. whichever dataset would
    actually receive the dropped branch's transformations if released right
    now (see alakazam-tree.js's _onDragPointerMove). A dashed outline (not
@@ -1641,6 +1646,8 @@ var AlakazamTree = (() => {
 //   nodeRenamed        {id, name}
 //   contextMenuAction  {action, id}
 //   renderError        {message, stack} -- see applyData's catch below
+// Events from MATLAB (sendEventToHTMLSource):
+//   busy               true | false: the app-wide busy cursor (busyCursor.m)
 function setup(htmlComponent) {
     var container = document.getElementById('tree')
     var tree = AlakazamTree.create(container, {
@@ -1690,6 +1697,13 @@ function setup(htmlComponent) {
     applyData(htmlComponent.Data)
     htmlComponent.addEventListener('DataChanged', function () {
         applyData(htmlComponent.Data)
+    })
+    // MATLAB's busy cursor over the whole window (busyCursor.m): the
+    // window's own Pointer stops at this page's edge. A class of its own,
+    // not alz-busy, which every Data push clears: a node added part-way
+    // through the work must not take this one away.
+    htmlComponent.addEventListener('busy', function (event) {
+        document.documentElement.classList.toggle('alz-app-busy', !!event.Data)
     })
 }
 

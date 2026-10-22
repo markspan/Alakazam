@@ -35,6 +35,11 @@ function onNodeDropped(this, eventData, sourceTree)
 
     move = isfield(eventData, 'Move') && isequal(eventData.Move, true);
 
+    % The tree's page shows the busy cursor from the drop on, but only over
+    % that tree; this shows it over the rest of the window too, while the
+    % branch is applied.
+    restoreCursor = busyCursor(this.MainFigure); %#ok<NASGU>
+
     try
         releaseTree = sourceTree.beginBatch(); %#ok<NASGU>  redraw once, not per node
         if move

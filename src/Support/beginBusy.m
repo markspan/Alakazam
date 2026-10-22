@@ -49,12 +49,15 @@ function [restoreFcn, updateFcn] = beginBusy(fig, message)
 %   take it down for the duration and put it back afterwards. See busyGate
 %   for why that matters in MATLAB Online, where a modal progress dialog
 %   otherwise covers the very settings the user is being asked to fill in.
+%   The indicator is the window's own layer (BusyOverlay) where it has one,
+%   rather than uiprogressdlg, whose dimmed layer always shows the arrow (see
+%   busyDialog). Either way the busy cursor is shown over the whole window
+%   (busyCursor), the ribbon and the trees included.
     if strcmp(fig.Visible, "on")
         restoreFcn = busyGate('open', fig, message);
         updateFcn  = @(newMessage) busyGate('message', newMessage);
     else
-        fig.Pointer = "watch";
-        restoreFcn = onCleanup(@() set(fig, "Pointer", "arrow"));
+        restoreFcn = busyCursor(fig);
         updateFcn  = @(~) [];
     end
 end

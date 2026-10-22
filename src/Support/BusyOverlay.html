@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+BusyOverlay.html: Alakazam's "please wait" layer, laid over the whole window
+by BusyOverlay.m in place of MATLAB's uiprogressdlg. It dims the window,
+takes its clicks, shows the wait cursor everywhere (the reason it exists:
+uiprogressdlg's own layer always shows the arrow) and a box with a title, a
+message and a bar: sliding while the length of the work is unknown, filling
+once it reports how far it has got.
+
+Data from MATLAB (htmlComponent.Data):
+  { title, message, value (0 to 1), indeterminate, showPercentage }
+Events sent to MATLAB:
+  ready   true, once the page can be shown (BusyOverlay.Ready)
+-->
+<style>
+:root {
+    --dim: rgba(24, 34, 52, 0.30);
+    --box: #ffffff;
+    --text: #1f2633;
+    --muted: #5a6475;
+    --track: #e2e8f2;
+    --accent: #4a7fc9;
+}
+html, body { margin: 0; height: 100%; }
+/* The reason for this page: the wait cursor wherever the pointer is. */
+html, html * { cursor: wait !important; }
+body {
+    background: var(--dim);
+    display: flex; align-items: center; justify-content: center;
+    font: 13px "Segoe UI", Helvetica, Arial, sans-serif; color: var(--text);
+    user-select: none; overflow: hidden;
+}
+.box {
+    background: var(--box); border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+    padding: 16px 20px 18px; width: min(440px, calc(100% - 48px));
+    display: flex; flex-direction: column; gap: 10px;
+}
+.title { font-weight: 600; font-size: 13px; }
+.message { white-space: pre-line; line-height: 1.45; overflow-wrap: anywhere; }
+.bar { position: relative; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--accent); border-radius: 3px; transition: width 0.1s linear; }
+.bar.indeterminate .fill { width: 30%; transition: none; animation: slide 1.3s ease-in-out infinite; }
+@keyframes slide { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+    .bar.indeterminate .fill { animation: none; left: 0; width: 100%; opacity: 0.45; }
+}
+.percent { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.percent[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div class="box" role="alertdialog" aria-busy="true" aria-labelledby="title" aria-describedby="message">
+    <div class="title" id="title">Alakazam</div>
+    <div class="message" id="message" aria-live="polite"></div>
+    <div class="bar indeterminate" id="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div class="fill" id="fill"></div>
+    </div>
+    <div class="percent" id="percent" hidden></div>
+</div>
+<script>
+function setup(htmlComponent) {
+    var title = document.getElementById('title');
+    var message = document.getElementById('message');
+    var bar = document.getElementById('bar');
+    var fill = document.getElementById('fill');
+    var percent = document.getElementById('percent');
+
+    function render(data) {
+        if (!data) { return; }
+        var value = Math.min(Math.max(Number(data.value) || 0, 0), 1);
+        var indeterminate = !!data.indeterminate;
+        title.textContent = data.title || '';
+        message.textContent = data.message || '';
+        bar.classList.toggle('indeterminate', indeterminate);
+        fill.style.width = indeterminate ? '' : (value * 100) + '%';
+        if (indeterminate) {
+            bar.removeAttribute('aria-valuenow');
+        } else {
+            bar.setAttribute('aria-valuenow', String(Math.round(value * 100)));
+        }
+        percent.hidden = indeterminate || !data.showPercentage;
+        percent.textContent = Math.round(value * 100) + '%';
+    }
+
+    render(htmlComponent.Data);
+    htmlComponent.addEventListener('DataChanged', function () {
+        render(htmlComponent.Data);
+    });
+    htmlComponent.sendEventToMATLAB('ready', true);
+}
+</script>
+</body>
+</html>

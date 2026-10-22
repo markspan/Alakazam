@@ -9,6 +9,8 @@
 //   nodeRenamed        {id, name}
 //   contextMenuAction  {action, id}
 //   renderError        {message, stack} -- see applyData's catch below
+// Events from MATLAB (sendEventToHTMLSource):
+//   busy               true | false: the app-wide busy cursor (busyCursor.m)
 function setup(htmlComponent) {
     var container = document.getElementById('tree')
     var tree = AlakazamTree.create(container, {
@@ -58,5 +60,12 @@ function setup(htmlComponent) {
     applyData(htmlComponent.Data)
     htmlComponent.addEventListener('DataChanged', function () {
         applyData(htmlComponent.Data)
+    })
+    // MATLAB's busy cursor over the whole window (busyCursor.m): the
+    // window's own Pointer stops at this page's edge. A class of its own,
+    // not alz-busy, which every Data push clears: a node added part-way
+    // through the work must not take this one away.
+    htmlComponent.addEventListener('busy', function (event) {
+        document.documentElement.classList.toggle('alz-app-busy', !!event.Data)
     })
 }

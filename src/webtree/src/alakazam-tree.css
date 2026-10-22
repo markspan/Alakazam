@@ -55,6 +55,11 @@ html.alz-dragging.alz-moving, html.alz-dragging.alz-moving * { cursor: move !imp
    this can never get stuck on. */
 html.alz-busy, html.alz-busy * { cursor: wait !important; }
 
+/* The same cursor while MATLAB says the whole app is busy (bridge.js's
+   'busy' listener, sent by busyCursor.m): a transformation run from the
+   ribbon, an export, a branch being applied. */
+html.alz-app-busy, html.alz-app-busy * { cursor: wait !important; }
+
 /* The node currently under the drag -- i.e. whichever dataset would
    actually receive the dropped branch's transformations if released right
    now (see alakazam-tree.js's _onDragPointerMove). A dashed outline (not

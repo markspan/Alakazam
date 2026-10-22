@@ -155,4 +155,8 @@ function setupMainWindow(this)
     % the next one opened -- see SignalView/EpochView/AverageView).
     this.MainFigure.WindowScrollWheelFcn = @(~, e) this.dispatchWheel(e);
     this.MainFigure.KeyPressFcn          = @(~, e) this.dispatchKey(e);
+
+    % The "please wait" layer (BusyOverlay), made last so it lies over
+    % everything else in the grid, and hidden until beginBusy shows it.
+    this.BusyLayer = BusyOverlay(this.MainGrid);
 end

@@ -30,8 +30,7 @@ function onInstallPlugin(this, source, repo, host)
     end
     source = char(source);
 
-    progress = uiprogressdlg(host, 'Title', 'Install a plugin', ...
-        'Message', sprintf('Fetching and checking %s...', source), 'Indeterminate', 'on');
+    progress = busyDialog(host, 'Install a plugin', sprintf('Fetching and checking %s...', source));
     try
         candidate = Plugins.prepare(source);
     catch ME

@@ -34,6 +34,12 @@ function varargout = busyGate(action, varargin)
 %   the progress is shown on the app's own window, in the dialog that is
 %   already up.
 %
+%   CURSOR. The dialog is the window's own layer (BusyOverlay, through
+%   busyDialog), which shows the wait cursor over the whole window; MATLAB's
+%   uiprogressdlg, the fallback, always shows the arrow. The window's Pointer
+%   and its pages are set busy as well (busyCursor). Both go when the gate is
+%   suspended: the user is then filling a form in, not waiting.
+%
 %   ACTIONS
 %     busyGate('open', fig, message)  arm and show; returns an onCleanup
 %     busyGate('suspend')             take it down, remember it was up
@@ -60,11 +66,13 @@ function varargout = busyGate(action, varargin)
             state.message = varargin{2};
             state.armed = true;
             state.dlg = showDialog(state.fig, state.message);
+            busyCursor(state.fig, true);
             varargout{1} = onCleanup(@() busyGate('close'));
 
         case 'suspend'
             if state.armed && ~state.suspended
                 closeDialog(state.dlg);
+                busyCursor(state.fig, false);
                 state.dlg = [];
                 state.suspended = true;
                 % 'resume' puts back a spinner, so a later progress report
@@ -75,6 +83,7 @@ function varargout = busyGate(action, varargin)
         case 'resume'
             if state.armed && state.suspended && isvalid(state.fig)
                 state.dlg = showDialog(state.fig, state.message);
+                busyCursor(state.fig, true);
                 state.suspended = false;
             end
 
@@ -90,6 +99,9 @@ function varargout = busyGate(action, varargin)
 
         case 'close'
             closeDialog(state.dlg);
+            if state.armed && ~state.suspended
+                busyCursor(state.fig, false);
+            end
             state = emptyState();
 
         case 'isarmed'
@@ -192,7 +204,9 @@ function text = timeLeftText(seconds)
 end
 
 function dlg = showDialog(fig, message)
-    dlg = uiprogressdlg(fig, "Title", "Alakazam", "Message", message, "Indeterminate", "on");
+%SHOWDIALOG  The window's own layer where it has one, so the wait cursor
+%   shows over all of it, or uiprogressdlg (see busyDialog).
+    dlg = busyDialog(fig, "Alakazam", message);
 end
 
 function closeDialog(dlg)

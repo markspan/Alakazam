@@ -146,19 +146,6 @@ classdef AlakazamRibbon < handle
             this.TabsData = this.buildTabsData(transRoots);
             this.Component.Data = this.buildData();
         end
-
-        function setBusy(this, busy)
-        %SETBUSY  The busy cursor over the ribbon (BUSY true), or its usual
-        %   cursors again. The page draws its own cursors (a hand over its
-        %   buttons), which the window's Pointer does not reach, so a button
-        %   that starts something slow has to tell the page as well (see
-        %   AlakazamRibbon.html's 'busy' listener). On a MATLAB that cannot
-        %   send to the page, the cursor there stays as it was.
-            try
-                sendEventToHTMLSource(this.Component, 'busy', logical(busy));
-            catch
-            end
-        end
     end
 
     methods (Access = private)

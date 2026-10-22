@@ -614,10 +614,10 @@ classdef PluginsTest < matlab.unittest.TestCase
         function installPluginsShowsTheBusyCursorUntilItsWindowIsThere(testCase)
         %INSTALLPLUGINSSHOWSTHEBUSYCURSORUNTILITSWINDOWISTHERE  From the press
         %   until the window is made (asking GitHub takes some seconds), the
-        %   busy cursor over the main window and over the ribbon, whose page
-        %   draws its own cursors; the usual ones after, an error included. A
-        %   stand-in PluginsDialog records the main window's cursor while it
-        %   runs, and fails when asked to.
+        %   busy cursor over the main window (busyCursor, which tells its
+        %   pages as well: BusyCursorTest); the usual one after, an error
+        %   included. A stand-in PluginsDialog records the main window's
+        %   cursor while it runs, and fails when asked to.
             folder = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder;
             writeText(fullfile(folder, 'PluginsDialog.m'), strjoin({ ...
                 'function fig = PluginsDialog(parent, varargin)', ...
@@ -632,26 +632,17 @@ classdef PluginsTest < matlab.unittest.TestCase
             testCase.addTeardown(@() rmappdata(groot, 'StandInPointer'));
             main = uifigure('Visible', 'off');
             testCase.addTeardown(@() delete(main));
-            ribbon = {};
-            app = FakeApp(struct('MainFigure', main, ...
-                'Ribbon', struct('setBusy', @(busy) setBusy(busy))));
+            app = FakeApp(struct('MainFigure', main));
 
             manageCopy(app);
             testCase.verifyEqual(getappdata(groot, 'StandInPointer'), 'watch', ...
                 'No busy cursor over the main window while the list was made.');
             testCase.verifyEqual(char(main.Pointer), 'arrow');
-            testCase.verifyEqual(ribbon, {true, false}, 'The ribbon was not told, or not told back.');
 
-            ribbon = {};
             setappdata(groot, 'StandInFails', true);
             testCase.addTeardown(@() rmappdata(groot, 'StandInFails'));
             testCase.verifyError(@() manageCopy(app), 'StandIn:fails');
             testCase.verifyEqual(char(main.Pointer), 'arrow', 'An error left the busy cursor on.');
-            testCase.verifyEqual(ribbon, {true, false});
-
-            function setBusy(busy)
-                ribbon{end + 1} = busy;
-            end
         end
 
         function theListShowsTheBusyCursorWhileAskingGitHub(testCase)
@@ -674,17 +665,6 @@ classdef PluginsTest < matlab.unittest.TestCase
                 seen{end + 1} = char(window(1).Pointer);
                 repos = PluginsTest.noRepos();
             end
-        end
-
-        function theRibbonPageHasABusyCursor(testCase)
-        %THERIBBONPAGEHASABUSYCURSOR  What AlakazamRibbon.setBusy sends, the
-        %   page listens for, and its busy rule outranks the buttons' hand.
-            source = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'src');
-            page = fileread(fullfile(source, 'AlakazamRibbon.html'));
-            testCase.verifySubstring(page, 'addEventListener(''busy''');
-            testCase.verifySubstring(page, 'body.alz-busy * { cursor: wait !important; }');
-            code = fileread(fullfile(source, 'AlakazamRibbon.m'));
-            testCase.verifySubstring(code, 'sendEventToHTMLSource(this.Component, ''busy''');
         end
 
         % ---- asking GitHub as little as can be -----------------------------

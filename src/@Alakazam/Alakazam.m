@@ -57,6 +57,7 @@ classdef Alakazam < handle
         ReportsTreePanel        % uipanel hosting WorkSpace.ReportsTree, bottom third of TreeGrid
         PlotsTabGroup   % uitabgroup, one uitab per open dataset
         TileGrid        % uigridlayout, sibling of PlotsTabGroup in the same cell -- see setPlotsViewMode/retile
+        BusyLayer       % BusyOverlay over the whole MainGrid, hidden until beginBusy shows it
         PlotsViewMode = "tabs" % "tabs", "grid" or "stack"; see setPlotsViewMode
         TileOrder = string.empty % tab Tags, display order within TileGrid; see retile
         PickedTileTag = "" % Tag of the tile picked for a click-to-swap reorder, or "" if none

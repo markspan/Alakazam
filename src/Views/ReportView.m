@@ -95,8 +95,7 @@ classdef ReportView < AlakazamView
         %   a window of its own (see Alakazam.undockTab).
             fig = ancestor(this.Grid, "figure");
 
-            progress = uiprogressdlg(fig, "Title", "Word copy", ...
-                "Message", "Converting the report for Word...", "Indeterminate", "on");
+            progress = busyDialog(fig, "Word copy", "Converting the report for Word...");
             [docxFile, errorMessage] = reportToWord(this.EEG.ReportHtmlFile);
             close(progress);
 

@@ -82,8 +82,8 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family:
 .alz-group-title.expandable:hover { filter: brightness(1.18); }
 .alz-group-title.expandable.alz-popup-open { filter: brightness(1.18); }
 
-/* While MATLAB works on a button's request (AlakazamRibbon.setBusy): the
-   busy cursor everywhere on the page, over the buttons' hand as well. */
+/* While MATLAB is working (busyCursor.m): the busy cursor everywhere on
+   the page, over the buttons' hand as well. */
 body.alz-busy, body.alz-busy * { cursor: wait !important; }
 </style>
 </head>
@@ -288,8 +288,8 @@ function setup(htmlComponent) {
     htmlComponent.addEventListener('DataChanged', function () {
         alzRender(htmlComponent.Data);
     });
-    // MATLAB's busy cursor (AlakazamRibbon.setBusy): the window's own Pointer
-    // stops at this page's edge.
+    // MATLAB's busy cursor (busyCursor.m): the window's own Pointer stops at
+    // this page's edge.
     htmlComponent.addEventListener('busy', function (event) {
         document.body.classList.toggle('alz-busy', !!event.Data);
     });

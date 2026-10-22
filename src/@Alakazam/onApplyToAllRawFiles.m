@@ -77,10 +77,12 @@ function onApplyToAllRawFiles(this)
     % informative for a batch that can take a while, rather than a spinner
     % with no sense of how much is left.
     total = numel(targets);
-    dlg = uiprogressdlg(this.MainFigure, "Title", "Alakazam", ...
-        "Message", sprintf("Applying to %d raw file(s)...", total), ...
-        "ShowPercentage", "on", "Value", 0);
+    dlg = busyDialog(this.MainFigure, "Alakazam", sprintf("Applying to %d raw file(s)...", total));
+    dlg.Indeterminate = "off";
+    dlg.ShowPercentage = "on";
+    dlg.Value = 0;
     restoreBusy = onCleanup(@() close(dlg));
+    restoreCursor = busyCursor(this.MainFigure); %#ok<NASGU>
 
     % One target's failure (a genuine incompatibility, e.g. a
     % subject whose recording lacks a channel/event type this

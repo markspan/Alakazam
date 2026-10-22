@@ -116,6 +116,23 @@ classdef BusyGateTest < matlab.unittest.TestCase
             testCase.verifyFalse(testCase.dialogIsUp());
         end
 
+        function theBusyCursorGoesWithTheDialog(testCase)
+        %THEBUSYCURSORGOESWITHTHEDIALOG  The busy cursor over the whole window
+        %   while the dialog is up (busyCursor), and the arrow while a
+        %   transformation's options dialog has it suspended: the user is then
+        %   filling a form in, not waiting.
+            testCase.skipIfNoDialogs();
+            fig = testCase.Figure;
+            busyGate('open', fig, 'Running Something...');
+            testCase.verifyEqual(char(fig.Pointer), 'watch');
+            busyGate('suspend');
+            testCase.verifyEqual(char(fig.Pointer), 'arrow');
+            busyGate('resume');
+            testCase.verifyEqual(char(fig.Pointer), 'watch');
+            busyGate('close');
+            testCase.verifyEqual(char(fig.Pointer), 'arrow');
+        end
+
         % ---- progress: the indicator as a filling bar ---------------------
         function progressFillsTheIndicatorAndOneHandsItBack(testCase)
         %PROGRESSFILLSTHEINDICATORANDONEHANDSITBACK  A transformation's loop

@@ -524,3 +524,31 @@ tree._closeMenu()
 if (savedOffsetW) { Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', savedOffsetW) } else { delete window.HTMLElement.prototype.offsetWidth }
 if (savedOffsetH) { Object.defineProperty(window.HTMLElement.prototype, 'offsetHeight', savedOffsetH) } else { delete window.HTMLElement.prototype.offsetHeight }
 console.log('context menu is clamped to stay fully inside the panel: OK')
+
+// --- 15. the app-wide busy cursor: MATLAB's busyCursor.m sends 'busy' to the
+//     page (bridge.js), which keeps it on through a Data push (a node added
+//     part-way through the work) and takes it off only when told. Run on the
+//     assembled page itself, the one uihtml loads. ---
+const page = new JSDOM(fs.readFileSync('dist/alakazam-tree.html', 'utf8'), {
+    url: 'http://localhost/',
+    pretendToBeVisual: true,
+    runScripts: 'dangerously'
+})
+const pageHtml = page.window.document.documentElement
+const listeners = {}
+const component = {
+    Data: { nodes: [{ id: 'a', label: 'RawImport', icon: 'raw', parentId: null }], selectedId: null },
+    addEventListener(name, fn) { listeners[name] = fn },
+    sendEventToMATLAB() {}
+}
+page.window.setup(component)
+assert.ok(listeners.busy, 'the page should listen for MATLAB\'s busy event')
+listeners.busy({ Data: true })
+assert.ok(pageHtml.classList.contains('alz-app-busy'), 'busy true should show the busy cursor')
+listeners.DataChanged()
+assert.ok(pageHtml.classList.contains('alz-app-busy'), 'a Data push must not take the app-wide busy cursor away')
+listeners.busy({ Data: false })
+assert.ok(!pageHtml.classList.contains('alz-app-busy'), 'busy false should take the busy cursor away')
+assert.ok(page.window.document.querySelector('style').textContent.includes('html.alz-app-busy * { cursor: wait !important; }'),
+    'the page should carry the busy cursor rule')
+console.log('the app-wide busy cursor follows MATLAB, not the Data pushes: OK')
