@@ -336,6 +336,10 @@ hyphen or a space) goes in double quotes, `"53"`; a bare number that is also a
 channel's name is refused rather than guessed. Blank lines and text after `%`
 are ignored.
 
+The lines run in order. A name the dataset already has is overwritten in
+place (`let C3 = -C3`), and `let X = []` removes channel X. Channels a Derive
+Channels step made earlier are kept, and can be used here like any other.
+
 Unlike pooling, a derived channel is **appended to the dataset**, so it also
 appears on the ERP line plot and flows into grand averages, not just the
 measurements. Two consequences worth knowing:

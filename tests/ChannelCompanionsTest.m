@@ -82,6 +82,42 @@ classdef ChannelCompanionsTest < matlab.unittest.TestCase
             testCase.verifyEqual(out.etc.alz.interpolated(5, :), logical([0 0 1 0]));
         end
 
+        function anOverwrittenChannelsErrorIsUnknownToo(testCase)
+        %ANOVERWRITTENCHANNELSERRORISUNKNOWNTOO  "let C3 = C3 - C4" keeps
+        %   C3's place, but its error is that of a difference, which the
+        %   average cannot give; the other channels keep theirs.
+            avg = average({'C3', 'C4', 'Cz'}, 2);
+
+            out = TransTools.invoke('DeriveChannels', avg, struct('derivations', 'let C3 = C3 - C4'));
+
+            testCase.assertEqual(size(out.data, 1), 3);
+            testCase.verifyTrue(all(isnan(out.stErr(1, :))));
+            testCase.verifyTrue(all(isnan(out.aSME(1, :))));
+            testCase.verifyEqual(out.stErr(2:3, :, :), avg.stErr(2:3, :, :));
+            testCase.verifyEqual(out.aSME(2:3, :), avg.aSME(2:3, :));
+        end
+
+        function aRemovedChannelTakesItsRowsWithIt(testCase)
+            avg = average({'C3', 'C4', 'Cz'}, 2);
+            avg.etc.alz.interpolated = logical([1 0 0 0 0; 0 1 0 0 0; 0 0 1 0 0]);
+
+            out = TransTools.invoke('DeriveChannels', avg, struct('derivations', 'let C4 = []'));
+
+            testCase.verifyEqual(out.stErr, avg.stErr([1 3], :, :));
+            testCase.verifyEqual(out.aSME, avg.aSME([1 3], :));
+            testCase.verifyEqual(out.etc.alz.interpolated, logical([1 0 0 0 0; 0 0 1 0 0]));
+        end
+
+        function anOverwrittenChannelIsInterpolatedWhereItsSourcesWere(testCase)
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'C3', 'C4', 'Cz'}, 'trials', 4);
+            EEG.etc.alz.interpolated = logical([0 0 0 0; 1 0 0 0; 0 0 1 0]);
+
+            out = TransTools.invoke('DeriveChannels', EEG, ...
+                struct('derivations', sprintf('let C3 = C3 - C4\nlet Cz = -Cz')));
+
+            testCase.verifyEqual(out.etc.alz.interpolated, logical([1 0 0 0; 1 0 0 0; 0 0 1 0]));
+        end
+
         % ---- the seam ---------------------------------------------------------
         function aStepThatDropsAChannelIsBroughtInStepByLabel(testCase)
         %ASTEPTHATDROPSACHANNELISBROUGHTINSTEPBYLABEL  DropSecondChannel

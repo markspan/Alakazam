@@ -151,9 +151,17 @@ function step = derive(params, ctx, names)
     random = randn(rng0, n, 4);
     probe.data = [eye(n), zeros(n, 1), random];
     try
-        [probed, added] = TransTools.ApplyDerivations(probe, text);
+        [probed, added, replaced, removed] = TransTools.ApplyDerivations(probe, text);
     catch err
         step = untranslated('DeriveChannels', params, names, err.message);
+        return;
+    end
+    % The weights below are read off rows appended after the channels, so a
+    % statement that overwrites or removes a channel ("let ECG = -ECG",
+    % "let ECG = []") is not translated, rather than translated wrongly.
+    if ~isempty(replaced) || ~isempty(removed)
+        step = untranslated('DeriveChannels', params, names, ['a statement overwrites or ' ...
+            'removes a channel']);
         return;
     end
     rows = (n + 1):size(probed.data, 1);

@@ -120,12 +120,93 @@ classdef DeriveChannelsTest < matlab.unittest.TestCase
                 'Alakazam:Derivations');
         end
 
-        function aNameThatClashesWithARealChannelIsRefused(testCase)
+        function aNameTheDataHasIsOverwrittenInPlace(testCase)
+        %ANAMETHEDATAHASISOVERWRITTENINPLACE  "let ECG = -ECG" turns an
+        %   inverted ECG the right way up: the same channel, in the same
+        %   place, with its position and type, only its values new.
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'C3', 'ECG', 'C4'});
+            EEG.chanlocs(2).type = 'ECG';
+
+            out = DeriveChannels(EEG, struct('derivations', 'let ECG = -ECG'));
+
+            testCase.assertEqual(out.nbchan, 3);
+            testCase.verifyEqual(out.data(2, :, :), -EEG.data(2, :, :));
+            testCase.verifyEqual(out.data([1 3], :, :), EEG.data([1 3], :, :));
+            testCase.verifyEqual(out.chanlocs, EEG.chanlocs, 'The channel list is untouched.');
+        end
+
+        function emptyBracketsRemoveTheChannel(testCase)
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'C3', 'ECG', 'C4'});
+
+            out = DeriveChannels(EEG, struct('derivations', 'let ECG = [ ]'));
+
+            testCase.verifyEqual({out.chanlocs.labels}, {'C3', 'C4'});
+            testCase.verifyEqual(out.nbchan, 2);
+            testCase.verifyEqual(out.data, EEG.data([1 3], :, :));
+        end
+
+        function removingAChannelThatIsNotThereIsRefused(testCase)
             EEG = makeTestEEG('nbchan', 2, 'labels', {'C3', 'C4'});
 
             testCase.verifyError( ...
-                @() DeriveChannels(EEG, struct('derivations', 'let C4 = C3 - C4')), ...
+                @() DeriveChannels(EEG, struct('derivations', 'let ECG = []')), ...
                 'Alakazam:Derivations');
+        end
+
+        function aChannelDerivedInAnEarlierStepCanBeUsed(testCase)
+        %ACHANNELDERIVEDINANEARLIERSTEPCANBEUSED  The reported failure: ECG2
+        %   derived from ECG in one step, ECG removed, and then ECG derived
+        %   back from ECG2 in another step, which failed with "ECG2 is not a
+        %   channel" because every step first removed all derived channels.
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'C3', 'ECG', 'C4'});
+
+            copied = DeriveChannels(EEG, struct('derivations', 'let ECG2 = ECG'));
+            noEcg = DeriveChannels(copied, struct('derivations', 'let ECG = []'));
+            back = DeriveChannels(noEcg, struct('derivations', 'let ECG = ECG2'));
+
+            testCase.verifyEqual({back.chanlocs.labels}, {'C3', 'C4', 'ECG2', 'ECG'});
+            testCase.verifyEqual(back.data(4, :, :), EEG.data(2, :, :));
+            testCase.verifyEqual(back.data(3, :, :), EEG.data(2, :, :), ...
+                'The channel the first step derived is still there.');
+        end
+
+        function theLinesRunInOrder(testCase)
+        %THELINESRUNINORDER  Each line sees the channels the lines above left:
+        %   a copy kept under a new name, the original removed, the copy used.
+            EEG = makeTestEEG('nbchan', 2, 'labels', {'C3', 'ECG'});
+
+            out = DeriveChannels(EEG, struct('derivations', ...
+                sprintf('let heart = ECG\nlet ECG = []\nlet double = heart * 2')));
+
+            testCase.verifyEqual({out.chanlocs.labels}, {'C3', 'heart', 'double'});
+            testCase.verifyEqual(out.data(3, :, :), 2 * EEG.data(2, :, :), 'AbsTol', 1e-12);
+            testCase.verifyError(@() DeriveChannels(EEG, struct('derivations', ...
+                sprintf('let ECG = []\nlet x = ECG'))), 'Alakazam:Derivations', ...
+                'A removed channel is gone for the lines below.');
+        end
+
+        function aQuotedNameCanBeOverwrittenOrRemoved(testCase)
+            EEG = makeTestEEG('nbchan', 3, 'labels', {'53', 'LEOG', 'EOG-R'});
+
+            out = DeriveChannels(EEG, struct('derivations', ...
+                sprintf('let "53" = -"53"\nlet "EOG-R" = []')));
+
+            testCase.verifyEqual({out.chanlocs.labels}, {'53', 'LEOG'});
+            testCase.verifyEqual(out.data(1, :, :), -EEG.data(1, :, :));
+        end
+
+        function aChannelTheIcaWasComputedOnIsKept(testCase)
+        %ACHANNELTHEICAWASCOMPUTEDONISKEPT  Its components would no longer
+        %   match the data; any other channel goes, and the decomposition's
+        %   channel numbers follow.
+            EEG = makeTestEEG('nbchan', 4, 'labels', {'Fz', 'ECG', 'Cz', 'Pz'});
+            EEG.icachansind = [1 3 4];
+
+            testCase.verifyError(@() DeriveChannels(EEG, struct('derivations', 'let Cz = []')), ...
+                'Alakazam:Derivations');
+            out = DeriveChannels(EEG, struct('derivations', 'let ECG = []'));
+            testCase.verifyEqual(out.icachansind, [1 2 3]);
+            testCase.verifyEqual({out.chanlocs(out.icachansind).labels}, {'Fz', 'Cz', 'Pz'});
         end
 
         function aQuotedNameIsTheChannelOfThatName(testCase)
@@ -201,12 +282,12 @@ classdef DeriveChannelsTest < matlab.unittest.TestCase
             testCase.verifyEqual(m.measurements{1}.amplitude, expected, 'AbsTol', 1e-10);
         end
 
-        function aDownstreamMeasureBlockReplacesTheseChannels(testCase)
-        %ADOWNSTREAMMEASUREBLOCKREPLACESTHESECHANNELS  A documented trap,
-        %   pinned so it stays a known property rather than a surprise.
-        %   Whichever step defines derivations replaces ALL derived channels,
-        %   which is what makes replay idempotent. So use one place or the
-        %   other: derive in this node and leave Measure's field blank.
+        function aDownstreamMeasureBlockAddsToTheseChannels(testCase)
+        %ADOWNSTREAMMEASUREBLOCKADDSTOTHESECHANNELS  Until 2026-10-22 a
+        %   documented trap: whichever step defined derivations removed ALL
+        %   derived channels first, so a let block in Measure wiped the ones
+        %   this node had made. Now it adds to them, and overwrites one only
+        %   by naming it again.
             EEG = makeTestEEG('nbchan', 2, 'labels', {'C3', 'C4'});
             EEG.data = mean(EEG.data, 3);
             EEG.trials = 1;
@@ -223,12 +304,17 @@ classdef DeriveChannelsTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(strcmpi({kept.chanlocs.labels}, 'LRP')), ...
                 'A blank Measure block must leave upstream derived channels alone.');
 
-            % Measure defining its own: LRP is replaced by Measure's channel.
-            replaced = Measure(derived, struct('windows', {{win}}, ...
+            % Measure defining its own: added beside LRP.
+            both = Measure(derived, struct('windows', {{win}}, ...
                 'derivations', 'let other = C3 + C4'));
-            testCase.verifyFalse(any(strcmpi({replaced.chanlocs.labels}, 'LRP')), ...
-                'A non-blank Measure block replaces every derived channel.');
-            testCase.verifyTrue(any(strcmpi({replaced.chanlocs.labels}, 'other')));
+            testCase.verifyEqual({both.chanlocs.labels}, {'C3', 'C4', 'LRP', 'other'}, ...
+                'A Measure block must keep the channels derived above it.');
+
+            % Measure naming LRP again: overwritten, not added twice.
+            redefined = Measure(derived, struct('windows', {{win}}, ...
+                'derivations', 'let LRP = C4 - C3'));
+            testCase.verifyEqual({redefined.chanlocs.labels}, {'C3', 'C4', 'LRP'});
+            testCase.verifyEqual(redefined.data(3, :), -derived.data(3, :), 'AbsTol', 1e-12);
         end
 
         function itIsRegisteredForTheRibbon(testCase)

@@ -227,8 +227,9 @@ end
 % (channels x samples[ x bins]) before measuring, so a derivation like
 % "let LRP = C3 - C4" is both measurable here and visible downstream (the
 % ERP line plot, grand averages). TransTools.ApplyDerivations is a no-op when the
-% block is empty, and idempotent, so replay/Recalculate replaces rather
-% than accumulates the derived channels. See TransTools.ApplyDerivations.m.
+% block is empty; a name the data already has (an upstream DeriveChannels
+% node's, say) is overwritten rather than added twice, and channels the
+% block does not name are left as they are. See TransTools.ApplyDerivations.m.
 EEG = TransTools.ApplyDerivations(EEG, derivations);
 
 %% Compute

@@ -183,7 +183,7 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         % window may name a channel that a "let" statement defines.
         derivText = textFromLines(derivArea.Value);
         try
-            [~, derivedNames] = TransTools.ApplyDerivations(dummyEEG(), derivText);
+            [~, derivedNames, ~, removedNames] = TransTools.ApplyDerivations(dummyEEG(), derivText);
         catch err
             uialert(fig, err.message, 'Check the derived channels');
             return;
@@ -191,6 +191,10 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         augLabels = allLabels;
         if ~isempty(derivedNames)
             augLabels = [allLabels, string(derivedNames)];
+        end
+        if ~isempty(removedNames)
+            % "let X = []" removes X, so a window may no longer name it.
+            augLabels = augLabels(~ismember(lower(augLabels), lower(string(removedNames))));
         end
         [built, errMsg] = windowsFromRows(data, augLabels);
         if ~isempty(errMsg)
@@ -264,10 +268,10 @@ function [windows, derivations] = MeasureDialog(chanlocs, priorWindows, priorDer
         % overwritten. Two reasons. Replacing wiped a let block the user
         % had written whenever the loaded file had none, which every current
         % preset does. And appending a second definition of the same name
-        % would not merely be untidy: TransTools.ApplyDerivations appends each
-        % derived channel to the dataset as it evaluates, so the duplicate
-        % hits its "already exists in this dataset" error at OK time, in a
-        % message that names the channel and not the load that caused it.
+        % would not merely be untidy: TransTools.ApplyDerivations runs the
+        % lines in order and overwrites a name that already exists, so the
+        % file's definition, coming last, would silently win over the one
+        % the user wrote.
         [mergedDerivations, keptNames] = mergeLetDefinitions( ...
             textFromLines(derivArea.Value), loadedDerivations);
         derivArea.Value = linesFromText(mergedDerivations);

@@ -153,6 +153,19 @@ classdef ExportFieldTripScriptTest < matlab.unittest.TestCase
             end
         end
 
+        function overwritingOrRemovingAChannelIsNotTranslated(testCase)
+        %OVERWRITINGORREMOVINGACHANNELISNOTTRANSLATED  The weights are read
+        %   off appended rows, so "let C3 = -C3" would come out as nothing at
+        %   all; it is marked as not translated rather than translated wrongly.
+            ctx = struct('srate', 250, 'labels', {{'C3', 'C4'}}, 'format', 'EPOCHED', 'decision', []);
+            names = struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', 1, 'binColumns', []);
+            for text = {'let C3 = -C3', 'let C4 = []', sprintf('let lrp = C3 - C4\nlet C4 = []')}
+                step = fieldtripTransformCall('DeriveChannels', struct('derivations', text{1}), ctx, names);
+                testCase.verifyEqual(step.status, 'none', text{1});
+                testCase.verifySubstring(strjoin(step.lines, newline), 'overwrites or removes a channel', text{1});
+            end
+        end
+
         function whatCannotBeCarriedIsRefusedWithItsReason(testCase)
             ctx = struct('srate', 250, 'labels', {{'C3', 'C4'}}, 'format', 'CONTINUOUS', 'decision', []);
             names = struct('in', 'data', 'out', 'data', 'trials', 'trials', 'step', 1, 'binColumns', []);

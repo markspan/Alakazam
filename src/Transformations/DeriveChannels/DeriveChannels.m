@@ -1,5 +1,5 @@
 function [EEG, options] = DeriveChannels(input, varargin)
-%% DeriveChannels  Add channels computed from existing ones ("let" statements).
+%% DeriveChannels  Add, overwrite or remove channels ("let" statements).
 %
 %   A difference wave between electrodes is a channel operation, not a bin
 %   operation: a bin says which EVENTS go into an average, while this says
@@ -20,6 +20,15 @@ function [EEG, options] = DeriveChannels(input, varargin)
 %   quotes (let eogv = LEOG - "53"), and a bare number that is also a
 %   channel's name is refused. Lines starting with % are comments. See
 %   TransTools.ApplyDerivations for the full grammar and its reasoning.
+%
+%   A NAME THE DATA ALREADY HAS IS OVERWRITTEN, and [] REMOVES IT:
+%
+%       let ECG = -ECG          % an inverted ECG the right way up
+%       let ECG2 = []           % the channel is gone
+%
+%   The lines run in order, each on the channels the lines above left, so
+%   "let ECG2 = ECG" and then "let ECG = []" keeps a copy under the new name.
+%   An overwritten channel keeps its place, position and type.
 %
 %   WORKS AT ANY STAGE. The arithmetic is elementwise over a channel's
 %   waveform, so this runs on continuous, epoched or averaged data alike and
@@ -43,13 +52,14 @@ function [EEG, options] = DeriveChannels(input, varargin)
 %   across subjects, for a grand average to line up). As a node it is
 %   visible, plottable, and composes with everything downstream.
 %
-%   USE ONE PLACE OR THE OTHER. A derived channel is marked
-%   .type = 'derived', and whichever step defines derivations replaces every
-%   derived channel rather than adding to them -- that is what makes
-%   Recalculate and replay idempotent instead of accumulating duplicates. So
-%   a non-empty let block in a downstream Measure will replace the channels
-%   this node added. Measure is a no-op when its field is blank, which is
-%   the combination to use: derive here, leave Measure's field empty.
+%   STEPS ADD UP. A later DeriveChannels node, or a let block in a
+%   downstream Measure, works on the channels this node left, its derived
+%   ones included, and overwrites one only if it names it again. Until
+%   2026-10-22 each such step first removed every channel marked 'derived',
+%   so a second node could not use the first one's channels ("ECG2 is not a
+%   channel" while the dialog listed it). Recalculate and replay still add
+%   no duplicates: a step re-run starts from its parent's data, and a name
+%   that is already there is overwritten, not added twice.
 %
 %   TOOLBOX OR OWN CODE. ERPLAB's pop_eegchanoperator does channel arithmetic,
 %   but ERPLAB is not a toolbox Alakazam installs, and its formulas are not
@@ -87,7 +97,8 @@ if interactive
         'title', 'Derive Channels', ...
         'Description', sprintf(['One "let <name> = <expression>" per line. Channels by label, ' ...
             'in double quotes when the label is not a plain word ("53", "EOG-L"); + - * / with ' ...
-            'parentheses, abs() and sqrt(); %% starts a comment.\nChannels: %s'], ...
+            'parentheses, abs() and sqrt(); %% starts a comment. A name that is already a ' ...
+            'channel is overwritten (let ECG = -ECG), and let <name> = [] removes it.\nChannels: %s'], ...
             strjoin(labels, ', ')), ...
         {'Statements'; 'derivations'}, DialogFields.TextArea( ...
             TransTools.FieldOr(stored, 'derivations', example), 'Height', 220, ...
@@ -102,22 +113,28 @@ else
 end
 
 text = char(string(TransTools.FieldOr(options, 'derivations', '')));
-[EEG, added] = TransTools.ApplyDerivations(input, text);
+[EEG, added, replaced, removed] = TransTools.ApplyDerivations(input, text);
 
-if isempty(added)
-    % Nothing defined: a no-op rather than an error, so a stored block that
-    % has been commented out still replays instead of stopping the branch.
-    fprintf('DeriveChannels: no "let" statements, so no channels were added.\n');
+% Nothing defined is a no-op rather than an error, so a stored block that
+% has been commented out still replays instead of stopping the branch.
+done = {};
+if ~isempty(added);    done{end + 1} = ['added ' strjoin(added, ', ')];       end
+if ~isempty(replaced); done{end + 1} = ['overwrote ' strjoin(replaced, ', ')]; end
+if ~isempty(removed);  done{end + 1} = ['removed ' strjoin(removed, ', ')];   end
+if isempty(done)
+    fprintf('DeriveChannels: no "let" statements, so no channels were changed.\n');
 else
-    fprintf('DeriveChannels: added %s.\n', strjoin(added, ', '));
+    fprintf('DeriveChannels: %s.\n', strjoin(done, '; '));
 end
 end
 
 % ======================================================================= %
 function d = channelsOnly(EEG)
 %CHANNELSONLY  The dataset's channels over three samples: enough for the
-%   derivation engine to resolve labels, catch clashes and evaluate the
-%   grammar when the dialog checks a block, without copying the recording.
+%   derivation engine to resolve labels, evaluate the grammar and refuse
+%   removing a channel the ICA decomposition uses when the dialog checks a
+%   block, without copying the recording.
     d = struct('chanlocs', EEG.chanlocs, 'nbchan', numel(EEG.chanlocs), ...
-        'data', zeros(numel(EEG.chanlocs), 3));
+        'data', zeros(numel(EEG.chanlocs), 3), ...
+        'icachansind', TransTools.FieldOr(EEG, 'icachansind', []));
 end

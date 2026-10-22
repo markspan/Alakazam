@@ -12,11 +12,10 @@ function [merged, keptNames] = mergeLetDefinitions(existingText, loadedText)
 %   typed, and every window already in their table was written against it;
 %   replacing it would silently change what those windows measure.
 %
-%   WHY NOT SIMPLY CONCATENATE. TransTools.ApplyDerivations appends each derived
-%   channel to the dataset as it evaluates the block, so a second "let LRP"
-%   finds LRP already present and raises "already exists in this dataset"
-%   at OK time, in a message that names the channel and gives no hint that
-%   loading a file caused it.
+%   WHY NOT SIMPLY CONCATENATE. TransTools.ApplyDerivations runs the lines in
+%   order and overwrites a name that already exists, so a second "let LRP"
+%   coming last would silently replace the user's definition with the
+%   file's, the opposite of the rule above.
 %
 %   ITS OWN FILE SO IT CAN BE TESTED. As a local function inside
 %   MeasureDialog it was reachable only by opening the dialog, and the
@@ -81,8 +80,9 @@ function name = letName(line)
     if ~isempty(hash)
         text = text(1:hash(1) - 1);
     end
-    token = regexp(strtrim(text), '^let\s+([A-Za-z]\w*)\s*=', 'tokens', 'once');
+    % A name in double quotes ("53", "EOG-R") is a name too, as the engine reads it.
+    token = regexp(strtrim(text), '^let\s+([A-Za-z][\w'']*|"[^"]+")\s*=', 'tokens', 'once', 'ignorecase');
     if ~isempty(token)
-        name = token{1};
+        name = strip(token{1}, '"');
     end
 end
