@@ -26,8 +26,8 @@ classdef DefineBinsEngine
         % @DefineBinsEngine/<name>.m.
         epochWin = parseEpochBounds(startStr, stopStr)
         spec = parseSpec(script)
-        [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
-        [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
+        [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
+        [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
     end
 
     methods (Static, Access = private)

@@ -1,9 +1,12 @@
-function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
+function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
 %CUTEPOCHS  Cut a chan x time x trials stack around every matched anchor.
 %   The union of all bins' matched events becomes the trial set (an event in
 %   several bins is one trial carrying several bin tags). Windows that run off
 %   either end of the recording are padded with NaN. Produces an EPOCHED
 %   dataset that plots with EpochView and can later be averaged per bin.
+%   CENTERLAT is each event's time-zero sample; ZEROLAT, optional, the exact
+%   latency it was taken from (evaluateBins), by which the neighbours tell a
+%   trial's own event from the others. Without it the sample is used.
     if ~isfield(EEG, 'data') || isempty(EEG.data)
         throw(MException('Alakazam:DefineBins', ...
             ['You gave an Epoch start/stop, so DefineBins tried to cut the data into ' ...
@@ -83,8 +86,11 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat)
     if ~isfield(EEG.etc, 'alz') || ~isstruct(EEG.etc.alz)
         EEG.etc.alz = struct();
     end
+    if nargin < 5 || isempty(zeroLat)
+        zeroLat = lat;
+    end
     EEG.etc.alz.epochNeighbours = TransTools.EpochNeighbours(EEG.event, lat(allEvents), ...
-        srate, times([1 end]));
+        srate, times([1 end]), zeroLat(allEvents));
     % Where each trial began in the recording it was cut from: the sample
     % (1-based, of DefineBins' input) holding its first point, below 1 where
     % the epoch ran off the start and was padded. The events are rewritten

@@ -1,11 +1,14 @@
-function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
+function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
 %EVALUATEBINS  Match every bin's predicate against every event in EEG, tag
 %   each event with its bin membership (EEG.event(i).bini, ERPLAB-style),
 %   and build the per-bin EEG.bindesc summary (matched event indices,
 %   per-match reaction times; combination bins are left for Average to
 %   compute). CENTERLAT is the sample each event's own epoch should be
 %   centred on: its own latency, unless some bin's 'timelock' clause
-%   overrides it with a matched neighbour's latency instead.
+%   overrides it with a matched neighbour's latency instead. ZEROLAT is
+%   that same latency before it was floored, the exact time of the event the
+%   epoch is locked to, which cutEpochs needs to tell that event from its
+%   neighbours (see TransTools.EpochNeighbours).
 %
 %   THE TIME-LOCKING SAMPLE IS CHOSEN WITH FLOOR, MATCHING EEGLAB AND
 %   ERPLAB. Event latencies are fractional once a recording has been
@@ -42,7 +45,8 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
     nEv = numel(order);
     membership = cell(1, nEv);
     % floor, matching EEGLAB/ERPLAB -- see the note in the header above.
-    centerLat  = floor([EEG.event.latency]);
+    zeroLat    = double([EEG.event.latency]);
+    centerLat  = floor(zeroLat);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
                      'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'rtTrim', {}, ...
                      'filters', {});
@@ -127,6 +131,7 @@ function [EEG, bindesc, centerLat] = evaluateBins(EEG, bins)
                 % the same convention as one time-locked to a stimulus or
                 % the two are a sample apart for no stated reason.
                 centerLat(order(p)) = floor(tlLat);
+                zeroLat(order(p)) = tlLat;
             end
 
             matchedOrig(end+1)   = order(p);

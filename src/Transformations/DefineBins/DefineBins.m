@@ -279,13 +279,13 @@ function [EEG, options] = DefineBins(input, varargin)
     end
 
     %% Match every bin's predicate against every event, and tag EEG.event
-    [EEG, bindesc, centerLat] = DefineBinsEngine.evaluateBins(EEG, bins);
+    [EEG, bindesc, centerLat, zeroLat] = DefineBinsEngine.evaluateBins(EEG, bins);
 
     %% Cut epochs when an epoch window was given (dialog), so the result plots
     %  as an epoched dataset (EpochView). Without it, the data stays continuous
     %  and only the bin tags are added.
     if ~isempty(epochWin)
-        [EEG, bindesc] = DefineBinsEngine.cutEpochs(EEG, bindesc, epochWin, centerLat);
+        [EEG, bindesc] = DefineBinsEngine.cutEpochs(EEG, bindesc, epochWin, centerLat, zeroLat);
     end
     EEG.bindesc = bindesc;
 

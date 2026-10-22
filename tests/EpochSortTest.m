@@ -159,6 +159,53 @@ classdef EpochSortTest < matlab.unittest.TestCase
             testCase.verifyEqual(key.values, [450 NaN 620]);
         end
 
+        function aTrialsOwnEventBetweenSamplesIsNotItsNeighbour(testCase)
+        %ATRIALSOWNEVENTBETWEENSAMPLESISNOTITSNEIGHBOUR  The reported failure:
+        %   the Heartbeats plugin places R-peaks between samples, time zero is
+        %   the latency floored, and each trial's own heartbeat, a fraction of
+        %   a sample later, was its own "next heartbeat", every trial within
+        %   a sample of zero. At 100 Hz, beats at 100.6, 180.2 and 260.9.
+            events = struct('type', 'heartbeat', 'latency', {100.6, 180.2, 260.9});
+
+            context = TransTools.EpochNeighbours(events, [100 180 260], 100, [-1000 1000], ...
+                [100.6 180.2 260.9]);
+
+            testCase.verifyEqual(context.next, [802 809 NaN], 'AbsTol', 1e-9, ...
+                'The next beat, measured from time zero, the floored sample.');
+            testCase.verifyEqual(context.previous, [NaN -794 -798], 'AbsTol', 1e-9);
+        end
+
+        function defineBinsFindsTheNextHeartbeat(testCase)
+        %DEFINEBINSFINDSTHENEXTHEARTBEAT  The same through DefineBins, as the
+        %   user met it, locked to the beats and, in a second bin, locked back
+        %   to a stimulus: there the stimulus is the trial's own event.
+            srate = 100;
+            EEG = struct('data', randn(1, 1000), 'srate', srate, 'pnts', 1000, 'trials', 1, ...
+                'nbchan', 1, 'xmin', 0, 'xmax', 9.99, 'times', (0:999) * 10, ...
+                'DataFormat', 'CONTINUOUS', 'chanlocs', struct('labels', 'ECG'), ...
+                'event', struct('type', {'heartbeat', 'heartbeat', 'heartbeat', 'heartbeat'}, ...
+                                'latency', {200.6, 280.2, 360.9, 441.5}));
+
+            epoched = DefineBins(EEG, struct('script', 'bin 1 "Beat" "heartbeat"', ...
+                'epoch', struct('lo', -200, 'hi', 1000, 'unit', 'ms')));
+
+            key = EpochSortTest.keyWithId(epochSortKeys(epoched), 'next:heartbeat');
+            testCase.verifyEqual(key.values, [802 809 815 NaN], 'AbsTol', 1e-9);
+
+            EEG.event(end + 1) = struct('type', 'stim', 'latency', 300.5);
+            locked = DefineBins(EEG, struct('script', ...
+                'bin 1 "Beat after stim" "heartbeat" and prev("stim") timelock prev("stim")', ...
+                'epoch', struct('lo', -200, 'hi', 1000, 'unit', 'ms')));
+            context = locked.etc.alz.epochNeighbours;
+            stim = strcmp(context.types, 'stim');
+            beat = strcmp(context.types, 'heartbeat');
+            testCase.verifyEqual(context.next(stim), NaN, ...
+                'The stimulus a trial is locked to is not its own next stimulus,');
+            testCase.verifyEqual(context.previous(stim), NaN, '... nor its previous one.');
+            testCase.verifyEqual(context.next(beat), 609, 'AbsTol', 1e-9, ...
+                'The beat after the stimulus, at 360.9, from time zero at sample 300.');
+        end
+
         function aSingleTrialOffersNothing(testCase)
             EEG = EpochSortTest.epoched();
             EEG.data = EEG.data(:, :, 1);
