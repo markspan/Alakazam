@@ -20,7 +20,7 @@ function checkComboReferences(bins)
                 'match events directly -- would you mind untangling that chain of references?'], ...
                 strjoin([path, {sprintf('bin %g "%s"', bins(i).index, bins(i).label)}], ' -> ')));
         end
-        if isempty(bins(i).combo); state(i) = 2; return; end
+        if ~TransTools.IsComboBin(bins(i)); state(i) = 2; return; end
         state(i) = 1;
         for t = 1:numel(bins(i).combo)
             refIdx = bins(i).combo(t).bin;

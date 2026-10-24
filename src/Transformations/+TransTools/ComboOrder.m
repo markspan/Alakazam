@@ -36,10 +36,7 @@ function [steps, unresolved] = ComboOrder(bindesc)
     steps = struct('target', {}, 'parts', {}, 'coeffs', {});
     unresolved = zeros(1, 0);
     n = numel(bindesc);
-    isCombo = false(1, n);
-    if isfield(bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {bindesc.combo});
-    end
+    isCombo = TransTools.IsComboBin(bindesc);
     if ~any(isCombo)
         return;
     end

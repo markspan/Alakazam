@@ -52,7 +52,7 @@ function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
                      'filters', {});
 
     for b = 1:numel(bins)
-        if ~isempty(bins(b).combo)
+        if TransTools.IsComboBin(bins(b))
             % Combination (difference) bin: no event predicate; the Average
             % step computes it from the referenced bins' averages.
             bindesc(b) = binRecord(bins(b), [], [], bins(b).combo, [], []);

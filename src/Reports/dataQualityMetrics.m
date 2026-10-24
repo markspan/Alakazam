@@ -481,7 +481,7 @@ function bins = binMemberships(EEG, nTrials)
         return;
     end
     for b = 1:numel(EEG.bindesc)
-        if isfield(EEG.bindesc, 'combo') && ~isempty(EEG.bindesc(b).combo)
+        if TransTools.IsComboBin(EEG.bindesc(b))
             continue;
         end
         bins(end + 1) = struct('label', char(string(EEG.bindesc(b).label)), ... %#ok<AGROW>

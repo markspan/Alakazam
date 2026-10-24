@@ -46,10 +46,7 @@ function [spec, specFreqs, peakHz] = ReferenceSpectrum(input, refIdx)
 
     spec = nan(nCells, nBins);
     peakHz = nan(1, nBins);
-    isCombo = false(1, nBins);
-    if isfield(input.bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {input.bindesc.combo});
-    end
+    isCombo = TransTools.IsComboBin(input.bindesc);
 
     for b = find(~isCombo)
         trials = input.bindesc(b).trials;

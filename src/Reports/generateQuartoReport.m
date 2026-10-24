@@ -383,10 +383,7 @@ function [ordinaryLabels, comboBins] = classifyBins(EEG)
         return;
     end
     bindesc = EEG.bindesc;
-    isCombo = false(1, numel(bindesc));
-    if isfield(bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {bindesc.combo});
-    end
+    isCombo = TransTools.IsComboBin(bindesc);
     ordinaryLabels = {bindesc(~isCombo).label};
     for b = find(isCombo)
         comboBins(end + 1) = struct('label', char(string(bindesc(b).label)), ...

@@ -116,10 +116,7 @@ function [ersp, freqs, info] = ComputeErsp(input, opts)
     % wavelet convolution at all, only derived from the bins they
     % reference, in a second pass below (mirrors Average.m's own
     % dependency-resolution scheme for the exact same kind of bin).
-    isCombo = false(1, nBins);
-    if isfield(input.bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {input.bindesc.combo});
-    end
+    isCombo = TransTools.IsComboBin(input.bindesc);
 
     ersp = nan(nChan, opts.NumFreqs, nT, nBins);
     total = max(1, sum(~isCombo) * nChan); % avoid a 0/0 if every bin is a combo bin
