@@ -787,8 +787,7 @@ classdef EpochView < AlakazamView
                 return;
             end
             for b = 1:numel(EEG.bindesc)
-                isCombo = isfield(EEG.bindesc, 'combo') && ~isempty(EEG.bindesc(b).combo);
-                if ~isCombo && ~isempty(TransTools.BinTrials(EEG, b))
+                if ~TransTools.IsComboBin(EEG.bindesc(b)) && ~isempty(TransTools.BinTrials(EEG, b))
                     positions(end + 1) = b; %#ok<AGROW>
                 end
             end

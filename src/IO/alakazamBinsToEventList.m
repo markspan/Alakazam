@@ -74,7 +74,7 @@ function EEG = alakazamBinsToEventList(EEG)
     end
 
     % --- EVENTLIST.bdf: one entry per plain (non-combination) bin. ---
-    plainBins = find(arrayfun(@(b) isempty(b.combo), EEG.bindesc));
+    plainBins = find(~TransTools.IsComboBin(EEG.bindesc));
     bdf = repmat(struct('expression', '', 'description', '', 'prehome', [], ...
         'athome', [], 'posthome', [], 'namebin', '', 'rtname', [], 'rtindex', [], 'rt', []), 1, numel(plainBins));
     for k = 1:numel(plainBins)

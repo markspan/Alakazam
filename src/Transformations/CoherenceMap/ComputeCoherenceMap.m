@@ -302,10 +302,7 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
 %   where the coherence itself is not (see the same header).
     coh = nan(nChan, nF, nTime, nBins);
     refPower = nan(nF, nTime, nBins);
-    isCombo = false(1, nBins);
-    if isfield(input.bindesc, 'combo')
-        isCombo = ~cellfun(@isempty, {input.bindesc.combo});
-    end
+    isCombo = TransTools.IsComboBin(input.bindesc);
 
     TransTools.BusyGate('progress', 0);
     binsToDo = find(~isCombo);

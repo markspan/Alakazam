@@ -47,9 +47,7 @@ function text = ressSection(entries)
         return;
     end
     binLabels = cellstr(string({EEG.bindesc.label}));
-    if isfield(EEG.bindesc, 'combo')
-        binLabels = binLabels(cellfun(@isempty, {EEG.bindesc.combo}));
-    end
+    binLabels = binLabels(~TransTools.IsComboBin(EEG.bindesc));
     frameSeconds = frameLength(EEG);
 
     roles = strings(0, 4);
