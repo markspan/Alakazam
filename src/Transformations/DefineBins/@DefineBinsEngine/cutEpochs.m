@@ -1,7 +1,8 @@
 function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
 %CUTEPOCHS  Cut a chan x time x trials stack around every matched anchor.
-%   The union of all bins' matched events becomes the trial set (an event in
-%   several bins is one trial carrying several bin tags). Windows that run off
+%   Every event some bin matched (a non-empty .bini) becomes a trial, which
+%   carries the event's .bini and .binrt (an event in several bins is one
+%   trial carrying several bin tags). Windows that run off
 %   either end of the recording are padded with NaN. Produces an EPOCHED
 %   dataset that plots with EpochView and can later be averaged per bin.
 %   CENTERLAT is each event's time-zero sample; ZEROLAT, optional, the exact
@@ -39,7 +40,14 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
              'the sampling rate is what you expect?'], win.lo, win.hi, win.unit, srate));
     end
 
-    allEvents = unique([bindesc.events]);
+    % Every event some bin matched (its .bini, see evaluateBins), in order.
+    if ~isfield(EEG.event, 'bini')
+        [EEG.event.bini] = deal(zeros(1, 0));
+    end
+    if ~isfield(EEG.event, 'binrt')
+        [EEG.event.binrt] = deal(zeros(1, 0));
+    end
+    allEvents = find(~cellfun(@isempty, {EEG.event.bini}));
     if isempty(allEvents)
         throw(MException('Alakazam:DefineBins', ...
             ['None of your bins matched a single event in this dataset, I''m afraid, ' ...
@@ -98,17 +106,18 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
     % FieldTrip script exported from the analysis cuts its trials by.
     EEG.etc.alz.epochStart = reshape(lat(allEvents), 1, []) + loS;
 
-    % Per-trial epoch table and bin -> trial index mapping.
-    trialOf = zeros(1, max(allEvents));
-    trialOf(allEvents) = 1:ntr;
+    % Per-trial epoch table. Each trial carries its event's bins and their
+    % reaction times, the one store of bin membership on epoched data (see
+    % TransTools.BinMembership); EEGLAB keeps them with the trial from here on.
     EEG.epoch = struct('event', {}, 'eventtype', {}, ...
-                       'eventlatency', {}, 'bini', {});
+                       'eventlatency', {}, 'bini', {}, 'binrt', {});
     for k = 1:ntr
         ei = allEvents(k);
         EEG.epoch(k).event        = ei;
         EEG.epoch(k).eventtype    = EEG.event(ei).type;
         EEG.epoch(k).eventlatency = 0;
         EEG.epoch(k).bini         = EEG.event(ei).bini;
+        EEG.epoch(k).binrt        = EEG.event(ei).binrt;
         % EEGLAB expects every event to carry its own containing epoch
         % number once EEG.trials > 1 (eeg_checkset errors "the event info
         % structure does not contain an 'epoch' field" otherwise --
@@ -156,11 +165,7 @@ function [EEG, bindesc] = cutEpochs(EEG, bindesc, win, centerLat, zeroLat)
     % it is idempotent, so that is harmless, defence-in-depth redundancy).
     EEG = rewriteEpochedEventLatencies(EEG);
 
-    for b = 1:numel(bindesc)
-        if isempty(bindesc(b).events)
-            bindesc(b).trials = [];
-        else
-            bindesc(b).trials = trialOf(bindesc(b).events);
-        end
-    end
+    % The bins hold no lists of their own any more; a caller's bindesc that
+    % still has them (built before 2026-10-24) loses them here.
+    bindesc = rmfield(bindesc, intersect(fieldnames(bindesc), {'events', 'rt', 'trials'}));
 end

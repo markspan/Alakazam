@@ -1,9 +1,10 @@
 function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
 %EVALUATEBINS  Match every bin's predicate against every event in EEG, tag
-%   each event with its bin membership (EEG.event(i).bini, ERPLAB-style),
-%   and build the per-bin EEG.bindesc summary (matched event indices,
-%   per-match reaction times; combination bins are left for Average to
-%   compute). CENTERLAT is the sample each event's own epoch should be
+%   each event with its bin membership (EEG.event(i).bini, ERPLAB-style)
+%   and the reaction time each of those bins captured (EEG.event(i).binrt),
+%   and build the per-bin EEG.bindesc summary (how many events each bin
+%   matched, what its windows resolved to; combination bins are left for
+%   Average to compute). CENTERLAT is the sample each event's own epoch should be
 %   centred on: its own latency, unless some bin's 'timelock' clause
 %   overrides it with a matched neighbour's latency instead. ZEROLAT is
 %   that same latency before it was floored, the exact time of the event the
@@ -43,19 +44,21 @@ function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
 %#ok<*AGROW>
     [ctx, order] = DefineBinsEngine.buildContext(EEG);
     nEv = numel(order);
+    % Which bins each event is in, and the reaction time each bin captured:
+    % the one store of bin membership (see TransTools.BinMembership).
     membership = cell(1, nEv);
+    memberRts = cell(1, nEv);
     % floor, matching EEGLAB/ERPLAB -- see the note in the header above.
     zeroLat    = double([EEG.event.latency]);
     centerLat  = floor(zeroLat);
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
-                     'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'rtTrim', {}, ...
-                     'filters', {});
+                     'combo', {}, 'n', {}, 'rtTrim', {}, 'filters', {});
 
     for b = 1:numel(bins)
         if TransTools.IsComboBin(bins(b))
             % Combination (difference) bin: no event predicate; the Average
             % step computes it from the referenced bins' averages.
-            bindesc(b) = binRecord(bins(b), [], [], bins(b).combo, [], []);
+            bindesc(b) = binRecord(bins(b), 0, bins(b).combo, [], []);
             continue;
         end
 
@@ -103,8 +106,7 @@ function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
             end
         end
 
-        matchedOrig = [];
-        rts = [];
+        nMatched = 0;
         rtRemoved = 0;
         for c = 1:numel(candidates)
             p = candidates(c);
@@ -134,35 +136,37 @@ function [EEG, bindesc, centerLat, zeroLat] = evaluateBins(EEG, bins)
                 zeroLat(order(p)) = tlLat;
             end
 
-            matchedOrig(end+1)   = order(p);
-            rts(end+1)           = rtMs;
+            nMatched             = nMatched + 1;
             membership{p}(end+1) = bins(b).index;
+            memberRts{p}(end+1)  = rtMs;
         end
         if ~isempty(rtTrim)
             rtTrim.removed = rtRemoved;
         end
-        bindesc(b) = binRecord(bins(b), matchedOrig, rts, [], rtTrim, filterRecords);
+        bindesc(b) = binRecord(bins(b), nMatched, [], rtTrim, filterRecords);
     end
 
-    % Tag events with their bin membership (ERPLAB-style .bini).
+    % Tag events with their bin membership (ERPLAB-style .bini) and, beside
+    % it, the reaction time each of those bins captured (.binrt).
     for p = 1:nEv
-        EEG.event(order(p)).bini = membership{p};
+        EEG.event(order(p)).bini  = membership{p};
+        EEG.event(order(p)).binrt = memberRts{p};
     end
 end
 
-function rec = binRecord(bin, events, rts, combo, rtTrim, filters)
-%BINRECORD  Build one EEG.bindesc entry with a stable field order. RTTRIM
-%   is what a window relative to the mean reaction time resolved to (see
-%   resolveRtWindow), or [] for a bin without one; FILTERS what each of the
-%   bin's other tests about its trials came to (resolveValueWindow), or [].
+function rec = binRecord(bin, n, combo, rtTrim, filters)
+%BINRECORD  Build one EEG.bindesc entry with a stable field order. N is the
+%   number of events the bin matched; which ones, and their reaction times,
+%   are on the events (.bini, .binrt). RTTRIM is what a window relative to
+%   the mean reaction time resolved to (see resolveRtWindow), or [] for a
+%   bin without one; FILTERS what each of the bin's other tests about its
+%   trials came to (resolveValueWindow), or [].
     rec.index   = bin.index;
     rec.label   = bin.label;
     rec.script  = bin.text;
     rec.plan    = bin.expr;
     rec.combo   = combo;
-    rec.events  = events;
-    rec.rt      = rts;
-    rec.n       = numel(events);
+    rec.n       = n;
     rec.rtTrim  = rtTrim;
     rec.filters = filters;
 end

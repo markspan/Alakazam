@@ -15,9 +15,9 @@ function keys = epochSortKeys(EEG)
 %
 %   THE REACTION TIME is DefineBins' own: the delay to the neighbour a bin's
 %   definition captured going forward (next(...) within ...). It is read
-%   from bindesc(b).rt, which cutEpochs (and Deconvolve's trials) keep
-%   aligned element by element with bindesc(b).trials. A trial in two bins
-%   takes the first finite one.
+%   from the trial itself, EEG.epoch(t).binrt beside .bini (see
+%   TransTools.BinMembership; an old dataset's bindesc(b).rt is read the
+%   same way). A trial in two bins takes the first finite one.
 %
 %   THE NEIGHBOURS need nothing in the bin definition: "Next saccade (ms)",
 %   "Previous stimonset (ms)" and so on, for every event type, from the
@@ -112,23 +112,17 @@ function keys = neighbourKeys(EEG, nTrials)
 end
 
 function rt = reactionTimes(EEG, nTrials)
-%REACTIONTIMES  Each trial's DefineBins reaction time, NaN where it has none.
+%REACTIONTIMES  Each trial's DefineBins reaction time, NaN where it has none:
+%   the first finite one of the bins it is in, in the order it matched them.
     rt = nan(1, nTrials);
-    if ~isfield(EEG, 'bindesc') || isempty(EEG.bindesc) ...
-            || ~isfield(EEG.bindesc, 'rt') || ~isfield(EEG.bindesc, 'trials')
+    if ~isfield(EEG, 'bindesc') || isempty(EEG.bindesc)
         return;
     end
-    for b = 1:numel(EEG.bindesc)
-        trials = double(EEG.bindesc(b).trials);
-        times = double(EEG.bindesc(b).rt);
-        if numel(trials) ~= numel(times)
-            continue;   % not aligned (a hand-built bindesc): nothing safe to read
-        end
-        for k = 1:numel(trials)
-            t = trials(k);
-            if t >= 1 && t <= nTrials && isnan(rt(t)) && isfinite(times(k))
-                rt(t) = times(k);
-            end
+    [~, binrt] = TransTools.BinMembership.perUnit(TransTools.BinMembership.migrate(EEG));
+    for t = 1:min(nTrials, numel(binrt))
+        first = find(isfinite(binrt{t}), 1);
+        if ~isempty(first)
+            rt(t) = binrt{t}(first);
         end
     end
 end

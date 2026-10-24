@@ -256,14 +256,16 @@ function chosen = writeEntry(traceFid, mapFid, referenceFid, entry, maxChannels,
 end
 
 function n = trialCounts(EEG, nBin)
-%TRIALCOUNTS  Trials behind each bin, NaN where the dataset does not say.
+%TRIALCOUNTS  Trials behind each bin (TransTools.BinMembership), NaN where
+%   the dataset does not say: none of its trials carries the bin.
     n = nan(1, nBin);
-    if ~isfield(EEG, 'bindesc') || ~isfield(EEG.bindesc, 'trials')
+    if ~isfield(EEG, 'bindesc') || isempty(EEG.bindesc)
         return;
     end
     for b = 1:min(nBin, numel(EEG.bindesc))
-        if ~isempty(EEG.bindesc(b).trials)
-            n(b) = numel(EEG.bindesc(b).trials);
+        members = TransTools.BinMembership.of(EEG, b);
+        if ~isempty(members)
+            n(b) = numel(members);
         end
     end
 end

@@ -9,8 +9,8 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
 %   two estimators (see METHOD below).
 %
 %   INPUT is an EEGLAB-style epoched EEG struct (DataFormat 'EPOCHED', data
-%   channels x samples x trials, with EEG.bindesc(b).trials indexing the trial
-%   dimension per bin). OPTS fields:
+%   channels x samples x trials, each bin's trials read by
+%   TransTools.BinMembership). OPTS fields:
 %     RefIndex             row of the reference channel in EEG.data
 %     Frequency            fixed frequency (Hz); 0 = find it from the reference
 %     TimeStart, TimeStop  analysis window (ms); TimeStop <= TimeStart = whole epoch
@@ -101,8 +101,8 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
     end
 
     for b = 1:nBins
-        tr = input.bindesc(b).trials;
-        if ~isnumeric(tr) || isempty(tr)
+        tr = TransTools.BinMembership.of(input, b);
+        if isempty(tr)
             continue;   % combination/difference bin: coherence is not linear across bins
         end
 

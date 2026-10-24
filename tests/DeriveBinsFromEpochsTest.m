@@ -22,6 +22,8 @@ classdef DeriveBinsFromEpochsTest < matlab.unittest.TestCase
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(root, 'src', 'Support')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(root, 'src', 'Transformations')));
         end
     end
 
@@ -38,9 +40,11 @@ classdef DeriveBinsFromEpochsTest < matlab.unittest.TestCase
             binA = EEG.bindesc(labels == "A");
             binB = EEG.bindesc(labels == "B");
             testCase.verifyEqual(binA.n, 2);
-            testCase.verifyEqual(sort(binA.trials), [1, 2]);
+            testCase.verifyEqual(TransTools.BinTrials(EEG, find(labels == "A")), [1, 2]);
             testCase.verifyEqual(binB.n, 1);
-            testCase.verifyEqual(binB.trials, 3);
+            testCase.verifyEqual(TransTools.BinTrials(EEG, find(labels == "B")), 3);
+            testCase.verifyFalse(any(isfield(EEG.bindesc, {'events', 'rt', 'trials'})), ...
+                'Which trials a bin holds is on the trials, not listed beside the bin.');
         end
 
         function theMultiEventEpochsNumericEventFieldIsHandled(testCase)
@@ -74,12 +78,14 @@ classdef DeriveBinsFromEpochsTest < matlab.unittest.TestCase
         function everyEpochGetsAlakazamsLeanFourFieldShape(testCase)
         %EVERYEPOCHGETSALAKAZAMSLEANFOURFIELDSHAPE  EEG.epoch is REPLACED
         %   with DefineBins/cutEpochs' own convention (event/eventtype/
-        %   eventlatency/bini only), not pop_epoch's richer per-epoch
-        %   fields left in place alongside a new .bini.
+        %   eventlatency, and bini/binrt, the trial's bins and reaction
+        %   times), not pop_epoch's richer per-epoch fields left in place
+        %   alongside a new .bini.
             EEG = popEpochFixture();
             EEG.epoch(1).eventduration = {0, 0}; % a pop_epoch field this function does not use
             EEG = deriveBinsFromEpochs(EEG);
-            testCase.verifyEqual(sort(fieldnames(EEG.epoch)), sort({'event'; 'eventtype'; 'eventlatency'; 'bini'}));
+            testCase.verifyEqual(sort(fieldnames(EEG.epoch)), ...
+                sort({'event'; 'eventtype'; 'eventlatency'; 'bini'; 'binrt'}));
         end
 
         function itIsANoOpWhenBindescAlreadyExists(testCase)

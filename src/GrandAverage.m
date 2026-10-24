@@ -130,10 +130,8 @@ function EEG = GrandAverage(sourceFiles, weighted)
     for b = 1:nBins
         EEG.bindesc(b).label  = referenceLabels{b};
         EEG.bindesc(b).n      = sprintf('%d subjects', nSubjects);
-        EEG.bindesc(b).events = [];
-        EEG.bindesc(b).rt     = [];
-        EEG.bindesc(b).trials = [];
     end
+    EEG.bindesc = withoutTrialLists(EEG.bindesc);
     EEG.etc.GrandAverage = struct('sources', {sourceFiles}, ...
         'weighted', weighted, 'nSubjects', nSubjects, 'kind', 'erp');
 end
@@ -206,10 +204,8 @@ function EEG = combineMaps(subjects, sourceFiles, kind)
     for b = 1:nBins
         EEG.bindesc(b).label  = referenceLabels{b};
         EEG.bindesc(b).n      = sprintf('%d subjects', nSubjects);
-        EEG.bindesc(b).events = [];
-        EEG.bindesc(b).rt     = [];
-        EEG.bindesc(b).trials = [];
     end
+    EEG.bindesc = withoutTrialLists(EEG.bindesc);
 end
 
 function validateMapCompatibility(subjects, sourceFiles, field)
@@ -400,4 +396,11 @@ function value = firstNonBlank(candidates)
             return;
         end
     end
+end
+
+function bindesc = withoutTrialLists(bindesc)
+%WITHOUTTRIALLISTS  The first subject's bins without the per-bin lists of
+%   events, trials and reaction times a bindesc from before 2026-10-24 still
+%   has: a grand average has no trials, and its bins none of them.
+    bindesc = rmfield(bindesc, intersect(fieldnames(bindesc), {'events', 'rt', 'trials'}));
 end

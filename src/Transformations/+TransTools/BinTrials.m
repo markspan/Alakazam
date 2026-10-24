@@ -1,17 +1,13 @@
 function idx = BinTrials(EEG, b)
-%BINTRIALS  Trial indices (into the epoch stack) belonging to bin B.
-%   Prefers the explicit trial list DefineBins stores on each bin; falls
-%   back to scanning the per-epoch .bini membership tags. Previously
-%   reimplemented, identically, in Average.m and SpectralMeasure.m (the
-%   latter's own copy said as much: "mirrors Average.binTrials");
-%   consolidated here.
+%BINTRIALS  Trial indices (into the epoch stack) belonging to bin B, a
+%   position in EEG.bindesc. Read from the one store of bin membership,
+%   EEG.epoch(t).bini (see TransTools.BinMembership, which also gives each
+%   trial's reaction time); an old dataset whose bins still list their
+%   trials is read as it always was.
 %
-%   See also DEFINEBINS, AVERAGE, SPECTRALMEASURE.
-    idx = [];
-    if isfield(EEG.bindesc, 'trials') && ~isempty(EEG.bindesc(b).trials)
-        idx = EEG.bindesc(b).trials;
-    elseif isfield(EEG, 'epoch') && ~isempty(EEG.epoch) && isfield(EEG.epoch, 'bini')
-        binIndex = EEG.bindesc(b).index;
-        idx = find(arrayfun(@(e) any(e.bini == binIndex), EEG.epoch));
-    end
+%   Kept as the short form of TransTools.BinMembership.of because plugins
+%   call it (Beamformer).
+%
+%   See also TRANSTOOLS.BINMEMBERSHIP, DEFINEBINS, AVERAGE.
+    idx = TransTools.BinMembership.of(EEG, b);
 end

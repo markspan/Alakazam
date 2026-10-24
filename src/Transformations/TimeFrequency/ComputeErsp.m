@@ -17,8 +17,8 @@ function [ersp, freqs, info] = ComputeErsp(input, opts)
 %   time-frequency (ERSP) convention.
 %
 %   INPUT is an EEGLAB-style epoched EEG struct (DataFormat = 'EPOCHED',
-%   EEG.bindesc(b).trials indexing EEG.data's 3rd dimension per bin --
-%   see DefineBins.m). OPTS is a struct with fields MinFreq, MaxFreq,
+%   each bin's trials read by TransTools.BinMembership -- see DefineBins.m).
+%   OPTS is a struct with fields MinFreq, MaxFreq,
 %   NumFreqs (Hz range and count, log-spaced), MinCycles, MaxCycles
 %   (wavelet cycles at the frequency extremes, linearly interpolated in
 %   between), BaselineStart, BaselineStop (ms, for the dB correction).
@@ -111,8 +111,8 @@ function [ersp, freqs, info] = ComputeErsp(input, opts)
     info = struct('halfWaveletMs', halfLens / srate * 1000, 'noBaseline', noBaseline);
 
     % Combination (difference) bins defined in DefineBins ("bin N = bin A
-    % - bin B") have no trials of their own (DefineBins.m leaves
-    % bindesc(b).trials = [] for them) -- their ERSP cannot be computed by
+    % - bin B") have no trials of their own (no trial carries them) -- their
+    % ERSP cannot be computed by
     % wavelet convolution at all, only derived from the bins they
     % reference, in a second pass below (mirrors Average.m's own
     % dependency-resolution scheme for the exact same kind of bin).
@@ -123,7 +123,7 @@ function [ersp, freqs, info] = ComputeErsp(input, opts)
     done = 0;
     TransTools.BusyGate('progress', 0);
     for b = find(~isCombo)
-        trials = input.bindesc(b).trials;
+        trials = TransTools.BinMembership.of(input, b);
         if isempty(trials)
             % No matched events for this (ordinary, non-combo) bin: leave
             % its ersp(:,:,:,b) as NaN (imagesc will just show it blank)

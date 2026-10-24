@@ -484,26 +484,15 @@ function bins = binMemberships(EEG, nTrials)
         if TransTools.IsComboBin(EEG.bindesc(b))
             continue;
         end
+        % The bin's trials as the rest of the app reads them
+        % (TransTools.BinMembership), within this dataset's trials.
+        members = TransTools.BinMembership.of(EEG, b);
         bins(end + 1) = struct('label', char(string(EEG.bindesc(b).label)), ... %#ok<AGROW>
-            'index', b, 'trials', binTrialIndices(EEG, b, nTrials)); %#ok<AGROW>
+            'index', b, 'trials', members(members >= 1 & members <= nTrials)); %#ok<AGROW>
     end
     if isempty(bins)
         bins(1) = struct('label', 'all', 'index', NaN, 'trials', 1:nTrials);
     end
-end
-
-function idx = binTrialIndices(EEG, b, nTrials)
-%BINTRIALINDICES  Trial indices belonging to bin B -- the explicit list
-%   DefineBins stores, else the per-epoch .bini membership tags. Mirrors
-%   Average.binTrials, which resolves the same two sources the same way.
-    idx = [];
-    if isfield(EEG.bindesc, 'trials') && ~isempty(EEG.bindesc(b).trials)
-        idx = EEG.bindesc(b).trials(:).';
-    elseif isfield(EEG, 'epoch') && ~isempty(EEG.epoch) && isfield(EEG.epoch, 'bini')
-        binIndex = EEG.bindesc(b).index;
-        idx = find(arrayfun(@(e) any(e.bini == binIndex), EEG.epoch));
-    end
-    idx = idx(idx >= 1 & idx <= nTrials);
 end
 
 function v = smeFor(averaged, c, binIndex)

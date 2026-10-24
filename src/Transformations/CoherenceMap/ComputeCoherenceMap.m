@@ -13,8 +13,8 @@ function [coh, freqs, cohTimes, refPower, info] = ComputeCoherenceMap(input, opt
 %   coherence SpectralMeasure.m computes (and the RIFT paper's Eq. 1), but
 %   resolved at every time point rather than averaged over the epoch.
 %
-%   INPUT is an EEGLAB-style epoched EEG struct (DataFormat 'EPOCHED',
-%   EEG.bindesc(b).trials indexing the 3rd dimension per bin). OPTS fields:
+%   INPUT is an EEGLAB-style epoched EEG struct (DataFormat 'EPOCHED', each
+%   bin's trials read by TransTools.BinMembership). OPTS fields:
 %     Method     'Wavelet', 'STFT' or 'FilterHilbert'
 %     RefIndex   row of the reference channel in EEG.data
 %     MinFreq, MaxFreq, NumFreqs   frequency range (Hz)
@@ -309,7 +309,7 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
     total = max(1, numel(binsToDo));
     for bi = 1:numel(binsToDo)
         b = binsToDo(bi);
-        trials = input.bindesc(b).trials;
+        trials = TransTools.BinMembership.of(input, b);
         if isempty(trials)
             TransTools.BusyGate('progress', bi / total);
             continue;

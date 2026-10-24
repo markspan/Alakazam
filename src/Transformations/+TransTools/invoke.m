@@ -50,9 +50,16 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
 %   need not know those arrays exist, and one that keeps them itself is left
 %   as it is.
 %
+%   AND ONE TO THE INPUT: a dataset saved before 2026-10-24, whose bins
+%   still list their trials in EEG.bindesc, is converted to the one store of
+%   bin membership on its trials (TransTools.BinMembership.migrate) before
+%   the step sees it, so no step has to know the old form and what it saves
+%   is in the new one.
+%
 %   See also TRANSTOOLS.INITGUARD, ALAKAZAM.ONTRANSFORMATION,
-%   TRANSTOOLS.ALIGNCHANNELCOMPANIONS.
+%   TRANSTOOLS.ALIGNCHANNELCOMPANIONS, TRANSTOOLS.BINMEMBERSHIP.
     transformId = char(transformId);
+    inputEEG = TransTools.BinMembership.migrate(inputEEG);
 
     if exist(transformId, 'file') ~= 2
         throw(MException('Alakazam:contract:unknownTransformation', ...

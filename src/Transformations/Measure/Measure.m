@@ -245,12 +245,12 @@ end
 if perTrial
     % WHICH BIN EACH TRIAL BELONGS TO, recorded alongside the values,
     % because a per-trial value is useless for a group model without its
-    % condition. Read through Support/trialBins, the same membership the
-    % rest of the app uses, so a trial in two bins (a combination bin
+    % condition. Read through TransTools.BinMembership, the same membership
+    % the rest of the app uses, so a trial in two bins (a combination bin
     % overlapping a base one) is reported as being in both rather than
     % silently assigned to the first.
     EEG.trialMeasurements = measurements;
-    EEG.trialBinIndex = arrayfun(@(t) {trialBins(EEG, t)}, 1:nBins);
+    EEG.trialBinIndex = arrayfun(@(t) {TransTools.BinMembership.ofTrial(EEG, t)}, 1:nBins);
 else
     EEG.measurements = measurements;
 end

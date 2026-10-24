@@ -49,7 +49,7 @@ function [spec, specFreqs, peakHz] = ReferenceSpectrum(input, refIdx)
     isCombo = TransTools.IsComboBin(input.bindesc);
 
     for b = find(~isCombo)
-        trials = input.bindesc(b).trials;
+        trials = TransTools.BinMembership.of(input, b);
         if isempty(trials)
             continue;
         end

@@ -322,7 +322,7 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
             X = TransTools.Tdft(Vc, fUse, t, tapers);                 % K x nT (raw)
 
             % ArtefactDetect rejects a trial by blanking its data to NaN in
-            % place, not by removing it from bindesc(b).trials -- so a
+            % place, not by taking it out of its bin -- so a
             % rejected trial still reaches tdft here as a fully-NaN column
             % of X. Every trial-pooling reduction below is 'omitnan' so one
             % (or many) rejected trials drop out instead of poisoning the

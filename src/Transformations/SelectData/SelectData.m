@@ -7,16 +7,17 @@ function [EEG, options] = SelectData(input, varargin)
 %   Channels are stored as labels and resolved to indices against the current
 %   dataset, so a stored selection replays on a dataset whose channels differ.
 %
-%   WHAT IS KEPT BESIDE THE TRIALS. pop_select renumbers what EEGLAB knows
-%   about (EEG.epoch, each event's .epoch) but not what Alakazam keeps per
-%   trial: each bin's trial list, EEG.bindesc(b).trials, which
-%   TransTools.BinTrials and so Average read in preference to
-%   EEG.epoch(t).bini, with its .events, .rt and .n beside it, and the
-%   per-trial records in EEG.etc.alz. Left alone, every bin still listed the
-%   trials it had before the selection: Average then failed with an index
-%   past the last trial or, where the old numbers were still in range,
-%   averaged the wrong trials without a word. So a trial selection renumbers
-%   them to the trials that remain (see followKeptTrials).
+%   WHAT IS KEPT BESIDE THE TRIALS. The bins a trial is in, and its reaction
+%   times, are on the trial itself (EEG.epoch(t).bini and .binrt, see
+%   TransTools.BinMembership), and pop_select keeps the EEG.epoch entries of
+%   the trials it keeps, so they follow by themselves; each bin's count, .n,
+%   is counted again. What pop_select does not know is the per-trial records
+%   in EEG.etc.alz, which a trial selection cuts to the trials that remain
+%   (see followKeptTrials). Until 2026-10-24 each bin also listed its trials
+%   in EEG.bindesc(b).trials, which this step had to renumber by hand: left
+%   alone, Average failed with an index past the last trial or, where the
+%   old numbers were still in range, averaged the wrong trials. A dataset
+%   that still has those lists is converted first.
 %
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = SelectData(input)        % interactive dialog
@@ -39,6 +40,7 @@ if isempty(args)
     EEG = input;   % nothing selected -> no-op
     return;
 end
+input = TransTools.BinMembership.migrate(input);   % bins on the trials, where pop_select keeps them
 EEG = pop_select(input, args{:});
 if selectsTrials(options)
     EEG = followKeptTrials(EEG, input, keptTrials(input, options));
@@ -105,66 +107,25 @@ end
 
 % ======================================================================= %
 function EEG = followKeptTrials(EEG, input, kept)
-%FOLLOWKEPTTRIALS  Renumber what Alakazam keeps per trial to the trials
-%   pop_select kept: every bin's trial list (followBin) and the per-trial
-%   records in EEG.etc.alz (followRecords).
+%FOLLOWKEPTTRIALS  What Alakazam keeps per trial, cut to the trials
+%   pop_select kept: the per-trial records in EEG.etc.alz (followRecords),
+%   and each bin's count. The bins themselves are on the trials, which
+%   pop_select keeps, except when it leaves a single trial: it then clears
+%   EEG.epoch, and the trial's bins are read from its own event.
     nBefore = size(input.data, 3);
     if numel(kept) ~= size(EEG.data, 3)
         % pop_select chose its trials some other way than keptTrials says.
-        % Renumbering the bins by the wrong list would average the wrong
-        % trials, which is the fault this function exists to prevent.
+        % Cutting the records by the wrong list would pair each trial with
+        % another's, which is the fault this function exists to prevent.
         throw(MException('Alakazam:SelectData', ...
             ['SelectData: I''m afraid EEGLAB kept %d trial(s) where %d were expected, so ' ...
-             'the bins'' trial lists cannot be renumbered to match. Nothing was changed.'], ...
+             'the per-trial records cannot be cut to match. Nothing was changed.'], ...
             size(EEG.data, 3), numel(kept)));
-    end
-    newNumber = zeros(1, nBefore);   % 0 for a trial that was removed
-    newNumber(kept) = 1:numel(kept);
-    if isfield(EEG, 'bindesc') && isstruct(EEG.bindesc) && isfield(EEG.bindesc, 'trials')
-        for b = 1:numel(EEG.bindesc)
-            EEG.bindesc(b) = followBin(EEG.bindesc(b), newNumber);
-        end
     end
     if isfield(EEG, 'etc') && isstruct(EEG.etc) && isfield(EEG.etc, 'alz') && isstruct(EEG.etc.alz)
         EEG.etc.alz = followRecords(EEG.etc.alz, kept, nBefore);
     end
-end
-
-function bin = followBin(bin, newNumber)
-%FOLLOWBIN  One bin's trial list with the removed trials dropped and the
-%   rest renumbered, and its .events, .rt and .n kept in step with it.
-%
-%   .events and .rt run parallel to .trials, one entry per trial the bin
-%   matched, as DefineBins and deriveBinsFromEpochs build them; one that does
-%   not is left alone, since nothing says which of its entries went with a
-%   removed trial. The kept .events are not renumbered: they are rows of the
-%   event table the bins were matched in, a record of which event each trial
-%   was cut around, and EEGLAB's own event checks prune an epoched dataset's
-%   table whatever SelectData does. The live link from a trial to its event,
-%   each event's .epoch, is pop_select's, and it renumbers that itself.
-%
-%   A bin with no list (a combination bin, or one read from
-%   EEG.epoch(t).bini) has nothing to renumber; pop_select subsets
-%   EEG.epoch itself.
-    trials = bin.trials;
-    if isempty(trials)
-        return;
-    end
-    old = double(trials);
-    stays = false(size(old));
-    known = old >= 1 & old <= numel(newNumber) & old == round(old);
-    stays(known) = newNumber(old(known)) > 0;
-    for f = {'events', 'rt'}
-        if isfield(bin, f{1}) && numel(bin.(f{1})) == numel(trials)
-            bin.(f{1}) = bin.(f{1})(stays);
-        end
-    end
-    renumbered = trials(stays);
-    renumbered(:) = newNumber(old(stays));   % keeps the list's own shape and class
-    bin.trials = renumbered;
-    if isfield(bin, 'n') && isnumeric(bin.n)
-        bin.n = numel(renumbered);
-    end
+    EEG = TransTools.BinMembership.recount(EEG);
 end
 
 function alz = followRecords(alz, kept, nBefore)

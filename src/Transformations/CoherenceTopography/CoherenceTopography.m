@@ -119,8 +119,8 @@ end
 % Keep only bins that have real trials: a difference / combination bin has no
 % trials of its own, so coherence (a normalised ratio, not linear across bins)
 % is undefined for it -- don't draw an empty tile for it.
-if isfield(input, 'bindesc') && ~isempty(input.bindesc) && isfield(input.bindesc, 'trials')
-    hasTrials = arrayfun(@(d) isnumeric(d.trials) && ~isempty(d.trials), input.bindesc);
+if isfield(input, 'bindesc') && ~isempty(input.bindesc)
+    hasTrials = arrayfun(@(b) ~isempty(TransTools.BinMembership.of(input, b)), 1:numel(input.bindesc));
     binLabels = {input.bindesc.label};
 else
     hasTrials = true(1, size(coh, 2));

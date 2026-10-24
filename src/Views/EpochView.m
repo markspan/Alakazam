@@ -129,12 +129,15 @@ classdef EpochView < AlakazamView
         function this = EpochView(fig, eeg)
         %EPOCHVIEW  Build the view for an epoched dataset in FIG.
             this.Figure = fig;
+            % Bin membership per trial (written by DefineBins, on the trials:
+            % see TransTools.BinMembership, which also reads an old dataset
+            % whose bins listed their trials). Optional, so epoched datasets
+            % without bins still draw.
+            eeg = TransTools.BinMembership.migrate(eeg);
             this.EEG    = eeg;
             this.Times  = eeg.times;
             this.Labels = {eeg.chanlocs.labels};
 
-            % Bin membership per trial (written by DefineBins). Optional, so
-            % epoched datasets without bins still draw.
             this.HasBins = isfield(eeg, "epoch") && ~isempty(eeg.epoch) ...
                 && isfield(eeg.epoch, "bini");
             if isfield(eeg, "bindesc") && ~isempty(eeg.bindesc)
@@ -695,10 +698,8 @@ classdef EpochView < AlakazamView
         %   more than one row. Trials with no bin membership trail last,
         %   same convention as the default (single-row) mode.
             nTrials = size(this.EEG.data, 3);
-            biniLists = cell(1, nTrials);
-            for t = 1:nTrials
-                biniLists{t} = this.EEG.epoch(t).bini;
-            end
+            biniLists = TransTools.BinMembership.perUnit(this.EEG);
+            biniLists(end + 1:nTrials) = {zeros(1, 0)};
             allBins = sort(unique([biniLists{:}]));
             order = [];
             keys = [];
