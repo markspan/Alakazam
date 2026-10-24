@@ -9,8 +9,8 @@ function mask = IsComboBin(bins)
 %   struct array of .bin and .coeff that is empty for an ordinary bin. A
 %   single bin, EEG.bindesc(b), gives a scalar.
 %
-%   ROBUST TO WHAT A DATASET MAY CARRY. A struct without a .combo field (an
-%   ERPset import, a bindesc from before combination bins existed) has no
+%   ROBUST TO WHAT A DATASET MAY CARRY. A struct without a .combo field (a
+%   dataset made by hand, a bindesc from before combination bins existed) has no
 %   combination bins, so its mask is all false, one per bin; anything that
 %   is not a struct (a dataset with no bins, bindesc = []) gives an empty
 %   mask. Neither is an error, so every caller can index with it directly:

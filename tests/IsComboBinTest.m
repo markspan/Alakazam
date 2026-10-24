@@ -4,7 +4,7 @@ classdef IsComboBinTest < matlab.unittest.TestCase
 %   share.
 %
 %   THE CASES THAT MATTER are the shapes a dataset can arrive in: bins from
-%   DefineBins, a bindesc with no .combo field (an ERPset import), no bins at
+%   DefineBins, a bindesc with no .combo field (made by hand), no bins at
 %   all, and a single bin, since callers ask both of the whole bindesc and of
 %   EEG.bindesc(b). The mask must always be a row of one entry per bin, so
 %   that find() and logical indexing work without reshaping.
