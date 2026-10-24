@@ -4,6 +4,30 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## V0.4.7.3 (2026-10-24)
+
+### Changed
+
+- **Which trials are in a bin is kept in one place: on the trials.** Each
+  trial carries the bins it is in and, beside them, the reaction time each
+  bin captured (`EEG.epoch(t).bini` and `.binrt`; on continuous data the
+  same pair on each event). The bins no longer list their events, trials
+  and reaction times as well, which every step that changed the trials had
+  to keep in step and which readers could believe over the trials' own
+  tags. A trial in two bins now keeps the reaction time of each. Workspaces
+  saved before are read as they were and converted when a step runs on
+  them; there is nothing to do.
+- **The Deconvolve, RESS and Beamformer plugins need this version.**
+  Deconvolve 0.1.5, RESS and Beamformer read the bins through Alakazam
+  rather than in their own way; Install plugins warns when they are
+  installed on an older Alakazam.
+
+### Fixed
+
+- **Running DefineBins again on trials already cut updates their bins.**
+  Without an epoch window it tagged the events again but left each trial
+  with its old bins, so Average and the views went on using those.
+
 ## V0.4.7.2 (2026-10-22)
 
 ### Added
