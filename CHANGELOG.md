@@ -4,6 +4,27 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## V0.4.7.4 (2026-11-02)
+
+### Changed
+
+- **Datasets keep EEGLAB's table of a recording's events, `EEG.urevent`, as
+  EEGLAB does.** It is made at import, or by the next step on the continuous
+  data of a workspace saved before; events a step or a plugin adds get an
+  entry, and events since removed stay in it. So a dataset exported as `.set`
+  still lets EEGLAB's `eeg_context` and `eeg_time2prev` find what came before
+  and after each trial, also events no longer in the dataset. Trials cut before
+  this version have no table until they are cut again from continuous data.
+- **Sort by in the epoch view also offers the next and previous events on
+  trials cut in EEGLAB**, measured from that table.
+- **A grand average no longer carries its first subject's table.**
+
+### Fixed
+
+- **Recalculating the steps below a changed node now runs them as every other
+  run does.** It called them directly, without converting the bins of a saved
+  workspace or keeping per-channel fields in step with the channels.
+
 ## V0.4.7.3 (2026-10-24)
 
 ### Changed
