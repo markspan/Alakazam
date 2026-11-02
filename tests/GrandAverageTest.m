@@ -86,6 +86,38 @@ classdef GrandAverageTest < matlab.unittest.TestCase
         end
 
         % ---- the error band ----------------------------------------------
+        function theGrandAverageHoldsNoTableOfARecording(testCase)
+        %THEGRANDAVERAGEHOLDSNOTABLEOFARECORDING  A subject can carry EEG.urevent,
+        %   and the result starts as a copy of a subject. It is no recording's.
+            testCase.seed(1);
+            files = testCase.randomSubjects([10 20]);
+            loaded = load(files{1});
+            EEG = loaded.EEG;
+            EEG.urevent = struct('type', 'S1', 'latency', 100);
+            save(files{1}, 'EEG');
+
+            average = GrandAverage(files, false);
+
+            testCase.verifyEmpty(average.urevent);
+        end
+
+        function aGrandAverageOfMapsHoldsNoTableEither(testCase)
+            testCase.seed(1);
+            files = testCase.randomSubjects([10 20]);
+            for i = 1:numel(files)
+                loaded = load(files{i});
+                EEG = loaded.EEG;
+                EEG.ersp = randn(4, 3, 5, 2);
+                EEG.urevent = struct('type', 'S1', 'latency', 100);
+                save(files{i}, 'EEG');
+            end
+
+            average = GrandAverage(files, false);
+
+            testCase.verifySize(average.ersp, [4 3 5 2]);
+            testCase.verifyEmpty(average.urevent);
+        end
+
         function withoutWeightingTheBandIsThePlainSem(testCase)
         %WITHOUTWEIGHTINGTHEBANDISTHEPLAINSEM  std / sqrt(N) across the
         %   subjects, whatever their trial counts.

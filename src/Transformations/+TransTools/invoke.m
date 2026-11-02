@@ -56,10 +56,16 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
 %   the step sees it, so no step has to know the old form and what it saves
 %   is in the new one.
 %
+%   AND BOTH KEEP EEGLAB'S TABLE OF ORIGINAL EVENTS, EEG.urevent
+%   (TransTools.AlignUrevents): a recording that has none gets it, and an
+%   event a step added gets its entry, so no step has to know of the table.
+%
 %   See also TRANSTOOLS.INITGUARD, ALAKAZAM.ONTRANSFORMATION,
-%   TRANSTOOLS.ALIGNCHANNELCOMPANIONS, TRANSTOOLS.BINMEMBERSHIP.
+%   TRANSTOOLS.ALIGNCHANNELCOMPANIONS, TRANSTOOLS.BINMEMBERSHIP,
+%   TRANSTOOLS.ALIGNUREVENTS.
     transformId = char(transformId);
     inputEEG = TransTools.BinMembership.migrate(inputEEG);
+    inputEEG = TransTools.AlignUrevents(inputEEG);
 
     if exist(transformId, 'file') ~= 2
         throw(MException('Alakazam:contract:unknownTransformation', ...
@@ -96,6 +102,7 @@ function [EEG, options] = invoke(transformId, inputEEG, params)
     if isstruct(EEG) && isstruct(inputEEG) && isfield(inputEEG, 'chanlocs')
         EEG = TransTools.AlignChannelCompanions(EEG, inputEEG.chanlocs);
     end
+    EEG = TransTools.AlignUrevents(EEG, inputEEG);
 end
 
 % ======================================================================= %

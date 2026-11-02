@@ -26,7 +26,10 @@ function keys = epochSortKeys(EEG)
 %   definition would also drop every trial without that neighbour, which is
 %   wrong for a model that has to see every event; this sorts without
 %   dropping anything, and a trial with no such neighbour in its window goes
-%   last.
+%   last. Trials cut by something else, such as an epoched .set from an EEGLAB
+%   pipeline, have no such table, and are measured here from EEGLAB's own
+%   record of the recording's events, EEG.urevent, through each trial's
+%   time-locking event.
 %
 %   AN EVENT FIELD is any numeric field of each trial's own time-locking
 %   event: an importer's or EYE-EEG's (fixation position, pupil size,
@@ -89,13 +92,11 @@ function keys = neighbourKeys(EEG, nTrials)
 %   the table no longer has one column per trial, since a column that belongs
 %   to another trial is worse than none.
     keys = struct('id', {}, 'label', {}, 'values', {}, 'timeMs', {});
-    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'alz') ...
-            || ~isstruct(EEG.etc.alz) || ~isfield(EEG.etc.alz, 'epochNeighbours')
-        return;
+    context = recordedNeighbours(EEG, nTrials);
+    if isempty(context)
+        context = neighboursFromUrevents(EEG, nTrials);
     end
-    context = EEG.etc.alz.epochNeighbours;
-    if ~isstruct(context) || ~all(isfield(context, {'types', 'next', 'previous'})) ...
-            || size(context.next, 2) ~= nTrials || size(context.previous, 2) ~= nTrials
+    if isempty(context)
         return;
     end
     for k = 1:numel(context.types)
@@ -107,6 +108,81 @@ function keys = neighbourKeys(EEG, nTrials)
         if varies(context.previous(k, :))
             keys(end + 1) = struct('id', ['previous:' name], 'label', ['Previous ' name ' (ms)'], ...
                 'values', context.previous(k, :), 'timeMs', true); %#ok<AGROW>
+        end
+    end
+end
+
+function context = recordedNeighbours(EEG, nTrials)
+%RECORDEDNEIGHBOURS  The table measured when the trials were cut, [] when
+%   there is none, or it no longer fits the trials.
+    context = [];
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc) || ~isfield(EEG.etc, 'alz') ...
+            || ~isstruct(EEG.etc.alz) || ~isfield(EEG.etc.alz, 'epochNeighbours')
+        return;
+    end
+    recorded = EEG.etc.alz.epochNeighbours;
+    if isstruct(recorded) && all(isfield(recorded, {'types', 'next', 'previous'})) ...
+            && size(recorded.next, 2) == nTrials && size(recorded.previous, 2) == nTrials
+        context = recorded;
+    end
+end
+
+function context = neighboursFromUrevents(EEG, nTrials)
+%NEIGHBOURSFROMUREVENTS  The same table measured from EEG.urevent: each trial's
+%   time zero is where its time-locking event lay in the recording. [] when
+%   the dataset has no such table, or no trial's event points into it. A trial
+%   whose event does not point into it has no neighbours.
+    context = [];
+    if ~isfield(EEG, 'urevent') || ~isstruct(EEG.urevent) || isempty(EEG.urevent) ...
+            || ~isfield(EEG.urevent, 'latency') || ~isfield(EEG, 'event') ...
+            || ~isfield(EEG.event, 'urevent') || ~isfield(EEG, 'srate') || ~isfield(EEG, 'times')
+        return;
+    end
+    zero = nan(1, nTrials);
+    for t = 1:nTrials
+        anchor = zeroEvent(EEG, t);
+        if anchor > 0
+            p = EEG.event(anchor).urevent;
+            if isnumeric(p) && isscalar(p) && p >= 1 && p <= numel(EEG.urevent)
+                zero(t) = double(EEG.urevent(p).latency);
+            end
+        end
+    end
+    if all(isnan(zero))
+        return;
+    end
+    context = TransTools.EpochNeighbours(EEG.urevent, zero, EEG.srate, EEG.times([1 end]));
+end
+
+function anchor = zeroEvent(EEG, t)
+%ZEROEVENT  The event at trial T's time zero, 0 if it has none. An epoch that
+%   holds several events lists them all, as pop_epoch and eeg_checkset leave
+%   it, with each one's latency in the epoch beside it.
+    anchor = 0;
+    if ~isfield(EEG, 'epoch') || numel(EEG.epoch) < t || ~isfield(EEG.epoch, 'event')
+        return;
+    end
+    events = EEG.epoch(t).event;
+    if iscell(events)
+        events = [events{:}];
+    end
+    if isscalar(events)
+        if isnumeric(events) && events >= 1 && events <= numel(EEG.event)
+            anchor = events;
+        end
+        return;
+    end
+    if isempty(events) || ~isfield(EEG.epoch, 'eventlatency')
+        return;
+    end
+    latency = EEG.epoch(t).eventlatency;
+    if iscell(latency)
+        latency = [latency{:}];
+    end
+    if isnumeric(latency) && numel(latency) == numel(events)
+        at = find(abs(latency) < 1e-6, 1);
+        if ~isempty(at) && events(at) >= 1 && events(at) <= numel(EEG.event)
+            anchor = events(at);
         end
     end
 end

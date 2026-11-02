@@ -174,7 +174,10 @@ end
   bypasses it. It also brings the per-channel arrays of the result
   (`stErr`, `aSME`, `etc.alz.interpolated`) in step with its channels, by
   label (`TransTools.AlignChannelCompanions`), so a step that adds or drops
-  channels with EEGLAB's own functions need not know they exist.
+  channels with EEGLAB's own functions need not know they exist. In the same
+  way it keeps EEGLAB's table of the recording's original events, `EEG.urevent`
+  (`TransTools.AlignUrevents`): an event a step adds gets its entry and
+  pointer, by EEGLAB's rules, and a removed one leaves the table alone.
 - **Options are plain data**, never a command string that is `eval`'d.
   Channels and bins are stored by **label**, not index, and resolved against
   the dataset at compute time, so a stored choice replays on another subject

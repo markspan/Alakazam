@@ -30,6 +30,7 @@ function loadRawFile(this, name, format)
         elseif ~isempty(EEG.times) && max(abs(EEG.times(:))) < 10
             EEG.times = EEG.times * 1000;   % epoched times in seconds, as loadSETFile
         end
+        EEG = TransTools.AlignUrevents(EEG);   % the table not every reader makes
         EEG = deriveBinsFromEpochs(EEG);
         EEG.etc.alz.importedWith = struct('format', format.name, 'reader', reader);
         EEG.id = id;

@@ -226,7 +226,8 @@ The up and down arrow keys, or the mouse wheel, step the channel.
 
 **Sort by** orders the trials by a value each one carries: the time to the
 next or the previous event of any type (**Next saccade**, **Previous
-stimonset**), measured when the trials were cut; the reaction time
+stimonset**), measured when the trials were cut, or for trials cut in EEGLAB,
+from the original event table the dataset carries; the reaction time
 DefineBins captured for the trial's bin; or any numeric field of the
 trial's own event, such as a fixation's duration or a saccade's amplitude
 from an eye tracker. When the value is a time, it is drawn across the image

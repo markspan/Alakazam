@@ -55,7 +55,7 @@ function EEG = binsAsEpochs(EEG)
     EEG.trials = nBins;
     EEG.event = struct('type', labels, 'latency', num2cell((0:nBins - 1) * EEG.pnts + zero), ...
         'epoch', num2cell(1:nBins));
-    EEG.urevent = [];
+    EEG.urevent = [];   % these events are bins, not events of a recording
     EEG.epoch = [];
     if isfield(EEG, 'EVENTLIST')
         EEG = rmfield(EEG, 'EVENTLIST');
