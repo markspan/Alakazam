@@ -63,6 +63,13 @@ as the reference implementation. Every report states which estimator its
 coherence values used, and a node made with one estimator keeps it when
 recalculated.
 
+**Trial counts.** Coherence and inter-trial coherence are biased upwards by few
+trials: on unrelated signals coherence averages $1/N$, .050 at 20 trials and .010
+at 100, and two conditions with different counts differ for that reason alone
+[@bastos2016; @keil2022]. The coherence report draws that chance line. To compare
+such conditions directly, tick **Equalise trials across bins**, which averages
+over random subsets that give every bin the same number of trials.
+
 ### A component instead of an electrode
 
 Reading the response at Oz, or at wherever it looks strongest, is a choice

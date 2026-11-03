@@ -37,6 +37,16 @@ decision before anything changes), **won't fix** (decided to leave as is).
 | M24 | fixed | Data quality | Rectification is now reported |
 | M25 | fixed | Spectral view | Now keeps the bin as well as the channel |
 | M26 | fixed | TimeFrequency | Edge samples entered the baseline, and the baseline was the mean of dB |
+| M27 | fixed | Cluster statistics | A two-tailed test was read against the whole alpha: 12.0% false positives against 5.5% |
+| M28 | fixed | Statistics report | Recordings counted as people in the tests with no person term |
+| M29 | fixed | Statistics report | The slope model never fits averaged data; sphericity was assumed unsaid; Huynh-Feldt added |
+| M30 | fixed | Statistics report | Session designs lacked a person-by-session term; the single-trial fallback dropped the condition |
+| M31 | fixed | Statistics report | Normality test chose the test, on pooled values; "rank-biserial" was not; BCa at 200, unseeded |
+| M32 | fixed | Data quality | The SME was of a different score from Measure's; pools got no SME |
+| M33 | fixed | Grand Average | Channels paired by position; time axes unchecked; empty bins blanked in silence |
+| M34 | fixed | Coherence | CohTopo after a rejected trial; filter-Hilbert edges; window coherence; newcrossf lag; trial counts |
+| M35 | fixed | Spectra | Welch across boundaries; SNR neighbours held other tags; Fourier rejection and phase |
+| M36 | open | Fourier | The Volt scale depends on the other channels and on the taper (the user is checking it against Analyzer) |
 
 ---
 
@@ -523,3 +533,26 @@ contrast, is not.
   search (the **Local pts** column provides one).
 - `bin_language.md` said combination coefficients must be integers; the
   parser accepts fractions (`0.5 bin 1 + 0.5 bin 2`).
+
+---
+
+## The audit of 2 November 2026
+
+M27 to M36 came from reading the numerical core and running each suspect on the
+real code; none were found by the manual work. The measurements are in the
+CHANGELOG entry, and the tests in `TwoTailedClusterTest`, `GrandAverageLineUpTest`,
+`RejectedTrialSpectraTest`, `ErpScoreAgainstMeasureTest` and `ReportStatsHelpersTest`.
+
+### M36. The Volt scale
+
+*Status: open, left as it was at the user's request: they are checking it against
+BrainVision Analyzer.*
+
+`Fourier`'s Volt, Power and density outputs divide the window by `var(x) / var(w .* x)`,
+where `var` of a matrix runs across CHANNELS at each sample and `/` is matrix right
+division, so one number per segment. An amplitude-1 sine at an FFT bin reads .188
+alone under the default Hanning taper, .348 with white noise on a second channel,
+.0012 or .496 with a burst on a second channel at the epoch's edge or centre, and 1.000
+untapered. The manual (chapter 10) says a sinusoid of amplitude *A* reads *A*, which
+holds only untapered. PSD does not use this scale and is not affected. Analyzer's manual
+in `Docs/` does not describe such a ratio.

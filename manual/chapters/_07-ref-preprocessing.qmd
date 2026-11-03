@@ -453,6 +453,11 @@ be compared [@luckApplied; @kappenman2021]. An average reference assumes
 dense and even coverage of the head, which a 32-channel cap only
 approximates [@dien1998].
 
+**After rejection.** `pop_reref` multiplies each trial by one matrix, and a
+channel that is missing in a trial enters the average every channel subtracts.
+So a channel rejected in one trial leaves that trial blank on every channel. That
+is EEGLAB's behaviour and is kept; re-referencing before rejecting avoids it.
+
 ## Interpolate {#sec-tr-interpolate}
 
 *Tools > 1. Preprocessing > Interpolate · continuous or epoched → the same ·

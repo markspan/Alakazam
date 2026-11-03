@@ -60,6 +60,21 @@ these channels".
 
 : A cluster test's options. {#tbl-cluster-options}
 
+**A two-tailed *p* is doubled.** FieldTrip counts each tail on its own, so a
+*p* compared with .05 as it stands tests at .10. Alakazam asks it to double the
+probabilities (`correcttail = 'prob'`), so the *p* in the report is the one to
+read against the stated level. A report made before this used FieldTrip's other
+correction, which leaves the *p* per tail, and read it against the whole level,
+so that on null data it called a cluster significant in 12.0% of runs where
+FieldTrip's own mask did in 5.5%. Clusters reported as significant there with
+*p* between .025 and .05 were not.
+
+**Each person is one subject.** Where a person was recorded more than once,
+their recordings are averaged before the test, since a permutation test takes
+its units to be exchangeable; the report says so. Every subject needs the same
+channels, in any order, since FieldTrip lines them up by label, and the same
+time axis.
+
 Tests of three or more bins or groups at once (an omnibus or interaction
 test) are not yet supported. The smallest *p* a test can return is
 $1/(P+1)$ for $P$ permutations, so "*p* < .001" from 1000 permutations is the
