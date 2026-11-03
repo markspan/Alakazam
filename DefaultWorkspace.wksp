@@ -1,5 +1,5 @@
 {
-  "RawDirectory": "~/Desktop/partA/",
+  "RawDirectory": "~/Documents/GitHub/Alakazam/Data/ds006848/Rest/",
   "CacheDirectory": "~/Documents/GitHub/Alakazam/Data/Cache/",
   "ExportsDirectory": "~/Documents/GitHub/Alakazam/Data/Exports/",
   "TransformSettings": {
@@ -7,7 +7,8 @@
     "Baseline": {
       "Start": -100,
       "Stop": 0
-    }
+    },
+    "DefineBins": []
   },
   "Groups": []
 }
