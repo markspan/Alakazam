@@ -13,6 +13,7 @@ if (nrow(model_all) > 0) {
 effects_all <- bind_rows(effects_list)
 if (nrow(effects_all) > 0) {
   cat(as_raw_html(blank_missing(apa_gt(effects_all, "__ANOVA_TABLE_TITLE__"))))
+  if ("p_HF" %in% names(effects_all)) cat(sprintf("\n*%s*\n\n", "__CAPTION_HF__"))
 }
 
 bf_all <- bind_rows(bf_list)

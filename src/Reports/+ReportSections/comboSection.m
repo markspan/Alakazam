@@ -1,7 +1,7 @@
 function block = comboSection(windowLabel, measureType, comboLabel, recipeText)
 %COMBOSECTION  One combination (difference) bin. For most measure types: a
-%   one-sample t-test against zero -- or, when the values depart from
-%   normality, a Wilcoxon signed-rank test against zero instead. Run
+%   one-sample t-test against zero, with a Wilcoxon signed-rank test beside it
+%   as a check, on one value per person. Run
 %   entirely separately from the omnibus test above, never as one more
 %   level within it (see this file's own header comment for why that would
 %   be statistically invalid). For a LATENCY or CIRCULAR measure type (see

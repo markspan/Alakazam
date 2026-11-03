@@ -38,14 +38,15 @@ if (!exists("tdat") || is.null(tdat) || nrow(tdat) == 0) {
          mutate(trial_c = as.numeric(scale(trial))) %>% ungroup()
     d$trial_c[!is.finite(d$trial_c)] <- 0   # a person with one trial has no spread
 
-    # MAXIMAL FIRST, THEN REDUCED IN THE ORDER THAT COSTS LEAST.
-    # Barr et al. (2013) argue for the maximal structure the design
-    # justifies; Bates et al. (2015) show that when it will not stand up
-    # the correlation between random terms is what to drop FIRST, since
-    # it is the parameter the data can least afford, and only then the
-    # slope itself. Going straight from slopes to intercepts, as an
-    # earlier version of this section did, discards a model the data may
-    # well support.
+    # MAXIMAL FIRST, THEN REDUCED IN THE ORDER THAT COSTS LEAST. Barr et al.
+    # (2013) argue for the maximal structure the design justifies. Dropping the
+    # slopes altogether is what costs most: with slopes in the data and none in
+    # the model this gave .193 false positives at .05, as Scandola & Tidoni (2024)
+    # warn. So the middle step keeps the condition in the random structure, as an
+    # intercept per person per condition, their "complex random intercept": .030
+    # on the same data. It is not (1 + bin || person_id), which for a factor does
+    # not give uncorrelated slopes: lme4 expands it to correlated terms for every
+    # level, which is more parameters rather than fewer.
     fit <- function(f) tryCatch(suppressMessages(suppressWarnings(
              lmerTest::lmer(f, data = d))), error = function(e) NULL)
     ok <- function(mm) !is.null(mm) && !isSingular(mm)
@@ -53,11 +54,11 @@ if (!exists("tdat") || is.null(tdat) || nrow(tdat) == 0) {
     structure_used <- "Random intercepts and correlated slopes"
     m <- fit(value ~ bin + trial_c + (1 + bin | person_id))
     if (!ok(m)) {
-      structure_used <- "Random intercepts and uncorrelated slopes"
-      m <- fit(value ~ bin + trial_c + (1 + bin || person_id))
+      structure_used <- "Random intercepts per person and per person by condition (the slopes would not fit)"
+      m <- fit(value ~ bin + trial_c + (1 | person_id) + (1 | person_id:bin))
     }
     if (!ok(m)) {
-      structure_used <- "Random intercepts only (maximal model was singular)"
+      structure_used <- "Random intercepts only (nothing richer would fit; the test of condition may be too liberal)"
       m <- fit(value ~ bin + trial_c + (1 | person_id))
     }
 

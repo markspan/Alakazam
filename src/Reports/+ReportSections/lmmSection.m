@@ -16,10 +16,16 @@ function block = lmmSection(windowLabel, measureType, binLabels, plan)
 %   subject to have every bin and drops anyone missing even one; an LMM
 %   fits on every non-missing (subject, bin) observation, so a subject
 %   missing one bin still contributes their other bins rather than being
-%   excluded from the channel entirely. The maximal random structure a
-%   design justifies is fitted first (random intercept AND slope for bin,
-%   Barr et al., 2013), falling back to intercept-only if that does not
-%   converge to a non-singular fit, and the report says which was used.
+%   excluded from the channel entirely.
+%
+%   SLOPES NEED REPLICATES. With one value per person per bin, which is what
+%   an average gives, a slope cannot be separated from the residual (Barr,
+%   2013) and lme4 refuses the model, so a random intercept is what is fitted,
+%   and the report says why. That is the uncorrected repeated-measures ANOVA
+%   when the data are complete (the F is identical), with its sphericity
+%   assumption, so the table adds the Huynh-Feldt p on the complete cases,
+%   and that p is what the summary and the post-hoc gate read. Only session
+%   designs have replicates, and there slopes are tried first.
 %
 %   GROUPED BY PERSON, NOT BY RECORDING. The random effect is on person_id.
 %   Where nobody has set a person, WorkSpace.personFor returns the
@@ -92,6 +98,7 @@ function block = lmmSection(windowLabel, measureType, binLabels, plan)
     text = strrep(text, '__BF_TABLE_TITLE__', view.bfTableTitle);
     text = strrep(text, '__CAPTION_LMM__', ReportSections.rLit(ReportSections.testCaption('lmm')));
     text = strrep(text, '__CAPTION_LMM_BF__', ReportSections.rLit(ReportSections.testCaption('lmm_bf')));
+    text = strrep(text, '__CAPTION_HF__', ReportSections.rLit(ReportSections.testCaption('lmm_hf')));
     text = strrep(text, '__CAPTION_POSTHOC__', ReportSections.rLit(ReportSections.testCaption(postHocCaption(view.postHoc))));
     text = strrep(text, '__CAPTION_EMMEANS__', ReportSections.rLit(ReportSections.testCaption('emmeans_holm')));
     text = strrep(text, '__NBINS__', num2str(numel(binLabels)));

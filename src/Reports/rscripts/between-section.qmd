@@ -7,6 +7,7 @@ Single condition ("__BIN1_MD__"), compared between the between-subjects groups.
 #| results: asis
 grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__BIN1_R__") %>% droplevels()
 __BLOCKMATCHDIAGNOSTIC__
+grp <- per_person(grp)
 
 descr_list <- list()
 res2_list <- list()
@@ -27,38 +28,31 @@ for (ch in unique(grp$channel)) {
     mutate(channel = ch, .before = 1)
 
   if (n_groups == 2) {
-    # Not narrated -- used only to choose which test below to report.
-    shap <- tryCatch(shapiro.test(d$value), error = function(e) NULL)
-    use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
-
-    if (use_parametric) {
-      tt <- t.test(value ~ group, data = d)
-      # The bootstrap CI can fail on degenerate data (e.g. near-constant
-      # values in one group) with an R error rather than a clean NA --
-      # caught here so that failure only blanks the CI, not this
-      # channel's whole result.
-      eff <- tryCatch(d %>% rstatix::cohens_d(value ~ group, ci = TRUE, ci.type = "bca", nboot = 200),
-                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
-      bf <- bf10_ttest(formula = value ~ group,
-                       data = as.data.frame(d %>% mutate(group = droplevels(factor(group)))))
-      res2_list[[ch]] <- tibble(Channel = ch, Test = "Welch two-sample t-test", Statistic = unname(tt$statistic), df = apa_num(unname(tt$parameter), 1),
-                    p = apa_p(tt$p.value), Effect = "Cohen's d", Estimate = eff$effsize,
-                    CI_low = eff$conf.low, CI_high = eff$conf.high,
-                    BF10 = fmt_bf(bf), Evidence = bf_word(bf))
-      p_grp <- tt$p.value
-      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "indep_t", test = "welch_t_test", p = p_grp,
-                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
-    } else {
-      wt <- wilcox.test(value ~ group, data = d, conf.int = TRUE)
-      eff <- tryCatch(d %>% rstatix::wilcox_effsize(value ~ group, ci = TRUE),
-                       error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
-      res2_list[[ch]] <- tibble(Channel = ch, Test = "Mann-Whitney U", Statistic = unname(wt$statistic), df = "--",
-                    p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
-                    CI_low = eff$conf.low, CI_high = eff$conf.high)
-      p_grp <- wt$p.value
-      omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "indep_t", test = "mann_whitney_u", p = p_grp,
-                                            estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    # The test of record and its check, both, always (see paired-section.qmd). The
+    # Shapiro-Wilk p is of the values about their own group's mean: the raw values
+    # of two groups pooled are bimodal exactly when the groups differ, and were
+    # choosing the rank test for 77% of samples at d = 4.
+    lv <- levels(droplevels(factor(d$group)))
+    tt <- t.test(value ~ group, data = d)
+    eff <- cohens_d_ci(d$value[d$group == lv[1]], d$value[d$group == lv[2]])
+    bf <- bf10_ttest(formula = value ~ group,
+                     data = as.data.frame(d %>% mutate(group = droplevels(factor(group)))))
+    res2 <- tibble(Channel = ch, Test = "Welch two-sample t-test", Statistic = unname(tt$statistic), df = apa_num(unname(tt$parameter), 1),
+                   p = apa_p(tt$p.value), Effect = "Cohen's d", Estimate = eff$effsize,
+                   CI_low = eff$conf.low, CI_high = eff$conf.high,
+                   BF10 = fmt_bf(bf), Evidence = bf_word(bf),
+                   Shapiro_Wilk_p = shapiro_note(d$value - ave(d$value, d$group)))
+    p_grp <- tt$p.value
+    omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "indep_t", test = "welch_t_test", p = p_grp,
+                                          estimate = eff$effsize, conf.low = eff$conf.low, conf.high = eff$conf.high))
+    wt <- tryCatch(suppressWarnings(wilcox.test(value ~ group, data = d, conf.int = TRUE)), error = function(e) NULL)
+    if (!is.null(wt)) {
+      rb <- rank_biserial_ci(value ~ group, data = d)
+      res2 <- bind_rows(res2, tibble(Channel = ch, Test = "Mann-Whitney U", Statistic = unname(wt$statistic), df = "--",
+                                     p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = rb$effsize,
+                                     CI_low = rb$conf.low, CI_high = rb$conf.high))
     }
+    res2_list[[ch]] <- res2
   } else {
     # Welch's one-way ANOVA, not the classic (Fisher) one -- it does not
     # assume equal variances across groups, which is routinely violated

@@ -1,10 +1,8 @@
 function lines = vsZeroLines(includeVsZero)
 %VSZEROLINES  The per-group one-sample-vs-zero test, spliced into
 %   comboSectionGrouped's own per-channel loop when INCLUDEVSZERO -- {}
-%   (no-op) otherwise. Each group is tested with a t-test, or -- when that
-%   group's own values depart from normality -- a Wilcoxon signed-rank
-%   test instead; picked independently per group, since one group's
-%   distribution says nothing about another's.
+%   (no-op) otherwise. Each group is tested with a t-test, with a Wilcoxon
+%   signed-rank test beside it as a check.
 %
 %   Appends its result (one row per group, tagged with the current
 %   channel) to the CALLER's vszero_list[[ch]] rather than printing

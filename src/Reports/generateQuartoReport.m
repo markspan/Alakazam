@@ -36,18 +36,20 @@
 %       comparison is possible.
 %     - 1 ordinary bin, 2+ groups: a between-subjects test (Welch t /
 %       Welch ANOVA + Games-Howell), betweenSection.
-%     - 2 ordinary bins, nothing else: a paired t-test + Cohen's dz, or a
-%       Wilcoxon signed-rank test + rank-biserial r when a silent Shapiro-Wilk
-%       check finds the differences non-normal. Only the chosen test is shown.
+%     - 2 ordinary bins, nothing else: a paired t-test + Cohen's dz, and a
+%       Wilcoxon signed-rank test + rank-biserial r beside it. The Shapiro-Wilk
+%       p describes the differences and chooses nothing.
 %     - Any other multi-bin design: lmmSection, a linear mixed model whose
 %       fixed effects come from the plan -- bin, bin * group, bin * session,
 %       or (bin + session + group)^2 (every main effect and every two-way
 %       interaction; the three-way is deliberately omitted). Random effect
-%       (1 + bin | person_id), falling back to an intercept-only model on a
-%       singular fit, and to a simpler FIXED structure, with the reason
-%       printed, when the recordings cannot support session.
+%       (1 + bin | person_id) where a person has replicates of a condition (the
+%       session designs, which also get (1 | person_id:session)), otherwise an
+%       intercept with the Huynh-Feldt p beside the model's; and a simpler FIXED
+%       structure, with the reason printed, when the recordings cannot support
+%       session.
 %     - Each COMBINATION (difference) bin, separately: a one-sample t-test
-%       (or Wilcoxon, chosen the same way) against zero -- never folded into
+%       and a Wilcoxon beside it against zero, on one value per person, never folded into
 %       the omnibus test above, since a combination bin is computed from the
 %       OTHER bins' waveforms, not an independent condition, so including it
 %       there would be statistically invalid.
@@ -707,7 +709,8 @@ function text = preambleText(csvFileName, reportTitle, groupColumn, hasGroups, p
         '```' ...
         }, ...
         groupsSummaryChunk(hasGroups), ...
-        designNoteLines(plan)]);
+        designNoteLines(plan), ...
+        repeatedPeopleLines(plan)]);
     text = strrep(strjoin(lines, newline), '__CSVFILE_R__', ReportSections.rLit(csvFileName));
 end
 
@@ -722,6 +725,29 @@ function lines = groupFilterLines(hasGroups)
         return;
     end
     lines = ReportDoc.template('preamble-omnibus-tail.Rpart');
+end
+
+function lines = repeatedPeopleLines(plan)
+%REPEATEDPEOPLELINES  Says so when a person was recorded more than once: every
+%   test with no person term then averages that person's recordings first
+%   (per_person in the setup chunk), and a mixed model has the person in it.
+%   Plain markdown, as designNoteLines is: there is nothing to compute.
+    lines = {};
+    nPeople = plan.nPeople;
+    nRecordings = plan.nRecordings;
+    if nRecordings <= nPeople
+        return;
+    end
+    lines = { ...
+        '' ...
+        '::: {.callout-note}' ...
+        '## People recorded more than once' ...
+        '' ...
+        sprintf(['These %d recordings come from %d people. A test with no person term ' ...
+            '(a *t*-test, a Wilcoxon, a Welch ANOVA) takes its rows to be independent, so it ' ...
+            'runs on one value per person, the mean of that person''s recordings.'], ...
+            nRecordings, nPeople) ...
+        ':::'};
 end
 
 function lines = designNoteLines(plan)

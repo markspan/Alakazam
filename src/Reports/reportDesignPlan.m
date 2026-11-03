@@ -26,6 +26,7 @@ function plan = reportDesignPlan(design)
 %     .sessionLevels / .groupLevels
 %     .usedFallback    true when a richer model was available but not fitted
 %     .fallbackReason  why, in a sentence the report prints verbatim
+%     .nPeople / .nRecordings  how many of each the design holds
 %
 %   THREE DECISIONS ARE FIXED HERE, DELIBERATELY.
 %
@@ -58,11 +59,13 @@ function plan = reportDesignPlan(design)
         'fixed', 'bin', 'random', '(1 + bin | person_id)', ...
         'randomFallback', '(1 | person_id)', ...
         'sessionLevels', {{}}, 'groupLevels', {{}}, ...
-        'usedFallback', false, 'fallbackReason', '');
+        'usedFallback', false, 'fallbackReason', '', 'nPeople', 0, 'nRecordings', 0);
 
     if isempty(design.persons)
         return;
     end
+    plan.nPeople = numel(design.persons);
+    plan.nRecordings = sum(arrayfun(@(p) numel(p.recordings), design.persons));
 
     groupLevels = levelsOf(design, 'group');
     sessionLevels = levelsOf(design, 'session');
@@ -80,6 +83,15 @@ function plan = reportDesignPlan(design)
     if useSession
         plan.sessionLevels = sessionLevels;
         plan.withinFactors = {'bin', 'session'};
+        % ONE PERSON'S VALUES WITHIN A SESSION SHARE THAT SESSION: the cap, the
+        % impedances, the day. Without this term the model tests session against
+        % the residual, on about 75 degrees of freedom for 16 people, and on data
+        % with no session effect it gave .19 false positives at .05; with it,
+        % .037, on about 15. The main effect has to be tested against how far it
+        % varies between people (Scandola & Tidoni, 2024, on keeping every
+        % within-subjects effect in the random structure).
+        plan.random = [plan.random ' + (1 | person_id:session)'];
+        plan.randomFallback = [plan.randomFallback ' + (1 | person_id:session)'];
     elseif numel(sessionLevels) >= 2
         plan.usedFallback = true;
         plan.fallbackReason = reason;

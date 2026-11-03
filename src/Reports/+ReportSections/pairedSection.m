@@ -1,8 +1,9 @@
 function block = pairedSection(windowLabel, measureType, bin1, bin2)
-%PAIREDSECTION  Exactly two ordinary bins: a paired t-test, or -- when the
-%   within-subject differences depart from normality -- a Wilcoxon
-%   signed-rank test instead. Shapiro-Wilk decides which one is reported;
-%   only one test is ever shown, not both plus a Bayes factor.
+%PAIREDSECTION  Exactly two ordinary bins: a paired t-test with its Bayes
+%   factor, and a Wilcoxon signed-rank test beside it as a check. Both are
+%   always shown, and the Shapiro-Wilk p only describes the differences: a
+%   normality test used to choose between them distorts the error rates of
+%   the test that follows it (Rochon et al., 2012).
 %
 %   CLUSTERED ACROSS CHANNELS: one descriptives table, one results table
 %   and one faceted plot for the whole window/measure block, not one of

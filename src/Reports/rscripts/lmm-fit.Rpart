@@ -1,6 +1,14 @@
 
-  m <- tryCatch(lmerTest::lmer(value ~ __FIXED__ + __RANDOM__, data = d,
-                               control = lme4::lmerControl(optimizer = "bobyqa")), error = function(e) NULL)
+  # SLOPES NEED REPLICATES. With one value per person per condition a slope
+  # cannot be told from the residual (Barr, 2013), and lme4 refuses the model
+  # outright, so it is not tried. What is left is a random intercept, which
+  # assumes sphericity; see huynh_feldt below for what is done about that.
+  replicated <- anyDuplicated(d[c("person_id", "bin")]) > 0
+  m <- NULL
+  if (replicated) {
+    m <- tryCatch(lmerTest::lmer(value ~ __FIXED__ + __RANDOM__, data = d,
+                                 control = lme4::lmerControl(optimizer = "bobyqa")), error = function(e) NULL)
+  }
   used_maximal <- !is.null(m) && !lme4::isSingular(m)
   if (is.null(m) || lme4::isSingular(m)) {
     m <- tryCatch(lmerTest::lmer(value ~ __FIXED__ + __RANDOM_FALLBACK__, data = d,
@@ -14,8 +22,14 @@
   if (is.null(m)) {
     model_list[[ch]] <- tibble(Channel = ch, Model = "Did not fit", N_subjects = n_distinct(d$person_id), Marginal_R2 = NA_real_)
   } else {
-    model_desc <- if (used_maximal) "Random intercept + slope" else "Random intercept only (maximal model was singular)"
+    model_desc <- if (used_maximal) "Random intercept + slope"
+                  else if (!replicated) "Random intercept (one value per person per condition, so no slope can be separated from error)"
+                  else "Random intercept (the model with slopes would not fit, or was singular)"
     aov_tab <- as.data.frame(anova(m))
+    fixed_vars <- all.vars(~ __FIXED__)
+    # Only where slopes could not carry the sphericity assumption away.
+    hf <- if (used_maximal) NULL else huynh_feldt(d, intersect(c("bin", "session"), fixed_vars), intersect("group", fixed_vars))
+    friedman_p <- if (identical(fixed_vars, "bin")) friedman_note(d) else ""
     for (eff in c(__EFFECT_VECTOR__)) {
       if (eff %in% rownames(aov_tab)) {
         effRow <- aov_tab[eff, ]
@@ -34,12 +48,27 @@
           Partial_eta2 = if (is.null(eta_eff)) NA_real_ else eta_eff$Eta2_partial,
           CI_low = if (is.null(eta_eff)) NA_real_ else eta_eff$CI_low,
           CI_high = if (is.null(eta_eff)) NA_real_ else eta_eff$CI_high)
+        # WHICH p GOES ON. Where the term has a correction, the summary below and
+        # the post-hoc gate read the corrected p: they are what control the error
+        # rate, and it is the one that holds if sphericity does not. The table
+        # shows both, and how many people the correction rests on.
+        eff_used <- eff_p
+        hf_row <- if (is.null(hf)) NULL else hf[hf$key == term_key(eff), ]
+        if (!is.null(hf_row) && nrow(hf_row) == 1) {
+          effects_list[[paste(ch, eff)]]$HF_epsilon <- hf_row$epsilon
+          effects_list[[paste(ch, eff)]]$p_HF <- apa_p(hf_row$p)
+          effects_list[[paste(ch, eff)]]$N_complete <- hf_row$n_complete
+          eff_used <- hf_row$p
+        }
+        if (eff == "bin" && nzchar(friedman_p)) {
+          effects_list[[paste(ch, eff)]]$Friedman_p <- friedman_p
+        }
         if (eff == "__HEADLINE_EFFECT__") {
-          p_head <- eff_p
+          p_head <- eff_used
           eta_head <- eta_eff
         }
         if (eff == "bin") {
-          p_bin <- eff_p
+          p_bin <- eff_used
         }
       }
     }
