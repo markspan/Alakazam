@@ -180,7 +180,7 @@ classdef DimigenRiftTemplateTest < matlab.unittest.TestCase
 
             testCase.assertTrue(isfield(final, 'bindesc') && numel(final.bindesc) == 4, ...
                 'Expected 4 bins: RIFT 64Hz, SSVEP 30Hz, RIFT 60Hz, RIFT 60Hz peripheral.');
-            counts = cellfun(@numel, {final.bindesc.trials});
+            counts = arrayfun(@(b) numel(TransTools.BinMembership.of(final, b)), 1:numel(final.bindesc));
             testCase.verifyEqual(sum(counts), final.trials);
             % Subject 1 is in the 1-3 group (30Hz SSVEP control): that bin
             % should be populated, and the 4-10 group's peripheral-RIFT bin
