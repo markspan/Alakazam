@@ -93,6 +93,7 @@ classdef Alakazam < handle
         bins = candidateBinLabels(this, candidateFiles)
         epochMs = candidateEpochMs(this, candidateFiles)
         groups = candidateGroupLabels(this, candidateFiles)
+        persons = candidatePersonLabels(this, candidateFiles)
         entries = collectMeasurementEntries(this)
         entries = collectSpectralEntries(this)
         entries = collectEntriesWithField(this, fieldName)

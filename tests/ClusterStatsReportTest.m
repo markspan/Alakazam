@@ -59,6 +59,20 @@ classdef ClusterStatsReportTest < matlab.unittest.TestCase
                 'clusterStat', masses);
         end
 
+        function verifyTheHeadlineSaysHowItWasTested(testCase, correctm)
+            summary = testCase.summaryFixture(correctm, true);
+            txt = generateClusterStatsReport(summary, 'stat.csv', 'wave.csv', 'out.csv', 'null.csv');
+            testCase.verifySubstring(txt, 'twice the share');
+            testCase.verifySubstring(txt, '*p* <= .05');
+            testCase.verifyFalse(contains(txt, 'recordings of one person'));
+            summary.nRecordings = 24;
+            txt = generateClusterStatsReport(summary, 'stat.csv', 'wave.csv', 'out.csv', 'null.csv');
+            testCase.verifySubstring(txt, '18 subject(s) (from 24 recordings');
+            summary.opts.tail = 1;
+            txt = generateClusterStatsReport(summary, 'stat.csv', 'wave.csv', 'out.csv', 'null.csv');
+            testCase.verifyFalse(contains(txt, 'twice the share'), 'One tail is not doubled.');
+        end
+
         function txt = build(testCase, correctm, withMass)
             txt = generateClusterStatsReport(testCase.summaryFixture(correctm, withMass), ...
                 'stat.csv', 'wave.csv', 'outline.csv', 'null.csv');
@@ -66,6 +80,10 @@ classdef ClusterStatsReportTest < matlab.unittest.TestCase
     end
 
     methods (Test)
+        function theHeadlineSaysHowItWasTested(testCase)
+            testCase.verifyTheHeadlineSaysHowItWasTested('cluster');
+        end
+
         function everyEmittedChunkParses(testCase)
         %EVERYEMITTEDCHUNKPARSES  R's own parser on the whole document.
             testCase.assumeTrue(~isempty(ReportFixtures.rscriptExe()), ...

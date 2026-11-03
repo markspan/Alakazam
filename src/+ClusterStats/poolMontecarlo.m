@@ -12,7 +12,10 @@ function stat = poolMontecarlo(results, counts, cfg)
 %   Reproduces ft_statistics_montecarlo's own arithmetic exactly, including
 %   the +1 that keeps a Monte Carlo p-value from ever being 0 (the smallest
 %   attainable p is 1/(N+1), because the observed labelling is itself one
-%   of the possible ones).
+%   of the possible ones), and its two-tailed correction: 'prob' doubles the
+%   probabilities and 'alpha' halves alpha. CFG.alpha is the alpha as asked
+%   for, so the correction has to be applied here too: leaving it out made
+%   the mask of a split run twice as liberal as an unsplit one.
     stat = results{1};
     statobs = stat.stat(:);
 
@@ -34,8 +37,18 @@ function stat = poolMontecarlo(results, counts, cfg)
         otherwise, prob = min(prbPos ./ Nrand, prbNeg ./ Nrand);
     end
 
+    alpha = cfg.alpha;
+    if cfg.tail == 0
+        switch TransTools.FieldOr(cfg, 'correcttail', 'no')
+            case 'prob'
+                prob = min(2 * prob, 1);
+            case 'alpha'
+                alpha = alpha / 2;
+        end
+    end
+
     stat.prob            = reshape(prob, size(stat.prob));
-    stat.mask            = stat.prob <= cfg.alpha;
+    stat.mask            = stat.prob <= alpha;
     stat.posdistribution = posdist;
     stat.negdistribution = negdist;
 end
