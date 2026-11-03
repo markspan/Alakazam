@@ -200,8 +200,8 @@ classdef FourierView < AlakazamView
             % drawn is made real first (magnitudeOf, angle).
             %
             % PHASE IS SHOWN WRAPPED, in [-pi, pi], and NOT UNWRAPPED
-            % ACROSS FREQUENCY. Fourier measures phase from the segment's
-            % first sample, so every spectrum carries a ramp of 2*pi*f times
+            % ACROSS FREQUENCY. Fourier measures phase from time zero, so a
+            % response at any other time carries a ramp of 2*pi*f times
             % the time at which its activity is centred, and unwrap() summed
             % that ramp over every bin: on a five-minute recording it drew a
             % straight line reaching 10^4 to 10^5 rad by 100 Hz, which says

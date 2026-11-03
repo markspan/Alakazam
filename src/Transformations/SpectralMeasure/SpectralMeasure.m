@@ -10,7 +10,11 @@ function [EEG, options] = SpectralMeasure(input, varargin)
 %     * power / amplitude -- of the trial-averaged (evoked) complex, since a
 %       tagged response is phase-locked to the flicker.
 %     * SNR -- power(f) / mean(power at the neighbouring frequency bins each
-%       side, past a guard band): the standard SSVEP signal-to-noise ratio.
+%       side, past a guard band): the standard SSVEP signal-to-noise ratio. A
+%       neighbour as close to ANOTHER ROW's frequency as the guard keeps it from
+%       its own is left out, since the other tag is signal, not noise: on a 1 s
+%       epoch a 64 Hz tag sits among the neighbours of 60 Hz, and took its SNR
+%       from 1059 to 14. Only the rows are known; name any other tag as a row.
 %     * itc -- inter-trial coherence / phase-locking value in [0,1],
 %       |mean_trials(X/|X|)|; reference-free consistency of the response.
 %     * phase -- angle of the evoked complex, measured from the event (time
@@ -262,20 +266,39 @@ df = srate / nsamp;
 % (e.g. the RIFT paper's own script) reuse one coherence image per
 % channel/condition across multiple reported frequencies.
 crossfCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
+
+% Trial counts: coherence and phase locking rise as the trials fall. Said when
+% they differ, and evened out on request by repeated random subsets, for the ITC
+% and for the frame and single-window coherence (see TransTools.EqualisedDraws).
+trialSets = arrayfun(@(b) TransTools.BinTrials(EEG, b), 1:nBins, 'UniformOutput', false);
+[equalDraws, nEqual, trialCounts] = TransTools.EqualisedDraws(EEG, trialSets, ...
+    TransTools.FieldOr(crossf, 'EqualiseDraws', 20));
+trialDraws = {};
+if logical(TransTools.FieldOr(crossf, 'EqualiseTrials', false))
+    trialDraws = equalDraws;
+    if strcmp(cohMethod, 'newcrossf')
+        fprintf(['SpectralMeasure: Equalise trials applies to the ITC here, not to the coherence: ' ...
+            'newcrossf runs as EEGLAB runs it, on every trial.\n']);
+    end
+else
+    TransTools.TrialCountNote(trialCounts, {EEG.bindesc.label}, 'SpectralMeasure');
+end
+
 measurements = cell(1, numel(rows));
 for w = 1:numel(rows)
     measurements{w} = computeRow(EEG, rows{w}, freqHz(w), allLabels, refIdx, ...
-        nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache);
+        nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache, abs(freqHz), trialDraws);
 end
 EEG.spectralMeasures = measurements;
-EEG.etc.alz.spectralMeasure = struct('options', options, 'phaseReference', phaseReference);
+EEG.etc.alz.spectralMeasure = struct('options', options, 'phaseReference', phaseReference, ...
+    'trialCounts', trialCounts, 'equalisedTo', nEqual * ~isempty(trialDraws));
 
 %% Evoked amplitude spectrum per channel x bin, for the view
 [EEG.spectrum, EEG.specFreqs] = evokedSpectrum(EEG, tapers(:, 1), df);
 end
 
 % ======================================================================= %
-function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache)
+function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tapers, snrN, snrGuard, crossf, crossfCache, rowFreqs, trialDraws)
 %COMPUTEROW  All metrics for one frequency row, per channel x bin.
     specs = measureChannelSpecs(row.channels, allLabels, row.label);
     nCh = numel(specs);
@@ -290,6 +313,10 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
     offs = (snrGuard + (1:snrN)) * df;
     neigh = [fUse - offs, fUse + offs];
     neigh = neigh(neigh > 0 & neigh < nyq);
+    clearance = (snrGuard + 1) * df;
+    for other = rowFreqs(abs(rowFreqs - fUse) > 1e-9)
+        neigh = neigh(abs(neigh - other) >= clearance - 1e-9);
+    end
 
     power = nan(nCh, nBins); amplitude = nan(nCh, nBins); snr = nan(nCh, nBins);
     itc = nan(nCh, nBins); phase = nan(nCh, nBins);
@@ -317,6 +344,13 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
                 Xref = TransTools.Tdft(Vref, fUse, t, tapers);        % K x nT (raw)
             end
         end
+        % The subsets of this bin's trials to average over (see the note where
+        % trialDraws is made); by default the one set of them all. A colon on
+        % its own stands for every trial.
+        subsets = {':'};
+        if ~isempty(trialDraws)
+            subsets = cellfun(@(d) ismember(trials, d), trialDraws{b}, 'UniformOutput', false);
+        end
         for c = 1:nCh
             Vc = poolWave(EEG, specs(c).members, trials);  % nsamp x nT
             X = TransTools.Tdft(Vc, fUse, t, tapers);                 % K x nT (raw)
@@ -331,7 +365,7 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
             amplitude(c, b) = coh1 * abs(Ek(1));           % calibrated (uV) via taper 0
             power(c, b)     = amplitude(c, b)^2;
             phase(c, b)     = angle(Ek(1));
-            itc(c, b)       = mean(abs(mean(X ./ max(abs(X), eps), 2, 'omitnan')));
+            itc(c, b)       = mean(cellfun(@(s) mean(abs(mean(X(:, s) ./ max(abs(X(:, s)), eps), 2, 'omitnan'))), subsets));
 
             if ~isempty(neigh)
                 Pf = mean(abs(Ek).^2);                     % raw evoked power (ratio use)
@@ -347,20 +381,19 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
                     case 'frames'
                         % The estimator of record: sliding frames, exact frequency,
                         % see TransTools.FrameCoherence.
-                        [coherence(c, b), phaselag(c, b)] = TransTools.FrameCoherence( ...
-                            Vc, Vref, EEG.srate, fUse, struct('WinSize', crossf.WinSize, ...
+                        [cohs, lags] = cellfun(@(s) TransTools.FrameCoherence( ...
+                            Vc(:, s), Vref(:, s), EEG.srate, fUse, struct('WinSize', crossf.WinSize, ...
                             'Times', TransTools.FieldOr(EEG, 'times', []), 'TimeStart', crossf.TimeStart, ...
-                            'TimeStop', crossf.TimeStop));
+                            'TimeStop', crossf.TimeStop)), subsets);
+                        coherence(c, b) = mean(cohs);
+                        phaselag(c, b) = angle(mean(exp(1i * lags)));
                     case 'newcrossf'
                         [coherence(c, b), phaselag(c, b)] = crossfCoherence( ...
                             EEG, specs(c).members, refIdx, b, trials, fUse, crossf, crossfCache);
                     otherwise    % 'window': one DFT bin per trial over the whole epoch
-                        cross = sum(X(:) .* conj(Xref(:)), 'omitnan');
-                        den = sum(abs(X(:)).^2, 'omitnan') * sum(abs(Xref(:)).^2, 'omitnan');
-                        if den > 0
-                            coherence(c, b) = abs(cross)^2 / den;
-                            phaselag(c, b)  = angle(cross);
-                        end
+                        [cohs, lags] = cellfun(@(s) windowCoherence(X(:, s), Xref(:, s)), subsets);
+                        coherence(c, b) = mean(cohs);
+                        phaselag(c, b) = angle(mean(exp(1i * lags)));
                 end
             end
         end
@@ -371,6 +404,24 @@ function m = computeRow(EEG, row, fHz, allLabels, refIdx, nBins, t, df, nyq, tap
     m = struct('label', row.label, 'freq', fHz, 'channels', {{specs.label}}, ...
         'refChannel', ref, 'power', power, 'amplitude', amplitude, 'snr', snr, ...
         'itc', itc, 'phase', phase, 'coherence', coherence, 'phaselag', phaselag);
+end
+
+function [coh, lag] = windowCoherence(X, Xref)
+%WINDOWCOHERENCE  Magnitude-squared coherence and cross phase of the single-window
+%   coefficients X and XREF (tapers x trials). A coefficient missing from either
+%   side is left out of BOTH, so the reference's power runs over the trials the
+%   cross-spectrum used, as FrameCoherence does and as this file's header says.
+%   Otherwise a channel rejected in half the trials reads half its coherence:
+%   .504 for a channel identical to its reference.
+    usable = isfinite(X) & isfinite(Xref);
+    cross = sum(X(usable) .* conj(Xref(usable)));
+    den = sum(abs(X(usable)) .^ 2) * sum(abs(Xref(usable)) .^ 2);
+    coh = NaN;
+    lag = NaN;
+    if den > 0
+        coh = abs(cross) ^ 2 / den;
+        lag = angle(cross);
+    end
 end
 
 function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, crossf, cache)
@@ -470,11 +521,12 @@ function [coh, phlag] = crossfCoherence(EEG, members, refIdx, b, trials, fUse, c
     % the RIFT paper's own script, not "average then square".
     coh = mean(img.coh(fIdx, tIdx) .^ 2, 2);
     % Phase-lag: newcrossf reports this separately per time frame (in
-    % radians); a plain mean here is a reasonable single summary of a
-    % narrow, already-selected steady-state window, though note this is an
-    % addition beyond what the paper itself reports (its own script never
-    % uses cohangle).
-    phlag = mean(img.angle(fIdx, tIdx), 2);
+    % radians). An angle wraps at +/-pi, so the frames are averaged on the
+    % circle, as FrameCoherence averages its own: the arithmetic mean of 179
+    % and -179 degrees is 0, and an antiphase channel used to read -0.63 rad
+    % here where the true lag is +/-3.14. This is an addition beyond what the
+    % paper itself reports (its own script never uses cohangle).
+    phlag = angle(mean(exp(1i * img.angle(fIdx, tIdx)), 2));
 end
 
 function V = poolWave(EEG, members, trials)

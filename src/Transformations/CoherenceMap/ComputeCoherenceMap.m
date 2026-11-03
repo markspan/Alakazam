@@ -71,14 +71,24 @@ function [coh, freqs, cohTimes, refPower, info] = ComputeCoherenceMap(input, opt
 %   frequencies (a 60 Hz response bleeds into the 64 Hz row) exactly where a
 %   reader looks for the onset. Those samples are NaN, drawn blank, in the
 %   coherence and in REFPOWER, and a frequency whose wavelet is longer than
-%   the whole epoch is blank throughout. The STFT frames lie inside the epoch
-%   and the filter-Hilbert bands are padded, so neither method is affected.
+%   the whole epoch is blank throughout. The STFT frames lie inside the epoch,
+%   so that method is not affected.
+%
+%   THE FILTER-HILBERT BAND IS TREATED THE SAME WAY, for the same reason. Its
+%   Gaussian band-pass is a Gaussian in time, of sigma 1 / (2 pi sigmaF), and
+%   within three of those of an edge part of it lies over the padding: padding
+%   stops the filter wrapping round, and does not give it data it does not
+%   have. With a 2 Hz band that is 562 ms each side. A pure 60 Hz reference
+%   read 1.4e8 times more power at 64 Hz on the first sample of a 2 s epoch
+%   than in its middle, before these were blanked. A shorter epoch needs a
+%   wider band, which is the same trade the wavelet's cycles make.
 %
 %   INFO describes what could be computed: .halfWaveletMs (1 x nFreqs), how
 %   far from each end of the epoch a frequency's first and last computed
 %   sample lie, and .blankFrequencies (1 x nFreqs logical), the frequencies
-%   whose wavelet is longer than the epoch. Both are empty and all false for
-%   the STFT and filter-Hilbert methods.
+%   whose wavelet is longer than the epoch. For the filter-Hilbert method these
+%   are its three sigma, one value for every frequency. Both are empty and all
+%   false for the STFT.
 %
 %   TOOLBOX OR OWN CODE. EEGLAB's newcrossf, and FieldTrip's ft_freqanalysis
 %   with ft_connectivityanalysis('coh'), compute coherence over time too, and
@@ -97,8 +107,7 @@ function [coh, freqs, cohTimes, refPower, info] = ComputeCoherenceMap(input, opt
             [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts);
             info = noEdges(freqs);
         case 'filterhilbert'
-            [coh, freqs, cohTimes, refPower] = filterHilbertCoherence(input, opts);
-            info = noEdges(freqs);
+            [coh, freqs, cohTimes, refPower, info] = filterHilbertCoherence(input, opts);
         otherwise
             [coh, freqs, cohTimes, refPower, info] = waveletCoherence(input, opts);
     end
@@ -142,7 +151,7 @@ function [coh, freqs, cohTimes, refPower, info] = waveletCoherence(input, opts)
     end
 
     analytic = @(sig) waveletTransform(sig, waveletFFTs, halfLens, nfft, nT, nF);
-    [coh, refPower] = coherenceOverBins(input, nChan, nF, nT, nBins, refIdx, analytic);
+    [coh, refPower] = coherenceOverBins(input, nChan, nF, nT, nBins, refIdx, analytic, opts);
     cohTimes = times;
     info = struct('halfWaveletMs', halfLens / srate * 1000, 'blankFrequencies', 2 * halfLens >= nT);
 end
@@ -190,7 +199,7 @@ function [coh, freqs, cohTimes, refPower] = stftCoherence(input, opts)
     nFrame = numel(starts);
 
     analytic = @(sig) stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame);
-    [coh, refPower] = coherenceOverBins(input, nChan, nF, nFrame, nBins, refIdx, analytic);
+    [coh, refPower] = coherenceOverBins(input, nChan, nF, nFrame, nBins, refIdx, analytic, opts);
 end
 
 function A = stftTransform(sig, taper, starts, win, nfft, fsel, nF, nFrame) %#ok<INUSD>
@@ -231,7 +240,7 @@ function w = makeTaper(kind, n)
 end
 
 % ======================================================================= %
-function [coh, freqs, cohTimes, refPower] = filterHilbertCoherence(input, opts)
+function [coh, freqs, cohTimes, refPower, info] = filterHilbertCoherence(input, opts)
 %FILTERHILBERTCOHERENCE  Band-pass around each frequency, then the analytic
 %   signal. See the header of ComputeCoherenceMap for the design.
     times = input.times;
@@ -276,23 +285,34 @@ function [coh, freqs, cohTimes, refPower] = filterHilbertCoherence(input, opts)
     cohTimes = times(keep);
 
     analytic = @(sig) hilbertBands(sig, masks, pad, nT, keep, nfft);
-    [coh, refPower] = coherenceOverBins(input, nChan, nF, numel(keep), nBins, refIdx, analytic);
+    [coh, refPower] = coherenceOverBins(input, nChan, nF, numel(keep), nBins, refIdx, analytic, opts);
+    info = struct('halfWaveletMs', repmat(pad / srate * 1000, 1, nF), ...
+        'blankFrequencies', repmat(2 * pad >= nT, 1, nF));
 end
 
 function A = hilbertBands(sig, masks, pad, nT, keep, nfft)
-%HILBERTBANDS  nF x numel(keep) complex band-passed analytic signal.
+%HILBERTBANDS  nF x numel(keep) complex band-passed analytic signal, NaN within
+%   three sigma of either end of the epoch (see the header): a NaN coefficient
+%   makes the sums it enters NaN, so the coherence and the reference power are
+%   blank there too.
     sig = double(sig(:).');
     x = zeros(1, nfft);
     x(pad + 1 : pad + nT) = sig - mean(sig);
     Y = ifft(masks .* fft(x, nfft), [], 2);
     A = Y(:, pad + keep);
+    A(:, keep <= pad | keep > nT - pad) = NaN;
 end
 
 % ======================================================================= %
-function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, refIdx, analytic)
+function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, refIdx, analytic, opts)
 %COHERENCEOVERBINS  Accumulate trial-wise cross/auto spectra per bin and form
 %   the magnitude-squared coherence to the reference. ANALYTIC(sig) returns an
 %   nF x nTime complex time-frequency matrix for one trial's signal.
+%
+%   With OPTS.EqualiseTrials, each bin is computed on repeated random subsets
+%   that give every bin the same number of trials, and averaged over them
+%   (TransTools.EqualisedDraws). Otherwise it is one pass over its trials, and
+%   a note is printed when the counts differ.
 %
 %   REFPOWER (nF x nTime x nBins) is the reference's own trial-averaged
 %   power, |R|^2. See this file's own ComputeCoherenceMap header for why
@@ -307,62 +327,98 @@ function [coh, refPower] = coherenceOverBins(input, nChan, nF, nTime, nBins, ref
     TransTools.BusyGate('progress', 0);
     binsToDo = find(~isCombo);
     total = max(1, numel(binsToDo));
+    trialSets = arrayfun(@(b) TransTools.BinMembership.of(input, b), 1:nBins, 'UniformOutput', false);
+    [draws, ~, counts] = TransTools.EqualisedDraws(input, trialSets, TransTools.FieldOr(opts, 'EqualiseDraws', 20));
+    equalise = logical(TransTools.FieldOr(opts, 'EqualiseTrials', false));
+    if ~equalise
+        TransTools.TrialCountNote(counts, {input.bindesc.label}, 'CoherenceMap');
+    end
     for bi = 1:numel(binsToDo)
         b = binsToDo(bi);
-        trials = TransTools.BinMembership.of(input, b);
+        trials = trialSets{b};
         if isempty(trials)
             TransTools.BusyGate('progress', bi / total);
             continue;
         end
-        % REJECTED TRIALS ARE LEFT OUT. Rejection writes NaN and leaves the
-        % trial in its bin, and one NaN sample makes a trial's whole
-        % transform NaN, which summed into the spectra made the channel's
-        % coherence NaN everywhere. A trial counts for a channel only where
-        % both it and the reference are intact, and the reference power in
-        % that channel's denominator runs over the same trials as its cross
-        % spectrum, or the ratio would no longer be a coherence.
-        estimable = numel(trials) >= 2;
-        Sxy = zeros(nChan, nF, nTime);
-        Sxx = zeros(nChan, nF, nTime);
-        SyyCh = zeros(nChan, nF, nTime);
-        nUsed = zeros(nChan, 1);
-        Syy = zeros(nF, nTime);
-        nRef = 0;
-        for tr = trials(:)'
-            if ~all(isfinite(input.data(refIdx, :, tr)))
-                continue;
-            end
-            R = analytic(input.data(refIdx, :, tr));
-            Syy = Syy + abs(R).^2;
-            nRef = nRef + 1;
-            if ~estimable
-                continue;
-            end
-            for ch = 1:nChan
-                if ch == refIdx || ~all(isfinite(input.data(ch, :, tr))); continue; end
-                X = analytic(input.data(ch, :, tr));
-                Sxy(ch, :, :) = squeeze(Sxy(ch, :, :)) + X .* conj(R);
-                Sxx(ch, :, :) = squeeze(Sxx(ch, :, :)) + abs(X).^2;
-                SyyCh(ch, :, :) = squeeze(SyyCh(ch, :, :)) + abs(R).^2;
-                nUsed(ch) = nUsed(ch) + 1;
+        subsets = {trials};
+        if equalise && ~isempty(draws{b})
+            subsets = draws{b};
+        end
+        cohSum = zeros(nChan, nF, nTime);
+        cohCount = zeros(nChan, nF, nTime);
+        refSum = zeros(nF, nTime);
+        refCount = 0;
+        for k = 1:numel(subsets)
+            [one, power, nRef] = binCoherence(input, subsets{k}, nChan, nF, nTime, refIdx, analytic);
+            seen = ~isnan(one);
+            cohSum(seen) = cohSum(seen) + one(seen);
+            cohCount = cohCount + seen;
+            if nRef > 0
+                refSum = refSum + power;
+                refCount = refCount + 1;
             end
         end
-        if estimable
-            for ch = 1:nChan
-                if ch == refIdx || nUsed(ch) < 2; continue; end
-                num = abs(squeeze(Sxy(ch, :, :))).^2;
-                den = squeeze(Sxx(ch, :, :)) .* squeeze(SyyCh(ch, :, :));
-                c = num ./ den;
-                c(den == 0) = NaN;
-                coh(ch, :, :, b) = c;
-            end
-        end
-        if nRef > 0
-            refPower(:, :, b) = Syy / nRef;
+        c = cohSum ./ cohCount;      % 0/0 is NaN: never computed in any subset
+        coh(:, :, :, b) = c;
+        if refCount > 0
+            refPower(:, :, b) = refSum / refCount;
         end
         TransTools.BusyGate('progress', bi / total);
     end
     % Done, even when there were no bins to compute (every bin a combination
     % bin): the indicator goes back to its spinner.
     TransTools.BusyGate('progress', 1);
+end
+
+function [coh, refPower, nRef] = binCoherence(input, trials, nChan, nF, nTime, refIdx, analytic)
+%BINCOHERENCE  The coherence of every channel to the reference over TRIALS, and
+%   the reference's power over them.
+%
+%   REJECTED TRIALS ARE LEFT OUT. Rejection writes NaN and leaves the trial in
+%   its bin, and one NaN sample makes a trial's whole transform NaN, which
+%   summed into the spectra made the channel's coherence NaN everywhere. A trial
+%   counts for a channel only where both it and the reference are intact, and
+%   the reference power in that channel's denominator runs over the same trials
+%   as its cross spectrum, or the ratio would no longer be a coherence.
+    coh = nan(nChan, nF, nTime);
+    refPower = zeros(nF, nTime);
+    estimable = numel(trials) >= 2;
+    Sxy = zeros(nChan, nF, nTime);
+    Sxx = zeros(nChan, nF, nTime);
+    SyyCh = zeros(nChan, nF, nTime);
+    nUsed = zeros(nChan, 1);
+    Syy = zeros(nF, nTime);
+    nRef = 0;
+    for tr = trials(:)'
+        if ~all(isfinite(input.data(refIdx, :, tr)))
+            continue;
+        end
+        R = analytic(input.data(refIdx, :, tr));
+        Syy = Syy + abs(R).^2;
+        nRef = nRef + 1;
+        if ~estimable
+            continue;
+        end
+        for ch = 1:nChan
+            if ch == refIdx || ~all(isfinite(input.data(ch, :, tr))); continue; end
+            X = analytic(input.data(ch, :, tr));
+            Sxy(ch, :, :) = squeeze(Sxy(ch, :, :)) + X .* conj(R);
+            Sxx(ch, :, :) = squeeze(Sxx(ch, :, :)) + abs(X).^2;
+            SyyCh(ch, :, :) = squeeze(SyyCh(ch, :, :)) + abs(R).^2;
+            nUsed(ch) = nUsed(ch) + 1;
+        end
+    end
+    if estimable
+        for ch = 1:nChan
+            if ch == refIdx || nUsed(ch) < 2; continue; end
+            num = abs(squeeze(Sxy(ch, :, :))).^2;
+            den = squeeze(Sxx(ch, :, :)) .* squeeze(SyyCh(ch, :, :));
+            c = num ./ den;
+            c(den == 0) = NaN;
+            coh(ch, :, :) = c;
+        end
+    end
+    if nRef > 0
+        refPower = Syy / nRef;
+    end
 end

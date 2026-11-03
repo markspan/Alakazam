@@ -150,7 +150,6 @@ for b = 1:nBins
     if isempty(trials)
         continue;
     end
-    nUsed(b) = numel(trials);
     zAll = nan(nChan, nLags, numel(trials));
     for k = 1:numel(trials)
         t = trials(k);
@@ -161,6 +160,9 @@ for b = 1:nBins
             zAll(ci, :, k) = atanh(clampR(r));
         end
     end
+    % The trials that gave any correlation at all: a rejected one is NaN and
+    % stays in its bin, and the view prints this as the bin's n.
+    nUsed(b) = nnz(any(isfinite(zAll), [1 2]));
     zBar = mean(zAll, 3, 'omitnan');
     nValid = sum(isfinite(zAll), 3);
     rMean(:, :, b) = tanh(zBar);

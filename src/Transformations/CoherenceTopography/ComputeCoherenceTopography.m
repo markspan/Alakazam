@@ -19,6 +19,8 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
 %     MinFreq, MaxFreq     search band (Hz), used when TagSource is 'band'
 %     FreqStep             search-grid step (Hz) for that search (default 0.1)
 %     WindowMs, Taper      frame length in ms (default 510) and taper, 'frames' only
+%     EqualiseTrials       true: average over random subsets giving every bin the
+%                          same number of trials (TransTools.EqualisedDraws)
 %
 %   METHOD. 'frames' is the estimator of record (TransTools.FrameCoherence): the
 %   coherence is taken in sliding frames and averaged, which is what CoherenceMap
@@ -95,6 +97,13 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
     detFreq = nan(1, nBins);
     refAmp  = nan(numel(ampFreqs), nBins);
 
+    trialSets = arrayfun(@(b) TransTools.BinMembership.of(input, b), 1:nBins, 'UniformOutput', false);
+    [draws, ~, counts] = TransTools.EqualisedDraws(input, trialSets, TransTools.FieldOr(opts, 'EqualiseDraws', 20));
+    equalise = logical(TransTools.FieldOr(opts, 'EqualiseTrials', false));
+    if ~equalise
+        TransTools.TrialCountNote(counts, {input.bindesc.label}, 'CoherenceTopography');
+    end
+
     refPeak = nan(1, nBins);
     if fixedF <= 0 && strcmp(tagSource, 'reference')
         [~, ~, refPeak] = TransTools.ReferenceSpectrum(input, refIdx);
@@ -121,9 +130,15 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
             % trial MEAN, so the trials are averaged once and each search
             % frequency transforms one column instead of every trial: 161
             % frequencies over about a hundred trials was some 16,000 column
-            % transforms per bin, and is now 161. A NaN in any trial still
-            % makes the result NaN, as it did through the mean of the transforms.
-            evoked = mean(Vref, 2);                    % nwin x 1
+            % transforms per bin, and is now 161. A rejected trial is left out:
+            % it is NaN, and let into the mean it made every amplitude NaN, and
+            % max of all NaN is the first entry, so the tag silently became the
+            % bottom of the search band (55 Hz, coherence .115, for a 60 Hz tag).
+            intact = all(isfinite(Vref), 1);
+            if ~any(intact)
+                continue;                              % nothing left to find a tag in
+            end
+            evoked = mean(Vref(:, intact), 2);         % nwin x 1
             amp = zeros(numel(ampFreqs), 1);
             for k = 1:numel(ampFreqs)
                 amp(k) = abs(TransTools.Tdft(evoked, ampFreqs(k), t, taper));
@@ -134,30 +149,41 @@ function [coh, detFreq, refAmp, ampFreqs] = ComputeCoherenceTopography(input, op
         end
         detFreq(b) = fUse;
 
-        if strcmp(method, 'frames')
-            all3 = input.data(:, :, tr);                          % nChan x nSamp x nTr
-            R = reshape(all3(refIdx, :, :), nSamp, []);           % nSamp x nTr
-            for c = 1:nChan
-                if c == refIdx; continue; end        % self-coherence is trivially 1
-                coh(c, b) = TransTools.FrameCoherence( ...
-                    reshape(all3(c, :, :), nSamp, []), R, srate, fUse, frameOpts);
-            end
-            continue;
+        % The trials to average over: all of them, or the random subsets that
+        % give every bin the same number.
+        subsets = {tr};
+        if equalise && ~isempty(draws{b})
+            subsets = draws{b};
         end
-
-        V    = input.data(:, win, tr);                            % nChan x nwin x nTr
-        Vref = reshape(V(refIdx, :, :), nwin, []);                % nwin x nTr
-        Xref = TransTools.Tdft(Vref, fUse, t, taper);             % 1 x nTr
-        refAuto = sum(abs(Xref).^2);
-        if refAuto == 0; continue; end
-        for c = 1:nChan
-            if c == refIdx; continue; end            % self-coherence is trivially 1
-            Xc = TransTools.Tdft(reshape(V(c, :, :), nwin, []), fUse, t, taper);
-            den = sum(abs(Xc).^2) * refAuto;
-            if den > 0
-                coh(c, b) = abs(sum(Xc .* conj(Xref)))^2 / den;
+        one = nan(nChan, numel(subsets));
+        for k = 1:numel(subsets)
+            if strcmp(method, 'frames')
+                all3 = input.data(:, :, subsets{k});                  % nChan x nSamp x nTr
+                R = reshape(all3(refIdx, :, :), nSamp, []);           % nSamp x nTr
+                for c = 1:nChan
+                    if c == refIdx; continue; end        % self-coherence is trivially 1
+                    one(c, k) = TransTools.FrameCoherence( ...
+                        reshape(all3(c, :, :), nSamp, []), R, srate, fUse, frameOpts);
+                end
+            else
+                V    = input.data(:, win, subsets{k});                % nChan x nwin x nTr
+                Vref = reshape(V(refIdx, :, :), nwin, []);            % nwin x nTr
+                Xref = TransTools.Tdft(Vref, fUse, t, taper);         % 1 x nTr
+                for c = 1:nChan
+                    if c == refIdx; continue; end    % self-coherence is trivially 1
+                    Xc = TransTools.Tdft(reshape(V(c, :, :), nwin, []), fUse, t, taper);
+                    % A trial missing from either side is left out of both, so
+                    % the ratio stays a coherence and a rejected trial does not
+                    % blank the map.
+                    usable = isfinite(Xc) & isfinite(Xref);
+                    den = sum(abs(Xc(usable)) .^ 2) * sum(abs(Xref(usable)) .^ 2);
+                    if den > 0
+                        one(c, k) = abs(sum(Xc(usable) .* conj(Xref(usable)))) ^ 2 / den;
+                    end
+                end
             end
         end
+        coh(:, b) = mean(one, 2);
     end
 end
 

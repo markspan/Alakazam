@@ -20,6 +20,12 @@ function [EEG, options] = ReRef(input, varargin)
 %   taken over every site, the original reference included, so the channels
 %   sum to zero. See addImplicitReferenceChannel below for the maths.
 %
+%   AFTER PER-CHANNEL REJECTION, pop_reref blanks the whole trial. It multiplies
+%   each trial by one matrix, and a channel that is NaN in a trial enters the
+%   average every channel subtracts, so a channel rejected in one trial leaves
+%   that trial NaN on all of them (19 of 19 in the test). That is the toolbox's
+%   behaviour and is kept; re-referencing before rejecting avoids it.
+%
 %   Signature (Alakazam transformation contract):
 %     [EEG, options] = ReRef(input)        % interactive dialog
 %     [EEG, options] = ReRef(input, opts)  % replay a stored options struct

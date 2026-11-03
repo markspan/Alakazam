@@ -221,13 +221,22 @@ output.trials = nseg;
 TransTools.BusyGate('progress', 0);
 
 output.freqs = input.srate/2*linspace(0,1,NFFT/2+1);
+rotation = exp(-1i * 2 * pi * (0:NFFT - 1) * input.srate / NFFT * firstSampleTime(input, nsamp));
 
 for seg = 1:nseg
         TransTools.BusyGate('progress', seg/nseg);
 
-        vunw = var(input.data(:,:,seg));
-        vwin = var(fullwin.*input.data(:,:,seg));
-        norm = vunw/vwin;
+        % A CHANNEL REJECTED IN THIS SEGMENT STAYS OUT OF THE RATIO. Its NaN made
+        % the ratio NaN, and so every channel's spectrum in the segment, though
+        % rejection is meant to take out that channel alone.
+        intactChannels = all(isfinite(input.data(:,:,seg)), 2);
+        if any(intactChannels)
+            vunw = var(input.data(intactChannels,:,seg));
+            vwin = var(fullwin.*input.data(intactChannels,:,seg));
+            norm = vunw/vwin;
+        else
+            norm = NaN;     % the whole segment is rejected, and stays NaN
+        end
         
         corrwin = repmat(fullwin ./ norm, nchan,1);
 
@@ -277,12 +286,14 @@ for seg = 1:nseg
         % used to be written fft(x', NFFT)', and ' is the CONJUGATE
         % transpose: on the complex result it stored conj(X), so every
         % 'Complex' phase had the wrong sign (the magnitudes, being abs(),
-        % never showed it). The phase is that of exp(-i*2*pi*f*t) with t
-        % counted from the segment's first sample, as in SpectralMeasure.
+        % never showed it). The phase is that of exp(-i*2*pi*f*t) with t the
+        % dataset's own time: from the event in an epoch, as in SpectralMeasure
+        % and FieldTrip. It used to be counted from the segment's first sample,
+        % which moved it by 2*pi*f times the prestimulus interval.
         spec = fs * fft(corrwin .* input.data(:,:,seg), NFFT, 2) / nsamp;
         switch lower(options.Output)
             case 'complex'
-                data(:,:,seg) = spec;
+                data(:,:,seg) = spec .* rotation;
             case 'volt'
                 data(:,:,seg) = abs(spec);
             case 'power'
@@ -296,6 +307,20 @@ end
 
 output.data = gather(data(:,1:NFFT/2+1,:));
 output.pnts = NFFT/2+1;
+
+function t0 = firstSampleTime(input, nsamp)
+%FIRSTSAMPLETIME  The time of the segment's first sample, in seconds: an epoch's
+%   axis is in ms, and a continuous recording's in seconds (DEVELOPER.md). A
+%   dataset with no usable axis counts from its first sample.
+    t0 = 0;
+    times = TransTools.FieldOr(input, 'times', []);
+    if numel(times) ~= nsamp || ~all(isfinite(times))
+        return;
+    end
+    t0 = double(times(1));
+    if ~strcmpi(char(string(TransTools.FieldOr(input, 'DataFormat', ''))), 'CONTINUOUS')
+        t0 = t0 / 1000;
+    end
 
 function tf = toLogical(v)
 %TOLOGICAL  Coerce a stored FullSpectrum value to logical, tolerating an

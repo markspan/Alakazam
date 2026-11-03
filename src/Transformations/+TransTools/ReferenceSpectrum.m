@@ -53,14 +53,25 @@ function [spec, specFreqs, peakHz] = ReferenceSpectrum(input, refIdx)
         if isempty(trials)
             continue;
         end
+        % A REJECTED TRIAL IS LEFT OUT. It is NaN, and summed in it made the whole
+        % spectrum NaN: no peak, and so, from one rejected trial, no tag for the
+        % bin in CoherenceTopography or the report's coherence section.
         summed = zeros(1, numel(keep));
+        nIntact = 0;
         for tr = trials(:)'
             x = double(input.data(refIdx, :, tr));
+            if ~all(isfinite(x))
+                continue;
+            end
             x = (x(:).' - mean(x(:))) .* taper;
             F = fft(x);
             summed = summed + abs(F(keep)).^2;
+            nIntact = nIntact + 1;
         end
-        amp = sqrt(summed / numel(trials)) * scale;
+        if nIntact == 0
+            continue;
+        end
+        amp = sqrt(summed / nIntact) * scale;
         spec(:, b) = accumarray(cellOf(:), amp(:), [nCells 1], @max, NaN);
 
         candidates = amp;

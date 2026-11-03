@@ -222,8 +222,7 @@ function note = blankNote(eeg)
 %BLANKNOTE  Why the lowest frequencies are blank, when they are: their
 %   wavelet is longer than the epoch, so no sample is clear of its edges
 %   (see ComputeCoherenceMap). Empty for a map made before that was
-%   recorded, for the STFT and filter-Hilbert methods, or when every
-%   frequency has samples.
+%   recorded, for the STFT method, or when every frequency has samples.
     note = '';
     try
         blank = eeg.etc.alz.coherenceMap.blankFrequencies;
@@ -234,7 +233,7 @@ function note = blankNote(eeg)
         return;
     end
     if all(blank)
-        note = '   Blank throughout: the epoch is shorter than these wavelets.';
+        note = '   Blank throughout: the epoch is shorter than the wavelets or the band-pass reach.';
         return;
     end
     note = sprintf(['   Blank below %.3g Hz: the wavelet there is longer than the epoch; ' ...
