@@ -24,9 +24,10 @@ function EEG = GrandAverage(sourceFiles, weighted)
 %   The pooled aSME follows the same weights: sqrt(sum(w.^2 .* SME.^2))
 %   over the subjects, which with equal weights is sqrt(sum(SME.^2)) / N.
 %
-%   Every subject must have the same number of channels, the same number
-%   of time samples, and the same set of bin labels; see
-%   validateCompatibility below for the exact errors this checks for.
+%   Every subject must have the same channels, in any order, since each is
+%   lined up with the first by label; the same time axis; the same set of bin
+%   labels; and data in every bin. See validateCompatibility below for the
+%   exact errors this checks for.
 %
 %   Returns a plain EEG struct (DataFormat = "Averaged", trials = 1) with
 %   EEG.etc.GrandAverage = struct('sources', ..., 'weighted', ...,
@@ -92,20 +93,22 @@ function EEG = GrandAverage(sourceFiles, weighted)
     aSMEstack  = nan(nChan, nBins, nSubjects);
     for s = 1:nSubjects
         subjectLabels = {subjects{s}.bindesc.label};
+        rows = channelRows(subjects{s}, subjects{1});
         hasSME = isfield(subjects{s}, 'aSME') && ~isempty(subjects{s}.aSME) ...
             && size(subjects{s}.aSME, 1) == nChan;
         for b = 1:nBins
             match = find(strcmp(subjectLabels, referenceLabels{b}), 1);
-            data(:, :, b, s) = subjects{s}.data(:, :, match);
+            data(:, :, b, s) = subjects{s}.data(rows, :, match);
             n = subjects{s}.bindesc(match).n;
             if isnumeric(n)
                 trialCount(b, s) = n;
             end
             if hasSME && match <= size(subjects{s}.aSME, 2)
-                aSMEstack(:, b, s) = subjects{s}.aSME(:, match);
+                aSMEstack(:, b, s) = subjects{s}.aSME(rows, match);
             end
         end
     end
+    refuseEmptyBins(data, referenceLabels, subjects, sourceFiles);
 
     [grandMean, grandSEM, weights] = combineSubjects(data, trialCount, weighted);
 
@@ -184,16 +187,24 @@ function EEG = combineMaps(subjects, sourceFiles, kind)
 
     for s = 1:nSubjects
         subjectLabels = {subjects{s}.bindesc.label};
+        rows = channelRows(subjects{s}, subjects{1});
         A = subjects{s}.(field);
         reordered = nan(sz);
         for b = 1:nBins
             match = find(strcmp(subjectLabels, referenceLabels{b}), 1);
-            reordered(:, :, :, b) = A(:, :, :, match);
+            reordered(:, :, :, b) = A(rows, :, :, match);
+            if ~any(isfinite(reordered(:, :, :, b)), 'all')
+                refuseEmptyBin(sourceFiles{s}, subjects{s}, referenceLabels{b});
+            end
         end
         stacked(:, :, :, :, s) = reordered;
     end
 
-    grand = mean(stacked, 5, 'omitnan');
+    % NOT 'omitnan', AS IN THE ERP PATH: a cell blank for one subject stays blank
+    % rather than quietly being the mean of the others. Averaging over whichever
+    % subjects have data gives a map computed over a different N per cell. The
+    % edges every subject leaves blank (see ComputeErsp) stay blank either way.
+    grand = mean(stacked, 5);
 
     EEG = subjects{1};
     EEG.(field) = grand;
@@ -212,7 +223,7 @@ end
 
 function validateMapCompatibility(subjects, sourceFiles, field)
 %VALIDATEMAPCOMPATIBILITY  Every subject's map must match in channels, frequency
-%   count and time count, and carry the same set of bin labels.
+%   axis and time axis, and carry the same set of bin labels.
     reference     = subjects{1};
     referenceName = displayNameFor(sourceFiles{1}, reference);
     refSize       = size(reference.(field));
@@ -238,7 +249,75 @@ function validateMapCompatibility(subjects, sourceFiles, field)
                 'same set of bin labels.'], subjectName, strjoin(subjectLabels, ', '), ...
                 referenceName, strjoin(referenceLabels, ', '))));
         end
+
+        channelRows(subject, reference, subjectName, referenceName);
+        for axisName = {'freqs', 'cohFreqs', 'times', 'cohTimes'}
+            refuseDifferentAxis(subject, reference, axisName{1}, subjectName, referenceName);
+        end
     end
+end
+
+function rows = channelRows(subject, reference, subjectName, referenceName)
+%CHANNELROWS  Where each of REFERENCE's channels is in SUBJECT, by label.
+%   BY LABEL, NOT BY POSITION. Two datasets can hold the same channels in
+%   different orders, and a mean by position then averages Fz with Pz in silence:
+%   this used to return 2 for a channel that read 1 in both subjects. Refuses
+%   channels that differ, when told the names to say so with.
+    want = lower(cellfun(@(l) char(string(l)), {reference.chanlocs.labels}, 'UniformOutput', false));
+    have = lower(cellfun(@(l) char(string(l)), {subject.chanlocs.labels}, 'UniformOutput', false));
+    [found, rows] = ismember(want, have);
+    if nargin > 2 && (~all(found) || numel(want) ~= numel(have))
+        throw(MException('Alakazam:GrandAverage', sprintf([ ...
+            '"%s" and "%s" differ in channel(s) %s, I''m afraid. Every subject in a grand ' ...
+            'average needs the same channels.'], subjectName, referenceName, ...
+            strjoin(setxor(want, have), ', '))));
+    end
+end
+
+function refuseDifferentAxis(subject, reference, axisName, subjectName, referenceName)
+%REFUSEDIFFERENTAXIS  Subjects are averaged sample by sample, so two epochs of one
+%   length that start at different times would be averaged at the wrong latencies.
+    if ~isfield(reference, axisName) || ~isfield(subject, axisName)
+        return;
+    end
+    a = double(reference.(axisName)(:));
+    b = double(subject.(axisName)(:));
+    if numel(a) ~= numel(b) || max(abs(a - b), [], 'all') > 1e-3
+        throw(MException('Alakazam:GrandAverage', sprintf([ ...
+            'Unfortunately, "%s" and "%s" have different %s axes. Every subject needs the same ' ...
+            'epoch: the same Epoch start/stop when DefineBins ran, at the same sample rate.'], ...
+            subjectName, referenceName, axisName)));
+    end
+end
+
+function refuseEmptyBins(data, labels, subjects, sourceFiles)
+%REFUSEEMPTYBINS  A bin with no data in one subject makes that bin of the grand
+%   average empty, since the subjects are summed without 'omitnan' on purpose
+%   (see validateCompatibility). So it is refused by name, as an empty subject
+%   is. A channel empty in one subject's bin blanks that channel of the average,
+%   and is said rather than refused.
+    for s = 1:numel(subjects)
+        for b = 1:numel(labels)
+            page = data(:, :, b, s);
+            if ~any(isfinite(page), 'all')
+                refuseEmptyBin(sourceFiles{s}, subjects{s}, labels{b});
+            end
+            empty = ~any(isfinite(page), 2);
+            if any(empty)
+                warning('Alakazam:GrandAverage:emptyChannel', ...
+                    '"%s" has no data on channel(s) %s in bin "%s", so the grand average of them is blank.', ...
+                    displayNameFor(sourceFiles{s}, subjects{s}), ...
+                    strjoin({subjects{1}.chanlocs(empty).labels}, ', '), labels{b});
+            end
+        end
+    end
+end
+
+function refuseEmptyBin(file, subject, label)
+    throw(MException('Alakazam:GrandAverage', sprintf([ ...
+        'I''m afraid "%s" has no data in bin "%s": every trial of it was rejected, or it has ' ...
+        'none. Including it would leave that bin of the grand average empty. Please leave this ' ...
+        'subject out, or revisit its artefact rejection.'], displayNameFor(file, subject), label)));
 end
 
 function [grandMean, grandSEM, weights] = combineSubjects(data, trialCount, weighted)
@@ -326,6 +405,7 @@ function validateCompatibility(subjects, sourceFiles)
                 'grand average needs the same number of channels.'], ...
                 subjectName, size(subject.data, 1), referenceName, size(reference.data, 1))));
         end
+        channelRows(subject, reference, subjectName, referenceName);
 
         if size(subject.data, 2) ~= size(reference.data, 2)
             throw(MException('Alakazam:GrandAverage', sprintf([ ...
@@ -334,6 +414,7 @@ function validateCompatibility(subjects, sourceFiles)
                 'start/stop when DefineBins ran).'], ...
                 subjectName, size(subject.data, 2), referenceName, size(reference.data, 2))));
         end
+        refuseDifferentAxis(subject, reference, 'times', subjectName, referenceName);
 
         subjectLabels = sort(string({subject.bindesc.label}));
         if ~isequal(subjectLabels, referenceLabels)
