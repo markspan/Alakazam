@@ -76,6 +76,9 @@ function [EEG, options] = Measure(input, varargin)
 %              .area for Area. The CSV exporter picks the right field(s) per
 %              window from .measure/.areaMode/.scope.
 %
+%   The scoring of one waveform is TransTools.MeasureScorer, which erpScoreSME
+%   shares, so the SME beside a value is the standard error of that value.
+%
 %   TOOLBOX OR OWN CODE. These are ERPLAB's measures (geterpvalues), but
 %   ERPLAB is not a toolbox Alakazam installs, and geterpvalues reads ERPLAB's
 %   ERPsets, where this works on Alakazam's averages and grand averages, pools
@@ -270,6 +273,7 @@ function m = computeWindow(EEG, win, allLabels, nBins)
 %     Integral                -> area   (signed trapz over the window)
 %     Fractional Peak Latency -> latency
 %     Fractional Area Latency -> latency
+%   The scoring itself is TransTools.MeasureScorer, shared with erpScoreSME.
     % Resolve the Channels field into one output "channel" per spec (a
     % single electrode, or a "{A+B+C}" pool), and build each spec's virtual
     % waveform V(c,:,b): the electrode itself, or the NaN-tolerant mean of
@@ -289,499 +293,59 @@ function m = computeWindow(EEG, win, allLabels, nBins)
         end
     end
 
-    [loIdx, hiIdx] = windowSampleRange(EEG.times, win.start, win.stop);
-    winTimes = reshape(EEG.times(loIdx:hiIdx), 1, []);
+    scoring = TransTools.MeasureScorer.prepare(win, EEG.times);
 
     amplitude = nan(nCh, nBins);
     latency   = nan(nCh, nBins);
     area      = nan(nCh, nBins);
 
-    width       = winWidth(win);
-    localPoints = winLocalPoints(win);
-    fraction    = winFraction(win);
-    areaMode    = winAreaMode(win);
-    % WHAT THE USER ASKED FOR, AND WHAT THAT MEANS, KEPT APART. Two names
-    % because they genuinely differ: the pre-unification "Integral" and
-    % "Peak Area" both compute an Area, and a single variable rewritten from
-    % one to the other loses the only record of what was chosen. That is not
-    % hypothetical -- the error message below has to report win.measure
-    % rather than the resolved name, precisely because the resolved one
-    % would tell the user about a measure they never picked.
-    requested = lower(strtrim(char(string(win.measure))));
-    [measure, useBand] = resolveMeasureKind(requested, width);
-    validateMeasureParameters(measure, useBand, width, fraction, win);
-
-    % Optional per-window baseline: subtract each virtual channel's own mean
-    % over the baseline interval before ANY measure, so amplitude, area and
-    % the fractional latencies are all taken relative to it (matters most
-    % for the area measures -- a DC offset inflates an integral). No-op when
-    % the window has no baseline set.
-    baseline = winBaseline(win);
-    if ~isempty(baseline)
-        [blo, bhi] = windowSampleRange(EEG.times, baseline(1), baseline(2));
-        for c = 1:nCh
-            for b = 1:nBins
-                base = mean(V(c, blo:bhi, b), 'omitnan');
-                if ~isnan(base)
-                    V(c, :, b) = V(c, :, b) - base;
-                end
-            end
-        end
-    end
-
-    % Locate the peak first for the measures that need one: Peak, a
-    % peak-band Area, and Fractional Peak Latency. Peak and peak-band Area
-    % may share the peak across channels via a reference channel (Analyzer's
-    % "search peak in a reference channel" mode); Fractional Peak Latency is
-    % always per-channel (each channel's rise to a fraction of its own
-    % peak). localPoints picks absolute (0) vs local (>=1) extremum.
-    needsPeak = strcmp(measure, 'peak') || strcmp(measure, 'fractional peak latency') ...
-        || (strcmp(measure, 'area') && useBand);
-    usesRef = ~isempty(win.refChannel) && (strcmp(measure, 'peak') || (strcmp(measure, 'area') && useBand));
-    peakSample = nan(nCh, nBins);
-    if needsPeak
-        if usesRef
-            refIdx = find(allLabels == string(win.refChannel), 1);
-            if isempty(refIdx)
-                throw(MException('Alakazam:Measure', sprintf( ...
-                    'Window "%s" names a reference channel ("%s") that I''m afraid is not in this dataset.', ...
-                    win.label, win.refChannel)));
-            end
-            for b = 1:nBins
-                peakSample(:, b) = findPeakSample(EEG.data(refIdx, loIdx:hiIdx, b), win.polarity, loIdx, localPoints);
-            end
-        else
-            for c = 1:nCh
-                for b = 1:nBins
-                    peakSample(c, b) = findPeakSample(V(c, loIdx:hiIdx, b), win.polarity, loIdx, localPoints);
-                end
-            end
-        end
-    end
-
-    switch measure
-        case 'mean amplitude'
-            for c = 1:nCh
-                for b = 1:nBins
-                    amplitude(c, b) = mean(V(c, loIdx:hiIdx, b), 'omitnan');
-                end
-            end
-
-        case 'area'
-            if useBand
-                for c = 1:nCh
-                    for b = 1:nBins
-                        s = peakSample(c, b);
-                        if isnan(s); continue; end
-                        amplitude(c, b) = V(c, s, b);
-                        latency(c, b)   = EEG.times(s);
-                        area(c, b)      = bandArea(EEG.times, V(c, :, b), EEG.times(s), width, areaMode);
-                    end
-                end
-            else
-                for c = 1:nCh
-                    for b = 1:nBins
-                        area(c, b) = areaOf(winTimes, V(c, loIdx:hiIdx, b), areaMode);
-                    end
-                end
-            end
-
-        case 'peak'
-            for c = 1:nCh
-                for b = 1:nBins
-                    s = peakSample(c, b);
-                    if isnan(s); continue; end
-                    amplitude(c, b) = V(c, s, b);
-                    latency(c, b)   = EEG.times(s);
-                end
-            end
-
-        case 'fractional peak latency'
-            for c = 1:nCh
-                for b = 1:nBins
-                    s = peakSample(c, b);
-                    if isnan(s); continue; end
-                    latency(c, b) = fractionalPeakLatency( ...
-                        V(c, loIdx:hiIdx, b), winTimes, win.polarity, s - loIdx + 1, fraction);
-                end
-            end
-
-        case 'fractional area latency'
-            for c = 1:nCh
-                for b = 1:nBins
-                    latency(c, b) = fractionalAreaLatency( ...
-                        V(c, loIdx:hiIdx, b), winTimes, fraction, areaMode);
-                end
-            end
-
-        otherwise
+    % Peak and peak-band Area may share the peak across channels via a
+    % reference channel (Analyzer's "search peak in a reference channel"
+    % mode); Fractional Peak Latency is always per-channel (each channel's
+    % rise to a fraction of its own peak).
+    usesRef = ~isempty(win.refChannel) && (strcmp(scoring.measure, 'peak') ...
+        || (strcmp(scoring.measure, 'area') && scoring.useBand));
+    if usesRef
+        refIdx = find(allLabels == string(win.refChannel), 1);
+        if isempty(refIdx)
             throw(MException('Alakazam:Measure', sprintf( ...
-                'Window "%s" has a measure type ("%s") that I don''t recognise.', win.label, char(string(win.measure)))));
+                'Window "%s" names a reference channel ("%s") that I''m afraid is not in this dataset.', ...
+                win.label, win.refChannel)));
+        end
     end
 
-    if strcmp(measure, 'area')
-        outMode = areaMode;
-        if useBand; outScope = 'band'; else; outScope = 'window'; end
+    for b = 1:nBins
+        if usesRef
+            shared = TransTools.MeasureScorer.findPeak(EEG.data(refIdx, scoring.lo:scoring.hi, b), scoring);
+        end
+        for c = 1:nCh
+            if usesRef
+                s = TransTools.MeasureScorer.score(V(c, :, b), EEG.times, scoring, shared);
+            else
+                s = TransTools.MeasureScorer.score(V(c, :, b), EEG.times, scoring);
+            end
+            amplitude(c, b) = s.amplitude;
+            latency(c, b)   = s.latency;
+            area(c, b)      = s.area;
+        end
+    end
+
+    % The area mode is the window's for the fractional area latency too: it
+    % selects which area is accumulated, and the SME has to read it from here.
+    if strcmp(scoring.measure, 'area')
+        outMode = scoring.areaMode;
+        if scoring.useBand; outScope = 'band'; else; outScope = 'window'; end
+    elseif strcmp(scoring.measure, 'fractional area latency')
+        outMode = scoring.areaMode;
+        outScope = '';
     else
         outMode = '';
         outScope = '';
     end
 
     m = struct('label', win.label, 'start', win.start, 'stop', win.stop, ...
-        'measure', win.measure, 'polarity', win.polarity, 'width', width, ...
-        'localPoints', localPoints, 'fraction', fraction, 'areaMode', outMode, ...
-        'scope', outScope, 'refChannel', win.refChannel, 'channels', {{specs.label}}, ...
-        'amplitude', amplitude, 'latency', latency, 'area', area);
-end
-
-function [measure, useBand] = resolveMeasureKind(requested, width)
-%RESOLVEMEASUREKIND  The computation a requested measure name asks for.
-%
-%   Folds the pre-unification names into the one Area measure:
-%     Integral  -> Area over the whole window (signed).
-%     Peak Area -> Area over a peak-locked band (signed).
-%
-%   Kept so that saved templates, tree nodes and .alm files from before the
-%   unification still replay. Otherwise Area's scope is set by its Width
-%   (0 or blank = the whole window, >0 = a peak-locked band that wide).
-%
-%   THE ONLY PLACE A MEASURE NAME IS TRANSLATED. Everything downstream sees
-%   the resolved name and nothing re-derives it, which is what keeps the
-%   translation checkable: one function to read, rather than a rewrite here
-%   and assumptions about it scattered over the next hundred lines.
-    forceBand = [];
-    measure = requested;
-    if strcmp(requested, 'integral')
-        measure = 'area'; forceBand = false;
-    elseif strcmp(requested, 'peak area')
-        measure = 'area'; forceBand = true;
-    end
-
-    useBand = false;
-    if strcmp(measure, 'area')
-        if ~isempty(forceBand)
-            useBand = forceBand;
-        else
-            useBand = ~isnan(width) && width > 0;
-        end
-    end
-end
-
-function validateMeasureParameters(measure, useBand, width, fraction, win)
-%VALIDATEMEASUREPARAMETERS  Refuse a window definition that cannot be
-%   measured, up front, so a bad one fails with a clear message rather than
-%   a column of NaN discovered later.
-%
-%   Reports win.measure, not the resolved name: a user who chose "Peak
-%   Area" should not be told about "area".
-    if strcmp(measure, 'area') && useBand && (isnan(width) || width <= 0)
-        throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is set up as a peak-band Area measure, but has no positive Width (ms) to integrate over -- could you add one?', win.label)));
-    end
-    if any(strcmp(measure, {'fractional peak latency', 'fractional area latency'})) ...
-            && (isnan(fraction) || fraction <= 0 || fraction >= 1)
-        throw(MException('Alakazam:Measure', sprintf( ...
-            'Window "%s" is a %s measure, but is missing a Fraction strictly between 0 and 1 -- would you set one?', ...
-            win.label, char(string(win.measure)))));
-    end
-end
-
-function w = winWidth(win)
-%WINWIDTH  A window's Peak Area band width (ms) as a numeric scalar, or
-%   NaN if absent/empty/non-numeric. Tolerant of a stored window that
-%   predates the Width field, or one whose width is only meaningful for a
-%   Peak Area measure and was left blank for the others.
-    if isfield(win, 'width') && ~isempty(win.width) && isnumeric(win.width)
-        w = double(win.width);
-    else
-        w = NaN;
-    end
-end
-
-function n = winLocalPoints(win)
-%WINLOCALPOINTS  A window's local-peak neighbourhood as a non-negative
-%   integer (0 = absolute extreme; the default and the behaviour of every
-%   window saved before this field existed).
-    if isfield(win, 'localPoints') && ~isempty(win.localPoints) && isnumeric(win.localPoints)
-        n = max(0, round(double(win.localPoints)));
-    else
-        n = 0;
-    end
-end
-
-function f = winFraction(win)
-%WINFRACTION  A window's fractional-latency fraction (0..1) as a numeric
-%   scalar, or NaN if absent/empty/non-numeric.
-    if isfield(win, 'fraction') && ~isempty(win.fraction) && isnumeric(win.fraction)
-        f = double(win.fraction);
-    else
-        f = NaN;
-    end
-end
-
-function mode = winAreaMode(win)
-%WINAREAMODE  An Area window's integration mode -- 'signed' (numerical
-%   integration, negatives subtract), 'rectified' (|v|), 'positive' (only
-%   the part above 0) or 'negative' (only the part below 0). Defaults to
-%   'signed', which is also what the old Integral / Peak Area measures
-%   (folded into Area) always did.
-    mode = 'signed';
-    if isfield(win, 'areaMode') && ~isempty(win.areaMode) && (ischar(win.areaMode) || isstring(win.areaMode))
-        cand = lower(strtrim(char(string(win.areaMode))));
-        if ismember(cand, {'signed', 'rectified', 'positive', 'negative'})
-            mode = cand;
-        end
-    end
-end
-
-function base = winBaseline(win)
-%WINBASELINE  A window's baseline interval as [start stop] ms (start <=
-%   stop), or [] when there is none. Accepts a 2-element numeric array or
-%   the raw "start stop" / "start, stop" text the dialog stores; anything
-%   else (blank, a single number, junk) means "no baseline".
-    base = [];
-    if ~isfield(win, 'baseline') || isempty(win.baseline)
-        return;
-    end
-    b = win.baseline;
-    if isnumeric(b) && numel(b) == 2
-        base = double(reshape(b, 1, 2));
-    else
-        txt = strtrim(char(string(b)));
-        if isempty(txt)
-            return;
-        end
-        nums = str2double(strtrim(strsplit(txt, {',', ' '})));
-        nums = nums(~isnan(nums));
-        if numel(nums) == 2
-            base = nums(:)';
-        end
-    end
-    if ~isempty(base) && base(1) > base(2)
-        base = base([2 1]);
-    end
-end
-
-function a = bandArea(times, wave, centreMs, width, mode)
-%BANDAREA  Area (uV.ms, per MODE) of the full-length WAVE (one bin's
-%   virtual channel, over TIMES) across a band WIDTH ms wide centred on
-%   CENTREMS. Takes the whole waveform (not a channel/bin index) because
-%   the band can extend past the search window and WAVE may be a pooled
-%   ROI mean. The band bounds snap to real samples the nearest-sample way
-%   the search window does, so a band running off the epoch edge clamps
-%   rather than erroring. Integration/NaN handling is areaOf's.
-    half = width / 2;
-    [lo, hi] = windowSampleRange(times, centreMs - half, centreMs + half);
-    a = areaOf(times(lo:hi), wave(lo:hi), mode);
-end
-
-function a = areaOf(t, y, mode)
-%AREAOF  Trapezoidal area of Y over T, by MODE: 'signed' (as-is, negatives
-%   subtract), 'rectified' (|y|), 'positive' (max(y,0)) or 'negative'
-%   (min(y,0)). NaN samples are dropped and the rest integrated at their
-%   own times; fewer than two real samples has no area (NaN).
-    t = reshape(t, 1, []);
-    y = reshape(y, 1, []);
-    valid = ~isnan(y);
-    if nnz(valid) < 2
-        a = NaN;
-        return;
-    end
-    t = t(valid);
-    y = y(valid);
-    switch mode
-        case 'rectified'
-            y = abs(y);
-        case 'positive'
-            y = max(y, 0);
-        case 'negative'
-            y = min(y, 0);
-        otherwise
-            % 'signed' -- leave y as-is.
-    end
-    a = trapz(t, y);
-end
-
-function s = findPeakSample(windowData, polarity, loIdx, localPoints)
-%FINDPEAKSAMPLE  The absolute sample index (into the full recording, not
-%   the window-relative slice WINDOWDATA) of the window's peak by POLARITY.
-%   With LOCALPOINTS >= 1 it returns the most extreme LOCAL peak -- a
-%   sample at least as extreme as its LOCALPOINTS neighbours on each side
-%   -- which avoids picking a window-edge sample or a lone noise spike the
-%   way the plain extreme can (ERPLAB's "local peak" / Analyzer's "local
-%   maximum"); if the window has no such local peak it falls back to the
-%   absolute extreme, matching both tools' own fallback. LOCALPOINTS == 0
-%   is the absolute extreme outright. NaN if every sample is NaN (e.g. an
-%   unresolved combo bin Average.m left as NaN): max/min on an all-NaN
-%   vector return NaN with idx == 1, which would otherwise look like a
-%   real match at the window's first sample.
-    windowData = reshape(windowData, 1, []);
-    neg = strcmpi(polarity, 'Negative');
-
-    if localPoints >= 1
-        localIdx = findLocalPeak(windowData, neg, localPoints);
-        if ~isnan(localIdx)
-            s = loIdx + localIdx - 1;
-            return;
-        end
-    end
-
-    if neg
-        [ext, idx] = min(windowData);
-    else
-        [ext, idx] = max(windowData);
-    end
-    if isnan(ext)
-        s = NaN;
-    else
-        s = loIdx + idx - 1;
-    end
-end
-
-function idx = findLocalPeak(w, neg, n)
-%FINDLOCALPEAK  Window-relative index of the most extreme local peak in W:
-%   a sample at least as extreme (by NEG) as the N samples on each side of
-%   it. NaN if there is none (window too short, or no interior extremum) --
-%   the caller then falls back to the absolute extreme. NaN neighbours do
-%   not disqualify a candidate (a few blanked samples should not hide a
-%   real local peak).
-    idx = NaN;
-    bestVal = [];
-    L = numel(w);
-    for i = (1 + n):(L - n)
-        v = w(i);
-        if isnan(v)
-            continue;
-        end
-        seg = w(i - n : i + n);
-        if neg
-            isPeak = all(v <= seg | isnan(seg));
-            better = isempty(bestVal) || v < bestVal;
-        else
-            isPeak = all(v >= seg | isnan(seg));
-            better = isempty(bestVal) || v > bestVal;
-        end
-        if isPeak && better
-            bestVal = v;
-            idx = i;
-        end
-    end
-end
-
-function latMs = fractionalPeakLatency(windowData, winTimes, polarity, peakLocalIdx, fraction)
-%FRACTIONALPEAKLATENCY  The (interpolated) latency at which the waveform
-%   rises through FRACTION x its peak amplitude on the onset side --
-%   searching back from the peak (PEAKLOCALIDX, window-relative) to the
-%   last crossing of the threshold. More robust than raw peak latency
-%   (ERPLAB's "fractional peak latency"). NaN if the peak is NaN or the
-%   waveform never drops below threshold within the window before the peak
-%   (window opened too late -- widen its Start).
-    w = reshape(windowData, 1, []);
-    if peakLocalIdx < 1 || peakLocalIdx > numel(w) || isnan(w(peakLocalIdx))
-        latMs = NaN;
-        return;
-    end
-    thr = fraction * w(peakLocalIdx);
-    neg = strcmpi(polarity, 'Negative');
-    latMs = NaN;
-    for i = peakLocalIdx : -1 : 2
-        if neg
-            crossed = w(i) <= thr && w(i - 1) > thr;
-        else
-            crossed = w(i) >= thr && w(i - 1) < thr;
-        end
-        if crossed
-            latMs = interpCrossing(winTimes(i - 1), w(i - 1), winTimes(i), w(i), thr);
-            return;
-        end
-    end
-end
-
-function latMs = fractionalAreaLatency(windowData, winTimes, fraction, mode)
-%FRACTIONALAREALATENCY  The (interpolated) latency that divides the
-%   window's cumulative area at FRACTION (e.g. 0.5 = 50% area latency, the
-%   robust onset/timing measure). NaN if fewer than two real samples or the
-%   total area is zero. NaN samples are dropped first.
-%
-%   MODE is the window's own .areaMode, applied to the waveform before
-%   integrating exactly as areaOf does it: 'signed' (as-is, negatives
-%   subtract), 'rectified' (|y|), 'positive' (max(y,0)) or 'negative'
-%   (min(y,0)). These are ERPLAB's four fractional-area measures --
-%   fninteglat, fareatlat, fareaplat and fareanlat respectively -- and
-%   Alakazam used to ignore MODE here and always integrate the signed area,
-%   which silently gave the 'signed' answer to a window asking for any of
-%   the other three.
-%
-%   WHICH MODE TO ASK FOR IS NOT COSMETIC. Only the signed cumulative area
-%   can be non-monotonic, and when it is, the fraction is genuinely
-%   ambiguous: a window whose positive and negative areas are comparable
-%   crosses its own 50% point more than once. This returns the FIRST
-%   crossing, which is the earliest latency at which the fraction is
-%   reached and the only one that answers "when did this component get
-%   halfway". (ERPLAB's fninteglat searches forward instead and reports the
-%   window edge in that situation, which is how the disagreement in
-%   Docs/luck.md was found.) The other three modes integrate a
-%   single-signed quantity, so their cumulative area is monotonic and the
-%   crossing is unique -- which is the reason to prefer one of them when a
-%   window genuinely spans components of both polarities.
-    if nargin < 4 || isempty(mode)
-        mode = 'signed';
-    end
-    y = reshape(windowData, 1, []);
-    t = reshape(winTimes, 1, []);
-    valid = ~isnan(y);
-    if nnz(valid) < 2
-        latMs = NaN;
-        return;
-    end
-    y = y(valid);
-    t = t(valid);
-    switch mode
-        case 'rectified'
-            y = abs(y);
-        case 'positive'
-            y = max(y, 0);
-        case 'negative'
-            y = min(y, 0);
-        otherwise
-            % 'signed' -- leave y as-is.
-    end
-
-    segArea = (y(1:end - 1) + y(2:end)) / 2 .* diff(t);   % per-interval trapezoid
-    cum = [0, cumsum(segArea)];                            % cumulative area at each sample
-    total = cum(end);
-    if total == 0
-        latMs = NaN;
-        return;
-    end
-    target = fraction * total;
-
-    % First interval whose cumulative area brackets the target.
-    k = find((cum(1:end - 1) - target) .* (cum(2:end) - target) <= 0, 1);
-    if isempty(k)
-        latMs = NaN;
-        return;
-    end
-    latMs = interpCrossing(t(k), cum(k), t(k + 1), cum(k + 1), target);
-end
-
-function tCross = interpCrossing(t1, v1, t2, v2, thr)
-%INTERPCROSSING  Linear-interpolated time between (T1,V1) and (T2,V2) at
-%   which the value equals THR. Falls back to T1 if the two values are
-%   equal (a flat segment exactly at the threshold).
-    if v2 == v1
-        tCross = t1;
-    else
-        tCross = t1 + (thr - v1) / (v2 - v1) * (t2 - t1);
-    end
-end
-
-function [loIdx, hiIdx] = windowSampleRange(times, startMs, stopMs)
-%WINDOWSAMPLERANGE  The [loIdx, hiIdx] sample range nearest [STARTMS,
-%   STOPMS] in TIMES: FieldTrip's rule for a latency range, which is also
-%   ERPLAB's (TransTools.WindowSamples). A window edge a few ms outside the
-%   data clamps to the edge sample; a window wholly outside is refused,
-%   where it used to be measured on the single edge sample.
-    [loIdx, hiIdx] = TransTools.WindowSamples(times, min(startMs, stopMs), ...
-        max(startMs, stopMs), 'Alakazam:Measure', 'measurement window');
+        'measure', win.measure, 'polarity', win.polarity, 'width', scoring.width, ...
+        'localPoints', scoring.localPoints, 'fraction', scoring.fraction, 'areaMode', outMode, ...
+        'scope', outScope, 'baseline', scoring.baseline, 'refChannel', win.refChannel, ...
+        'channels', {{specs.label}}, 'amplitude', amplitude, 'latency', latency, 'area', area);
 end

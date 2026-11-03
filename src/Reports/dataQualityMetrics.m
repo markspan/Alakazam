@@ -367,9 +367,10 @@ function rows = windowSME(EEG, windows, bins, labels, nChan)
 %   a per-channel function of the waveform erpScoreSME sees, so scoring it
 %   per-channel anyway would report an SME for a measurement nobody made.
 %
-%   A window restricted to a subset of CHANNELS emits rows for exactly
-%   those channels, for the same reason in miniature: the others were never
-%   measured, so an SME for them describes nothing.
+%   A window restricted to a subset of CHANNELS emits rows for exactly those
+%   channels, and a window measured on a pool emits a row for the pool, for
+%   the same reason in miniature: the others were never measured, so an SME
+%   for them describes nothing.
     rows = struct('window', {}, 'bin', {}, 'channel', {}, 'measure', {}, ...
         'method', {}, 'sme_uv', {}, 'score', {});
     if isempty(windows) || ~isfield(EEG, 'times') || isempty(EEG.times)
@@ -383,7 +384,10 @@ function rows = windowSME(EEG, windows, bins, labels, nChan)
             continue;
         end
         winLabel = char(string(fieldOrEmpty(win, 'label')));
-        measured = measuredChannels(win, labels);
+        [virtual, names] = measuredChannels(EEG, win, labels);
+        if isempty(names)
+            continue;
+        end
         for scored = scoreVariants(win)
             variant = scored{1};
             for b = 1:numel(bins)
@@ -391,13 +395,13 @@ function rows = windowSME(EEG, windows, bins, labels, nChan)
                 if isempty(member)
                     continue;
                 end
-                [sme, method, score] = erpScoreSME(EEG.data(:, :, member), times, variant);
-                for c = 1:nChan
-                    if isnan(sme(c)) || ~measured(c)
+                [sme, method, score] = erpScoreSME(virtual(:, :, member), times, variant);
+                for c = 1:numel(names)
+                    if isnan(sme(c))
                         continue;
                     end
                     rows(end + 1) = struct( ... %#ok<AGROW>
-                        'window', winLabel, 'bin', bins(b).label, 'channel', labels{c}, ...
+                        'window', winLabel, 'bin', bins(b).label, 'channel', names{c}, ...
                         'measure', char(string(variant.measure)), 'method', char(method), ...
                         'sme_uv', sme(c), 'score', score(c));
                 end
@@ -406,27 +410,34 @@ function rows = windowSME(EEG, windows, bins, labels, nChan)
     end
 end
 
-function mask = measuredChannels(win, labels)
-%MEASUREDCHANNELS  Logical mask over LABELS of the channels this window was
-%   actually measured on. A computed measurement carries .channels as the
-%   resolved list Measure produced (see computeWindow's {specs.label}); a
-%   window with none, or with an unrecognisable one, is treated as
-%   all-channels, which is what Measure itself does with a blank selection.
-    mask = true(1, numel(labels));
-    if ~isstruct(win) || ~isfield(win, 'channels') || isempty(win.channels)
-        return;
+function [virtual, names] = measuredChannels(EEG, win, labels)
+%MEASUREDCHANNELS  The waveforms this window was actually measured on, per
+%   trial, as channels x samples x trials, and their names: its electrodes, and
+%   its pools as the mean of their members, as Measure forms them. A computed
+%   measurement carries .channels as the resolved list Measure produced (see
+%   computeWindow's {specs.label}); a window with none is all channels, which
+%   is what Measure itself does with a blank selection. A channel this dataset
+%   does not have is one derived in Measure's own "let" block after averaging,
+%   which has no single trials to score.
+    wanted = fieldOrEmpty(win, 'channels');
+    if isempty(wanted)
+        wanted = labels;
     end
-    wanted = win.channels;
-    if ischar(wanted) || isstring(wanted)
-        wanted = cellstr(string(wanted));
+    wanted = cellstr(string(wanted));
+    specs = struct('label', {}, 'members', {});
+    for k = 1:numel(wanted)
+        try
+            specs = [specs, measureChannelSpecs(wanted{k}, string(labels), 'quality')]; %#ok<AGROW>
+        catch err
+            if ~strcmp(err.identifier, 'Alakazam:Measure')
+                rethrow(err);
+            end
+        end
     end
-    if ~iscell(wanted)
-        return;
-    end
-    wanted = cellfun(@(x) char(string(x)), wanted, 'UniformOutput', false);
-    candidate = ismember(labels, wanted);
-    if any(candidate)
-        mask = candidate;
+    names = {specs.label};
+    virtual = nan(numel(specs), size(EEG.data, 2), size(EEG.data, 3));
+    for c = 1:numel(specs)
+        virtual(c, :, :) = mean(EEG.data(specs(c).members, :, :), 1, 'omitnan');
     end
 end
 
