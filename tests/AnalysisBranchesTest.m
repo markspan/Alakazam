@@ -174,6 +174,7 @@ classdef AnalysisBranchesTest < matlab.unittest.TestCase
                       'S02: Average [AutoICA] (A)', 'S02: Average [without AutoICA] (A)'};
             branches = {'AutoICA', 'without AutoICA', 'AutoICA', 'without AutoICA'};
             seen = struct('visible', '', 'items', {{}}, 'selected', {{}}, 'byHand', '');
+            settled = false;
             timerObj = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                 'TasksToExecute', 60, 'TimerFcn', @(src, ~) drive(src));
             cleanup = onCleanup(@() delete(timerObj));
@@ -199,7 +200,14 @@ classdef AnalysisBranchesTest < matlab.unittest.TestCase
                 if isempty(drop) || isempty(list) || numel(list.Items) < 4
                     return;
                 end
+                % The first sight of the list can be while the dialog is still
+                % filling itself in, short of its uiwait. A tick later it is there.
+                if ~settled
+                    settled = true;
+                    return;
+                end
                 stop(src);
+                closes = onCleanup(@() delete(f(1)));   % a fault here must not leave it waiting
                 seen.visible = char(string(drop.Parent.Visible));
                 seen.items = drop.Items;
                 drop.Value = 'without AutoICA';

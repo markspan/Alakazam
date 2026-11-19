@@ -4,6 +4,178 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## V0.4.7.5 (2026-11-03)
+
+Every number below that changes does so when a node is recalculated, or a report
+made again; existing nodes keep what they were computed with.
+
+### Fixed
+
+- **A two-tailed cluster test now holds its stated level.** The report compared
+  FieldTrip's per-tail probabilities with the whole alpha, and on null data called a
+  cluster significant in 12.0% of runs where FieldTrip's own mask did in 5.5%. The
+  probabilities are now doubled (`correcttail = 'prob'`), so the printed *p* can be
+  read against the stated level, in the scalp and source tests alike, and in a run
+  split across workers, whose mask had the same fault. **Clusters reported as
+  significant before this with *p* between .025 and .05 were not.**
+- **Each person counts once.** Combination-bin, between-group and cluster tests took
+  every recording for a subject, so two sessions of one person counted as two
+  independent subjects (.154 false positives at .05 against .050). A person's
+  recordings are now averaged first, and the report says so.
+- **The mixed model no longer claims a slope it cannot have.** With one value per
+  person per condition lme4 refuses a random slope, so the model has always been an
+  intercept, labelled "singular"; on complete data that is the uncorrected
+  repeated-measures ANOVA. The report now says why, and adds the Huynh-Feldt *p* on the
+  complete cases, which is what the summary and the post-hoc gate read. False positives
+  with eight strongly ordered conditions were .103 at .05; the correction holds them
+  near .04.
+- **A session design has a random intercept per person per session.** Without it the
+  session effect was tested on about 75 degrees of freedom for 16 people (.19 false
+  positives at .05; now .037).
+- **The single-trial model keeps the condition in its random structure** when slopes
+  will not fit, as an intercept per person per condition, where it used to drop to an
+  intercept per person (.193 false positives at .05; now .030). `(1 + bin || person_id)`,
+  which for a factor does not give uncorrelated slopes, is gone.
+- **"Rank-biserial r" is the rank-biserial correlation**, signed. It was |Z| / sqrt(N)
+  from `rstatix::wilcox_effsize`, which read +.85 where the correlation is -.96.
+- **The SME is of the score beside it.** `erpScoreSME` and ERP Measure now share one
+  scorer (`TransTools.MeasureScorer`). It had drifted: 5.0 against 266 on a peak-band
+  area, 385 against 299 on a fractional area latency, and it ignored a window's
+  baseline, local peaks and area mode. A window on a pool gets the pool's SME, where it
+  got one for every channel. Bootstraps went from 200 to 1000, and are seeded.
+- **Grand Average matches channels by label**, where it paired them by position and
+  averaged Fz with Pz when the order differed. It refuses a different time axis and,
+  by name, a subject with no data in a bin; time-frequency and coherence maps no longer
+  average a blank cell over whichever subjects have it.
+- **One rejected trial no longer spoils CoherenceTopography.** The default blanked the
+  bin, and the band search silently read the bottom of the band (55 Hz for a 60 Hz tag).
+  The reference spectrum and the single-window estimator leave rejected trials out too.
+- **The filter-Hilbert coherence map blanks its edges**, as the wavelet map does: at the
+  first sample of a 2 s epoch a pure 60 Hz signal read 1.4e8 times more 64 Hz power than
+  in the middle. A 2 Hz band now blanks 562 ms at each end, and an epoch shorter than
+  that is blank throughout: use a wider band.
+- **Welch PSD does not cross a boundary event.** Segments are laid out in each stretch
+  between boundaries, as `spectopo` does.
+- **SNR leaves other rows' frequencies out of its neighbours.** On a 1 s epoch a 64 Hz
+  tag sat among the neighbours of 60 Hz, and took its SNR from 1059 to 14.
+- **Fourier: a rejected channel takes out only itself**, in Volt, Power, the densities
+  and Complex, where it blanked the segment on every channel. The Volt scale itself is
+  unchanged. **Complex phase is measured from time zero**, as in Spectral Measure and
+  FieldTrip; it was from the first sample of the epoch.
+- **The newcrossf phase lag is a circular mean** (an antiphase channel read -0.63 rad).
+- **The single-window coherence takes the reference's power over the trials the
+  cross-spectrum used** (a channel identical to its reference read .504 with half its
+  trials rejected).
+- **A bin with one trial has no standard error** (NaN, where it read 0), and
+  CrossCorrelation's trial count leaves rejected trials out.
+- **ERP Measure's results carry the window's baseline**, as its header always said, and
+  a fractional area latency keeps its area mode.
+
+### Added
+
+- **Equalise trials across bins**, in Spectral Measure, Coherence Map and CohTopo:
+  averages over random subsets that give every bin the same number of trials, since
+  coherence and ITC rise as the trials fall. A note is printed when the counts differ
+  and it is off.
+
+### Changed
+
+- **The statistics report shows each test with its check, always.** A *t*-test and its
+  rank-based counterpart are both reported, and Shapiro-Wilk only describes the data:
+  it used to choose one of the two, silently, and on the raw values of two groups pooled,
+  as the manual did not say. Three or more conditions get the Friedman check the manual
+  promised.
+- **BCa intervals use 2000 resamples and are seeded**, so rendering twice gives the
+  same interval. They take about a third of the time they took at 200.
+
+## V0.4.7.4 (2026-11-02)
+
+### Changed
+
+- **Datasets keep EEGLAB's table of a recording's events, `EEG.urevent`, as
+  EEGLAB does.** It is made at import, or by the next step on the continuous
+  data of a workspace saved before; events a step or a plugin adds get an
+  entry, and events since removed stay in it. So a dataset exported as `.set`
+  still lets EEGLAB's `eeg_context` and `eeg_time2prev` find what came before
+  and after each trial, also events no longer in the dataset. Trials cut before
+  this version have no table until they are cut again from continuous data.
+- **Sort by in the epoch view also offers the next and previous events on
+  trials cut in EEGLAB**, measured from that table.
+- **A grand average no longer carries its first subject's table.**
+
+### Fixed
+
+- **Recalculating the steps below a changed node now runs them as every other
+  run does.** It called them directly, without converting the bins of a saved
+  workspace or keeping per-channel fields in step with the channels.
+
+## V0.4.7.3 (2026-10-24)
+
+### Changed
+
+- **Which trials are in a bin is kept in one place: on the trials.** Each
+  trial carries the bins it is in and, beside them, the reaction time each
+  bin captured (`EEG.epoch(t).bini` and `.binrt`; on continuous data the
+  same pair on each event). The bins no longer list their events, trials
+  and reaction times as well, which every step that changed the trials had
+  to keep in step and which readers could believe over the trials' own
+  tags. A trial in two bins now keeps the reaction time of each. Workspaces
+  saved before are read as they were and converted when a step runs on
+  them; there is nothing to do.
+- **The Deconvolve, RESS and Beamformer plugins need this version.**
+  Deconvolve 0.1.5, RESS and Beamformer read the bins through Alakazam
+  rather than in their own way; Install plugins warns when they are
+  installed on an older Alakazam.
+
+### Fixed
+
+- **Running DefineBins again on trials already cut updates their bins.**
+  Without an epoch window it tagged the events again but left each trial
+  with its old bins, so Average and the views went on using those.
+
+## V0.4.7.2 (2026-10-22)
+
+### Added
+
+- **Derive Channels overwrites and removes channels.** A name the dataset
+  already has is overwritten in place, keeping its place, scalp position and
+  type: `let ECG = -ECG` turns an inverted ECG the right way up. `let ECG2 =
+  []` removes a channel. The lines run in order, each on the channels the
+  lines above left, and a channel name in double quotes works on the left
+  as well (`let "53" = -"53"`). A channel the ICA decomposition was computed
+  on is not removed, since the components would no longer match the data.
+  On an average, an overwritten channel has no error band, as a derived one
+  has none.
+
+### Changed
+
+- **The "please wait" indicator is Alakazam's own, and shows the busy
+  cursor everywhere.** MATLAB's progress dialog dims the window with a layer
+  that always shows the arrow, whatever the window's cursor is, so while a
+  transformation, an export or a load ran only the dialog's bar looked busy.
+  The new layer looks the same (a title, the message, a sliding or filling
+  bar, the time left) and shows the busy cursor over the whole window. A
+  dropped branch, Apply to All Raw Files and Install plugins show it over
+  the whole window too, not only over the tree or the ribbon.
+- **A let block in ERP Measure adds to the channels derived above it.**
+  It used to remove every derived channel first, so a Measure with its own
+  `let` lines lost the channels a Derive Channels step had made. It now
+  keeps them, and overwrites one only when it names it again.
+
+### Fixed
+
+- **A second Derive Channels can use the channels of the first.** Each
+  step removed every derived channel before it ran, so deriving ECG2 from ECG,
+  removing ECG and then deriving ECG from ECG2 in another step failed with
+  "ECG2 is not a channel", although the dialog listed it.
+- **Sorting the trials by the next or previous event finds the next one.**
+  An event between two samples, as every R-peak of the Heartbeats plugin is,
+  came a fraction of a sample after its epoch's time zero and was taken for
+  its own next event: sorted by "Next heartbeat", every trial was at 0. Which
+  event is the trial's own is now decided on its exact latency. Epochs cut
+  before this keep their old values until DefineBins is run again
+  (Recalculate).
+
 ## V0.4.7.1 (2026-10-21)
 
 ### Added

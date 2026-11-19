@@ -34,7 +34,7 @@ function plan = planDescendantRecalc(this, parentFile, parentEEG)
                 childTransformId, char(string(childMeta.id))));
         end
 
-        [newChildEEG, ~] = feval(childTransformId, parentEEG, childMeta.params);
+        [newChildEEG, ~] = TransTools.invoke(childTransformId, parentEEG, childMeta.params);
         newChildEEG.Call   = childMeta.Call;
         newChildEEG.params = childMeta.params;
         newChildEEG.File   = childFile;

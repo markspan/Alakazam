@@ -8,6 +8,7 @@ Two conditions: "__BIN1_MD__" vs. "__BIN2_MD__".
 grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__",
                        bin %in% c("__BIN1_R__", "__BIN2_R__")) %>% droplevels()
 __BLOCKMATCHDIAGNOSTIC__
+grp <- per_person(grp)
 
 descr_list <- list()
 res_list <- list()
@@ -34,49 +35,30 @@ for (ch in unique(grp$channel)) {
 
   wide <- d %>% select(dataset, bin, value) %>% pivot_wider(names_from = bin, values_from = value)
   diffs <- wide[["__BIN2_R__"]] - wide[["__BIN1_R__"]]
-  # Base R's shapiro.test(), not rstatix's shapiro_test(): the latter's
-  # tidied $p column is only reliable for its GROUPED (data %>%
-  # group_by() %>% shapiro_test()) form -- called on a bare vector it can
-  # come back without a $p column at all. Base shapiro.test() has a
-  # stable list return ($statistic, $p.value); tryCatch handles the
-  # genuine edge cases it errors on outright (n < 3, zero variance). Not
-  # narrated -- used only to choose which test below to report.
-  shap <- tryCatch(shapiro.test(diffs), error = function(e) NULL)
-  use_parametric <- is.null(shap) || is.na(shap$p.value) || shap$p.value >= .05
-
-  # THE EFFECT SIZE MUST BE THE SAME SUBTRACTION AS THE TEST.
-  # t.test/wilcox.test below is bin2 - bin1, in the order EEG.bindesc
-  # gives, but cohens_d(value ~ bin)/wilcox_effsize subtract in the order
-  # of the FACTOR LEVELS, and preambleText builds that factor with
-  # mutate(bin = factor(bin)), whose levels are alphabetical. Re-levelling
-  # here rather than computing the effect size by hand keeps rstatix's
-  # bootstrap CI, which a mean/sd of the difference vector would lose.
-  d_lvl <- d %>% mutate(bin = factor(bin, levels = c("__BIN2_R__", "__BIN1_R__")))
-
-  if (use_parametric) {
-    tt <- t.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE)
-    # The bootstrap CI (bca, nboot=200) can fail on degenerate data (e.g.
-    # a near-constant difference vector) with an R error from inside the
-    # boot package rather than a clean NA -- caught here so that failure
-    # only blanks the CI, not this channel's whole result.
-    eff <- tryCatch(d_lvl %>% rstatix::cohens_d(value ~ bin, paired = TRUE, ci = TRUE, ci.type = "bca", nboot = 200),
-                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
-    bf <- bf10_ttest(x = wide[["__BIN2_R__"]], y = wide[["__BIN1_R__"]], paired = TRUE)
-    res <- tibble(Channel = ch, Test = "Paired t-test", Statistic = unname(tt$statistic), df = unname(tt$parameter),
-                  p = apa_p(tt$p.value), Effect = "Cohen's dz", Estimate = eff$effsize,
-                  CI_low = eff$conf.low, CI_high = eff$conf.high,
-                  BF10 = fmt_bf(bf), Evidence = bf_word(bf))
-    p_val <- tt$p.value; test_id <- "paired_t"
-  } else {
-    wt <- wilcox.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE, conf.int = TRUE)
-    eff <- tryCatch(d_lvl %>% rstatix::wilcox_effsize(value ~ bin, paired = TRUE, ci = TRUE),
-                     error = function(e) tibble(effsize = NA_real_, conf.low = NA_real_, conf.high = NA_real_))
-    res <- tibble(Channel = ch, Test = "Wilcoxon signed-rank", Statistic = unname(wt$statistic), df = NA_real_,
-                  p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = eff$effsize,
-                  CI_low = eff$conf.low, CI_high = eff$conf.high)
-    p_val <- wt$p.value; test_id <- "wilcoxon_signed_rank"
+  # THE TEST OF RECORD AND ITS CHECK, BOTH, ALWAYS. The t-test is what the summary
+  # below carries. The Wilcoxon sits beside it, and the Shapiro-Wilk p describes
+  # the differences. None of them chooses among the others (see shapiro_note).
+  #
+  # THE EFFECT SIZE IS THE SAME SUBTRACTION AS THE TEST: bin2 - bin1, in the
+  # order EEG.bindesc gives, for all of them.
+  tt <- t.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE)
+  eff <- cohens_d_ci(diffs)
+  bf <- bf10_ttest(x = wide[["__BIN2_R__"]], y = wide[["__BIN1_R__"]], paired = TRUE)
+  res <- tibble(Channel = ch, Test = "Paired t-test", Statistic = unname(tt$statistic), df = unname(tt$parameter),
+                p = apa_p(tt$p.value), Effect = "Cohen's dz", Estimate = eff$effsize,
+                CI_low = eff$conf.low, CI_high = eff$conf.high,
+                BF10 = fmt_bf(bf), Evidence = bf_word(bf), Shapiro_Wilk_p = shapiro_note(diffs))
+  p_val <- tt$p.value; test_id <- "paired_t"
+  wt <- tryCatch(suppressWarnings(wilcox.test(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE, conf.int = TRUE)),
+                 error = function(e) NULL)
+  check <- NULL
+  if (!is.null(wt)) {
+    rb <- rank_biserial_ci(wide[["__BIN2_R__"]], wide[["__BIN1_R__"]], paired = TRUE)
+    check <- tibble(Channel = ch, Test = "Wilcoxon signed-rank", Statistic = unname(wt$statistic), df = NA_real_,
+                    p = apa_p(wt$p.value), Effect = "Rank-biserial r", Estimate = rb$effsize,
+                    CI_low = rb$conf.low, CI_high = rb$conf.high)
   }
-  res_list[[ch]] <- res
+  res_list[[ch]] <- bind_rows(res, check)
 
   omnibus <- bind_rows(omnibus, tibble(group = tag, window = "__WINDOW_R__", measure = "__MEASURETYPE_R__", channel = ch, contrast = NA_character_, role = "primary", design = "paired_t", test = paste0(test_id, "_test"), p = p_val,
                                         estimate = res$Estimate, conf.low = res$CI_low, conf.high = res$CI_high))

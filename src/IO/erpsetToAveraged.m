@@ -51,7 +51,7 @@ function EEG = erpsetToAveraged(ERP)
     % so bins come back as plain bins.
     labels = binLabels(ERP, nbin);
     accepted = acceptedTrials(ERP, nbin);
-    bindesc = repmat(struct('index', 0, 'label', '', 'n', 0, 'combo', [], 'trials', []), 1, nbin);
+    bindesc = repmat(struct('index', 0, 'label', '', 'n', 0, 'combo', []), 1, nbin);
     for b = 1:nbin
         bindesc(b).index = b;
         bindesc(b).label = labels{b};

@@ -116,24 +116,28 @@ function [EEG, options] = DefineBins(input, varargin)
 %
 % Adds to EEG:
 %   EEG.bindesc(b) : struct per bin with fields index, label, script, plan,
-%                    events (indices into EEG.event), rt (per-event delay to
-%                    the captured neighbour, ms; NaN when none), n, rtTrim
-%                    (for a bin whose 'rt within' window is relative to the
-%                    mean reaction time, e.g. (150, mean + 2.5 sd] ms: the
-%                    mean, sd and bounds it resolved to in this recording,
-%                    and how many trials it removed; [] otherwise), filters
-%                    (for every other test about the bin's trials as a
-%                    whole, such as rank(rt) within [0, 50] or field ibi
-%                    within (median, inf): the test, the statistics of its
-%                    values, the window it resolved to and how many trials
-%                    it removed; [] when there are none), and - once
-%                    epoched - trials (indices into the epoch stack).
+%                    combo, n (how many events it matched), rtTrim (for a
+%                    bin whose 'rt within' window is relative to the mean
+%                    reaction time, e.g. (150, mean + 2.5 sd] ms: the mean,
+%                    sd and bounds it resolved to in this recording, and how
+%                    many trials it removed; [] otherwise), and filters (for
+%                    every other test about the bin's trials as a whole,
+%                    such as rank(rt) within [0, 50] or field ibi within
+%                    (median, inf): the test, the statistics of its values,
+%                    the window it resolved to and how many trials it
+%                    removed; [] when there are none). Which events are in
+%                    a bin is not listed here but on the events:
 %   EEG.event(i).bini : row vector of bin numbers this event belongs to
-%                    (ERPLAB-style; an event may be in several bins).
+%                    (ERPLAB-style; an event may be in several bins), and
+%   EEG.event(i).binrt : beside it, the delay to the neighbour each of those
+%                    bins captured (ms; NaN when none), the reaction time.
 % With an .epoch window (see above) it also segments EEG.data into
 % channels x time x trials, sets DataFormat = 'EPOCHED', fills EEG.times and
-% EEG.epoch (one entry per trial, tagged with its bins), and records in
-% EEG.etc.alz.epochStart the sample of the input each trial starts at.
+% EEG.epoch (one entry per trial, carrying its event's .bini and .binrt, the
+% one store of bin membership once epoched: see TransTools.BinMembership),
+% and records in EEG.etc.alz.epochStart the sample of the input each trial
+% starts at. Run on data that is already epoched, without a window, it tags
+% the events again and copies their tags onto the trials.
 %
 %% WHICH SAMPLE IS t = 0
 %
@@ -286,6 +290,11 @@ function [EEG, options] = DefineBins(input, varargin)
     %  and only the bin tags are added.
     if ~isempty(epochWin)
         [EEG, bindesc] = DefineBinsEngine.cutEpochs(EEG, bindesc, epochWin, centerLat, zeroLat);
+    elseif (isfield(EEG, 'data') && size(EEG.data, 3) > 1) ...
+            || strcmpi(TransTools.FieldOr(EEG, 'DataFormat', ''), 'EPOCHED')
+        % Bins tagged again on trials already cut: each trial takes its own
+        % events' new tags, the store a trial's bins are read from.
+        EEG = TransTools.BinMembership.fromEvents(EEG);
     end
     EEG.bindesc = bindesc;
 
@@ -326,9 +335,10 @@ function reportBins(bindesc, EEG, epochNote)
     end
     for b = 1:numel(bindesc)
         d = bindesc(b);
-        valid = ~isnan(d.rt);
+        [~, rts] = TransTools.BinMembership.of(EEG, b);
+        valid = ~isnan(rts);
         if any(valid)
-            rtStr = sprintf('  (mean delay %.0f ms)', mean(d.rt(valid)));
+            rtStr = sprintf('  (mean delay %.0f ms)', mean(rts(valid)));
         else
             rtStr = '';
         end

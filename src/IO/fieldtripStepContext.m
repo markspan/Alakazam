@@ -84,7 +84,7 @@ function d = definedTrials(result)
             'recalculate the DefineBins step and export again?']));
     end
     nTrials = size(result.data, 3);
-    ordinary = find(arrayfun(@(b) isempty(b.combo), result.bindesc));
+    ordinary = find(~TransTools.IsComboBin(result.bindesc));
     membership = false(nTrials, numel(ordinary));
     for j = 1:numel(ordinary)
         membership(TransTools.BinTrials(result, ordinary(j)), j) = true;

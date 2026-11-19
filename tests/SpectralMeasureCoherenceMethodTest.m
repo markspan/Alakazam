@@ -132,6 +132,20 @@ classdef SpectralMeasureCoherenceMethodTest < matlab.unittest.TestCase
             testCase.verifyGreaterThan(result.spectralMeasures{1}.coherence, 0.5);
         end
 
+        function newcrossfsLagIsAveragedOnTheCircle(testCase)
+        %   An angle wraps at +/-pi. The arithmetic mean over frames of a lag near
+        %   +/-pi is near 0: an antiphase channel used to read -0.63 rad.
+            testCase.assumeTrue(testCase.haveNewcrossf(), 'EEGLAB''s newcrossf is not available.');
+            EEG = testCase.recording(20, 30);
+            EEG.data(1, :, :) = 2 * mean(EEG.data, 1) - EEG.data(1, :, :) - 2 * EEG.data(2, :, :) + EEG.data(2, :, :);
+            opts = testCase.options(struct('Method', 'newcrossf', 'WinSize', 100, 'PadRatio', 4, ...
+                'TimesOut', 60, 'MinFreq', 12, 'MaxFreq', 30));
+
+            got = SpectralMeasure(EEG, opts).spectralMeasures{1};
+
+            testCase.verifyGreaterThan(abs(got.phaselag), 3);
+        end
+
         function newcrossfLeavesARejectedTrialOut(testCase)
         %NEWCROSSFLEAVESAREJECTEDTRIALOUT  Rejection blanks a trial to NaN. Handed
         %   to newcrossf, one such trial made its whole image NaN, so every row's

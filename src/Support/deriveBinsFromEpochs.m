@@ -85,6 +85,9 @@ function EEG = deriveBinsFromEpochs(EEG)
     if ~isfield(EEG.event, 'bini')
         [EEG.event.bini] = deal([]);
     end
+    if ~isfield(EEG.event, 'binrt')
+        [EEG.event.binrt] = deal([]);
+    end
 
     anchorType = strings(1, nTrials);
     anchorType(valid) = arrayfun(@(ei) string(EEG.event(ei).type), anchorEvent(valid));
@@ -92,31 +95,33 @@ function EEG = deriveBinsFromEpochs(EEG)
     trialNums = find(valid);
 
     bindesc = struct('index', {}, 'label', {}, 'script', {}, 'plan', {}, ...
-                      'combo', {}, 'events', {}, 'rt', {}, 'n', {}, 'trials', {});
+                      'combo', {}, 'n', {});
     for b = 1:numel(uTypes)
         members  = trialNums(ic == b);
         eventIdx = anchorEvent(members);
         for k = 1:numel(eventIdx)
-            EEG.event(eventIdx(k)).bini = [EEG.event(eventIdx(k)).bini, b];
+            EEG.event(eventIdx(k)).bini  = [EEG.event(eventIdx(k)).bini, b];
+            EEG.event(eventIdx(k)).binrt = [EEG.event(eventIdx(k)).binrt, NaN];
         end
         bindesc(b).index  = b;
         bindesc(b).label  = char(uTypes(b));
         bindesc(b).script = '';
         bindesc(b).plan   = [];
         bindesc(b).combo  = [];
-        bindesc(b).events = eventIdx;
-        bindesc(b).rt     = nan(1, numel(eventIdx));
         bindesc(b).n      = numel(eventIdx);
-        bindesc(b).trials = members;
     end
 
-    newEpoch = struct('event', {}, 'eventtype', {}, 'eventlatency', {}, 'bini', {});
+    % Each trial carries its anchor event's bins (and no reaction times: an
+    % imported epoch knows none), the one store of bin membership on epoched
+    % data (see TransTools.BinMembership).
+    newEpoch = struct('event', {}, 'eventtype', {}, 'eventlatency', {}, 'bini', {}, 'binrt', {});
     for t = 1:nTrials
         if ~valid(t)
             newEpoch(t).event        = [];
             newEpoch(t).eventtype    = '';
             newEpoch(t).eventlatency = 0;
             newEpoch(t).bini         = [];
+            newEpoch(t).binrt        = [];
             continue;
         end
         ei = anchorEvent(t);
@@ -124,6 +129,7 @@ function EEG = deriveBinsFromEpochs(EEG)
         newEpoch(t).eventtype    = EEG.event(ei).type;
         newEpoch(t).eventlatency = 0;
         newEpoch(t).bini         = EEG.event(ei).bini;
+        newEpoch(t).binrt        = EEG.event(ei).binrt;
     end
 
     EEG.epoch   = newEpoch;

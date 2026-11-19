@@ -159,6 +159,45 @@ classdef EpochSortTest < matlab.unittest.TestCase
             testCase.verifyEqual(key.values, [450 NaN 620]);
         end
 
+        function trialsCutInEeglabAreMeasuredFromItsOwnTable(testCase)
+        %TRIALSCUTINEEGLABAREMEASUREDFROMITSOWNTABLE  pop_epoch records no
+        %   neighbours, and an epoch of its lists every event it holds, the
+        %   time-locking one at latency 0. The delays are those it wrote beside
+        %   them, measured from the event, also between samples.
+            testCase.assumeNotEmpty(which('pop_epoch'), 'EEGLAB is not on the path.');
+            epoched = EpochSortTest.cutInEeglab();
+
+            key = EpochSortTest.keyWithId(epochSortKeys(epoched), 'next:R');
+
+            testCase.verifyEqual(key.values, [448 NaN 625 300], 'AbsTol', 1e-6);
+            testCase.verifyEqual(epoched.epoch(1).eventlatency{2}, 448, 'AbsTol', 1e-6);
+        end
+
+        function neighboursNoLongerAmongTheEventsAreStillFound(testCase)
+        %NEIGHBOURSNOLONGERAMONGTHEEVENTSARESTILLFOUND  What the table is for:
+        %   the events were pruned, and it still says what came next.
+            testCase.assumeNotEmpty(which('pop_epoch'), 'EEGLAB is not on the path.');
+            epoched = EpochSortTest.cutInEeglab();
+            epoched.event = epoched.event(strcmp({epoched.event.type}, 'S1'));
+            epoched = eeg_checkset(epoched, 'eventconsistency');
+
+            key = EpochSortTest.keyWithId(epochSortKeys(epoched), 'next:R');
+
+            testCase.verifyEqual(key.values, [448 NaN 625 300], 'AbsTol', 1e-6);
+        end
+
+        function aTrialWhoseEventHasNoEntryHasNoNeighbours(testCase)
+        %ATRIALWHOSEEVENTHASNOENTRYHASNONEIGHBOURS  Added to the trials after
+        %   they were cut, say. The other trials still have theirs.
+            testCase.assumeNotEmpty(which('pop_epoch'), 'EEGLAB is not on the path.');
+            epoched = EpochSortTest.cutInEeglab();
+            epoched.event(epoched.epoch(1).event(1)).urevent = [];
+
+            key = EpochSortTest.keyWithId(epochSortKeys(epoched), 'next:R');
+
+            testCase.verifyEqual(key.values, [NaN NaN 625 300], 'AbsTol', 1e-6);
+        end
+
         function aTrialsOwnEventBetweenSamplesIsNotItsNeighbour(testCase)
         %ATRIALSOWNEVENTBETWEENSAMPLESISNOTITSNEIGHBOUR  The reported failure:
         %   the Heartbeats plugin places R-peaks between samples, time zero is
@@ -316,6 +355,26 @@ classdef EpochSortTest < matlab.unittest.TestCase
                 'eventlatency', {0, 0, 0, 0}, 'bini', {1, 2, 1, 2});
             EEG.bindesc = struct('index', {1, 2}, 'label', {'A', 'B'}, 'combo', {[], []}, ...
                 'trials', {[1 3], [2 4]}, 'rt', {[NaN NaN], [NaN NaN]});
+        end
+
+        function epoched = cutInEeglab()
+        %CUTINEEGLAB  Four trials cut by EEGLAB itself at 100 Hz, from a set
+        %   that has EEG.urevent. The second has no response in its window, and
+        %   the last holds an event before its own.
+            EEG = eeg_emptyset();
+            EEG.data = randn(2, 2000);
+            EEG.nbchan = 2;
+            EEG.pnts = 2000;
+            EEG.trials = 1;
+            EEG.srate = 100;
+            EEG.xmin = 0;
+            EEG.xmax = 19.99;
+            EEG.times = (0:1999) / 100;
+            EEG.chanlocs = struct('labels', {'Cz', 'Pz'});
+            EEG.event = struct('type', {'S1', 'R', 'S1', 'S1', 'R', 'X', 'S1', 'R'}, ...
+                'latency', {300.4, 345.2, 800.7, 1300.1, 1362.6, 1690, 1700, 1730});
+            EEG = eeg_checkset(EEG, 'makeur');
+            epoched = pop_epoch(EEG, {'S1'}, [-0.2 0.8]);
         end
 
         function key = keyWithId(keys, id)

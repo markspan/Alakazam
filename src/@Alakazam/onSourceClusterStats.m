@@ -39,6 +39,8 @@ function onSourceClusterStats(this)
     if isempty(spec)
         return; % cancelled
     end
+    % Recordings of one person become one subject (ClusterStats.averageWithinPerson).
+    spec.contrast.personOf = this.candidatePersonLabels(spec.sourceFiles);
 
     % Both are onCleanup handles whose whole job is to stay alive until this
     % function returns, so neither is "unused" and neither can become a ~:

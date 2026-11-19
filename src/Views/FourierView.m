@@ -200,8 +200,8 @@ classdef FourierView < AlakazamView
             % drawn is made real first (magnitudeOf, angle).
             %
             % PHASE IS SHOWN WRAPPED, in [-pi, pi], and NOT UNWRAPPED
-            % ACROSS FREQUENCY. Fourier measures phase from the segment's
-            % first sample, so every spectrum carries a ramp of 2*pi*f times
+            % ACROSS FREQUENCY. Fourier measures phase from time zero, so a
+            % response at any other time carries a ramp of 2*pi*f times
             % the time at which its activity is centred, and unwrap() summed
             % that ramp over every bin: on a five-minute recording it drew a
             % straight line reaching 10^4 to 10^5 rad by 100 Hz, which says
@@ -1133,7 +1133,7 @@ end
 function phrase = trialBinPhrase(EEG, t)
 %TRIALBINPHRASE  The bin(s) trial T belongs to, as title text ('' if none).
 %
-%   Membership itself is Support/trialBins; this is only the wording.
+%   Membership itself is TransTools.BinMembership; this is only the wording.
 %
 %   THE LABEL IS QUOTED because bin labels routinely contain commas -- real
 %   ones from DefineBins read like 'frequent (c), preceded by rare (c)' --
@@ -1142,7 +1142,7 @@ function phrase = trialBinPhrase(EEG, t)
 %   leaves the reader no way to see where the bin name ends, or whether
 %   they are looking at one bin or two.
     phrase = '';
-    bins = trialBins(EEG, t);
+    bins = TransTools.BinMembership.ofTrial(EEG, t);
     if isempty(bins)
         return;
     end

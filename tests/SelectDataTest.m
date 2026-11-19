@@ -21,14 +21,18 @@ classdef SelectDataTest < matlab.unittest.TestCase
 %   revert of the (:)' fix in rangeArgs fails these for the right reason.
 %
 %   THE SECOND BUG THIS PINS. Removing or keeping trials went through
-%   pop_select, which renumbers EEG.epoch but not DefineBins' per-bin trial
-%   lists (EEG.bindesc(b).trials), and TransTools.BinTrials reads those first.
-%   Found on FieldTrip's ERP tutorial recording: 192 trials, trials 1 to 3
-%   removed, and Average failed with "Index must not exceed 189" because
-%   every bin still listed its old trials. Where the old numbers stay in
-%   range it averages the wrong trials instead. These cases cut real trials
-%   with DefineBins (binnedTrials), so the bins, events and records are the
-%   ones the app makes, and each trial carries a value that names it.
+%   pop_select, which keeps the EEG.epoch entries of the trials it keeps but
+%   knew nothing of the per-bin trial lists DefineBins also kept
+%   (EEG.bindesc(b).trials), which TransTools.BinTrials read first. Found on
+%   FieldTrip's ERP tutorial recording: 192 trials, trials 1 to 3 removed,
+%   and Average failed with "Index must not exceed 189" because every bin
+%   still listed its old trials. Where the old numbers stay in range it
+%   averages the wrong trials instead. Since 2026-10-24 a trial's bins and
+%   reaction times are on the trial itself (EEG.epoch(t).bini and .binrt,
+%   see TransTools.BinMembership), so they follow pop_select; a dataset that
+%   still has the lists is converted first. These cases cut real trials with
+%   DefineBins (binnedTrials), so the bins, events and records are the ones
+%   the app makes, and each trial carries a value that names it.
 %
 %   Run with: runtests('tests/SelectDataTest.m').
 %
@@ -89,24 +93,25 @@ classdef SelectDataTest < matlab.unittest.TestCase
             testCase.verifyEqual([averaged.bindesc.n], [2 3]);
         end
 
-        function removingTrialsRenumbersEachBinsTrialList(testCase)
-        %REMOVINGTRIALSRENUMBERSEACHBINSTRIALLIST  The lists themselves, and
-        %   what runs beside them: each kept trial keeps its own reaction
-        %   time and event, and the count follows. Trials 4 to 8 become 1 to
-        %   5, so A (old 5 7) is 2 4 and B (old 4 6 8) is 1 3 5.
+        function eachKeptTrialKeepsItsBinsAndReactionTimes(testCase)
+        %EACHKEPTTRIALKEEPSITSBINSANDREACTIONTIMES  The bins, and what runs
+        %   beside them: each kept trial keeps its own reaction time and
+        %   event, and the count follows. Trials 4 to 8 become 1 to 5, so A
+        %   (old 5 7) is 2 4 and B (old 4 6 8) is 1 3 5.
             epoched = binnedTrials(testCase);
             opts = offOptions(epoched);
             opts.trials = struct('mode', 'Remove', 'indices', [1 2 3]);
 
             result = SelectData(epoched, opts);
 
-            testCase.verifyEqual(result.bindesc(1).trials, [2 4]);
-            testCase.verifyEqual(result.bindesc(2).trials, [1 3 5]);
-            testCase.verifyEqual(result.bindesc(1).rt, [100 140], 'AbsTol', 1e-9, ...
+            [a, rtA] = TransTools.BinMembership.of(result, 1);
+            [b, rtB] = TransTools.BinMembership.of(result, 2);
+            testCase.verifyEqual(a, [2 4]);
+            testCase.verifyEqual(b, [1 3 5]);
+            testCase.verifyEqual(rtA, [100 140], 'AbsTol', 1e-9, ...
                 'Trial k answered after 20k ms, so A keeps the reaction times of 5 and 7.');
-            testCase.verifyEqual(result.bindesc(2).rt, [80 120 160], 'AbsTol', 1e-9);
-            testCase.verifyEqual(result.bindesc(1).events, epoched.bindesc(1).events([3 4]));
-            testCase.verifyEqual(result.bindesc(2).events, epoched.bindesc(2).events([2 3 4]));
+            testCase.verifyEqual(rtB, [80 120 160], 'AbsTol', 1e-9);
+            testCase.verifyEqual({result.epoch.eventtype}, {'B', 'A', 'B', 'A', 'B'});
             testCase.verifyEqual([result.bindesc.n], [2 3]);
         end
 
@@ -121,13 +126,54 @@ classdef SelectDataTest < matlab.unittest.TestCase
             result = SelectData(epoched, opts);
             averaged = Average(result);
 
-            testCase.verifyEqual(result.bindesc(1).trials, 2);
-            testCase.verifyEqual(result.bindesc(2).trials, [1 3]);
-            testCase.verifyEqual(result.bindesc(2).rt, [40 160], 'AbsTol', 1e-9);
+            testCase.verifyEqual(TransTools.BinTrials(result, 1), 2);
+            testCase.verifyEqual(TransTools.BinTrials(result, 2), [1 3]);
+            [~, rtB] = TransTools.BinMembership.of(result, 2);
+            testCase.verifyEqual(rtB, [40 160], 'AbsTol', 1e-9);
             testCase.verifyEqual(averaged.data(:, :, 1), epoched.data(:, :, 5), 'AbsTol', 1e-12);
             testCase.verifyEqual(averaged.data(:, :, 2), mean(epoched.data(:, :, [2 8]), 3), ...
                 'AbsTol', 1e-12);
             testCase.verifyEqual([averaged.bindesc.n], [1 2]);
+        end
+
+        function aSingleTrialLeftKeepsItsBin(testCase)
+        %ASINGLETRIALLEFTKEEPSITSBIN  pop_select clears EEG.epoch when one
+        %   trial is left; the trial's bin is then read from its event.
+            epoched = binnedTrials(testCase);
+            opts = offOptions(epoched);
+            opts.trials = struct('mode', 'Keep', 'indices', 5);
+
+            result = SelectData(epoched, opts);
+
+            [a, rtA] = TransTools.BinMembership.of(result, 1);
+            testCase.verifyEqual(a, 1);
+            testCase.verifyEqual(rtA, 100, 'AbsTol', 1e-9);
+            testCase.verifyEmpty(TransTools.BinTrials(result, 2));
+            testCase.verifyEqual([result.bindesc.n], [1 0]);
+        end
+
+        function aDatasetSavedWithTrialListsIsConvertedFirst(testCase)
+        %ADATASETSAVEDWITHTRIALLISTSISCONVERTEDFIRST  Saved before
+        %   2026-10-24: the bins list their trials, and the trials' own tags
+        %   may disagree (here they all say A). The lists were believed, and
+        %   still are, so the selection follows them.
+            epoched = binnedTrials(testCase);
+            old = epoched;
+            for b = 1:2
+                [members, rts] = TransTools.BinMembership.of(epoched, b);
+                old.bindesc(b).trials = members;
+                old.bindesc(b).rt = rts;
+            end
+            old.epoch = rmfield(old.epoch, 'binrt');
+            [old.epoch.bini] = deal(1);
+            opts = offOptions(old);
+            opts.trials = struct('mode', 'Remove', 'indices', [1 2 3]);
+
+            result = SelectData(old, opts);
+
+            testCase.verifyFalse(isfield(result.bindesc, 'trials'));
+            testCase.verifyEqual(TransTools.BinTrials(result, 1), [2 4]);
+            testCase.verifyEqual(TransTools.BinTrials(result, 2), [1 3 5]);
         end
 
         function perTrialRecordsFollowTheKeptTrials(testCase)
@@ -206,8 +252,8 @@ classdef SelectDataTest < matlab.unittest.TestCase
             epoched = DefineBins(continuous, struct('script', script));
 
             testCase.assertEqual(size(epoched.data, 3), nTrials);
-            testCase.assertEqual(epoched.bindesc(1).trials, [1 3 5 7]);
-            testCase.assertEqual(epoched.bindesc(2).trials, [2 4 6 8]);
+            testCase.assertEqual(TransTools.BinTrials(epoched, 1), [1 3 5 7]);
+            testCase.assertEqual(TransTools.BinTrials(epoched, 2), [2 4 6 8]);
             testCase.assertEqual(squeeze(epoched.data(1, 1, :))', (1:nTrials).^2);
         end
     end

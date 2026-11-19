@@ -70,7 +70,10 @@ if interactive
         {'Fixed frequency (Hz, 0 = from the reference)'; 'Frequency'}, stored.Frequency, ...
         'separator', 'Analysis window (ms, 0 to 0 = whole epoch):', ...
         {'Start'; 'TimeStart'}, stored.TimeStart, ...
-        {'Stop'; 'TimeStop'}, stored.TimeStop);
+        {'Stop'; 'TimeStop'}, stored.TimeStop, ...
+        'separator', 'Trial counts:', ...
+        {'Equalise trials across bins (random subsets)'; 'EqualiseTrials'}, ...
+            logical(TransTools.FieldOr(stored, 'EqualiseTrials', false)));
     if isempty(opts)
         EEG = [];   % cancelled
         opts = [];   % the contract is two outputs; both must be assigned
@@ -119,8 +122,8 @@ end
 % Keep only bins that have real trials: a difference / combination bin has no
 % trials of its own, so coherence (a normalised ratio, not linear across bins)
 % is undefined for it -- don't draw an empty tile for it.
-if isfield(input, 'bindesc') && ~isempty(input.bindesc) && isfield(input.bindesc, 'trials')
-    hasTrials = arrayfun(@(d) isnumeric(d.trials) && ~isempty(d.trials), input.bindesc);
+if isfield(input, 'bindesc') && ~isempty(input.bindesc)
+    hasTrials = arrayfun(@(b) ~isempty(TransTools.BinMembership.of(input, b)), 1:numel(input.bindesc));
     binLabels = {input.bindesc.label};
 else
     hasTrials = true(1, size(coh, 2));

@@ -201,11 +201,14 @@ classdef TransformContractTest < matlab.unittest.TestCase
         %   violations stop -- and a second unguarded call site is a second
         %   place to forget.
             root = fileparts(fileparts(mfilename('fullpath')));
-            files = dir(fullfile(root, 'src', '@Alakazam', '*.m'));
+            files = [dir(fullfile(root, 'src', '@Alakazam', '*.m')); ...
+                     dir(fullfile(root, 'src', 'Support', '*.m'))];
 
             for k = 1:numel(files)
                 src = fileread(fullfile(files(k).folder, files(k).name));
-                testCase.verifyEmpty(strfind(src, 'feval(transformId'), ...
+                % Whatever the variable is called: Recalculate's childTransformId
+                % went past a test that looked for feval(transformId alone.
+                testCase.verifyEmpty(regexp(src, '\<feval\(\s*\w*transformId', 'once', 'ignorecase'), ...
                     sprintf(['%s calls a transformation directly. Every call goes ' ...
                         'through TransTools.invoke, or the contract is unenforced ' ...
                         'again.'], files(k).name));

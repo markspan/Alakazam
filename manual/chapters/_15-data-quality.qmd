@@ -91,11 +91,14 @@ The estimator follows the score:
 - **Bootstrapped**, for peaks, latencies, areas and fractional latencies,
   which are not linear in the trials (the peak of the average is not the
   average of the peaks): trials are resampled with replacement, averaged and
-  scored again, and the spread of the scores is the SME. Bootstrapped values
-  change slightly each time the report is made.
+  scored again, and the spread of the scores is the SME [@zhangluck2023]. There
+  are 1000 resamples, seeded, so the report gives the same values each time.
 
-A window whose peak is found on a **reference channel**, and any channel a
-window did not measure, is skipped rather than approximated.
+The score is ERP Measure's own, by the same code: the same window, baseline,
+local peak, peak band and area mode. A window measured on a pool gets an SME for
+the pool. A window whose peak is found on a **reference channel**, a channel
+derived after averaging, which has no trials, and any channel a window did not
+measure, are skipped rather than approximated.
 
 ### Precision against trial count
 

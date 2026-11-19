@@ -21,10 +21,14 @@ every dataset in the workspace that can be combined.
 
 : The fields of **Define Grand**. {#tbl-ga-define}
 
-The subjects must agree: the same number of channels and samples, and the
-same set of bin labels. Bins are matched by label, not by position, so a
-subject whose bins were defined in a different order combines correctly,
-and one missing a bin is reported rather than combined with the wrong one.
+The subjects must agree: the same channels, the same time axis, and the same
+set of bin labels. Channels and bins are matched by label, not by position, so
+a subject whose channels or bins are in a different order combines correctly,
+and one missing a channel or a bin is reported rather than combined with the
+wrong one. A subject with no data in a bin is refused by name, since it would
+leave that bin of the grand average empty; a channel with none is said, and
+stays blank in the average rather than being the mean of the others. The same
+holds for time-frequency and coherence maps.
 The list shows every recording's datasets, including recordings taken out of
 the study under **Grouping** (@sec-design), which are marked
 "(not in study)"; leave those unticked, or use **Per Design Cell** below,

@@ -42,6 +42,7 @@ function loadSETFile(this, name)
                 EEG.times = EEG.times * 1000;
             end
         end
+        EEG = TransTools.AlignUrevents(EEG);   % a .set need not have the table
         % An epoched .set from outside Alakazam (another EEGLAB pipeline's
         % output, not DefineBins' own) carries condition info as pop_epoch's
         % own per-epoch event list, not Alakazam's EEG.bindesc/.bini -- adapt

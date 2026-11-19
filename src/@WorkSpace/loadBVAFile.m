@@ -33,6 +33,7 @@ function loadBVAFile(this, name)
         EEG.times = ((1:EEG.pnts) - 1) / EEG.srate;
         EEG.DataType = 'TIMEDOMAIN';
         EEG.DataFormat = 'CONTINUOUS';
+        EEG = TransTools.AlignUrevents(EEG);   % pop_loadbv makes the table; kept as it is
         EEG.id = id;
         EEG.File = matfilename;
         % -v7.3 on every save, not just the first one: this used to only

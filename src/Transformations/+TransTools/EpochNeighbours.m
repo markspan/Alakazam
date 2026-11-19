@@ -30,7 +30,9 @@ function context = EpochNeighbours(events, zeroSamples, srate, windowMs, zeroLat
 %   cutEpochs gives every other event .epoch = 0, which a later eeg_checkset
 %   prunes. So the neighbours are measured once, while the continuous
 %   latencies still exist, and kept beside the trials (EEG.etc.alz,
-%   read by epochSortKeys).
+%   read by epochSortKeys). EVENTS can also be EEGLAB's own table of them,
+%   EEG.urevent, which epochSortKeys uses for trials cut by something else,
+%   and so without this record.
 %
 %   See also DEFINEBINSENGINE/CUTEPOCHS, UNFOLD.FITBINS, EPOCHSORTKEYS.
     nTrials = numel(zeroSamples);

@@ -6,8 +6,8 @@ function block = betweenSection(windowLabel, measureType, binLabel)
 %   n_distinct(d$group) is checked PER CHANNEL at R runtime, not decided
 %   once in MATLAB (unlike ordinaryLabels/comboBins), since it can
 %   legitimately vary channel to channel once NA values are dropped -- a
-%   Welch two-sample *t*-test (2 groups, or a Mann-Whitney U when the data
-%   depart from normality), or a Welch one-way ANOVA + Games-Howell
+%   Welch two-sample *t*-test with a Mann-Whitney U beside it (2 groups), or
+%   a Welch one-way ANOVA + Games-Howell
 %   post-hoc (3+ groups), mirroring pairedSection/lmmSection's own split
 %   for the WITHIN-subjects case one bin count up.
 %

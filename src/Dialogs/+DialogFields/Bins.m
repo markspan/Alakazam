@@ -42,11 +42,7 @@ classdef Bins < DialogFields.LabelList
             end
             if isstruct(source) && isfield(source, 'label')
                 labels = arrayfun(@(b) char(string(b.label)), source, 'UniformOutput', false);
-                if isfield(source, 'combo')
-                    isDifference = arrayfun(@(b) ~isempty(b.combo), source);
-                else
-                    isDifference = false(size(labels));
-                end
+                isDifference = TransTools.IsComboBin(source);
             elseif isempty(source)
                 labels = {};
                 isDifference = false(1, 0);

@@ -160,6 +160,7 @@ as a heat map per bin.
 | **Cycles** at each end | 3, 12 | Wavelet only. |
 | **Window length**, **Zero-padding ratio**, **Window taper** | 500 ms, 4, Hann | STFT only; the taper is Hann (low side lobes) or boxcar (narrow main lobe). |
 | **Bandwidth**, **Time step** | 2 Hz FWHM, 50 ms | FilterHilbert only. |
+| **Equalise trials across bins** | off | Average over random subsets that give every bin the same number of trials. |
 
 : Coherence Map's options. {#tbl-coherencemap}
 
@@ -177,8 +178,11 @@ of either end, the wavelet lies partly over no data, so it is in effect
 shorter and each value there mixes in the neighbouring frequencies, which at
 60 Hz smears the response into the 64 Hz row just where its onset is read.
 A frequency whose wavelet is longer than the epoch is blank throughout, and
-the view says below which frequency. The STFT and FilterHilbert maps are
-unaffected.
+the view says below which frequency. The FilterHilbert map is treated the same
+way, for the same reason: its band-pass reaches three standard deviations in
+time, 562 ms either side for a 2 Hz band, and padding stops it wrapping round
+without giving it data. A shorter epoch needs a wider band. The STFT's frames lie
+inside the epoch, so its map is unaffected.
 
 ![The coherence of Oz to the photodiode in three RIFT conditions. In the 30 Hz SSVEP condition (middle), coherence appears at 30 Hz and its 60 Hz harmonic; the 60 and 64 Hz RIFT responses are weaker, and a line-noise band near 50 Hz runs through all three.](images/coherencemap-result.jpg){#fig-coherencemap-result}
 
@@ -214,6 +218,7 @@ evoked response within a search band; a fixed frequency overrides both.
 | **Search band** | 55 to 68 Hz | Where to look, for **band**. |
 | **Fixed frequency** | 0 (from the source) | A frequency that overrides both. |
 | **Analysis window** | 0 to 0 (whole epoch) | The steady-state interval, to leave out the onset response. |
+| **Equalise trials across bins** | off | Average over random subsets that give every bin the same number of trials. |
 
 : CohTopo's options. {#tbl-coherencetopography}
 

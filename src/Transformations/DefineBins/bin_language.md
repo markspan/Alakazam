@@ -118,8 +118,9 @@ these".)
 ## 6. Reaction time, for free
 
 Whenever a bin matches via a relation, `DefineBins` records the signed delay
-to that neighbour as the reaction time, in `EEG.bindesc(b).rt` , no extra
-syntax needed. Filter on it with `rt within`:
+to that neighbour as the reaction time, on the matched event and, once cut,
+on its trial (`EEG.event(i).binrt`, `EEG.epoch(t).binrt`: one time for each
+bin in `.bini`), no extra syntax needed. Filter on it with `rt within`:
 
 ```
 bin 1 "Fast responses" 112 and next(118) rt within (200,500] ms
@@ -446,7 +447,8 @@ an ordinary or a combination bin. See
 
 ### Reaction time and `rt within`
 
-`EEG.bindesc(b).rt` holds the delay to the neighbour picked out by the first
+`EEG.epoch(t).binrt` (on continuous data `EEG.event(i).binrt`) holds, for
+each bin in `.bini`, the delay to the neighbour picked out by the first
 (left-to-right) **forward** relation that contributed to the match (from a
 true branch, if it went through `or`); `NaN` for a pure-anchor match, one
 from a `not`, or one whose only relations look backwards. Only forward

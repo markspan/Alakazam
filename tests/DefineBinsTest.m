@@ -35,14 +35,14 @@ classdef DefineBinsTest < matlab.unittest.TestCase
     methods (Test)
         function matchesASimpleAnchorCode(testCase)
         %MATCHESASIMPLEANCHORCODE  bin 1 "Targets" 112 matches only the
-        %   events whose type is 112, tagging each with .bini and
-        %   recording their (original) indices on bindesc.
+        %   events whose type is 112, tagging each with .bini, the one
+        %   record of which events a bin holds.
             EEG = eegWithEvents({'112', '122', '112'}, [100, 200, 300]);
             opts = struct('script', 'bin 1 "Targets" 112');
 
             [result, ~] = DefineBins(EEG, opts);
 
-            testCase.verifyEqual(result.bindesc(1).events, [1, 3]);
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), [1, 3]);
             testCase.verifyEqual(result.bindesc(1).n, 2);
             testCase.verifyEqual(result.event(1).bini, 1);
             testCase.verifyEqual(result.event(2).bini, []);
@@ -58,7 +58,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             [result, ~] = DefineBins(EEG, opts);
 
-            testCase.verifyEqual(result.bindesc(1).events, 1);
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), 1);
         end
 
         function nextWithinWindowRequiresAQualifyingNeighbourInRange(testCase)
@@ -72,8 +72,8 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             [result, ~] = DefineBins(EEG, opts);
 
-            testCase.verifyEqual(result.bindesc(1).events, 1);
-            testCase.verifyEqual(result.bindesc(1).rt, 300, 'AbsTol', 1e-9); % (175-100)/250*1000 ms
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), 1);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(result, 1), 300, 'AbsTol', 1e-9); % (175-100)/250*1000 ms
         end
 
         function adjacentRequiresTheImmediatelyFollowingEvent(testCase)
@@ -85,13 +85,13 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             [result, ~] = DefineBins(EEG, opts);
 
-            testCase.verifyEqual(result.bindesc(1).events, 1); % the first 112 only
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), 1); % the first 112 only
         end
 
         function combinationBinRecordsItsRecipeNotItsOwnEvents(testCase)
         %COMBINATIONBINRECORDSITSRECIPENOTITSOWNEVENTS  bin 3 = bin 1 -
         %   bin 2 has no event predicate of its own: DefineBins records
-        %   the (coeff, bin) recipe on .combo and leaves .events empty
+        %   the (coeff, bin) recipe on .combo and tags no event with it
         %   (Average computes the actual difference later).
             EEG = eegWithEvents({'112', '122'}, [100, 200]);
             opts = struct('script', [ ...
@@ -101,7 +101,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             [result, ~] = DefineBins(EEG, opts);
 
-            testCase.verifyEmpty(result.bindesc(3).events);
+            testCase.verifyEmpty(DefineBinsTest.membersOf(result, 3));
             testCase.verifyEqual(result.bindesc(3).n, 0);
             testCase.verifyEqual([result.bindesc(3).combo.bin], [1, 2]);
             testCase.verifyEqual([result.bindesc(3).combo.coeff], [1, -1]);
@@ -717,7 +717,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [result, ~] = DefineBins(EEG, struct('script', ...
                 'bin 1 "x" 112 and next(118) rt within (400,800] ms'));
 
-            testCase.verifyEqual(result.bindesc(1).rt, [500 700], 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(result, 1), [500 700], 'AbsTol', 1e-9);
             testCase.verifyEmpty(result.bindesc(1).rtTrim);
         end
 
@@ -755,10 +755,10 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [b, ~] = DefineBins(EEG, struct('script', joined));
 
             m = mean(rts); s = std(rts);
-            testCase.verifyEqual(a.bindesc(1).rt, rts(rts >= m - 2*s & rts <= m + 2*s), 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(a, 1), rts(rts >= m - 2*s & rts <= m + 2*s), 'AbsTol', 1e-9);
             testCase.verifyEqual(a.bindesc(1).n, 8, ...
                 'Both the 100 ms and the 900 ms trial lie beyond two SDs of these RTs.');
-            testCase.verifyEqual(b.bindesc(1).rt, a.bindesc(1).rt);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(b, 1), DefineBinsTest.rtsOf(a, 1));
         end
 
         function aBareMeanIsABound(testCase)
@@ -769,7 +769,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [result, ~] = DefineBins(EEG, struct('script', ...
                 'bin 1 "x" 112 and next(118) rt within (0, mean] ms'));
 
-            testCase.verifyEqual(result.bindesc(1).rt, [300 400], 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(result, 1), [300 400], 'AbsTol', 1e-9);
         end
 
         function theCutoffIsComputedPerRecording(testCase)
@@ -817,11 +817,11 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             decoded(1).rtWindow.loSd = [];
             decoded(1).rtWindow.hiSd = [];
 
-            [~, fromOld] = DefineBinsEngine.evaluateBins(EEG, old);
-            [~, fromDecoded] = DefineBinsEngine.evaluateBins(EEG, decoded);
+            fromOld = DefineBinsTest.tagged(EEG, old);
+            fromDecoded = DefineBinsTest.tagged(EEG, decoded);
 
-            testCase.verifyEqual(fromOld(1).rt, [500 700], 'AbsTol', 1e-9);
-            testCase.verifyEqual(fromDecoded(1).rt, [500 700], 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(fromOld, 1), [500 700], 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.rtsOf(fromDecoded, 1), [500 700], 'AbsTol', 1e-9);
         end
 
         function meanAndSdAreStillFreeAsAliasNames(testCase)
@@ -833,7 +833,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [result, ~] = DefineBins(EEG, struct('script', ...
                 ['let mean = 112' newline 'bin 1 "x" mean']));
 
-            testCase.verifyEqual(result.bindesc(1).events, 1);
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), 1);
         end
 
         function relativeBoundSpellingErrorsAreExplained(testCase)
@@ -900,7 +900,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [result, ~] = DefineBins(EEG, struct('script', ...
                 ['let field = 112' newline 'bin 1 "x" field']));
 
-            testCase.verifyEqual(result.bindesc(1).events, 1);
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 1), 1);
         end
 
         function aFieldNoEventHasIsRefusedWithTheFieldsThatExist(testCase)
@@ -945,10 +945,10 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             d = result.bindesc;
             m = median(rts);
-            testCase.verifyEqual(sort(d(1).rt), sort(rts(rts <= m)), 'AbsTol', 1e-9);
-            testCase.verifyEqual(sort(d(2).rt), sort(rts(rts > m)), 'AbsTol', 1e-9);
-            testCase.verifyEqual(d(3).events, d(1).events);
-            testCase.verifyEqual(d(4).events, d(2).events);
+            testCase.verifyEqual(sort(DefineBinsTest.rtsOf(result, 1)), sort(rts(rts <= m)), 'AbsTol', 1e-9);
+            testCase.verifyEqual(sort(DefineBinsTest.rtsOf(result, 2)), sort(rts(rts > m)), 'AbsTol', 1e-9);
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 3), DefineBinsTest.membersOf(result, 1));
+            testCase.verifyEqual(DefineBinsTest.membersOf(result, 4), DefineBinsTest.membersOf(result, 2));
             record = d(1).filters;
             testCase.verifyEqual(record.text, 'rt within (0, median] ms');
             testCase.verifyEqual(record.median, m, 'AbsTol', 1e-9);
@@ -988,7 +988,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
                 'bin 1 "x" 112 and next(118) log(rt) within [mean - 1 sd, mean + 1 sd]'));
             L = log(rts);
             kept = rts(L >= mean(L) - std(L) & L <= mean(L) + std(L));
-            testCase.verifyEqual(sort(result.bindesc(1).rt), sort(kept), 'AbsTol', 1e-9);
+            testCase.verifyEqual(sort(DefineBinsTest.rtsOf(result, 1)), sort(kept), 'AbsTol', 1e-9);
             testCase.verifyEqual(result.bindesc(1).filters.mean, mean(L), 'AbsTol', 1e-12);
 
             beats = heartbeats([600 700 900 1200 0]);
@@ -1059,7 +1059,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             trials = stimulusResponse(rts);
             [result, ~] = DefineBins(trials, struct('script', ['bin 1 "x" 112 and next(118) ' ...
                 'rt within (0, median] ms and rank(rt) within (25, 100]']));
-            testCase.verifyEqual(sort(result.bindesc(1).rt), [380 420], 'AbsTol', 1e-9);
+            testCase.verifyEqual(sort(DefineBinsTest.rtsOf(result, 1)), [380 420], 'AbsTol', 1e-9);
         end
 
         function aTestAboutTheTrialsMayStandInALet(testCase)
@@ -1093,7 +1093,7 @@ classdef DefineBinsTest < matlab.unittest.TestCase
             [first, options] = DefineBins(EEG, struct('script', script));
 
             [again, ~] = DefineBins(EEG, options);
-            testCase.verifyEqual({again.bindesc.events}, {first.bindesc.events});
+            testCase.verifyEqual(DefineBinsTest.allMembers(again), DefineBinsTest.allMembers(first));
             slower = stimulusResponse(rts + 400);
             [other, ~] = DefineBins(slower, options);
             testCase.verifyEqual(other.bindesc(1).filters.median, median(rts) + 400, 'AbsTol', 1e-9);
@@ -1101,8 +1101,8 @@ classdef DefineBinsTest < matlab.unittest.TestCase
 
             spec = DefineBinsEngine.parseSpec('bin 1 "x" 112 and next(118) rt within (400,800] ms');
             testCase.verifyEmpty(spec.bins(1).filters, 'A plain window stays in rtWindow.');
-            [~, old] = DefineBinsEngine.evaluateBins(EEG, rmfield(spec.bins, 'filters'));
-            testCase.verifyEqual(sort(old(1).rt), sort(rts(rts > 400 & rts <= 800)), 'AbsTol', 1e-9);
+            old = DefineBinsTest.tagged(EEG, rmfield(spec.bins, 'filters'));
+            testCase.verifyEqual(sort(DefineBinsTest.rtsOf(old, 1)), sort(rts(rts > 400 & rts <= 800)), 'AbsTol', 1e-9);
         end
 
         function aBoundThatCannotBeComputedKeepsNothingAndSaysWhy(testCase)
@@ -1171,23 +1171,44 @@ classdef DefineBinsTest < matlab.unittest.TestCase
         function matched = matchesFor(~, EEG, script)
         %MATCHESFOR  The event types one bin matched, in recording order.
             spec = DefineBinsEngine.parseSpec(script);
-            [~, bindesc] = DefineBinsEngine.evaluateBins(EEG, spec.bins);
-            matched = {EEG.event(bindesc(1).events).type};
+            matched = {EEG.event(DefineBinsTest.membersOf(DefineBinsTest.tagged(EEG, spec.bins), 1)).type};
         end
 
         function events = eventsFor(~, EEG, script)
         %EVENTSFOR  The event indices bin 1 of SCRIPT matched.
             spec = DefineBinsEngine.parseSpec(script);
-            [~, bindesc] = DefineBinsEngine.evaluateBins(EEG, spec.bins);
-            events = bindesc(1).events;
+            events = DefineBinsTest.membersOf(DefineBinsTest.tagged(EEG, spec.bins), 1);
         end
 
         function rt = rtOf(~, EEG, script)
             spec = DefineBinsEngine.parseSpec(script);
-            [~, bindesc] = DefineBinsEngine.evaluateBins(EEG, spec.bins);
-            rt = bindesc(1).rt;
+            rt = DefineBinsTest.rtsOf(DefineBinsTest.tagged(EEG, spec.bins), 1);
             if isempty(rt); rt = NaN; end
             rt = rt(1);
+        end
+    end
+
+    methods (Static)
+        % Which events (trials) a bin matched, and their reaction times, are
+        % on the events and trials (.bini, .binrt); these read them as the
+        % app does, through TransTools.BinMembership.
+        function members = membersOf(EEG, b)
+            members = TransTools.BinMembership.of(EEG, b);
+        end
+
+        function rts = rtsOf(EEG, b)
+            [~, rts] = TransTools.BinMembership.of(EEG, b);
+        end
+
+        function all = allMembers(EEG)
+            all = arrayfun(@(b) {TransTools.BinMembership.of(EEG, b)}, 1:numel(EEG.bindesc));
+        end
+
+        function EEG = tagged(EEG, bins)
+        %TAGGED  EEG with its events tagged by BINS (evaluateBins) and the
+        %   bins' descriptions beside them, as DefineBins leaves it.
+            [EEG, bindesc] = DefineBinsEngine.evaluateBins(EEG, bins);
+            EEG.bindesc = bindesc;
         end
     end
 end

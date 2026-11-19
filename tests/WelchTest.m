@@ -42,6 +42,67 @@ classdef WelchTest < matlab.unittest.TestCase
     end
 
     methods (Test)
+        function aSegmentNeverCrossesABoundary(testCase)
+        %   A step at each splice spreads over a segment's whole spectrum. Each
+        %   stretch between boundaries is a clean sine plus a constant, and the
+        %   segments' means are the only thing the taper leaves of the constant.
+            srate = testCase.Srate;
+            n = 60 * srate;
+            t = (0:n - 1) / srate;
+            x = sin(2 * pi * 10 * t);
+            spliced = x;
+            cuts = 2000:3000:n;
+            for c = cuts
+                spliced(c:end) = spliced(c:end) + 50;
+            end
+            events = struct('type', repmat({'boundary'}, 1, numel(cuts)), 'latency', num2cell(cuts - 0.5));
+            opts = struct('SegmentSeconds', 2, 'Overlap', 50, 'Window', 'Hanning');
+            clean = Welch(continuousData(x, srate, struct('type', {}, 'latency', {})), opts);
+            r = Welch(continuousData(spliced, srate, events), opts);
+            [~, k] = min(abs(r.freqs - 10));
+            [~, k3] = min(abs(r.freqs - 25));
+            testCase.verifyEqual(r.data(1, k), clean.data(1, k), 'RelTol', 0.02);
+            testCase.verifyLessThan(r.data(1, k3), 1e-3, 'Nothing has spread from a splice.');
+            testCase.verifyEqual(r.WelchStretches, numel(cuts) + 1);
+        end
+
+        function eachStretchLaysOutItsOwnSegments(testCase)
+            srate = testCase.Srate;
+            n = 10 * srate;
+            data = randn(1, n);
+            events = struct('type', {'boundary'}, 'latency', {4 * srate + 0.5});
+            opts = struct('SegmentSeconds', 2, 'Overlap', 0, 'Window', 'Hanning');
+            r = Welch(continuousData(data, srate, events), opts);
+            testCase.verifyEqual(r.WelchSegments, 2 + 3, 'Two segments in 4 s and three in 6 s.');
+        end
+
+        function aStretchShorterThanASegmentIsLeftOut(testCase)
+            srate = testCase.Srate;
+            n = 10 * srate;
+            events = struct('type', {'boundary'}, 'latency', {1 * srate + 0.5});
+            opts = struct('SegmentSeconds', 2, 'Overlap', 0, 'Window', 'Hanning');
+            r = Welch(continuousData(randn(1, n), srate, events), opts);
+            testCase.verifyEqual(r.WelchSegments, 4, 'Nothing from the first second; four in the last nine.');
+        end
+
+        function noStretchLongEnoughIsSaid(testCase)
+            srate = testCase.Srate;
+            n = 3 * srate;
+            events = struct('type', {'boundary'}, 'latency', {1.5 * srate + 0.5});
+            opts = struct('SegmentSeconds', 2, 'Overlap', 0, 'Window', 'Hanning');
+            testCase.verifyError(@() Welch(continuousData(randn(1, n), srate, events), opts), 'Alakazam:Welch');
+        end
+
+        function otherEventsDoNotCutTheRecording(testCase)
+            srate = testCase.Srate;
+            data = randn(1, 10 * srate);
+            events = struct('type', {'S 1', 'S 2'}, 'latency', {100, 900});
+            opts = struct('SegmentSeconds', 2, 'Overlap', 50, 'Window', 'Hanning');
+            a = Welch(continuousData(data, srate, events), opts);
+            b = Welch(continuousData(data, srate, struct('type', {}, 'latency', {})), opts);
+            testCase.verifyEqual(a.data, b.data);
+        end
+
         function matchesPwelchExactly(testCase)
         %MATCHESPWELCHEXACTLY  Same segmentation, same taper, same answer.
         %   An independent implementation, not another of ours.
@@ -194,4 +255,12 @@ classdef WelchTest < matlab.unittest.TestCase
                 'AbsTol', 1e-12);
         end
     end
+end
+
+function EEG = continuousData(data, srate, events)
+%CONTINUOUSDATA  A one-channel continuous recording with the given events.
+    n = size(data, 2);
+    EEG = struct('data', data, 'srate', srate, 'nbchan', 1, 'trials', 1, 'pnts', n, ...
+        'times', (0:n - 1) / srate, 'DataFormat', 'CONTINUOUS', 'DataType', 'TIMEDOMAIN', ...
+        'event', events, 'chanlocs', struct('labels', 'A'));
 end

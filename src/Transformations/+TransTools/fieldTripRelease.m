@@ -12,7 +12,7 @@ function release = fieldTripRelease()
 %   20260924 replaced 20260812 on 10 October 2026. Nothing Alakazam calls
 %   changed its results between the two: ft_freqanalysis changed only its
 %   FOOOF output, ft_statistics_montecarlo only when it warns about an
-%   uncorrected two-sided test (Alakazam sets correcttail 'alpha'),
+%   uncorrected two-sided test (Alakazam sets correcttail),
 %   ft_inverse_dipolefit only its MEG rigid-body constraint, and
 %   ft_compute_leadfield gained a coil model for MEG.
 %

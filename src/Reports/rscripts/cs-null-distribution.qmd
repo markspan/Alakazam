@@ -30,7 +30,8 @@ if (is.null(null_df) || nrow(null_df) == 0 || !any(null_df$kind == "null")) {
   # The proportion of the null at least as extreme as the largest
   # observed cluster, stated per tail. This is the Monte-Carlo p-value
   # from its own definition, so a reader can check the number in the
-  # table above against the picture rather than trusting the label.
+  # table above against the picture rather than trusting the label; a
+  # two-tailed p in that table is twice this share (correcttail 'prob').
   for (tl in unique(nulls$tail)) {
     nd <- nulls$value[nulls$tail == tl]
     od <- obs$value[obs$tail == tl]

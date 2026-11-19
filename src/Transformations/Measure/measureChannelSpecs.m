@@ -38,7 +38,7 @@ function specs = measureChannelSpecs(channels, allLabels, windowLabel)
     for k = 1:numel(items)
         it = items{k};
         if startsWith(it, '{') && endsWith(it, '}')
-            members = splitNames(it(2:end - 1));
+            members = splitNames(it(2:end - 1), allLabels);
         else
             members = {it};
         end
@@ -96,10 +96,21 @@ function items = tokenize(text, windowLabel)
     if ~isempty(strtrim(cur)); items{end + 1} = strtrim(cur); end
 end
 
-function names = splitNames(inner)
-%SPLITNAMES  The member names inside a pool's braces, comma/space split.
+function names = splitNames(inner, allLabels)
+%SPLITNAMES  The member names inside a pool's braces, comma/space split. A pool
+%   this function has itself named is written "{A+B+C}", which a result carries
+%   as its channel, so a part that is no channel is split at its plus signs too.
     parts = strtrim(strsplit(inner, {',', ' '}));
-    names = parts(~cellfun(@isempty, parts));
+    parts = parts(~cellfun(@isempty, parts));
+    names = {};
+    for k = 1:numel(parts)
+        if contains(parts{k}, '+') && ~any(strcmpi(string(allLabels), parts{k}))
+            names = [names, strsplit(parts{k}, '+')]; %#ok<AGROW>
+        else
+            names{end + 1} = parts{k}; %#ok<AGROW>
+        end
+    end
+    names = names(~cellfun(@isempty, names));
 end
 
 function idx = resolveNames(names, allLabels, windowLabel)

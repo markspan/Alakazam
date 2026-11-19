@@ -234,8 +234,12 @@ function se = standardError(trials)
 %   made the band too narrow by sqrt(kept/total) -- 13% at a quarter of the
 %   trials rejected -- while std itself already left the NaNs out. With
 %   one channel rejected in one trial, that channel's count drops and no
-%   other's does. erpScoreSME counts the same way.
-    se = std(trials, 0, 3, 'omitnan') ./ sqrt(sum(~isnan(trials), 3));
+%   other's does. erpScoreSME counts the same way. One trial has no spread to
+%   describe, so its standard error is unknown (NaN), as windowedSME says of
+%   it, rather than the 0 that std gives, which claims no uncertainty at all.
+    n = sum(~isnan(trials), 3);
+    se = std(trials, 0, 3, 'omitnan') ./ sqrt(n);
+    se(n < 2) = NaN;
 end
 
 function sme = windowedSME(trials)

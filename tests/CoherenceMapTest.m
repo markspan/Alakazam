@@ -84,14 +84,12 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             testCase.verifyTrue(any(isfinite(coh(2, end, :, 1)), 'all'));
         end
 
-        function theStftAndFilterHilbertHaveNoEdgeZone(testCase)
+        function theStftHasNoEdgeZone(testCase)
             EEG = coherenceFixture();
             [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, stftOpts());
             testCase.verifyEmpty(info.halfWaveletMs);
             testCase.verifyFalse(any(info.blankFrequencies));
             testCase.verifyFalse(any(isnan(coh(2, :, :, 1)), 'all'));
-            [~, ~, ~, ~, info] = ComputeCoherenceMap(EEG, filterHilbertOpts());
-            testCase.verifyEmpty(info.halfWaveletMs);
         end
 
         function coherenceIsOneForAScalarMultipleStft(testCase)
@@ -241,8 +239,12 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
 
         function filterHilbertCoherenceIsOneForAScalarMultiple(testCase)
             EEG = coherenceFixture();
-            [coh, freqs, cohTimes] = ComputeCoherenceMap(EEG, filterHilbertOpts());
-            testCase.verifyEqual(coh(2, :, :, 1), ones(1, numel(freqs), numel(cohTimes)), 'AbsTol', 1e-6);
+            [coh, ~, ~, ~, info] = ComputeCoherenceMap(EEG, filterHilbertOpts());
+            cells = coh(2, :, :, 1);
+            cells = cells(~isnan(cells));
+            testCase.verifyNotEmpty(cells, 'Samples clear of the edges have a coherence.');
+            testCase.verifyFalse(any(info.blankFrequencies));
+            testCase.verifyEqual(cells, ones(size(cells)), 'AbsTol', 1e-6);
         end
 
         function filterHilbertReferencePowerPeaksAtTheReferencesOwnFrequency(testCase)
@@ -252,7 +254,7 @@ classdef CoherenceMapTest < matlab.unittest.TestCase
             opts = filterHilbertOpts();
             opts.MaxFreq = 20;
             [~, freqs, ~, refPower] = ComputeCoherenceMap(EEG, opts);
-            [~, fIdx] = max(mean(refPower(:, :, 1), 2));
+            [~, fIdx] = max(mean(refPower(:, :, 1), 2, 'omitnan'));
             testCase.verifyEqual(freqs(fIdx), 20, 'AbsTol', 1e-9);
         end
 

@@ -70,14 +70,14 @@ generic script to rediscover the design from a flat file.
 |-------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------|
 | One ordinary bin | Descriptive statistics | What is the measure's mean and SD? |
 | Ordinary bins, a circular measure (phase, phase lag) | Circular descriptives: mean angle with a bootstrap CI, resultant length $\bar R$; no test | Where does the phase cluster, and how tightly? |
-| Two ordinary bins | Paired *t*-test, Cohen's $d_z$ with a bootstrap CI, Bayes factor; Wilcoxon signed-rank check; Shapiro-Wilk note | Do the two conditions differ within subjects? |
-| Three or more ordinary bins | Linear mixed model (random intercept and slope per person, falling back to intercept only), partial $\eta^2$ with CI, Holm-corrected pairwise contrasts; Friedman check | Do the conditions differ, and which pairs? |
-| One ordinary bin, two groups | Welch *t*-test, Cohen's *d* with a bootstrap CI, Bayes factor; Mann-Whitney check | Do the groups differ? |
+| Two ordinary bins | Paired *t*-test, Cohen's $d_z$ with a bootstrap CI, Bayes factor; Wilcoxon signed-rank and rank-biserial *r* beside it; Shapiro-Wilk *p* as a description | Do the two conditions differ within subjects? |
+| Three or more ordinary bins | Linear mixed model (random intercept per person), with the Huynh-Feldt *p* beside the model's; partial $\eta^2$ with CI, Holm-corrected pairwise contrasts; Friedman check | Do the conditions differ, and which pairs? |
+| One ordinary bin, two groups | Welch *t*-test, Cohen's *d* with a bootstrap CI, Bayes factor; Mann-Whitney *U* and rank-biserial *r* beside it | Do the groups differ? |
 | One ordinary bin, three or more groups | Welch's ANOVA, Games-Howell pairwise comparisons | Do the groups differ, and which pairs? |
 | Two or more ordinary bins, groups | Linear mixed model with condition × group, partial $\eta^2$, Holm-corrected within- and between-group contrasts | Does the condition effect differ between groups? |
 | Two or more ordinary bins, sessions | Linear mixed model with condition × session | Does the condition effect change between sessions? |
 | Bins, sessions and groups | Linear mixed model with every main effect and two-way interaction | As above, without a three-way term the sample rarely supports |
-| A combination bin (amplitude, area, power, SNR, ITC, coherence) | One-sample *t*-test against zero (and Wilcoxon), $d_z$, Bayes factor | Is the effect present? |
+| A combination bin (amplitude, area, power, SNR, ITC, coherence) | One-sample *t*-test against zero and a Wilcoxon beside it, $d_z$, Bayes factor | Is the effect present? |
 | A combination bin, a latency | Descriptive statistics | (a latency has no natural zero to test against) |
 | A combination bin, groups | One-sample test within each group, and a between-group test of the difference | Is the effect present in each group, and does its size differ? |
 
@@ -85,11 +85,40 @@ generic script to rediscover the design from a flat file.
 
 **Linear mixed models, not repeated-measures ANOVA**, for three or more
 conditions: a subject missing one condition still contributes the others,
-where a repeated-measures ANOVA drops the subject altogether. The maximal
-random-effects structure is tried first [@barr2013] and reduced only when it
-does not converge to a non-singular fit [@bates2015]; the report says which
-structure was fitted. **Welch's** tests are used for group comparisons
-because between-subject EEG samples rarely have equal variances.
+where a repeated-measures ANOVA drops the subject altogether. **Welch's** tests
+are used for group comparisons because between-subject EEG samples rarely have
+equal variances.
+
+**Slopes need replicates, and sphericity still has to be dealt with.** With one
+value per person per condition, which is what an average gives, a random slope
+cannot be told from the residual [@barr2013b] and lme4 refuses the model. So the
+model has a random intercept, and the report says why. On complete data that
+model *is* the uncorrected repeated-measures ANOVA, with the same *F* and the
+same assumption of sphericity. Its false positives at .05 grow with the number
+of conditions when that fails: .05 at 3, .087 at 6 and .103 at 8, with
+neighbouring conditions correlated at .8 and 16 people. So the table adds the
+Huynh-Feldt-corrected *p* of each term with three levels or more, on the people
+with a value in every cell [@haverkamp2017], and that *p* is the one carried
+into the summary and used to gate post-hoc contrasts. An unstructured covariance
+is not the way out at these sample sizes: it is far too liberal below about 80
+people with six or more conditions (the same paper). Designs with sessions do
+have replicates, and try a random slope first; they also have a random intercept
+per person per session, without which the session effect is tested against the
+wrong error and gives .19 false positives at .05 (.037 with it).
+
+**Each test keeps its check beside it.** A *t*-test and its rank-based counterpart
+are both reported, every time, and the Shapiro-Wilk *p* only describes the data.
+None of them chooses among the others: a normality test used as a gate distorts
+the error rates of the test that follows it, and has least power where it would
+matter most [@rochon2012; @shatz2024]. The *t*-test is the one carried into the
+summary. The rank-biserial *r* is signed, in the direction of the test beside it
+[@kerby2014].
+
+**One value per person.** A test with no person term takes its rows to be
+independent, so where a person was recorded more than once their recordings are
+averaged first, and the report says so. Counting them as separate subjects gave
+.154 false positives at .05 where the same test on the people gave .050
+[@yu2022].
 
 **A combination bin is tested apart from the ordinary bins.** Its scores are
 a linear combination of theirs, not an independent condition, so folding it
@@ -100,7 +129,8 @@ test: the arithmetic mean of 179° and -179° is 0°, the direction opposite to
 where the data are.
 
 Every *t*-test is backed by a Bayes factor [@rouder2009], and every effect
-size by a bootstrapped (BCa, 200 resamples) confidence interval. The omnibus
+size by a bootstrapped (BCa, 2000 resamples, seeded, so that rendering twice
+gives the same interval) confidence interval. The omnibus
 tests report partial $\eta^2$ with a confidence interval rather than a
 marginal $R^2$, which has none.
 
@@ -152,8 +182,12 @@ trials does neither, and is the current standard for ERP inference
 [@fromer2018; @volpert2021]. Trial order enters as a covariate centred within
 person, since amplitude drifts over a session with fatigue and habituation,
 and the drift is confounded with condition whenever order is not perfectly
-counterbalanced. The random structure starts maximal and is reduced,
-correlation first, slope after [@barr2013; @bates2015].
+counterbalanced. The random structure starts maximal [@barr2013]. If the slopes
+will not fit, it keeps the condition in the random structure as an intercept per
+person per condition, since dropping it altogether is what inflates the test of
+condition [@scandola2024]: .193 false positives at .05 on data with a real random
+slope, against .030. Only if that will not fit either is it an intercept per
+person, and the report says the test may then be too liberal.
 
 To get the per-trial export, run ERP Measure on the **epoched** node as well
 as on the average: the same windows then give one value per trial.

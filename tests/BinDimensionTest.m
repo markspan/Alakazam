@@ -19,6 +19,8 @@ classdef BinDimensionTest < matlab.unittest.TestCase
             repo = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
                 fullfile(repo, 'src', 'Support')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture( ...
+                fullfile(repo, 'src', 'Transformations')));
         end
     end
 
@@ -66,9 +68,9 @@ classdef BinDimensionTest < matlab.unittest.TestCase
 
         function aTrialReportsTheBinItIsIn(testCase)
             EEG = testCase.binned('EPOCHED', 4);
-            testCase.verifyEqual(trialBins(EEG, 1), 1);
-            testCase.verifyEqual(trialBins(EEG, 2), 2);
-            testCase.verifyEqual(trialBins(EEG, 3), 1);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 1), 1);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 2), 2);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 3), 1);
         end
 
         function aTrialInTwoBinsReportsBoth(testCase)
@@ -77,28 +79,29 @@ classdef BinDimensionTest < matlab.unittest.TestCase
             EEG = testCase.binned('EPOCHED', 4);
             EEG.bindesc(3) = struct('label', 'All rare-ish', 'index', 3, ...
                 'trials', [1 2 3]);
-            testCase.verifyEqual(trialBins(EEG, 1), [1 3]);
-            testCase.verifyEqual(trialBins(EEG, 4), 2);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 1), [1 3]);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 4), 2);
         end
 
         function aTrialInNoBinReportsNothing(testCase)
             EEG = testCase.binned('EPOCHED', 5);
-            testCase.verifyEmpty(trialBins(EEG, 5));
+            testCase.verifyEmpty(TransTools.BinMembership.ofTrial(EEG, 5));
         end
 
         function membershipFallsBackToPerEpochBiniTags(testCase)
-        %   Datasets whose bins carry no explicit trial list.
+        %   A dataset saved before 2026-10-24 whose bins carry no trial list
+        %   of their own: the trials' own tags count, as they always did.
             EEG = testCase.binned('EPOCHED', 4);
             [EEG.bindesc.trials] = deal([]);
             EEG.epoch = struct('bini', {1, 2, [1 2], 2});
-            testCase.verifyEqual(trialBins(EEG, 1), 1);
-            testCase.verifyEqual(trialBins(EEG, 3), [1 2]);
-            testCase.verifyEqual(trialBins(EEG, 4), 2);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 1), 1);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 3), [1 2]);
+            testCase.verifyEqual(TransTools.BinMembership.ofTrial(EEG, 4), 2);
         end
 
         function noBinsMeansNoMembership(testCase)
             EEG = struct('data', zeros(2, 8, 4), 'DataFormat', 'EPOCHED');
-            testCase.verifyEmpty(trialBins(EEG, 1));
+            testCase.verifyEmpty(TransTools.BinMembership.ofTrial(EEG, 1));
         end
     end
 end

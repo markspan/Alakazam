@@ -128,6 +128,9 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     % source spaces and make their vertices incomparable, which is the one
     % thing a vertex-wise group test cannot survive.
     labels = sharedMontage(subjects);
+    nRecordings = numel(subjects);
+    [subjects, contrast, kept] = ClusterStats.averageWithinPerson(subjects, contrast);
+    sourceFiles = sourceFiles(kept);
     [leadfield, sourcemodel, resolvedLabels, elec, headmodel] = ...
         TransTools.BuildSourceForwardModel(labels, opts.SourceSpace);
     normals = TransTools.SurfaceNormals(sourcemodel);
@@ -180,9 +183,10 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
         cfg.uvar = uvar;
     end
     % A two-sided test spends alpha on both tails, exactly as ClusterStats
-    % does -- kept in step deliberately, since the two report the same way.
+    % does (see the note there on why 'prob') -- kept in step deliberately,
+    % since the two report the same way.
     if opts.tail == 0
-        cfg.correcttail = 'alpha';
+        cfg.correcttail = 'prob';
     end
 
     % THE ACCELERATED ROUTE, taken only when it is exactly equivalent.
@@ -220,6 +224,7 @@ function summary = SourceClusterStats(sourceFiles, contrast, opts)
     summary.contrast     = contrast;
     summary.opts         = opts;
     summary.nSubjects    = numel(subjects);
+    summary.nRecordings  = nRecordings;   % more than nSubjects when people came twice
     summary.sourceFiles  = sourceFiles;
     summary.sourcemodel  = sourcemodel;
     summary.vertexLabels = vertexLabels;

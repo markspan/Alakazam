@@ -33,6 +33,9 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
 %         the same length and order as SOURCEFILES, naming each subject's
 %         own group (e.g. via WorkSpace.groupFor) -- exactly two distinct
 %         groups are required (see ClusterStats.independentDesign).
+%   CONTRAST.personOf (optional, any mode) names the person each subject
+%   belongs to; recordings of one person are averaged into one subject first
+%   (see ClusterStats.averageWithinPerson).
 %
 %   Three-or-more-bin/-group designs (an omnibus F-type cluster test, or a
 %   bin x group interaction) are not implemented: FieldTrip supports them
@@ -48,7 +51,9 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
 %                        the pinned FieldTrip build this ships against).
 %     .clusteralpha      cluster-FORMING threshold (default 0.05). Ignored
 %                        for 'tfce'.
-%     .alpha             cluster/TFCE-level significance (default 0.05).
+%     .alpha             cluster/TFCE-level significance (default 0.05). A
+%                        two-tailed p is doubled before it is compared with it
+%                        (correcttail 'prob', below), so it holds for the test.
 %     .numrandomization  permutations (default 1000; more = a more precise
 %                        p-value estimate, at roughly linear runtime cost).
 %     .tail              -1/0/1 (default 0, two-tailed).
@@ -75,6 +80,9 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
     end
     subjects = restrictToScalpChannels(subjects);
     validateCompatibility(subjects, sourceFiles, contrast);
+    nRecordings = numel(subjects);
+    [subjects, contrast, kept] = ClusterStats.averageWithinPerson(subjects, contrast);
+    sourceFiles = sourceFiles(kept);
 
     [timelocks, design, ivar, uvar, statistic] = ClusterStats.buildDesign(subjects, contrast);
     [tlSubjects, tlConditions] = timelockLabels(subjects, contrast);
@@ -103,13 +111,17 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
     cfg.neighbours       = neighbours;
     cfg.tail             = opts.tail;
     cfg.clustertail      = opts.tail;
-    % A two-tailed cluster test needs correcttail = 'alpha' (halves alpha
-    % correctly for both tails together) -- a well-known FieldTrip pitfall
-    % that silently doubles the effective false-positive rate if left at
-    % its own plain default; set explicitly here rather than leaving every
-    % caller to rediscover it.
+    % A two-tailed test spends alpha on both tails, and FieldTrip's stat.prob
+    % and cluster probabilities describe one tail, so its plain default tests
+    % at twice the stated level. correcttail = 'prob' doubles every probability
+    % (clipped at 1), which is one of FieldTrip's two remedies and the one in
+    % which the p a report prints can be read against the alpha it states.
+    % The other, 'alpha', halves alpha and leaves the probabilities per tail:
+    % this used to set that, while the report compared the per-tail p with the
+    % whole alpha, and on null data called a cluster significant in 12.0% of
+    % runs where FieldTrip's own mask did in 5.5%.
     if opts.tail == 0
-        cfg.correcttail = 'alpha';
+        cfg.correcttail = 'prob';
     end
     cfg.alpha             = opts.alpha;
     cfg.numrandomization  = opts.numrandomization;
@@ -128,6 +140,7 @@ function summary = ClusterStats(sourceFiles, contrast, opts)
     summary.contrast     = contrast;
     summary.opts        = opts;
     summary.nSubjects   = numel(subjects);
+    summary.nRecordings = nRecordings;   % more than nSubjects when people came twice
     summary.sourceFiles = sourceFiles;
     % The exact per-subject/per-condition timelocks fed to
     % ft_timelockstatistics above, kept for the companion report's own
@@ -174,10 +187,16 @@ function opts = withDefaults(opts)
 end
 
 function validateCompatibility(subjects, sourceFiles, contrast)
-%VALIDATECOMPATIBILITY  Every subject needs the same channel count (so
-%   they share one neighbour structure) and the bin(s) this CONTRAST
+%VALIDATECOMPATIBILITY  Every subject needs the same channels (so they share
+%   one neighbour structure), the same time axis and the bin(s) this CONTRAST
 %   actually needs -- mirrors GrandAverage's own validateCompatibility,
 %   scoped to just what this contrast reads rather than every bin.
+%
+%   THE CHANNELS MAY COME IN ANY ORDER: FieldTrip lines them up by label, and a
+%   run with half the subjects listed in reverse gives an identical t map. A
+%   SHIFTED TIME AXIS IS REFUSED: FieldTrip would keep only the samples in
+%   common (176 of 201 for one subject 100 ms late), and test a shorter epoch
+%   than the one the report describes, without a word.
     switch contrast.mode
         case 'vsZero';      neededBins = string(contrast.bin);
         case 'paired';      neededBins = [string(contrast.binA), string(contrast.binB)];
@@ -188,6 +207,8 @@ function validateCompatibility(subjects, sourceFiles, contrast)
     end
 
     refChan = size(subjects{1}.data, 1);
+    refLabels = lower({subjects{1}.chanlocs.labels});
+    refTimes = double(subjects{1}.times(:));
     for i = 1:numel(subjects)
         name = displayNameFor(sourceFiles{i}, subjects{i});
         if size(subjects{i}.data, 1) ~= refChan
@@ -195,6 +216,19 @@ function validateCompatibility(subjects, sourceFiles, contrast)
                 ['"%s" has %d channels, I''m afraid, but the first subject has %d. Every ' ...
                  'subject needs the same channels for a cluster test.'], ...
                 name, size(subjects{i}.data, 1), refChan)));
+        end
+        unmatched = setxor(refLabels, lower({subjects{i}.chanlocs.labels}));
+        if ~isempty(unmatched)
+            throw(MException('Alakazam:ClusterStats', sprintf( ...
+                ['"%s" and the first subject differ in channel(s) %s, I''m afraid. Every ' ...
+                 'subject needs the same channels for a cluster test.'], ...
+                name, strjoin(unmatched, ', '))));
+        end
+        times = double(subjects{i}.times(:));
+        if numel(times) ~= numel(refTimes) || max(abs(times - refTimes)) > 1e-3
+            throw(MException('Alakazam:ClusterStats', sprintf( ...
+                ['"%s" has a different time axis from the first subject, I''m afraid. Every ' ...
+                 'subject needs the same epoch for a cluster test.'], name)));
         end
         haveLabels = string({subjects{i}.bindesc.label});
         missing = setdiff(neededBins, haveLabels);
@@ -225,16 +259,16 @@ function subjects = restrictToScalpChannels(subjects)
 %   eegChannelMask already exclude peripherals from a scalp-only display
 %   automatically rather than requiring it to be done by hand upstream.
 %
-%   The mask is computed once, from the first subject's own labels, and
-%   applied identically to every subject -- validateCompatibility (called
-%   right after this) is what actually enforces that every subject shares
-%   the same channel set, so there is nothing to reconcile per-subject here.
-    labels = {subjects{1}.chanlocs.labels};
-    isScalp = cellfun(@(l) isempty(channelTypeFromLabel(l)), labels);
-    if all(isScalp)
-        return; % nothing to drop
-    end
+%   The mask is each subject's own, from its own labels: the channels may
+%   come in a different order from one subject to the next, and a mask read
+%   off the first would then drop the wrong ones. validateCompatibility
+%   (called right after this) enforces that the channels left are the same.
     for i = 1:numel(subjects)
+        labels = {subjects{i}.chanlocs.labels};
+        isScalp = cellfun(@(l) isempty(channelTypeFromLabel(l)), labels);
+        if all(isScalp)
+            continue; % nothing to drop
+        end
         subjects{i}.chanlocs = subjects{i}.chanlocs(isScalp);
         subjects{i}.data     = subjects{i}.data(isScalp, :, :);
     end

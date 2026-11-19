@@ -33,6 +33,15 @@ classdef (TestTags = {'Slow'}) SourceClusterReportTest < matlab.unittest.TestCas
 
     methods (Test)
         % ---- what the document must say -----------------------------------
+        function itSaysWhenRecordingsOfOnePersonWereAveraged(testCase)
+            summary = testCase.summaryFixture();
+            once = generateSourceClusterStatsReport(summary, testCase.assetFixture());
+            testCase.verifyFalse(contains(once, 'recordings of one person'));
+            summary.nRecordings = summary.nSubjects + 2;
+            twice = generateSourceClusterStatsReport(summary, testCase.assetFixture());
+            testCase.verifySubstring(twice, sprintf('(from %d recordings', summary.nRecordings));
+        end
+
         function theInterpretationCaveatComesBeforeTheResults(testCase)
         %THEINTERPRETATIONCAVEATCOMESBEFORETHERESULTS  A caveat placed after
         %   the tables is a caveat read after the tables have already been

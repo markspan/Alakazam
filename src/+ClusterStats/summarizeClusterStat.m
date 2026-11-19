@@ -16,15 +16,17 @@ function clusters = summarizeClusterStat(stat, alpha)
 %     .posclusterslabelmat   chan x time, each point's cluster INDEX into
 %                             .posclusters (0 = not in any positive cluster)
 %     .negclusters / .negclusterslabelmat   the same for negative clusters
-%   ALPHA is the significance level to report against (typically the same
-%   cfg.alpha the test itself used).
+%   ALPHA is the significance level to report against, the cfg.alpha the test
+%   was asked for. A two-tailed STAT must have been made with correcttail
+%   'prob', whose probabilities are doubled: under 'alpha' they stay per tail,
+%   and comparing them with the whole ALPHA doubles the false-positive rate.
 %
 %   CLUSTERS is a struct array, one row per cluster FOUND (positive and
 %   negative together, regardless of significance -- a near-miss cluster is
 %   still worth seeing), sorted by p-value ascending:
 %     .sign          'positive' / 'negative'
 %     .pValue
-%     .significant   pValue < ALPHA
+%     .significant   pValue <= ALPHA, the comparison stat.mask is made with
 %     .channels      cellstr of every channel the cluster touches
 %     .timeRangeMs   [first last], milliseconds (converted back from
 %                    FieldTrip's own seconds)
@@ -90,7 +92,7 @@ function clusters = appendSignClusters(clusters, stat, alpha, sign)
         [chanIdx, timeIdx] = find(mask);
         entry.sign         = sign;
         entry.pValue       = clusterList(c).prob;
-        entry.significant  = entry.pValue < alpha;
+        entry.significant  = entry.pValue <= alpha;
         entry.channels     = unique(stat.label(chanIdx), 'stable');
         entry.timeRangeMs  = [min(stat.time(timeIdx)), max(stat.time(timeIdx))] * 1000;
         entry.nPoints      = nnz(mask);
@@ -130,7 +132,7 @@ function clusters = summarizeFromMaskOnly(stat, alpha)
         [chanIdx, timeIdx] = find(mask);
         entry.sign        = char(sign);
         entry.pValue       = min(stat.prob(mask));
-        entry.significant  = entry.pValue < alpha;
+        entry.significant  = entry.pValue <= alpha;
         entry.channels     = unique(stat.label(chanIdx), 'stable');
         entry.timeRangeMs  = [min(stat.time(timeIdx)), max(stat.time(timeIdx))] * 1000;
         entry.nPoints       = nnz(mask);

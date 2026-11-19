@@ -17,6 +17,7 @@ function loadMATFile(this, name)
     EEG.FileName = rawfilename;
     EEG = recordRawFile(EEG, rawfilename);   % for steps that need files beside it
     EEG.id = id;
+    EEG = TransTools.AlignUrevents(EEG);   % a foreign EEG struct need not have the table
 
     if ~exist(matfilename, 'file')
         saveEegCache(matfilename, EEG);

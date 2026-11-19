@@ -23,6 +23,12 @@ function [EEG, options] = Welch(input, varargin)
 %   what this provides, and it is why it refuses epoched input rather than
 %   quietly duplicating the other route.
 %
+%   A SEGMENT NEVER CROSSES A BOUNDARY EVENT. The two sides of a boundary are
+%   not continuous, and a splice in a segment spreads over its whole spectrum
+%   (a 50 uV step took the PSD at 3 Hz from 2.6e-9 to 1.8). As in EEGLAB's
+%   spectopo, the segments are laid out afresh in each stretch between
+%   boundaries, and a stretch shorter than a segment is left out.
+%
 %   TOOLBOX OR OWN CODE. MATLAB's pwelch computes the same averaged
 %   periodogram, and on clean data this matches it exactly (WelchTest). It is
 %   not called because it cannot leave out a segment that holds rejected (NaN)
@@ -121,10 +127,15 @@ end
 
 overlap = min(max(options.Overlap, 0), 99);
 step = max(1, round(segLen * (1 - overlap/100)));
-starts = 1:step:(nsamp - segLen + 1);
+edges = stretchEdges(TransTools.FieldOr(input, 'event', struct([])), nsamp);
+starts = zeros(1, 0);
+for s = 1:numel(edges) - 1
+    starts = [starts, edges(s):step:(edges(s + 1) - segLen)]; %#ok<AGROW>
+end
 if isempty(starts)
-    throw(MException('Alakazam:Welch', '%s', ...
-        'Problem in Welch: that segment length and overlap yield no complete segments.'));
+    throw(MException('Alakazam:Welch', '%s', sprintf( ...
+        ['Problem in Welch: no stretch of this recording between boundary events holds a %g s ' ...
+         'segment. Would you choose a shorter segment?'], options.SegmentSeconds)));
 end
 
 win = reshape(TransTools.WindowByName(options.Window, segLen), 1, []);
@@ -168,4 +179,18 @@ EEG.trials   = 1;
 EEG.DataType = 'FrequencyDomain';
 EEG.SpectrumUnit = 'PSD';   % as Fourier's Output = 'PSD'; FourierView reads it
 EEG.WelchSegments = used;   % how many segments the estimate actually averaged
+EEG.WelchStretches = numel(edges) - 1;   % stretches between boundary events
+end
+
+function edges = stretchEdges(events, nsamp)
+%STRETCHEDGES  The first sample of each stretch between boundary events, and
+%   nsamp + 1 after the last. A boundary's latency sits between two samples (at
+%   k - 0.5, EEGLAB's convention), and the stretch after it starts at k.
+    edges = [1, nsamp + 1];
+    if isempty(events) || ~isfield(events, 'type') || ~isfield(events, 'latency')
+        return;
+    end
+    isBoundary = arrayfun(@(e) strcmpi(strtrim(char(string(e.type))), 'boundary'), events);
+    latencies = [events(isBoundary).latency];
+    edges = unique([1, ceil(latencies(latencies > 1 & latencies <= nsamp)), nsamp + 1]);
 end

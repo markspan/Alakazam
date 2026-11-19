@@ -7,6 +7,7 @@ Single condition ("__BIN1_MD__"); descriptive statistics only, no comparison pos
 #| results: asis
 grp <- dat %>% filter(measure_type == "__MEASURETYPE_R__", window == "__WINDOW_R__", bin == "__BIN1_R__")
 __BLOCKMATCHDIAGNOSTIC__
+grp <- per_person(grp)
 
 d <- grp %>% filter(!is.na(value)) %>% droplevels()
 if (nrow(d) == 0) {
