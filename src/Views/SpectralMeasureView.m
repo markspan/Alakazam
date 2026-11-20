@@ -9,13 +9,14 @@ classdef SpectralMeasureView < AlakazamView
 %   EpochView and TimeFrequencyView, built by the same
 %   TransTools.BuildChannelDropdown and BuildBinDropdown, instead of the row
 %   of step and pan buttons below the plot it used to have. The bin dropdown
-%   is left out when there is one bin. Up/down arrows and the mouse wheel
-%   step the channel, left/right the bin, and a focus shared from another
-%   view sets both; the dropdowns follow all of them.
+%   is left out when there is one bin. Up/down arrows step the channel,
+%   left/right the bin, and a focus shared from another view sets both; the
+%   dropdowns follow all of them.
 %
 %   X/y zoom are the sliders below the plot (ZoomSliders, shared with
 %   FourierView): a zoom level, once set, survives a channel or bin change
-%   instead of resetting, and the axes toolbar pans.
+%   instead of resetting, and the axes toolbar pans. The mouse wheel zooms
+%   the y axis, further than the slider reaches in either direction.
 %
 %   See also ALAKAZAMPLOTTER, FOURIERVIEW, SPECTRALMEASURE, ZOOMSLIDERS.
 
@@ -115,8 +116,8 @@ classdef SpectralMeasureView < AlakazamView
             this.Zoom.applyYZoom(top);
 
             % The dropdowns show what is drawn, however it was chosen: a key,
-            % the wheel, a focus shared from another view, or the dropdown
-            % itself. Setting Value does not fire ValueChangedFcn.
+            % a focus shared from another view, or the dropdown itself.
+            % Setting Value does not fire ValueChangedFcn.
             this.ChannelDropdown.Value = this.Channel;
             if ~isempty(this.BinDropdown)
                 this.BinDropdown.Value = this.CurrentBin;
@@ -136,14 +137,12 @@ classdef SpectralMeasureView < AlakazamView
         end
 
         function onWheel(this, callbackData)
-        %ONWHEEL  Mouse wheel steps the shown channel (same direction as the
-        %   arrow keys), dispatched centrally by Alakazam.dispatchWheel.
-            if callbackData.VerticalScrollCount > 0
-                this.Channel = min(size(this.EEG.spectrum, 1), this.Channel + 1);
-            else
-                this.Channel = max(1, this.Channel - 1);
-            end
-            this.redraw();
+        %ONWHEEL  Zoom the y axis with the mouse wheel: away from you zooms
+        %   in, towards you out, with no limit but a sane one (see
+        %   ZoomSliders.scrollYZoom). Dispatched centrally by
+        %   Alakazam.dispatchWheel. The channel is stepped with the up and
+        %   down keys, which the wheel used to do as well.
+            this.Zoom.scrollYZoom(callbackData.VerticalScrollCount);
             this.notifyActivated();
         end
 

@@ -335,6 +335,52 @@ classdef ErpOverlayTest < matlab.unittest.TestCase
             testCase.verifyEqual(view.Axes.YLim, 2 * automatic, 'AbsTol', 1e-9);
         end
 
+        function theWheelZoomsTheAmplitudeAboutZero(testCase)
+        %THEWHEELZOOMSTHEAMPLITUDEABOUTZERO  Away from the user the wheel
+        %   zooms in, towards them out, 1.25 a notch, about 0 so the baseline
+        %   stays put. The time axis and the channel are left alone: the
+        %   wheel used to step the channel, which the keys still do.
+            [view, fig] = testCase.view(erp({'Fz', 'Cz'}, 'bins', 2));
+            closeFig = onCleanup(@() delete(fig));
+            view.Axes.YLim = [-2 4];
+            time = view.Axes.XLim;
+
+            view.onWheel(struct('VerticalScrollCount', -2));
+            testCase.verifyEqual(view.Axes.YLim, [-2 4] / 1.25 ^ 2, 'AbsTol', 1e-12);
+            view.onWheel(struct('VerticalScrollCount', 5));
+            testCase.verifyEqual(view.Axes.YLim, [-2 4] * 1.25 ^ 3, 'AbsTol', 1e-12);
+
+            testCase.verifyEqual(view.Axes.XLim, time);
+            testCase.verifyEqual(view.Channel, 1);
+        end
+
+        function aRangeWithoutZeroZoomsAboutItsMiddle(testCase)
+            [view, fig] = testCase.view(erp({'Fz', 'Cz'}, 'bins', 2));
+            closeFig = onCleanup(@() delete(fig));
+            view.Axes.YLim = [2 6];
+
+            view.onWheel(struct('VerticalScrollCount', -1));
+
+            testCase.verifyEqual(view.Axes.YLim, 4 + [-2 2] / 1.25, 'AbsTol', 1e-12);
+        end
+
+        function aWheelZoomIsKeptForEveryChannelUntilRestoreView(testCase)
+            testCase.pinAxisSettings();
+            [view, fig] = testCase.view(erp({'Fz', 'Cz', 'Pz'}, 'bins', 2));
+            closeFig = onCleanup(@() delete(fig));
+            automatic = view.Axes.YLim;
+
+            view.onWheel(struct('VerticalScrollCount', -3));
+            zoomed = view.Axes.YLim;
+            view.onKey(struct('Key', 'downarrow'));
+            testCase.verifyEqual(view.Axes.YLim, zoomed, 'AbsTol', 1e-12, ...
+                'The wheel''s zoom was lost at the next channel.');
+
+            view.onKey(struct('Key', 'uparrow'));
+            view.resetZoom();
+            testCase.verifyEqual(view.Axes.YLim, automatic, 'AbsTol', 1e-9);
+        end
+
         function theAveragesMoveOnlyUpAndDown(testCase)
         %THEAVERAGESMOVEONLYUPANDDOWN  Every interaction of this plot, a
         %   drag, the toolbar's pan or zoom, changes the amplitude axis only;

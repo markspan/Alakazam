@@ -10,6 +10,11 @@ classdef ZoomSlidersTest < matlab.unittest.TestCase
 %   and brings the top down in decades, and it survives the view redrawing
 %   another channel.
 %
+%   The mouse wheel (scrollYZoom) zooms the same y range by 1.25 a notch,
+%   past both ends of the slider's: beyond a hundredth of the range in, and
+%   beyond the natural range out. The slider follows where it can and rests
+%   at its end where it cannot, and dragging it takes over again.
+%
 %   Each case zooms by setting a slider and firing its callback, as a user's
 %   release of the slider does. 0.5 on the slider is a tenth of the range
 %   (0.01^0.5).
@@ -97,7 +102,75 @@ classdef ZoomSlidersTest < matlab.unittest.TestCase
         end
     end
 
+    methods (Test)
+        % ---- the mouse wheel ------------------------------------------------
+        function theWheelZoomsInPastTheSlider(testCase)
+        %THEWHEELZOOMSINPASTTHESLIDER  Thirty notches away from the user are
+        %   1.25^-30, about an 800th of the range, where the slider stops at
+        %   a hundredth; the slider rests at its end.
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(-30);
+            testCase.verifyEqual(ylim(testCase.Axes), [0, 10 * 1.25 ^ -30], 'RelTol', 1e-12);
+            testCase.verifyEqual(testCase.slider('YZoom').Value, 1);
+        end
+
+        function theWheelZoomsOutPastTheNaturalRange(testCase)
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(4);
+            testCase.verifyEqual(ylim(testCase.Axes), [0, 10 * 1.25 ^ 4], 'RelTol', 1e-12);
+            testCase.verifyEqual(testCase.slider('YZoom').Value, 0);
+        end
+
+        function aPhaseZoomedOutStaysCentredOnZero(testCase)
+            testCase.Zoom.applyYZoom(pi, -pi);
+            testCase.Zoom.scrollYZoom(2);
+            testCase.verifyEqual(ylim(testCase.Axes), [-pi, pi] * 1.25 ^ 2, 'RelTol', 1e-12);
+        end
+
+        function theSliderFollowsTheWheelWithinItsRange(testCase)
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(-10);
+            testCase.verifyEqual(testCase.slider('YZoom').Value, ...
+                log(1.25 ^ -10) / log(0.01), 'AbsTol', 1e-12);
+        end
+
+        function theSliderTakesOverFromTheWheel(testCase)
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(-40);
+            testCase.slide('YZoom', 0.5);
+            testCase.verifyEqual(ylim(testCase.Axes), [0, 1], 'AbsTol', 1e-12);
+        end
+
+        function aWheelZoomSurvivesARedrawOfAnotherChannel(testCase)
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(3);
+            testCase.Zoom.applyYZoom(20);   % the view redrawing a channel twice as large
+            testCase.verifyEqual(ylim(testCase.Axes), [0, 20 * 1.25 ^ 3], 'RelTol', 1e-12);
+        end
+
+        function onALogAxisTheWheelMovesTheTopInDecades(testCase)
+            testCase.Axes.YScale = 'log';
+            testCase.Zoom.applyYZoom(1000, 1);
+            testCase.Zoom.scrollYZoom(-2);
+            testCase.verifyEqual(ylim(testCase.Axes), [1, 1000 ^ (1.25 ^ -2)], 'RelTol', 1e-9);
+        end
+
+        function theWheelStopsShortOfAnUndrawableRange(testCase)
+        %THEWHEELSTOPSSHORTOFANUNDRAWABLERANGE  No limit a user would meet,
+        %   but a millionth of the range at most, so the axis can still be
+        %   drawn however far the wheel is turned.
+            testCase.Zoom.applyYZoom(10);
+            testCase.Zoom.scrollYZoom(-1000);
+            testCase.verifyEqual(ylim(testCase.Axes), [0, 10 * 1e-6], 'RelTol', 1e-12);
+        end
+    end
+
     methods (Access = private)
+        function s = slider(testCase, tag)
+        %SLIDER  The slider tagged TAG.
+            s = findall(testCase.Figure, 'Tag', tag);
+        end
+
         function slide(testCase, tag, value)
         %SLIDE  Move the slider tagged TAG to VALUE and release it.
             slider = findall(testCase.Figure, 'Tag', tag);
