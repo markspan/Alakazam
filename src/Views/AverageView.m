@@ -29,8 +29,12 @@ classdef AverageView < AlakazamView
 %   stepped through at the scale and offset chosen, until Restore view; the
 %   difference keeps its own.
 %
-%   The up / down arrow keys, or the mouse wheel, step the displayed
-%   channel for every line at once.
+%   THE MOUSE WHEEL ZOOMS THE AMPLITUDE AXIS (onWheel), by the same step as
+%   the spectrum views' (wheelZoomFactor) and without a limit, about 0 so
+%   the baseline stays put. Its zoom is kept like the toolbar's.
+%
+%   The up / down arrow keys step the displayed channel for every line at
+%   once.
 %
 %   Style follows the project standard.
 %
@@ -319,19 +323,25 @@ classdef AverageView < AlakazamView
         end
 
         function onWheel(this, callbackData)
-        %ONWHEEL  Scroll the mouse wheel to step the shown channel -- the
-        %   same direction convention as the up/down arrow keys (positive
-        %   VerticalScrollCount, i.e. scrolling down, steps forward
-        %   through channels, matching downarrow). Public: dispatched
-        %   centrally by Alakazam.dispatchWheel for whichever tab is
-        %   currently active, mirroring EpochView's/TimeFrequencyView's/
-        %   ScalpDistributionView's own onWheel contract.
-            if callbackData.VerticalScrollCount > 0
-                this.Channel = min(numel(this.channelLabels()), this.Channel + 1);
-            else
-                this.Channel = max(1, this.Channel - 1);
+        %ONWHEEL  Zoom the amplitude axis with the mouse wheel: away from you
+        %   zooms in, towards you out, by wheelZoomFactor per notch and with
+        %   no limit. The range is scaled about 0, so the baseline stays where
+        %   it is on the screen, or about its middle when 0 is out of view.
+        %   The zoom is kept as one made with the toolbar is (ZoomY, see
+        %   keepUserZoom): for every channel and redraw, the difference
+        %   keeping its own, until Restore view. Public: dispatched centrally
+        %   by Alakazam.dispatchWheel for whichever tab is active. The channel
+        %   is stepped with the up and down keys, which the wheel used to do
+        %   as well.
+            if isempty(this.LastLimits.y)
+                return;   % nothing drawn yet
             end
-            this.redraw();
+            zoomed = scaledAbout(this.Axes.YLim, wheelZoomFactor(callbackData.VerticalScrollCount));
+            if ~isempty(zoomed)
+                this.ZoomY.(this.limitsMode()) = zoomed;
+                ylim(this.Axes, zoomed);
+                this.LastLimits.y = zoomed;   % set here, so keepUserZoom need not find it
+            end
             this.notifyActivated();
         end
 
@@ -978,6 +988,21 @@ function sme = binASME(eeg, b)
     if isfield(eeg, 'aSME') && ~isempty(eeg.aSME) && size(eeg.aSME, 2) >= b ...
             && size(eeg.aSME, 1) == size(eeg.data, 1)
         sme = eeg.aSME(:, b);
+    end
+end
+
+function limits = scaledAbout(limits, factor)
+%SCALEDABOUT  The y-limits LIMITS scaled by FACTOR about 0, or about their
+%   middle when 0 is outside them. Empty when the result is no longer a
+%   range that can be drawn: collapsed to nothing, or beyond a double.
+    if limits(1) <= 0 && limits(2) >= 0
+        anchor = 0;
+    else
+        anchor = mean(limits);
+    end
+    limits = anchor + (limits - anchor) * factor;
+    if ~all(isfinite(limits)) || diff(limits) <= 1e3 * eps(max(abs(limits)))
+        limits = [];
     end
 end
 

@@ -247,8 +247,7 @@ on, the sort happens within each bin. Rejected trials are drawn blank.
 An averaged dataset is drawn as one waveform per bin, each with a band of
 *n* standard errors of the mean around it (the width is set in
 @sec-settings). The tick boxes on the right show and hide bins; the up and
-down arrow keys, or the mouse wheel, step the channel for every line at
-once. When the dataset carries ERP Measure results, the measurement windows
+down arrow keys step the channel for every line at once. When the dataset carries ERP Measure results, the measurement windows
 are drawn on the waveforms: the window shaded, and the measured value marked
 (a peak, a fractional latency, or the area filled).
 
@@ -257,8 +256,10 @@ amplitude axis only; the time axis stays as drawn. Dragging is how to put
 zero where you want it. What a zoom or pan sets is kept for every channel
 while you step through them, and while you tick lines, so all electrodes
 are seen at the scale and offset you chose; the toolbar's **Restore view**
-returns to automatic scaling. The difference (below) keeps its own
-amplitude zoom.
+returns to automatic scaling. The mouse wheel zooms the amplitude axis too:
+turned away from you it zooms in, towards you out, about 0 µV so the
+baseline stays in place, and as far as you like either way. Its zoom is kept
+in the same way. The difference (below) keeps its own amplitude zoom.
 
 ### Overlaying ERPs {#sec-overlay}
 
@@ -344,20 +345,25 @@ picked by trial, and take no overlay; average them to compare bins.
 
 | Control | Key | Action |
 |------------------|-----------|-------------------------------------------------------|
-| **Channel** | up, down | The channel shown. The mouse wheel also steps through the channels. |
+| **Channel** | up, down | The channel shown. |
 | **Trial** | left, right | The trial of an epoched spectrum, with the bin it belongs to. |
 | Tickboxes | | The lines drawn: the bins of an averaged spectrum, and those of an overlaid one. |
 | **Difference**, **Swap**, **Ratio in dB** | | Compare two ticked lines. |
 | **Remove overlay**, **Overlay opacity** | | Take the overlaid spectra off, or set how pale they are drawn. |
 | **Log scale** | | Draw the magnitude on a logarithmic axis, six decades deep. Off by default; not for a phase, a difference or a ratio. |
-| **x zoom**, **y zoom** | | Zoom the frequency and power axes. |
+| **x zoom**, **y zoom** | | Zoom the frequency and power axes. The mouse wheel zooms the power axis further, in or out. |
 | | P | Switch between magnitude and phase, for a complex spectrum. |
 
 : Controls of the spectrum view. {#tbl-spectrum-controls}
 
 The x zoom is anchored at the left edge of the window, so that 0 Hz stays in
 view unless the axis has been panned with the plot's toolbar. On a log
-scale the y zoom keeps the bottom of the axis and brings its top down.
+scale the y zoom keeps the bottom of the axis and brings its top down. The
+y zoom slider reaches from the automatic range down to a hundredth of it;
+the mouse wheel zooms the same axis without that limit, beyond a hundredth
+when a small peak needs it and beyond the automatic range when one channel
+is much larger than the one the plot was scaled to. The slider follows the
+wheel as far as it reaches.
 
 ### The other views
 

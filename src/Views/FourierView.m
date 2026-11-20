@@ -62,8 +62,8 @@ classdef FourierView < AlakazamView
 %   frequencies when the two differ.
 %
 %   The channel is picked with a dropdown above the plot, as in EpochView
-%   and TimeFrequencyView (TransTools.BuildChannelDropdown), and the keys,
-%   the wheel and a focus shared from another view move it along.
+%   and TimeFrequencyView (TransTools.BuildChannelDropdown), and the keys
+%   and a focus shared from another view move it along.
 %
 %   LOG SCALE, a checkbox above the plot and off by default, draws the
 %   magnitude on a logarithmic axis, where the high frequencies of a 1/f
@@ -76,9 +76,9 @@ classdef FourierView < AlakazamView
 %   something the generic axtoolbar zoom does not do), styled like
 %   SignalView's own zoom/pan/mag rows; a zoom level, once set, survives a
 %   channel/trial change instead of resetting (see ZoomSliders' own header
-%   comment on applyYZoom). The axes toolbar pans. The mouse wheel also
-%   steps the channel, same direction as the arrow keys, matching
-%   SpectralMeasureView's own onWheel.
+%   comment on applyYZoom). The axes toolbar pans. The mouse wheel zooms
+%   the y axis, further than the slider reaches in either direction
+%   (ZoomSliders.scrollYZoom), as in SpectralMeasureView and AverageView.
 %
 %   Style follows the project standard.
 %
@@ -264,8 +264,8 @@ classdef FourierView < AlakazamView
             this.Zoom.applyYZoom(hi, lo);
 
             % The controls show what is drawn, however it was chosen: a key,
-            % the wheel, a focus shared from another view, or the control
-            % itself. Setting Value does not fire ValueChangedFcn.
+            % a focus shared from another view, or the control itself.
+            % Setting Value does not fire ValueChangedFcn.
             this.ChannelDropdown.Value = this.Channel;
             if ~isempty(this.StepDropdown)
                 this.StepDropdown.Value = this.CurrentTrial;
@@ -310,18 +310,13 @@ classdef FourierView < AlakazamView
         end
 
         function onWheel(this, callbackData)
-        %ONWHEEL  Scroll the mouse wheel to step the shown channel -- the
-        %   same direction convention as the up/down arrow keys, matching
-        %   SpectralMeasureView's own onWheel (its near-twin: both views
-        %   share the same interaction model, see the class header
-        %   comment). Public: dispatched centrally by
-        %   Alakazam.dispatchWheel for whichever tab is currently active.
-            if callbackData.VerticalScrollCount > 0
-                this.Channel = min(size(this.EEG.data, 1), this.Channel + 1);
-            else
-                this.Channel = max(1, this.Channel - 1);
-            end
-            this.redraw();
+        %ONWHEEL  Zoom the y axis with the mouse wheel: away from you zooms
+        %   in, towards you out, with no limit but a sane one (see
+        %   ZoomSliders.scrollYZoom). Public: dispatched centrally by
+        %   Alakazam.dispatchWheel for whichever tab is active. The channel
+        %   is stepped with the up and down keys, which the wheel used to do
+        %   as well.
+            this.Zoom.scrollYZoom(callbackData.VerticalScrollCount);
             this.notifyActivated();
         end
 

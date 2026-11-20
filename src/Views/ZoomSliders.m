@@ -22,9 +22,19 @@ classdef ZoomSliders < handle
 %   THE Y AXIS IS THE VIEW'S. Each channel and bin has its own natural
 %   scale, known only to the view, so the view calls applyYZoom with it at
 %   the end of every redraw (in place of a bare ylim), and this applies the
-%   CURRENT y-zoom slider value relative to it. That is what keeps "how
-%   zoomed in" stable across a channel or bin change, rather than snapping
-%   back to fully zoomed out on every redraw.
+%   CURRENT y zoom, the slider's or the wheel's, relative to it. That
+%   keeps "how zoomed in" stable across a channel or bin change, rather
+%   than snapping back to fully zoomed out on every redraw.
+%
+%   THE WHEEL ZOOMS THE Y AXIS TOO, without the slider's limits. The slider
+%   spans the natural range down to a hundredth of it, which is not always
+%   the range a spectrum needs: a peak far above the rest, or a channel much
+%   smaller than the one the view scaled to. The wheel (scrollYZoom, called
+%   by the owning view's onWheel) multiplies the same zoom by
+%   wheelZoomFactor per notch, in either direction and as far as wanted,
+%   past the natural range as well as below its hundredth. The slider
+%   follows where it can and rests at its end where it cannot, and dragging
+%   it again takes over from wherever the wheel left the zoom.
 %
 %   AX and NYQUIST are captured once at construction: neither caller ever
 %   reassigns its axes or swaps in another dataset.
@@ -36,13 +46,19 @@ classdef ZoomSliders < handle
         Nyquist         % upper x-limit (EEG.srate / 2)
         ActivatedFcn    % function handle (), or empty
         XZoomValue = 0  % 0..1, x-zoom slider value (0 = the whole range)
-        YZoomValue = 0  % 0..1, y-zoom slider value (0 = the natural range)
+        % The share of the natural y range shown: 1 is the natural range,
+        % below 1 zoomed in, above 1 (the wheel only) zoomed out.
+        YFraction = 1
+        YSlider         % the y-zoom uislider, moved to follow the wheel
         YTop = 1        % most recent natural top passed to applyYZoom
         YBottom = 0     % and its natural bottom (0 for a magnitude, -pi for a phase)
     end
 
     properties (Constant, Access = private)
-        MinFraction = 0.01 % narrowest zoom, as a fraction of the full range
+        MinFraction = 0.01 % narrowest slider zoom, as a fraction of the full range
+        % How far the wheel may take YFraction: far beyond any use, but
+        % short of a range a double cannot draw.
+        WheelLimits = [1e-6, 1e6]
         LabelWidthPx = 40
     end
 
@@ -58,16 +74,18 @@ classdef ZoomSliders < handle
             this.ActivatedFcn = activatedFcn;
             this.makeSliderRow(grid, rows(1), "x zoom", "Zoom the frequency axis", ...
                 "XZoom", @(v) this.onXZoomChanged(v));
-            this.makeSliderRow(grid, rows(2), "y zoom", "Zoom the amplitude axis", ...
+            this.YSlider = this.makeSliderRow(grid, rows(2), "y zoom", ...
+                "Zoom the amplitude axis (the mouse wheel goes further)", ...
                 "YZoom", @(v) this.onYZoomChanged(v));
             this.applyXLim(0);
         end
 
         function applyYZoom(this, naturalTop, naturalBottom)
-        %APPLYYZOOM  Set the y-limits to the current y-zoom slider value,
-        %   relative to NATURALTOP (the owning view's own auto-scale for
-        %   whatever channel/trial/bin is now shown). Call at the end of the
-        %   owning view's redraw(), in place of a bare ylim(ax,[0,top]).
+        %APPLYYZOOM  Set the y-limits to the current y zoom, the slider's or
+        %   the wheel's, relative to NATURALTOP (the owning view's own
+        %   auto-scale for whatever channel/trial/bin is now shown). Call at
+        %   the end of the owning view's redraw(), in place of a bare
+        %   ylim(ax,[0,top]).
         %
         %   NATURALBOTTOM, 0 when omitted, is the lower end of that range,
         %   for a quantity that goes below zero: -pi for a phase in
@@ -89,13 +107,26 @@ classdef ZoomSliders < handle
             this.YBottom = naturalBottom;
             this.applyYLim();
         end
+
+        function scrollYZoom(this, scrollCount)
+        %SCROLLYZOOM  Zoom the y axis by SCROLLCOUNT notches of the mouse
+        %   wheel, a ScrollWheelData's VerticalScrollCount: away from the
+        %   user zooms in, towards them out (see wheelZoomFactor). No limit
+        %   but WheelLimits; the slider is moved to match, or to its end when
+        %   the zoom is beyond its range. Setting its Value fires none of its
+        %   callbacks.
+            this.YFraction = min(max(this.YFraction * wheelZoomFactor(scrollCount), ...
+                this.WheelLimits(1)), this.WheelLimits(2));
+            this.YSlider.Value = min(max(log(this.YFraction) / log(this.MinFraction), 0), 1);
+            this.applyYLim();
+        end
     end
 
     methods (Access = private)
-        function makeSliderRow(this, grid, row, labelText, tip, tag, changedFcn)
+        function slider = makeSliderRow(this, grid, row, labelText, tip, tag, changedFcn)
         %MAKESLIDERROW  One grid row: a label plus a 0..1 slider, tagged TAG,
         %   that fires CHANGEDFCN(value) while dragging and on release,
-        %   matching SignalView's own zoom/pan/mag rows.
+        %   matching SignalView's own zoom/pan/mag rows. Returns the slider.
             sliderRow = uigridlayout(grid, [1 2], "ColumnWidth", {this.LabelWidthPx, '1x'}, ...
                 "Padding", [0 0 0 0]);
             sliderRow.Layout.Row = row;
@@ -145,15 +176,15 @@ classdef ZoomSliders < handle
         end
 
         function onYZoomChanged(this, value)
-            this.YZoomValue = value;
+            this.YFraction = this.zoomFraction(value);
             this.applyYLim();
         end
 
         function applyYLim(this)
-        %APPLYYLIM  Apply the natural y-range, zoomed by the y-zoom slider:
-        %   towards 0 on a linear axis, and from the bottom up on a log axis
-        %   (see applyYZoom).
-            f = this.zoomFraction(this.YZoomValue);
+        %APPLYYLIM  Apply the natural y-range, zoomed by YFraction: towards 0
+        %   on a linear axis, and from the bottom up on a log axis (see
+        %   applyYZoom).
+            f = this.YFraction;
             if strcmp(this.Axes.YScale, 'log') && this.YBottom > 0
                 ylim(this.Axes, [this.YBottom, this.YBottom * (this.YTop / this.YBottom) ^ f]);
             else

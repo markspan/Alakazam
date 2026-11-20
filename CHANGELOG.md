@@ -4,6 +4,20 @@ What changed in each release, newest first. Releases are tagged on the
 Development branch; the version running is shown in the main window's title
 bar. Dates are those of the tag.
 
+## Unreleased
+
+### Changed
+
+- **The mouse wheel zooms the y axis of the averages and spectrum views**
+  (the ERP plot, the spectrum view and the Spectral Measure view), 1.25 a
+  notch: away from you in, towards you out, with no practical limit. The
+  y zoom slider stops at a hundredth of the automatic range and never zooms
+  out past it; the wheel does both, and the slider follows as far as it
+  reaches. On the ERP plot the amplitude is scaled about 0 µV, so the
+  baseline stays in place, and the zoom is kept for every channel like a
+  toolbar zoom, until Restore view. The wheel no longer steps the channel in
+  these views; the up and down keys and the channel menu still do.
+
 ## V0.4.7.5 (2026-11-03)
 
 Every number below that changes does so when a node is recalculated, or a report

@@ -79,6 +79,19 @@ classdef FourierViewControlsTest < matlab.unittest.TestCase
             testCase.verifyEqual(view.StepDropdown.Value, 2);
         end
 
+        function theWheelZoomsTheYAxisAndLeavesTheChannel(testCase)
+        %THEWHEELZOOMSTHEYAXISANDLEAVESTHECHANNEL  The wheel used to step the
+        %   channel. It zooms the y axis now, 1.25 a notch, and the up and
+        %   down keys step the channel.
+            [view, cleanup] = testCase.openView(FourierViewControlsTest.averaged()); %#ok<ASGLU>
+            natural = view.Axes.YLim;
+
+            view.onWheel(struct('VerticalScrollCount', -3));
+
+            testCase.verifyEqual(view.Channel, 1);
+            testCase.verifyEqual(view.Axes.YLim, natural * 1.25 ^ -3, 'RelTol', 1e-9);
+        end
+
         function singleTrialsArePickedByTrialWithTheirBin(testCase)
             [view, cleanup] = testCase.openView(FourierViewControlsTest.epoched()); %#ok<ASGLU>
 
